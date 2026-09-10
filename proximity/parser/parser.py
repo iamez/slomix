@@ -29,6 +29,13 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from proximity.parser.capability_manifest import (
+    SECTION_GATES,
+    SECTION_HEADER_RE,
+    build_manifest,
+    parse_declaration,
+)
+
 PROXIMITY_FILENAME_ROUND_RE = re.compile(r"-round-(\d+)_engagements\.txt$", re.IGNORECASE)
 GAMETIME_FILENAME_RE = re.compile(r"^gametime-(?P<map>.+)-R(?P<round>\d+)-(?P<ts>\d+)\.json$")
 
@@ -517,6 +524,30 @@ class VehicleProgress:
     max_health: int
     final_health: int
     destroyed_count: int
+    # v6.14 (docs/design/20 slice 2): gameTime() ms since round start, like
+    # carrier kill_time — stored unconverted. None = the file predates the
+    # fields (12-column line) or the mover never moved (Lua writes 0).
+    first_move_time: int | None = None
+    last_move_time: int | None = None
+    # First/last moving tick with a player mounted or within escort_radius —
+    # when the escort happened (a supply truck drives itself at round start,
+    # so the raw first move is not it). Fields 15-16.
+    first_escort_time: int | None = None
+    last_escort_time: int | None = None
+
+
+@dataclass
+class VehicleDestroyed:
+    """v6.14 `# VEHICLE_DESTROYED`: one row per destruction of a tracked
+    mover. `attacker_guid` is empty when the 500 ms poll saw the vehicle die
+    without a hit on it (script kill, sub-threshold damage)."""
+    vehicle_name: str
+    time: int
+    attacker_guid: str
+    attacker_name: str
+    attacker_team: str
+    means_of_death: int
+    health_before: int
 
 
 @dataclass
@@ -611,10 +642,12 @@ class ProximityParserV4:
         # v6 phases 1.5-4
         self.carrier_returns: list[CarrierReturn] = []
         self.vehicle_progress: list[VehicleProgress] = []
+        self.vehicle_destroyed: list[VehicleDestroyed] = []
         self.escort_credits: list[EscortCredit] = []
         self.construction_events: list[ConstructionEvent] = []
         self.objective_runs: list[ObjectiveRun] = []
         self.metadata = self._metadata_defaults()
+        self.sections_with_rows: set[str] = set()
         self._schema_cache: dict[tuple, bool] = {}
         self._round_link_context: dict[str, object | None] = {
             "round_id": None,
@@ -633,11 +666,24 @@ class ProximityParserV4:
             'escape_time': 5000,
             'escape_distance': 300,
             'position_sample_interval': 1000,  # v4: track sample rate
+            # ⚠️ Kept apart from the value above on purpose. That one is a
+            # software fallback the rest of the parser needs; this one is None
+            # until a file actually states its cadence, so the manifest can
+            # report `unknown` instead of publishing 1000 ms as if it had been
+            # measured (spec §4.2, CodeRabbit PR #795).
+            'position_sample_interval_declared': None,
             'round_start_unix': 0,
             'round_end_unix': 0,
             'axis_spawn_interval': 0,
             'allies_spawn_interval': 0,
             'tracker_version': 4,
+            # 6.11 capability declaration. None means the file predates it, and
+            # `None` is load-bearing: it selects the inference path in
+            # capability_manifest.build_manifest, which may answer `unknown` but
+            # never `disabled`. An empty dict would mean "declared nothing".
+            'tracker_version_full': None,
+            'test_mode': None,
+            'capabilities_declared': None,
         }
 
     @staticmethod
@@ -762,6 +808,7 @@ class ProximityParserV4:
     def parse_file(self, filepath: str) -> bool:
         """Parse an engagement file (v3 or v4 format)"""
         self.metadata = self._metadata_defaults()
+        self.sections_with_rows: set[str] = set()
         self.engagements = []
         self.player_tracks = []
         self.reaction_metrics = []
@@ -790,11 +837,13 @@ class ProximityParserV4:
         self.carrier_kills = []
         self.carrier_returns = []
         self.vehicle_progress = []
+        self.vehicle_destroyed = []
         self.escort_credits = []
         self.construction_events = []
         self.objective_runs = []
 
         section = 'header'
+        section_label = ''
 
         try:
             with open(filepath, encoding='utf-8', errors='replace') as f:
@@ -824,6 +873,9 @@ class ProximityParserV4:
                         continue
                     if line.startswith('# position_sample_interval='):
                         self.metadata['position_sample_interval'] = int(line.split('=')[1])
+                        self.metadata['position_sample_interval_declared'] = (
+                            self.metadata['position_sample_interval']
+                        )
                         continue
                     if line.startswith('# round_start_unix='):
                         try:
@@ -837,6 +889,26 @@ class ProximityParserV4:
                         except ValueError:
                             self.metadata['round_end_unix'] = 0
                         continue
+
+                    # Which section a following row belongs to, under the
+                    # name the FILE uses — kept separate from `section`, the
+                    # internal lowercase key, because the capability manifest is
+                    # keyed by the file's own section names.
+                    #
+                    # No `continue`: this deliberately falls through to the
+                    # detection chain below, which sets `section`. An earlier
+                    # version sat after that chain, where every branch had
+                    # already consumed its line with `continue`, so nothing was
+                    # ever recorded — the unit tests still passed and only
+                    # parsing a real file showed it.
+                    section_header = SECTION_HEADER_RE.match(line)
+                    if section_header:
+                        name = section_header.group(1)
+                        # ⚠️ An unrecognised section CLEARS the label. Leaving
+                        # the previous one would attribute a stranger's rows to
+                        # it, and report its capability as proven on data that
+                        # is not its own (CodeRabbit, PR #795).
+                        section_label = name if name in SECTION_GATES else ''
 
                     # Section detection
                     if line.startswith('# ENGAGEMENTS'):
@@ -917,6 +989,9 @@ class ProximityParserV4:
                     if line.startswith('# VEHICLE_PROGRESS'):
                         section = 'vehicle_progress'
                         continue
+                    if line.startswith('# VEHICLE_DESTROYED'):
+                        section = 'vehicle_destroyed'
+                        continue
                     if line.startswith('# ESCORT_CREDIT'):
                         section = 'escort_credit'
                         continue
@@ -927,6 +1002,20 @@ class ProximityParserV4:
                         section = 'objective_runs'
                         continue
 
+                    if line.startswith('# tracker_version_full='):
+                        self.metadata['tracker_version_full'] = line.split('=', 1)[1]
+                        continue
+                    if line.startswith('# test_mode='):
+                        self.metadata['test_mode'] = line.split('=', 1)[1] == '1'
+                        continue
+                    if line.startswith('# capabilities='):
+                        # split('=', 1): the value is name:0|1 pairs and carries
+                        # no '=' by contract, but splitting once keeps a future
+                        # value that does from being silently truncated.
+                        self.metadata['capabilities_declared'] = parse_declaration(
+                            line.split('=', 1)[1]
+                        )
+                        continue
                     if line.startswith('# axis_spawn_interval='):
                         try:
                             self.metadata['axis_spawn_interval'] = int(line.split('=')[1])
@@ -949,6 +1038,13 @@ class ProximityParserV4:
                     # Skip other comments
                     if line.startswith('#'):
                         continue
+
+                    # A data row proves its section carried something. Header
+                    # presence alone would not: ENGAGEMENTS, PLAYER_TRACKS and
+                    # both heatmaps write their header unconditionally, so an
+                    # empty one of those says nothing about its feature flag.
+                    if section_label:
+                        self.sections_with_rows.add(section_label)
 
                     # Parse data
                     if section == 'engagements':
@@ -1003,6 +1099,8 @@ class ProximityParserV4:
                         self._parse_carrier_return_line(line)
                     elif section == 'vehicle_progress':
                         self._parse_vehicle_progress_line(line)
+                    elif section == 'vehicle_destroyed':
+                        self._parse_vehicle_destroyed_line(line)
                     elif section == 'escort_credit':
                         self._parse_escort_credit_line(line)
                     elif section == 'construction_events':
@@ -1609,15 +1707,36 @@ class ProximityParserV4:
             self.logger.debug(f"_check_processed_file query failed for {filename}: {e}")
             return False
 
+    def build_capability_manifest(self) -> dict:
+        """The manifest for the file just parsed.
+
+        `capabilities_declared` is None for every file written before 6.11,
+        which is what selects the inference path — so this is one call, not two
+        branches, and there is no way to accidentally infer over a declaration.
+        """
+        return build_manifest(
+            sections_with_rows=self.sections_with_rows,
+            declared=self.metadata.get('capabilities_declared'),
+            test_mode=self.metadata.get('test_mode'),
+            tracker_version_full=self.metadata.get('tracker_version_full'),
+            position_sample_interval_ms=self.metadata.get(
+                'position_sample_interval_declared'
+            ),
+        )
+
     async def _mark_file_processed(self, filename: str, session_date: str | None = None) -> None:
         """Record that this file was imported with aggregates applied.
 
         When migration 062 columns exist, also record the tracker version and
         the canonical round key (session_date|map|round|start_unix) so the ET
         Performance v3 rating can join files to rounds and reason about which
-        telemetry signals were even capturable (audit AUD-007). `capabilities`
-        stays NULL until the Lua capability manifest lands (owner-gated) —
-        NULL means "unknown", never a claimed zero.
+        telemetry signals were even capturable (audit AUD-007).
+
+        `capabilities` carries the per-round manifest. A tracker from 6.11 on
+        declares its flags in the header and the manifest is exact; anything
+        older is inferred from which sections carried rows, which can prove a
+        capture was ON but can never prove one was OFF (see
+        capability_manifest). NULL remains possible and still means "unknown".
         """
         if not await self._table_has_column('proximity_processed_files', 'filename'):
             return
@@ -1638,6 +1757,39 @@ class ProximityParserV4:
                     str(int(self.metadata.get('round_num') or 0)),
                     str(int(self.metadata.get('round_start_unix') or 0)),
                 ))
+                # Guarded on its own: a schema with the other two 062 columns
+                # but not this one must still mark the file processed.
+                if await self._table_has_column(
+                    'proximity_processed_files', 'capabilities'
+                ):
+                    await self.db_adapter.execute(
+                        """INSERT INTO proximity_processed_files
+                               (filename, aggregates_applied, tracker_version,
+                                round_key, capabilities)
+                           VALUES ($1, TRUE, $2, $3, $4)
+                           ON CONFLICT (filename) DO UPDATE
+                               SET aggregates_applied = TRUE,
+                                   tracker_version = EXCLUDED.tracker_version,
+                                   round_key = EXCLUDED.round_key,
+                                   -- A declared manifest is exact and an
+                                   -- inferred one is a lower bound, so a
+                                   -- re-import of an old file must not
+                                   -- overwrite what a newer tracker stated.
+                                   capabilities = CASE
+                                       WHEN EXCLUDED.capabilities->>'source'
+                                            = 'declared'
+                                           THEN EXCLUDED.capabilities
+                                       WHEN proximity_processed_files
+                                            .capabilities->>'source'
+                                            = 'declared'
+                                           THEN proximity_processed_files
+                                                .capabilities
+                                       ELSE EXCLUDED.capabilities
+                                   END""",
+                        (filename, tracker_version, round_key,
+                         json.dumps(self.build_capability_manifest())),
+                    )
+                    return
                 await self.db_adapter.execute(
                     """INSERT INTO proximity_processed_files
                            (filename, aggregates_applied, tracker_version, round_key)
@@ -2684,9 +2836,33 @@ class ProximityParserV4:
                 max_health=int(parts[9]),
                 final_health=int(parts[10]),
                 destroyed_count=int(parts[11].strip()),
+                # v6.14 trailing fields: present from 14 columns on; the
+                # 12-column floor above stays so pre-v6.14 files still parse.
+                # Lua writes 0 for "never moved" — that is no time, not t=0.
+                first_move_time=(int(parts[12].strip()) or None) if len(parts) > 13 else None,
+                last_move_time=(int(parts[13].strip()) or None) if len(parts) > 13 else None,
+                first_escort_time=(int(parts[14].strip()) or None) if len(parts) > 15 else None,
+                last_escort_time=(int(parts[15].strip()) or None) if len(parts) > 15 else None,
             ))
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip vehicle_progress line: {e}")
+
+    def _parse_vehicle_destroyed_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 7:
+                return
+            self.vehicle_destroyed.append(VehicleDestroyed(
+                vehicle_name=parts[0],
+                time=int(parts[1]),
+                attacker_guid=parts[2],
+                attacker_name=parts[3],
+                attacker_team=parts[4],
+                means_of_death=int(parts[5]),
+                health_before=int(parts[6].strip()),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip vehicle_destroyed line: {e}")
 
     def _parse_escort_credit_line(self, line: str):
         try:
@@ -3093,6 +3269,20 @@ class ProximityParserV4:
         if not await self._table_has_column('proximity_vehicle_progress', 'vehicle_name'):
             return
         supports_round_end = await self._table_has_column('proximity_vehicle_progress', 'round_end_unix')
+        # v6.14 (migration 082): move times + the destruction list as JSONB
+        # on the vehicle's own row — no second table. Guarded so the importer
+        # keeps working on a database that has not applied 082 yet.
+        supports_move_times = await self._table_has_column('proximity_vehicle_progress', 'first_move_time')
+        destroyed_by_vehicle: dict[str, list[dict]] = {}
+        for vd in self.vehicle_destroyed:
+            destroyed_by_vehicle.setdefault(vd.vehicle_name, []).append({
+                "time": vd.time,
+                "attacker_guid": vd.attacker_guid,
+                "attacker_name": vd.attacker_name,
+                "attacker_team": vd.attacker_team,
+                "means_of_death": vd.means_of_death,
+                "health_before": vd.health_before,
+            })
         for vp in self.vehicle_progress:
             columns = [
                 "session_date", "round_number", "round_start_unix",
@@ -3112,6 +3302,12 @@ class ProximityParserV4:
                 vp.end_x, vp.end_y, vp.end_z,
                 vp.total_distance, vp.max_health, vp.final_health, vp.destroyed_count,
             ]
+            if supports_move_times:
+                columns += ["first_move_time", "last_move_time", "first_escort_time", "last_escort_time", "destroyed_events"]
+                values += [
+                    vp.first_move_time, vp.last_move_time, vp.first_escort_time, vp.last_escort_time,
+                    json.dumps(destroyed_by_vehicle.get(vp.vehicle_name, [])),
+                ]
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
@@ -4134,6 +4330,7 @@ class ProximityParserV4:
             'carrier_kills': len(self.carrier_kills),
             'carrier_returns': len(self.carrier_returns),
             'vehicle_progress': len(self.vehicle_progress),
+            'vehicle_destroyed': len(self.vehicle_destroyed),
             'escort_credits': len(self.escort_credits),
             'construction_events': len(self.construction_events),
             'objective_runs': len(self.objective_runs),

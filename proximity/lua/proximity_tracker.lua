@@ -51,7 +51,93 @@ local modname = "proximity_tracker"
 -- + pers.lastSpawnTime), SKILL_SNAPSHOT (sess.skill at round end), COMM_EVENTS
 -- (vsay/voice-macro frequency via et_ClientCommand). ALL default OFF; see
 -- docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md. Production unchanged until enabled.
-local version = "6.10"
+-- 6.11: additive capability declaration in the header (tracker_version_full,
+-- test_mode, capabilities). No section, no sampling and no cost changed — three
+-- header lines per round. It exists because an absent section is ambiguous by
+-- construction: `if isFeatureEnabled(x) and #rows > 0` writes nothing both when
+-- the capture is off and when it is on with nothing to report. Consumers were
+-- resolving that ambiguity by assuming, which turns missing telemetry into a
+-- claim about the match.
+local version = "6.14"
+
+-- BEGIN frame_health v6.13 (identical in every module; tests/unit/test_lua_frame_health_block_identical.py pins it)
+-- Every Lua module runs in its own VM, and the engine calls their
+-- et_RunFrame hooks one after another (g_lua.c G_LuaHook_RunFrame). They
+-- share one clock (et.trap_Milliseconds) and one process, so each module
+-- can append its own frame cost to the SAME log the tracker's gap watcher
+-- writes, and the reader attributes a gap offline: sum of the modules'
+-- `self` inside the gap window is "our Lua", the rest is engine/host.
+--   FH init wall=<ms> version=6.13 mod=<name>   one per map load (write-path proof)
+--   FM wall=<frame end ms> mod=<name> self=<ms> top=<section>:<ms>
+--                                          when a frame cost >= self_threshold_ms
+-- Rate-limited to one line per second per module and capped per lua state.
+-- trap_FS paths are relative to the homepath game dir, so this is the
+-- tracker's ~/.etlegacy/legacy/proximity/frame_health.log for every module.
+local FH_MOD = "proximity_tracker"
+local fh = {
+    version = "6.13", log = "proximity/frame_health.log",
+    self_threshold_ms = 50, min_write_interval_ms = 1000, max_lines_per_state = 3000,
+    writes = 0, last_write = -math.huge, frame_start = nil, top_name = nil, top_ms = 0,
+    error_printed = false,
+}
+local function fh_now()
+    return (et and et.trap_Milliseconds and et.trap_Milliseconds()) or 0
+end
+local function fh_write(line)
+    if fh.writes >= fh.max_lines_per_state then return end
+    -- endstats append idiom: the SECOND return signals an open failure
+    local fd, open_len = et.trap_FS_FOpenFile(fh.log, et.FS_APPEND)
+    if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
+    fh.writes = fh.writes + 1
+    et.trap_FS_Write(line, string.len(line), fd)
+    et.trap_FS_FCloseFile(fd)
+end
+local function fh_guard(what, f, ...)
+    local ok, err = pcall(f, ...)
+    if not ok and not fh.error_printed then
+        fh.error_printed = true
+        et.G_Print("[" .. FH_MOD .. "] frame_health " .. what .. " error: " .. tostring(err) .. "\n")
+    end
+end
+-- Call from et_InitGame: a map load (and map_restart) starts a fresh cadence.
+local function fh_init()
+    fh_guard("init", function()
+        fh.writes = 0
+        fh.last_write = -math.huge
+        fh.frame_start = nil
+        fh.top_name = nil
+        fh.top_ms = 0
+        fh_write(string.format("FH init wall=%d version=%s mod=%s\n", fh_now(), fh.version, FH_MOD))
+    end)
+end
+local function fh_begin()
+    fh.frame_start = fh_now()
+    fh.top_name = nil
+    fh.top_ms = 0
+end
+-- Call right after a known-costly section with the wall time taken before
+-- it: the costliest section of the frame is what the FM line names.
+local function fh_section(name, t0)
+    local ms = fh_now() - t0
+    if ms > fh.top_ms then
+        fh.top_ms = ms
+        fh.top_name = name
+    end
+end
+local function fh_end()
+    fh_guard("end", function()
+        if fh.frame_start == nil then return end
+        local now = fh_now()
+        local self_ms = now - fh.frame_start
+        fh.frame_start = nil
+        if self_ms < fh.self_threshold_ms then return end
+        if now - fh.last_write < fh.min_write_interval_ms then return end
+        fh.last_write = now
+        fh_write(string.format("FM wall=%d mod=%s self=%d top=%s:%d\n",
+            now, FH_MOD, self_ms, fh.top_name or "-", fh.top_ms))
+    end)
+end
+-- END frame_health v6.13
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -59,6 +145,28 @@ local config = {
     debug = false,
     output_dir = "proximity/",
     output_delay_ms = 0,
+
+    -- v6.12: frame-health watcher (spec
+    -- docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md section perf; built
+    -- 2026-09-01 for the lag investigation). At the TOP of frame N it
+    -- reports on frame N-1: gap = start(N) - start(N-1) counts EVERYTHING
+    -- in that frame's period (engine, all six lua modules, host
+    -- scheduling), self = frame N-1's own tracker cost, recorded at its
+    -- end. Both numbers describe the SAME frame -- pairing them across
+    -- frames would misattribute the round-end write burst (which runs
+    -- inside et_RunFrame) to the host. A slow tracker frame needs no
+    -- separate trigger: the gap covers the whole frame period, so it
+    -- always fires the same line, now with the honest self beside it.
+    -- self = -1 marks a frame whose body never completed (a lua error
+    -- aborted the hook) -- a repeating -1 series is an error loop, not
+    -- a performance signal. The file is appended under output_dir and
+    -- capped per lua state; a map load starts a fresh cadence.
+    frame_health = {
+        enabled = true,
+        gap_threshold_ms = 100,       -- 4x the 25 ms budget at sv_fps 40
+        min_write_interval_ms = 1000, -- at most one line per second
+        max_lines_per_state = 3000,   -- bound file growth per map load (300 cut a 2 h storm on 2026-09-02)
+    },
     max_string_length = 256,
     log_in_intermission = false,
     output_guard = true,
@@ -229,6 +337,28 @@ local config = {
     },
 
     -- Test mode (v4.1)
+    -- ===== W6 TRACE FIXTURE PROBE (dormant) =====
+    -- Deliberately NOT a `features` entry: isFeatureEnabled() returns false
+    -- whenever config.test_mode.enabled is set, and the whole point of this
+    -- probe is that it must be usable on a bot-populated test server.
+    --
+    -- ⛔ LOCAL TEST SERVER ONLY. Never enabled on puran.
+    --
+    -- What it establishes, before any fixture pipeline is built on top of it:
+    -- that `entNum = -2` really does give a WORLD-ONLY trace. The engine
+    -- (src/server/sv_world.c:749, commit 732518ef) returns straight after
+    -- CM_BoxTrace against model 0 when passEntityNum == -2, skipping
+    -- SV_ClipMoveToEntities entirely, and the Lua binding passes entNum through
+    -- without a bounds check (src/game/g_lua.c:2367). If that reading is wrong,
+    -- every W6 comparison built on it would be comparing engine-with-entities
+    -- against offline-world — so it is tested first and cheaply.
+    trace_fixture = {
+        enabled = false,
+        probe_delay_ms = 5000,   -- let entities finish spawning before -1 traces
+        batch = 250,             -- traces per frame; a map load already hitches
+                                 -- on its own, so the work is spread out
+    },
+
     test_mode = {
         enabled = false,
         lifecycle_log = true,
@@ -261,7 +391,22 @@ local config = {
         objective_run_tracking = true,
         -- v9 true-aim (6.02): per-shot origin + view angles. DEFAULT OFF —
         -- high frequency; opt-in only. Production unchanged until enabled.
-        shot_fired = false,
+        -- ⭐ TRUE IN THE REPOSITORY ON PURPOSE (2026-08-22). It was true on the
+        -- live server and false here, so the next deploy of this file silently
+        -- turned the capture off: shot rows stop dead on 2026-08-11 and every
+        -- session since has no gunfire data. §10.3 warned about exactly this
+        -- ("never blind-copy the repo file over the live one") — the durable fix
+        -- is for the repository to agree with the server, not for someone to
+        -- remember to re-edit the live copy after every deploy.
+        --
+        -- `aim_lock` is the control that proves the mechanism: it is true HERE,
+        -- and it survived the same deploy with 92% August coverage.
+        --
+        -- Measured cost on the local test server (6 bots, 690 s round):
+        -- 1.73 KB per player-minute, 26 shots per player-minute, ~207 KB for a
+        -- 12-player 10-minute round. Server CPU could not resolve a difference
+        -- at all (0.06% vs 0.12%, both rounding to 0-1%).
+        shot_fired = true,
         -- v7 draft (6.10): enable individually after the gated testmode probe
         -- (docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md).
         aim_lock = true,          -- crosshair-on-enemy lock events (activated 2026-06-22)
@@ -2528,6 +2673,19 @@ local function scanVehicleEntities()
                     max_health = health,
                     last_health = health,
                     destroyed_count = 0,
+                    -- v6.14 (docs/design/20 slice 2): WHEN the mover moved,
+                    -- and who took it down. gameTime() ms since round start,
+                    -- 0 = never moved (the parser reads 0 as "no time").
+                    first_move_time = 0,
+                    last_move_time = 0,
+                    -- first/last moving tick with a player mounted or within
+                    -- escort_radius: WHEN THE ESCORT HAPPENED. A supply truck
+                    -- drives itself for the first seconds of a round, so the
+                    -- raw first move is round start on that map — the escort
+                    -- moment needs the escorted move.
+                    first_escort_time = 0,
+                    last_escort_time = 0,
+                    destroyed = {},
                 }
                 -- %.0f, not %d: ox/oy/oz/health come from tonumber() and are
                 -- floats. Lua 5.4 %d THROWS on a non-integral float (LuaJIT
@@ -2568,6 +2726,19 @@ sampleVehiclePositions = function()
         end
         local current_pos = {x = vx, y = vy, z = vz}
 
+        -- v6.14: an entity read before it spawns answers (0,0,0) (the init
+        -- scan's sane_coord clamps garbage to 0 too). Its first real
+        -- position is then a "move" of a few thousand units from the world
+        -- origin — under MAX_SANE_MOVE, so it used to count (a supply truck
+        -- showed 3380 u and first_move_time=600 ms on an empty map load).
+        -- A mover is never really at the exact origin: resync and skip.
+        if veh.last_pos.x == 0 and veh.last_pos.y == 0 and veh.last_pos.z == 0
+            and (vx ~= 0 or vy ~= 0 or vz ~= 0) then
+            veh.start_pos = current_pos
+            veh.last_pos = current_pos
+            goto continue_vehicle
+        end
+
         local delta = distance3D(current_pos, veh.last_pos)
         -- Cap the per-sample delta. An entity read at map load before it spawns
         -- can return a billions-large origin (seen: truck pos ~1.15e10); that
@@ -2580,13 +2751,37 @@ sampleVehiclePositions = function()
 
         if is_moving then
             veh.total_distance = veh.total_distance + delta
+            -- v6.14: the escort moment's timestamp. `now` is gameTime()
+            -- (ms since round start, frozen during pause) — the same base
+            -- as carrier kill_time, so the parser stores it unconverted.
+            if veh.first_move_time == 0 then veh.first_move_time = now end
+            veh.last_move_time = now
         end
         veh.last_pos = current_pos
 
         -- Track health changes
         local health = tonumber(safe_gentity_get(entNum, "health")) or 0
         if health <= 0 and veh.last_health > 0 then
-            veh.destroyed_count = veh.destroyed_count + 1
+            if veh.first_escort_time > 0 then
+                -- The 500 ms poll saw it die without a hit on it (script
+                -- kill, or a hit below min_damage). Record it without an
+                -- attacker so destroyed_count and the VEHICLE_DESTROYED rows
+                -- stay one set.
+                veh.destroyed_count = veh.destroyed_count + 1
+                veh.destroyed[#veh.destroyed + 1] = {
+                    time = now, attacker_guid = "", attacker_name = "", attacker_team = "",
+                    means_of_death = 0, health_before = veh.last_health,
+                }
+            end
+            -- else: nobody has escorted this mover yet and it reads 0 HP —
+            -- its START state. Live (goldrush, three builds): the map
+            -- script sets the tank up alive at ~0.7 s and breaks it at
+            -- ~1.2 s (to be repaired), every round; "after the first move"
+            -- did not catch it (the tank moves by script at 0.6 s) and
+            -- neither did distrusting the init scan (a poll HAD read it
+            -- alive). Gameplay has engaged a mover once someone escorted
+            -- it; a hit with an attacker (recordVehicleDamage) counts
+            -- regardless of this gate.
         end
         if health > veh.max_health then veh.max_health = health end
         veh.last_health = health
@@ -2621,6 +2816,8 @@ sampleVehiclePositions = function()
                         if is_moving then
                             credit.credit_distance = credit.credit_distance + delta
                             credit.total_escort_distance = credit.total_escort_distance + delta
+                            if veh.first_escort_time == 0 then veh.first_escort_time = now end
+                            veh.last_escort_time = now
                         end
                     else
                         -- Check proximity while vehicle is moving
@@ -2629,6 +2826,8 @@ sampleVehiclePositions = function()
                             if player_pos then
                                 local d = distance3D(player_pos, current_pos)
                                 if d <= config.vehicle.escort_radius then
+                                    if veh.first_escort_time == 0 then veh.first_escort_time = now end
+                                    veh.last_escort_time = now
                                     credit.proximity_ms = credit.proximity_ms + config.vehicle.sample_interval_ms
                                     credit.samples = credit.samples + 1
                                     credit.total_escort_distance = credit.total_escort_distance + delta
@@ -2642,7 +2841,60 @@ sampleVehiclePositions = function()
                 end
             end
         end
+        ::continue_vehicle::
     end
+end
+
+-- v6.14: vehicle damage attribution (docs/design/20 slice 2). The engine's
+-- Lua damage hook fires for EVERY damaged entity (g_combat.c:1857 sits at
+-- the top of G_Damage, outside the targ->client branches), so a script_mover
+-- reaches et_Damage — where the first line used to reject it as "not a
+-- client". This branch runs BEFORE that line. The hook fires BEFORE the
+-- engine subtracts the damage (g_combat.c:1857 vs `targ->health -= take`
+-- at :1915 — unlike G_LogRegionHit, which runs before the hook), so the
+-- entity still reads its pre-hit health here: "dead" = health - damage <= 0.
+-- Live (goldrush, bots): with "dead = entity reads 0" the killing hit
+-- recorded nothing and the poll then logged the death without an attacker.
+-- Cost is accounted per frame as the "vehdmg" section (fh_section only
+-- brackets et_RunFrame, so the hook accumulates and the frame reports).
+local vehdmg = { ms = 0 }
+
+local function recordVehicleDamage(target, attacker, damage, meansOfDeath)
+    local veh = tracker.vehicles.entities[target]
+    if not veh then return end
+    local t0 = fh_now()
+    local health_now = tonumber(safe_gentity_get(target, "health")) or 0   -- pre-hit (see above)
+    local health_after = health_now - (tonumber(damage) or 0)
+    if health_after <= 0 and health_now > 0 then
+        local guid, name, team = "", "", ""
+        if isValidClient(attacker) and attacker ~= 1022 and attacker ~= 1023 then
+            guid = getPlayerGUID(attacker) or ""
+            name = getPlayerName(attacker) or ""
+            team = getPlayerTeam(attacker) or ""
+        end
+        -- Same rule as the poll: a death with NO player behind it before
+        -- anyone escorted the mover is its start state. Live (goldrush) the
+        -- map script "kills" the tank at ~1.0 s through G_Damage itself
+        -- (attacker = world, mod 36, take >= 1200) — it begins broken, to
+        -- be repaired. A player's kill counts at any time.
+        if guid == "" and veh.first_escort_time == 0 then
+            veh.last_health = 0
+            vehdmg.ms = vehdmg.ms + (fh_now() - t0)
+            return
+        end
+        veh.destroyed_count = veh.destroyed_count + 1
+        veh.destroyed[#veh.destroyed + 1] = {
+            time = gameTime(),
+            attacker_guid = guid, attacker_name = name, attacker_team = team,
+            means_of_death = tonumber(meansOfDeath) or 0,
+            health_before = health_now,
+        }
+        -- The poll must not count this death a second time.
+        veh.last_health = 0
+    elseif health_after > 0 then
+        veh.last_health = health_after
+    end
+    vehdmg.ms = vehdmg.ms + (fh_now() - t0)
 end
 
 -- ===== v6.01 OBJECTIVE RUN INTELLIGENCE =====
@@ -3090,6 +3342,62 @@ local function outputDataInner()
         config.position_sample_interval, round_start_unix, round_end_unix,
         tracker.spawn.axis_interval, tracker.spawn.allies_interval)
     et.trap_FS_Write(header, string.len(header), fd)
+
+    -- ===== CAPABILITY DECLARATION (6.11) =====
+    -- Says outright which captures were on, because the file cannot show it.
+    -- Every gated section is written as `if isFeatureEnabled(x) and #rows > 0`,
+    -- so a capture that was ON but had nothing to report produces a file that
+    -- is byte-identical to one where the capture was OFF. A reader looking at
+    -- an empty round therefore cannot tell "no gunfire happened" from "gunfire
+    -- was never recorded" — and guessing turns a gap in telemetry into a claim
+    -- about the game. This line removes the guess for every round written from
+    -- here on; older files fall back to what their sections prove, which is
+    -- `enabled` or `unknown`, never `disabled`.
+    --
+    -- The value reports isFeatureEnabled(), NOT config.features[]: test mode
+    -- forces every flag false (line 338), and the declaration has to match what
+    -- was actually written rather than what was configured. test_mode is
+    -- declared alongside so the two cases stay distinguishable.
+    --
+    -- `name:0|1` joined by commas, and deliberately no `=` in the value: the
+    -- parser reads header lines with line.split('=')[1], so an `=` here would
+    -- silently truncate the declaration.
+    local cap_order = {
+        "engagement_tracking", "crossfire_detection", "escape_detection",
+        "heatmap_generation", "reaction_tracking", "spawn_timing",
+        "team_cohesion", "crossfire_opportunities", "focus_fire",
+        "team_push_detection", "trade_kills", "kill_outcome_tracking",
+        "hit_region_tracking", "combat_positions", "carrier_tracking",
+        "carrier_returns", "vehicle_tracking", "construction_tracking",
+        "objective_run_tracking", "shot_fired", "aim_lock", "spawn_select",
+        "skill_snapshot", "comm_events",
+    }
+    local cap_parts, cap_seen = {}, {}
+    for _, name in ipairs(cap_order) do
+        cap_seen[name] = true
+        cap_parts[#cap_parts + 1] = name .. ":" .. (isFeatureEnabled(name) and "1" or "0")
+    end
+    -- A flag added to config.features without being added to cap_order would
+    -- otherwise vanish from the declaration, and a missing name reads as
+    -- "unknown" rather than as the bug it is. Collect the strays, sorted so the
+    -- line stays byte-stable across rounds (pairs() order is not defined).
+    local cap_extra = {}
+    for name, _ in pairs(config.features) do
+        if not cap_seen[name] then cap_extra[#cap_extra + 1] = name end
+    end
+    table.sort(cap_extra)
+    for _, name in ipairs(cap_extra) do
+        cap_parts[#cap_parts + 1] = name .. ":" .. (isFeatureEnabled(name) and "1" or "0")
+    end
+
+    local cap_header = string.format(
+        "# tracker_version_full=%s\n" ..
+        "# test_mode=%d\n" ..
+        "# capabilities=%s\n",
+        version,
+        config.test_mode.enabled and 1 or 0,
+        table.concat(cap_parts, ","))
+    et.trap_FS_Write(cap_header, string.len(cap_header), fd)
 
     -- ===== ENGAGEMENTS (v4) =====
     local fmt_header = "# ENGAGEMENTS\n" ..
@@ -3576,7 +3884,8 @@ local function outputDataInner()
         if #vp_items > 0 then
             local vp_header = "\n# VEHICLE_PROGRESS\n" ..
                 "# vehicle_name;vehicle_type;start_x;start_y;start_z;end_x;end_y;end_z;" ..
-                "total_distance;max_health;final_health;destroyed_count\n"
+                "total_distance;max_health;final_health;destroyed_count;" ..
+                "first_move_time;last_move_time;first_escort_time;last_escort_time\n"
             et.trap_FS_Write(vp_header, string.len(vp_header), fd)
             -- Coordinates and health come from tonumber() and are floats;
             -- Lua 5.4 %d throws on a non-integral float. This is a FILE
@@ -3595,13 +3904,43 @@ local function outputDataInner()
                 return math.type(n) == "integer" and n or 0
             end
             for _, veh in ipairs(vp_items) do
-                local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d\n",
+                -- v6.14: four trailing fields (the parser keeps its 12-field
+                -- floor and reads them only when present). gameTime() values
+                -- are integers, but they pass through trunc like the rest.
+                local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d;%d;%d;%d;%d\n",
                     veh.name, veh.type,
                     trunc(veh.start_pos.x), trunc(veh.start_pos.y), trunc(veh.start_pos.z),
                     trunc(veh.last_pos.x), trunc(veh.last_pos.y), trunc(veh.last_pos.z),
                     veh.total_distance, trunc(veh.max_health), trunc(veh.last_health),
-                    veh.destroyed_count)
+                    veh.destroyed_count, trunc(veh.first_move_time), trunc(veh.last_move_time),
+                    trunc(veh.first_escort_time), trunc(veh.last_escort_time))
                 et.trap_FS_Write(line, string.len(line), fd)
+            end
+
+            -- ===== VEHICLE DESTROYED (v6.14, docs/design/20 slice 2) =====
+            -- Inside the progress block on purpose: a destroyed vehicle is
+            -- always a progress row (destroyed_count > 0), and trunc() lives
+            -- here. One row per destruction of a tracked mover: when, by whom
+            -- (empty attacker when the 500 ms poll saw it die without a hit),
+            -- how.
+            local vd_items = {}
+            for _, veh in pairs(tracker.vehicles.entities) do
+                for _, d in ipairs(veh.destroyed) do
+                    vd_items[#vd_items + 1] = { name = veh.name, d = d }
+                end
+            end
+            if #vd_items > 0 then
+                local vd_header = "\n# VEHICLE_DESTROYED\n" ..
+                    "# vehicle_name;time;attacker_guid;attacker_name;attacker_team;" ..
+                    "means_of_death;health_before\n"
+                et.trap_FS_Write(vd_header, string.len(vd_header), fd)
+                for _, it in ipairs(vd_items) do
+                    local d = it.d
+                    local line = string.format("%s;%d;%s;%s;%s;%d;%d\n",
+                        it.name, trunc(d.time), d.attacker_guid, d.attacker_name, d.attacker_team,
+                        trunc(d.means_of_death), trunc(d.health_before))
+                    et.trap_FS_Write(line, string.len(line), fd)
+                end
             end
         end
     end
@@ -3806,8 +4145,90 @@ end
 
 -- ===== ENGINE CALLBACKS =====
 
+-- ===== FRAME-HEALTH WATCHER (v6.12) =====
+-- Runs at the TOP of every frame, reporting on the PREVIOUS one (see the
+-- config comment for why the pairing lives there). prev_wall/prev_self
+-- update before any of the frame body runs, so an error aborting the body
+-- cannot corrupt the cadence series -- it only leaves self at the -1
+-- sentinel, which is itself the signal. Open/write/close per line: at
+-- most 1/s, and a crash never loses buffered lines.
+local frame_health_state = {
+    prev_wall = nil, prev_self = -1, last_write = -math.huge, writes = 0,
+    last_lt = nil, last_lt_wall = nil,
+}
+
+local function frameHealthReport(wall_now, level_time)
+    local fh = config.frame_health
+    if not fh or not fh.enabled then return end
+    local st = frame_health_state
+    local prev_start = st.prev_wall
+    local prev_self = st.prev_self
+    st.prev_wall = wall_now
+    st.prev_self = -1  -- sentinel until this frame's body completes
+    if prev_start == nil then
+        -- First frame after a map load: write one INIT line unconditionally.
+        -- An empty log is ambiguous by construction (no stalls and a broken
+        -- writer look identical); this line is the positive proof that the
+        -- write path works, and it exercises open/format/write immediately.
+        local fd0, open_len0 = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
+        if fd0 and fd0 ~= -1 and fd0 ~= 0 and open_len0 ~= -1 then
+            -- "FH watcher", not "FH init": the shared block writes the per-module
+            -- init line from et_InitGame; this one proves the GAP watcher's own
+            -- write path on the first frame, and the report tells them apart.
+            local init_line = string.format("FH watcher wall=%d version=%s\n", wall_now, version)
+            et.trap_FS_Write(init_line, string.len(init_line), fd0)
+            et.trap_FS_FCloseFile(fd0)
+        else
+            et.G_Print("[PROX] frame_health: cannot open log for append (fd=" ..
+                tostring(fd0) .. ", len=" .. tostring(open_len0) .. ")\n")
+        end
+        return
+    end
+    -- v6.13: a pause freezes levelTime while the wall clock runs on. The
+    -- 2026-09-02 storm grew DURING a pause, and only this flag can say so
+    -- from the log alone (the etconsole prefix is svs.time, not a pause bit).
+    local paused = 0
+    if level_time ~= nil then
+        if st.last_lt == level_time then
+            if st.last_lt_wall ~= nil and wall_now - st.last_lt_wall >= 1000 then paused = 1 end
+        else
+            st.last_lt = level_time
+            st.last_lt_wall = wall_now
+        end
+    end
+    local gap = wall_now - prev_start
+    if gap < (fh.gap_threshold_ms or 100) then return end
+    if wall_now - st.last_write < (fh.min_write_interval_ms or 1000) then return end
+    if st.writes >= (fh.max_lines_per_state or 300) then return end
+    st.last_write = wall_now
+    st.writes = st.writes + 1
+    local players = 0
+    for i = 0, get_max_clients() - 1 do
+        if isPlayerActive(i) then players = players + 1 end
+    end
+    local gs = math.floor(tonumber(et.trap_Cvar_Get("gamestate")) or -1)
+    -- endstats append idiom: the SECOND return signals an open failure
+    local fd, open_len = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
+    if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
+    local line = string.format("FH wall=%d gap=%d self=%d gs=%d players=%d lt=%d paused=%d\n",
+        wall_now, gap, prev_self, gs, players, math.floor(tonumber(level_time) or -1), paused)
+    et.trap_FS_Write(line, string.len(line), fd)
+    et.trap_FS_FCloseFile(fd)
+end
+
 function et_InitGame(levelTime, randomSeed, restart)
+    fh_init()
     et.RegisterModname(modname .. " " .. version)
+
+    -- A map_restart keeps the lua VM alive, so without this reset the INIT
+    -- proof line would skip restarts and the per-state write cap would
+    -- carry over (review on #876). The wall clock is engine-global and
+    -- never resets, so dropping prev_wall only suppresses one frame's gap.
+    frame_health_state.prev_wall = nil
+    frame_health_state.prev_self = -1
+    frame_health_state.writes = 0
+    frame_health_state.last_lt = nil
+    frame_health_state.last_lt_wall = nil
 
     if not config.output_dir or config.output_dir == "" then
         config.output_dir = "proximity/"
@@ -3899,6 +4320,11 @@ function et_InitGame(levelTime, randomSeed, restart)
     -- pcall around all of et_InitGame would hide future errors — and LOUD on
     -- purpose: the etconsole.log error line is the only reason the original
     -- crash was ever found. Never swallow silently.
+    -- v6.13: the two entity scans (2 x 960 pcall'd gentity_get) are the
+    -- prime suspect for the seconds-long tracker frames seen at 0 players
+    -- right after a map load -- measured as their own FM line (init_scan).
+    fh_begin()
+    local fh_scan_t0 = fh_now()
     local sv_ok, sv_err = pcall(scanVehicleEntities)
     if not sv_ok then
         et.G_Print("[PROX] scanVehicleEntities FAILED: " .. tostring(sv_err) .. "\n")
@@ -3907,6 +4333,8 @@ function et_InitGame(levelTime, randomSeed, restart)
     if not so_ok then
         et.G_Print("[PROX] scanObjectiveEntities FAILED: " .. tostring(so_err) .. "\n")
     end
+    fh_section("init_scan", fh_scan_t0)
+    fh_end()
 
     -- v5 feature status
     local v5_features = {"spawn_timing", "team_cohesion", "crossfire_opportunities", "focus_fire", "team_push_detection", "trade_kills"}
@@ -3932,11 +4360,386 @@ end
 
 local last_gamestate = -1
 
+
+
+-- ===== W6 PAIRED-FIXTURE CAPTURE =====
+-- ⛔ Local test server only. Dormant unless config.trace_fixture.enabled.
+--
+-- Reads w6/<mapname>.txt (one segment per line, built offline by
+-- scripts/build_w6_trace_fixtures.py) and asks the engine the SAME question the
+-- offline tracer was asked: a world-only, point, CONTENTS_SOLID trace. Writes
+-- w6/out/<mapname>.txt for the comparison to join on idx.
+--
+-- entNum = -2 is the whole point: sv_world.c:749 returns straight after the
+-- world trace for that value, skipping SV_ClipMoveToEntities. Confirmed on this
+-- engine 2026-08-21 (a team_WOLF_checkpoint blocked -1 and not -2), so the
+-- offline tracer's world-only model is the right thing to compare against.
+--
+-- Batched across frames on purpose. A map load already produces
+-- "Hitch warning: 1132 msec" on its own; several thousand traces in one frame
+-- would be worse, and the per-batch timing is also the cost half of §10 C4,
+-- which has to exist before production enablement is even discussed.
+local w6 = {
+    segments = nil,   -- parsed input, or nil when there is nothing to do
+    cursor = 0,
+    out_lines = nil,
+    map = nil,
+    total_us = 0,
+    batches = 0,
+}
+
+local function w6Load(mapname)
+    local path = "w6/" .. mapname .. ".txt"
+    local fd, len = et.trap_FS_FOpenFile(path, et.FS_READ)
+    if not fd or fd == -1 or fd == 0 or not len or len <= 0 then
+        return nil
+    end
+    local data = et.trap_FS_Read(fd, len)
+    et.trap_FS_FCloseFile(fd)
+    if type(data) ~= "string" or #data == 0 then
+        return nil
+    end
+
+    local segs = {}
+    for line in data:gmatch("[^\r\n]+") do
+        if line:sub(1, 1) ~= "#" then
+            local idx, kind, ax, ay, az, bx, by, bz =
+                line:match("^(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)")
+            -- Every field must parse. A half-read line is a truncated file, and
+            -- a truncated file must not quietly become a shorter measurement.
+            --
+            -- ⛔ This used to SKIP the bad line and keep going, which is the
+            -- opposite of what the sentence above says: the load returned a
+            -- shorter table, the capture wrote fewer rows, and the shortfall
+            -- had to be caught two layers later — if at all (CodeRabbit, #797).
+            if not (idx and tonumber(ax) and tonumber(ay) and tonumber(az)
+                    and tonumber(bx) and tonumber(by) and tonumber(bz)) then
+                et.G_Print(string.format(
+                    "[PROX-W6] REFUSED %s: unparseable line %d. A truncated "
+                    .. "fixture must not become a shorter measurement.\n",
+                    path, #segs + 1))
+                return nil
+            end
+            segs[#segs + 1] = {
+                idx = idx, kind = kind,
+                a = {tonumber(ax), tonumber(ay), tonumber(az)},
+                b = {tonumber(bx), tonumber(by), tonumber(bz)},
+            }
+        end
+    end
+    return segs
+end
+
+local function w6Flush()
+    if not w6.out_lines or #w6.out_lines == 0 then return end
+    local path = "w6/out/" .. tostring(w6.map) .. ".txt"
+    local fd = et.trap_FS_FOpenFile(path, et.FS_WRITE)
+    if not fd or fd == -1 or fd == 0 then
+        et.G_Print("[PROX-W6] ERROR: cannot open " .. path .. " for write\n")
+        return
+    end
+    local per_us = (w6.batches > 0) and (w6.total_us / math.max(#w6.out_lines, 1)) or -1
+    local header = table.concat({
+        "# w6 engine capture map=" .. tostring(w6.map),
+        "# engine_call=et.trap_Trace(a,{0,0,0},{0,0,0},b,-2,1)",
+        "# tracker=" .. tostring(modname) .. " " .. tostring(version),
+        string.format("# segments=%d batches=%d total_ms=%.1f us_per_trace=%.2f",
+                      #w6.out_lines, w6.batches, w6.total_us / 1000.0, per_us),
+        "# idx fraction startsolid allsolid entityNum surfaceFlags contents",
+        "",
+    }, "\n")
+    et.trap_FS_Write(header, string.len(header), fd)
+    for _, l in ipairs(w6.out_lines) do
+        local line = l .. "\n"
+        et.trap_FS_Write(line, string.len(line), fd)
+    end
+    et.trap_FS_FCloseFile(fd)
+    et.G_Print(string.format(
+        "[PROX-W6] wrote %s  segments=%d  %.2f us/trace\n", path, #w6.out_lines, per_us))
+end
+
+local function w6Step(budget)
+    local started = et.trap_Milliseconds()
+    local n = 0
+    while w6.cursor < #w6.segments and n < budget do
+        w6.cursor = w6.cursor + 1
+        n = n + 1
+        local seg = w6.segments[w6.cursor]
+        local ok, tr = pcall(et.trap_Trace, seg.a, {0, 0, 0}, {0, 0, 0}, seg.b, -2, 1)
+        if ok and type(tr) == "table" then
+            w6.out_lines[#w6.out_lines + 1] = string.format(
+                "%s %.9g %d %d %d %d %d",
+                seg.idx,
+                tonumber(tr.fraction) or -1,
+                (tr.startsolid and 1) or 0,
+                (tr.allsolid and 1) or 0,
+                tonumber(tr.entityNum) or -1,
+                tonumber(tr.surfaceFlags) or 0,
+                tonumber(tr.contents) or 0)
+        else
+            -- Recorded, never skipped: a missing idx in the output would look
+            -- like a shorter run rather than a failed trace.
+            w6.out_lines[#w6.out_lines + 1] = seg.idx .. " ERROR 0 0 -1 0 0"
+        end
+    end
+    w6.total_us = w6.total_us + (et.trap_Milliseconds() - started) * 1000
+    w6.batches = w6.batches + 1
+    if w6.cursor >= #w6.segments then
+        w6Flush()
+        w6.segments = nil
+    end
+end
+
+-- ===== W6 TRACE FIXTURE PROBE =====
+-- ⛔ Local test server only. Dormant unless config.trace_fixture.enabled.
+--
+-- Establishes ONE thing: that et.trap_Trace with entNum = -2 is a world-only
+-- trace, matching what the offline BspPointTracer models. Everything W6 wants
+-- to measure rests on that, so it is proven here before anything is built on
+-- it -- and it is proven with segments whose answer is known in advance, so a
+-- broken probe cannot look like a passing one.
+--
+-- The two controls need no map knowledge, which is why they work anywhere:
+--   DOWN  -- straight down 10000 units from a standing player. The player is
+--            standing ON something, so this MUST be blocked by the world.
+--   TINY  -- one unit sideways from a standing player, inside the space they
+--            already occupy. This MUST be clear.
+-- A probe that reports DOWN clear or TINY blocked is broken, and says so
+-- without any reference to the geometry under test.
+local trace_probe_done = false
+local trace_probe_last = 0
+-- ⛔ The capture waits for this, not for trace_probe_done. "The probe ran" and
+-- "the probe proved its preconditions" are different facts, and W6's entire
+-- verdict rests on the second: if entNum = -2 does NOT skip entity clipping,
+-- every fixture segment is measuring something other than the world.
+local trace_probe_validated = false
+
+local function traceProbeOne(label, a, b)
+    local res = {}
+    for _, ent in ipairs({-2, -1}) do
+        local ok, tr = pcall(et.trap_Trace, a, {0, 0, 0}, {0, 0, 0}, b, ent, 1)
+        if not ok or type(tr) ~= "table" then
+            res[ent] = {err = tostring(tr)}
+        else
+            res[ent] = {
+                frac = tonumber(tr.fraction) or -1,
+                ent  = tonumber(tr.entityNum) or -1,
+                ss   = tostring(tr.startsolid),
+            }
+        end
+    end
+    local w, e = res[-2], res[-1]
+    if w.err or e.err then
+        et.G_Print(string.format("[PROX-W6] %-8s ERROR w=%s e=%s\n",
+            label, tostring(w.err), tostring(e.err)))
+        return nil
+    end
+    et.G_Print(string.format(
+        "[PROX-W6] %-8s world(-2): frac=%.4f ent=%d ss=%s | ents(-1): frac=%.4f ent=%d ss=%s%s\n",
+        label, w.frac, w.ent, w.ss, e.frac, e.ent, e.ss,
+        (w.frac ~= e.frac) and "   <<< DIFFER" or ""))
+    return w, e
+end
+
+-- A real, standing client. `r.currentOrigin` answers {0,0,0} for a slot that is
+-- not in the world yet, and in Lua 0 is TRUTHY — so a naive `if o and o[1]`
+-- accepts the world origin as a player position and every control below then
+-- "passes" on garbage. That is the same shape of false green this project has
+-- been bitten by elsewhere, so the check is explicit.
+local function firstRealClientOrigin()
+    local found = {}
+    for i = 0, get_max_clients() - 1 do
+        local o = safe_gentity_get(i, "r.currentOrigin")
+        if o and type(o) == "table" and o[1] and o[2] and o[3]
+           and not (o[1] == 0 and o[2] == 0 and o[3] == 0) then
+            found[#found + 1] = {slot = i, o = o}
+        end
+    end
+    return found
+end
+
+local function runTraceProbe()
+    local clients = firstRealClientOrigin()
+    if #clients < 2 then
+        et.G_Print(string.format(
+            "[PROX-W6] probe deferred: %d client(s) with a real origin, need 2\n", #clients))
+        return false
+    end
+
+    local seed = clients[1].o
+    local eye  = {seed[1], seed[2], seed[3] + 56}
+    et.G_Print(string.format("[PROX-W6] map=%s clients=%d seed=%.1f,%.1f,%.1f\n",
+        tostring(et.trap_Cvar_Get("mapname")), #clients, seed[1], seed[2], seed[3]))
+
+    -- Controls whose answer is known without knowing the map. Their results
+    -- used to be printed and dropped; a wrong one now stops the probe, because
+    -- a probe that answers a known question wrong cannot be trusted with an
+    -- unknown one.
+    local down_w = traceProbeOne("DOWN", eye, {seed[1], seed[2], seed[3] - 10000})
+    local tiny_w = traceProbeOne("TINY", eye, {seed[1] + 1, seed[2], seed[3] + 56})
+    if not down_w or not tiny_w then
+        et.G_Print("[PROX-W6] REFUSED: a control trace errored\n")
+        return true
+    end
+    if down_w.frac >= 1.0 then
+        et.G_Print(string.format(
+            "[PROX-W6] REFUSED: DOWN did not block (frac=%.4f). 10,000 units "
+            .. "down from a standing position must hit something.\n", down_w.frac))
+        return true
+    end
+    if tiny_w.frac < 1.0 then
+        et.G_Print(string.format(
+            "[PROX-W6] REFUSED: TINY was blocked (frac=%.4f). One unit sideways "
+            .. "inside the space the player already filled must be clear.\n", tiny_w.frac))
+        return true
+    end
+
+    -- The decisive test. Controls above prove the probe works; they do NOT
+    -- prove that -2 skips entity clipping, because nothing in them is blocked
+    -- by an entity. Only a segment where the two disagree can show that, so
+    -- sweep every client pair and count.
+    local pairs_n, differ = 0, 0
+    for i = 1, #clients do
+        for j = i + 1, #clients do
+            local a = clients[i].o
+            local b = clients[j].o
+            local w, e = traceProbeOne(
+                string.format("PAIR%d-%d", clients[i].slot, clients[j].slot),
+                {a[1], a[2], a[3] + 56}, {b[1], b[2], b[3] + 56})
+            if w and e then
+                pairs_n = pairs_n + 1
+                if w.frac ~= e.frac then differ = differ + 1 end
+            end
+        end
+    end
+    et.G_Print(string.format(
+        "[PROX-W6] pairs=%d differ(-2 vs -1)=%d\n", pairs_n, differ))
+
+    -- Client pairs agreeing proves nothing: if no ENTITY sits on the segment,
+    -- -2 and -1 must agree whether or not -2 skips entity clipping. The only
+    -- discriminating case is a segment an entity blocks, so go and find one:
+    -- walk the non-client entities, take those with a real bounding volume, and
+    -- trace straight through the middle of each. A solid brush entity (a door,
+    -- a mover) is clipped by -1 and invisible to -2, and the moment one of them
+    -- shows frac<1 for -1 and frac=1 for -2, the reading of sv_world.c:749 is
+    -- confirmed by the running engine rather than by me.
+    local ent_tested, ent_differ, first_proof = 0, 0, nil
+    for n = get_max_clients(), 1021 do
+        local inuse = safe_gentity_get(n, "inuse")
+        if inuse then
+            local lo = safe_gentity_get(n, "r.absmin")
+            local hi = safe_gentity_get(n, "r.absmax")
+            if lo and hi and lo[1] and hi[1]
+               and (hi[1] - lo[1]) > 8 and (hi[2] - lo[2]) > 8 and (hi[3] - lo[3]) > 8 then
+                local cx = (lo[1] + hi[1]) * 0.5
+                local cy = (lo[2] + hi[2]) * 0.5
+                local cz = (lo[3] + hi[3]) * 0.5
+                local span = (hi[1] - lo[1]) * 0.5 + 32
+                local a = {cx - span, cy, cz}
+                local b = {cx + span, cy, cz}
+                local okw, tw = pcall(et.trap_Trace, a, {0,0,0}, {0,0,0}, b, -2, 1)
+                local oke, te = pcall(et.trap_Trace, a, {0,0,0}, {0,0,0}, b, -1, 1)
+                if okw and oke and type(tw) == "table" and type(te) == "table" then
+                    ent_tested = ent_tested + 1
+                    local fw = tonumber(tw.fraction) or -1
+                    local fe = tonumber(te.fraction) or -1
+                    if fw ~= fe then
+                        ent_differ = ent_differ + 1
+                        if not first_proof then
+                            first_proof = string.format(
+                                "ent=%d class=%s model=%s  world(-2) frac=%.4f ent=%s | ents(-1) frac=%.4f ent=%s",
+                                n, tostring(safe_gentity_get(n, "classname")),
+                                tostring(safe_gentity_get(n, "model")),
+                                fw, tostring(tw.entityNum), fe, tostring(te.entityNum))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    et.G_Print(string.format("[PROX-W6] entities tested=%d differ=%d\n", ent_tested, ent_differ))
+    if first_proof then
+        et.G_Print("[PROX-W6] PROOF " .. first_proof .. "\n")
+    end
+    et.G_Print(string.format(
+        "[PROX-W6] VERDICT entNum=-2 skips entity clipping: %s\n",
+        (ent_differ > 0) and "CONFIRMED by the running engine"
+                          or "NOT SHOWN -- no entity blocked any probe segment"))
+
+    -- ⭐ NOT SHOWN is not the same as false, and it is not good enough either.
+    -- Client pairs agreeing proves nothing: with no entity on the segment, -2
+    -- and -1 must agree whether or not -2 skips entity clipping. Only a segment
+    -- an entity blocks discriminates, so without one the premise is untested and
+    -- the capture stays shut. Returning true here ends the probe; it is
+    -- `trace_probe_validated` that opens the gate.
+    trace_probe_validated = (ent_differ > 0)
+    if not trace_probe_validated then
+        et.G_Print("[PROX-W6] CAPTURE DISABLED: premise untested. Load a map with "
+            .. "solid brush entities (a door, a mover) and probe again.\n")
+    end
+    return true
+end
+
 function et_RunFrame(levelTime)
     if not config.enabled then return end
+    local fh_wall = et.trap_Milliseconds()
+    -- A swallowed error here would make a broken watcher look like a calm
+    -- server -- print the first one, then stay quiet.
+    local fh_ok, fh_err = pcall(frameHealthReport, fh_wall, levelTime)
+    if not fh_ok and not frame_health_state.error_printed then
+        frame_health_state.error_printed = true
+        et.G_Print("[PROX] frame_health error: " .. tostring(fh_err) .. "\n")
+    end
     frame_level_time = levelTime  -- Bug 1 fix: store for gameTime(); freezes during pause
 
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
+
+    if config.trace_fixture and config.trace_fixture.enabled and not trace_probe_done
+       and levelTime > (config.trace_fixture.probe_delay_ms or 5000)
+       and levelTime - (trace_probe_last or 0) > 5000 then
+        trace_probe_last = levelTime
+        local ok, done = pcall(runTraceProbe)
+        if not ok then
+            et.G_Print("[PROX-W6] probe failed: " .. tostring(done) .. "\n")
+            trace_probe_done = true
+        elseif done then
+            trace_probe_done = true
+        end
+    end
+
+    -- ⛔ trace_probe_validated, not .enabled: the fixture capture may only run
+    -- once the probe has SHOWN, on this running engine, that entNum = -2
+    -- excludes entity clipping. Before that, every traced segment would be
+    -- answering a different question than the offline tracer.
+    if config.trace_fixture and config.trace_fixture.enabled and trace_probe_validated then
+        if w6.segments == nil and w6.map ~= tracker.round.map_name then
+            w6.map = tracker.round.map_name
+            w6.segments = w6Load(tostring(w6.map))
+            w6.cursor, w6.out_lines, w6.total_us, w6.batches = 0, {}, 0, 0
+            if w6.segments then
+                et.G_Print(string.format("[PROX-W6] loaded %d segments for %s\n",
+                    #w6.segments, tostring(w6.map)))
+            end
+        end
+        if w6.segments then
+            -- ⚠️ pcall for the same reason `runTraceProbe` has one, which this
+            -- call site was missing. An error raised here propagates out of
+            -- et_RunFrame and takes the REST of the tracker's frame with it,
+            -- every frame for the rest of the map — the failure mode a
+            -- `string.format("%d", <float>)` already caused once in this file
+            -- (v6.10, et_InitGame, objectives never scanned). The capture is a
+            -- diagnostic; it must never be able to stop the tracker.
+            local fh_t0 = fh_now()
+            local ok, err = pcall(w6Step, config.trace_fixture.batch or 250)
+            fh_section("w6", fh_t0)
+            if not ok then
+                et.G_Print("[PROX-W6] capture failed, disabling: "
+                    .. tostring(err) .. "\n")
+                w6.segments = nil
+                trace_probe_validated = false
+            end
+        end
+    end
 
     -- Detect round start
     if gamestate == 0 and last_gamestate ~= 0 then
@@ -3973,6 +4776,7 @@ function et_RunFrame(levelTime)
         -- re-closing tracks and engagements into completed_tracks again and
         -- again (duplicated data), while the error spams the console. Contain
         -- the failure, print it loudly, and let the state machine advance.
+        local fh_round_end_t0 = fh_now()
         local re_ok, re_err = pcall(function()
         round_end_unix = os.time()
 
@@ -4019,6 +4823,7 @@ function et_RunFrame(levelTime)
             outputData()
         end
         end)
+        fh_section("round_end", fh_round_end_t0)
         if not re_ok then
             et.G_Print("[PROX] round-end handling FAILED: " .. tostring(re_err) .. "\n")
         end
@@ -4028,30 +4833,61 @@ function et_RunFrame(levelTime)
 
     -- During play
     if gamestate == 0 then
+        local fh_t0 = fh_now()
         sampleAllPlayers()
+        fh_section("sample", fh_t0)
 
         if isFeatureEnabled("escape_detection") then
             checkEscapes(levelTime)
         end
 
         -- v5: Run teamplay analysis
+        local fh_tp0 = fh_now()
         updateTeamplay(gameTime())
+        fh_section("teamplay", fh_tp0)
 
         if isFeatureEnabled("objective_run_tracking") then
+            local fh_pc0 = fh_now()
             pollConstructionProgress(gameTime())
+            fh_section("construction", fh_pc0)
         end
     end
 
     -- Handle delayed output
     if tracker.output_pending and et.trap_Milliseconds() >= tracker.output_due_ms then
         tracker.output_pending = false
+        local fh_out0 = fh_now()
         outputData()
+        fh_section("output", fh_out0)
     end
+
+    -- v6.14: the vehicle-damage hook's cost this frame, surfaced through
+    -- the same top-section mechanism (fh_section takes a start time, so
+    -- hand it "now minus what the hook spent").
+    if vehdmg.ms > 0 then
+        fh_section("vehdmg", fh_now() - vehdmg.ms)
+        vehdmg.ms = 0
+    end
+
+    -- The frame body completed: replace the -1 sentinel with the real cost.
+    -- This is the LAST statement on purpose -- everything above it, the
+    -- round-end write burst included, is inside the measurement.
+    frame_health_state.prev_self = et.trap_Milliseconds() - fh_wall
 end
 
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
     if not config.enabled then return end
     if not target or not attacker then return end
+    -- v6.14: a tracked vehicle is not a client; attribute the hit and stop.
+    -- pcall: an unguarded throw here would fire on every hit of the round.
+    if isFeatureEnabled("vehicle_tracking") and tracker.vehicles.entities[target] then
+        -- Play only, like every other branch below: a tank shelled during
+        -- warmup is not a round event.
+        if (tonumber(et.trap_Cvar_Get("gamestate")) or -1) == 0 then
+            pcall(recordVehicleDamage, target, attacker, damage, meansOfDeath)
+        end
+        return
+    end
     if not isValidClient(target) or not isValidClient(attacker) then return end
     if target == attacker then return end
     if attacker == 1022 or attacker == 1023 then return end
@@ -4442,12 +5278,20 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     end
     createPlayerTrack(clientNum)
 
-    -- v7 (6.10, dormant): which spawn point did the player pick?
-    -- sess.spawnObjectiveIndex + pers.lastSpawnTime are documented fields
-    -- (LUA_V7_CAPTURE_RESEARCH_2026-06.md, candidate 4). Real spawns only —
-    -- the revived==1 path returned above.
+    -- v7: which spawn point did the player pick? Real spawns only — the
+    -- revived==1 path returned above.
+    --
+    -- ⚠️ This read `sess.spawnObjectiveIndex` until 2026-08-22, on the strength
+    -- of LUA_V7_CAPTURE_RESEARCH_2026-06.md calling it a documented field. It is
+    -- not: the name appears ZERO times in the whole ET:Legacy source tree
+    -- (checked against commit 732518ef). Every capture it ever made was -1.
+    --
+    -- `sess.userSpawnPointValue` is the real one — 12 occurrences in the engine
+    -- and exposed to Lua as FIELD_INT (src/game/g_lua.c:1313). It has existed
+    -- since 2.83, so nothing about the live build blocked this.
+    -- `pers.lastSpawnTime` was always fine (g_lua.c:1270).
     if isFeatureEnabled("spawn_select") then
-        local spawn_index = tonumber(safe_gentity_get(clientNum, "sess.spawnObjectiveIndex"))
+        local spawn_index = tonumber(safe_gentity_get(clientNum, "sess.userSpawnPointValue"))
         local last_spawn = tonumber(safe_gentity_get(clientNum, "pers.lastSpawnTime"))
         tracker.spawn_selects[#tracker.spawn_selects + 1] = {
             time = gameTime(),
@@ -4843,3 +5687,16 @@ end
 
 -- ===== MODULE END =====
 et.G_Print(">>> Proximity Tracker v" .. version .. " loaded\n")
+
+-- BEGIN frame_health hook v6.13 (identical in every module)
+-- Wraps the module's own et_RunFrame so its whole cost -- early returns
+-- included -- lands in fh_end. An error inside is re-raised unchanged so
+-- the engine still prints it; the measurement is taken first.
+local fh_wrapped_run_frame = et_RunFrame
+function et_RunFrame(levelTime)
+    fh_begin()
+    local ok, err = pcall(fh_wrapped_run_frame, levelTime)
+    fh_end()
+    if not ok then error(err, 0) end
+end
+-- END frame_health hook v6.13
