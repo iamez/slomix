@@ -1,5 +1,27 @@
 #!/usr/bin/env python3
-"""Create an atomic PostgreSQL dump and target-bound verification manifest."""
+"""Create an atomic PostgreSQL dump and target-bound verification manifest.
+
+WHICH DATABASE and AS WHOM are two different questions, and this tool needs
+different answers than the web service does.
+
+`resolve_env_file` prefers `website/.env` over the root `.env` so a migration
+validates against the database the running service actually uses (Codex
+PX-DB-001). That is right for host/port/database. It is wrong for the ROLE:
+the service runs least-privilege as `website_app`, and a dump must read every
+table. On 2026-09-03 that cost a backup — `pg_dump` died with "permission
+denied for table voice_members", one of seven tables `website_app` cannot
+read, and the backup that was gating an 8,721-row repair simply did not exist.
+It failed loudly, which is the good outcome; the bad one is a tool that picks
+a role by accident.
+
+So the target still follows the service, and the role is resolved separately:
+
+    BACKUP_DB_USER  ->  the root .env's POSTGRES_USER  ->  whatever the
+                        connection resolved (the old behaviour)
+
+The manifest still binds to host:port/database only — the role is not part of
+a backup's identity, and making it one would refuse a perfectly good dump.
+"""
 
 from __future__ import annotations
 
@@ -54,13 +76,52 @@ def _write_manifest(path: Path, *, dump_path: Path, db_identity: str) -> None:
         temporary_path.unlink(missing_ok=True)
 
 
+def resolve_dump_role(connection: dict, repo_root: Path | None = None,
+                      environ: dict | None = None) -> tuple[str, str, str]:
+    """(user, password, where_it_came_from) for the role the dump runs as.
+
+    Explicit beats implicit: an operator who sets BACKUP_DB_USER means it. The
+    root .env comes next, because that is where this project keeps the owner
+    role (`etlegacy_user`), and the file that shadowed it (website/.env) keeps
+    the service's least-privilege one on purpose. Falling back to the resolved
+    connection preserves the old behaviour for anyone whose setup has neither.
+    """
+    environ = os.environ if environ is None else environ
+    repo_root = ROOT if repo_root is None else repo_root
+    fallback_password = str(connection.get("password") or "")
+
+    explicit = environ.get("BACKUP_DB_USER")
+    if explicit:
+        return (explicit,
+                environ.get("BACKUP_DB_PASSWORD") or fallback_password,
+                "BACKUP_DB_USER")
+
+    root_env = repo_root / ".env"
+    if root_env.exists():
+        try:
+            from dotenv import dotenv_values
+        except ImportError:
+            values = {}
+        else:
+            # dotenv_values parses without touching os.environ — this must not
+            # change what any later tool in the same process resolves.
+            values = dotenv_values(root_env) or {}
+        root_user = values.get("POSTGRES_USER") or values.get("DB_USER")
+        if root_user and root_user != connection.get("user"):
+            return (str(root_user),
+                    str(values.get("POSTGRES_PASSWORD")
+                        or values.get("DB_PASSWORD") or fallback_password),
+                    f"root {root_env.name}")
+
+    return str(connection["user"]), fallback_password, "resolved connection"
+
+
 def create_backup() -> tuple[Path, Path, str]:
     connection = get_connection_kwargs()
     host = str(connection["host"])
     port = int(connection["port"])
     database = str(connection["database"])
-    user = str(connection["user"])
-    password = str(connection["password"])
+    user, password, role_source = resolve_dump_role(connection)
     if not _SAFE_FILENAME.fullmatch(database):
         raise ValueError(f"database name is unsafe for a backup filename: {database!r}")
 
@@ -84,6 +145,7 @@ def create_backup() -> tuple[Path, Path, str]:
         "PGPASSWORD": password,
     })
     db_identity = f"{host}:{port}/{database}"
+    print(f"[db_backup] dumping {db_identity} as {user} (role from {role_source})")
 
     fd, temporary_name = tempfile.mkstemp(
         prefix=f".{output_path.name}.", suffix=".tmp", dir=backup_dir
@@ -106,8 +168,16 @@ def create_backup() -> tuple[Path, Path, str]:
             if return_code != 0:
                 stderr.seek(0)
                 details = stderr.read().decode(errors="replace").strip()
+                hint = ""
+                if "permission denied" in details.lower():
+                    hint = (
+                        f"\n  The dump ran as {user!r} (role from {role_source}). "
+                        f"A backup must read EVERY table; the web service's role "
+                        f"cannot. Re-run with BACKUP_DB_USER set to the owning "
+                        f"role (this project: etlegacy_user), or fix the grant."
+                    )
                 raise RuntimeError(
-                    f"pg_dump failed with exit code {return_code}: {details}"
+                    f"pg_dump failed with exit code {return_code}: {details}{hint}"
                 )
 
         if temporary_path.stat().st_size == 0:
