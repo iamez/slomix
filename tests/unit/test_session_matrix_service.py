@@ -22,7 +22,6 @@ from website.backend.services.session_matrix_service import (
     extract_team_rosters,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fake adapters: record queries, return canned rows per call.
 # ---------------------------------------------------------------------------
@@ -161,19 +160,23 @@ async def test_compute_stopwatch_swap_and_substitution():
     ]
 
     # Main stats query: (round_id, player_guid, name, side, kills, deaths, damage,
-    # time_played, revives, times_revived, assists, gibs, hs_kills,
-    # hits, shots, weapon_hs, return_fire_ms)
+    # DAMAGE_RECEIVED, time_played, revives, times_revived, assists, gibs,
+    # hs_kills, hits, shots, weapon_hs, return_fire_ms)
+    #
+    # ⚠️ damage_received was inserted after `damage` — every positional index
+    # after it shifted by one. These stubs are positional tuples, so a column
+    # added to the query is a column the fixtures must carry too.
     stats_rows = [
         # R1 — Allies side=1
-        (100, "g_ally1", "^1Allie1", 1, 10, 5, 1200, 300, 2, 1, 3, 0, 4, 100, 400, 30, 250.0),
-        (100, "g_sub",    "Sub",      1,  5, 3,  800, 300, 1, 0, 1, 0, 1,  50, 200,  5, None),
+        (100, "g_ally1", "^1Allie1", 1, 10, 5, 1200, 960, 300, 2, 1, 3, 0, 4, 100, 400, 30, 250.0),
+        (100, "g_sub", "Sub", 1, 5, 3, 800, 640, 300, 1, 0, 1, 0, 1, 50, 200, 5, None),
         # R1 — Axis side=2
-        (100, "g_axis1",  "Axis1",    2,  8, 6,  900, 300, 0, 0, 2, 1, 3,  80, 300, 20, 300.0),
+        (100, "g_axis1", "Axis1", 2, 8, 6, 900, 720, 300, 0, 0, 2, 1, 3, 80, 300, 20, 300.0),
         # R2 — Axis side=1 (swap)
-        (200, "g_axis1",  "Axis1",    1, 12, 4, 1500, 300, 0, 0, 2, 0, 5,  90, 300, 40, 280.0),
-        (200, "g_sub",    "Sub",      1,  3, 8,  500, 300, 0, 0, 0, 0, 0,  30, 200,  2, None),
+        (200, "g_axis1", "Axis1", 1, 12, 4, 1500, 1200, 300, 0, 0, 2, 0, 5, 90, 300, 40, 280.0),
+        (200, "g_sub", "Sub", 1, 3, 8, 500, 400, 300, 0, 0, 0, 0, 0, 30, 200, 2, None),
         # R2 — Allies side=2
-        (200, "g_ally1",  "^1Allie1", 2,  6, 7,  700, 300, 1, 1, 2, 0, 1,  60, 300, 10, 200.0),
+        (200, "g_ally1", "^1Allie1", 2, 6, 7, 700, 560, 300, 1, 1, 2, 0, 1, 60, 300, 10, 200.0),
     ]
 
     hardcoded = {
@@ -212,8 +215,8 @@ async def test_compute_strips_color_codes_from_names():
         (100, "g2", 2),
     ]
     stats_rows = [
-        (100, "g1", "^1Dmon^7",       1, 10, 5, 1000, 300, 1, 0, 0, 0, 0, 80, 300, 20, None),
-        (100, "g2", "^3rik^6mojster", 2,  5, 8,  600, 300, 0, 0, 0, 0, 0, 50, 250, 10, None),
+        (100, "g1", "^1Dmon^7", 1, 10, 5, 1000, 800, 300, 1, 0, 0, 0, 0, 80, 300, 20, None),
+        (100, "g2", "^3rik^6mojster", 2, 5, 8, 600, 480, 300, 0, 0, 0, 0, 0, 50, 250, 10, None),
     ]
     hardcoded = {"A": {"guids": ["g1"]}, "B": {"guids": ["g2"]}}
     matches = _matches(["oasis"], [[100]])
@@ -237,8 +240,8 @@ async def test_compute_handles_string_side_encoding():
         (100, "g2", "2"),
     ]
     stats_rows = [
-        (100, "g1", "Alpha", "1", 10, 5, 1000, 300, 0, 0, 0, 0, 0, 80, 300, 20, None),
-        (100, "g2", "Beta",  "2",  4, 6,  500, 300, 0, 0, 0, 0, 0, 40, 200, 10, None),
+        (100, "g1", "Alpha", "1", 10, 5, 1000, 800, 300, 0, 0, 0, 0, 0, 80, 300, 20, None),
+        (100, "g2", "Beta", "2", 4, 6, 500, 400, 300, 0, 0, 0, 0, 0, 40, 200, 10, None),
     ]
     hardcoded = {"A": {"guids": ["g1"]}, "B": {"guids": ["g2"]}}
     matches = _matches(["supply"], [[100]])
@@ -259,8 +262,8 @@ async def test_compute_divides_safely_on_zero_stats():
     side_mapping_rows = [(100, "g1", 1), (100, "g2", 2)]
     stats_rows = [
         # All-zero player — no time, no deaths, no shots
-        (100, "g1", "Zero", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, None),
-        (100, "g2", "Other", 2, 3, 0, 200, 60, 0, 0, 0, 0, 0, 20, 0, 0, None),
+        (100, "g1", "Zero", 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, None),
+        (100, "g2", "Other", 2, 3, 0, 200, 160, 60, 0, 0, 0, 0, 0, 20, 0, 0, None),
     ]
     hardcoded = {"A": {"guids": ["g1"]}, "B": {"guids": ["g2"]}}
     matches = _matches(["radar"], [[100]])
@@ -297,3 +300,35 @@ async def test_compute_returns_side_mapping_failed_on_empty_mapping():
         [100], matches, _scoring_payload(team_a="A", team_b="B"), hardcoded,
     )
     assert out == {"available": False, "reason": "side_mapping_failed"}
+
+
+def test_rounds_detail_carries_damage_received():
+    """The number that was missing everywhere per round.
+
+    The matrix reported damage GIVEN and omitted damage TAKEN, and so did the
+    per-player match history — so "how much did I take in that round" was
+    answerable nowhere on the site outside a Discord command.
+
+    This also pins the positional contract: `_fetch_stats` returns tuples, so
+    inserting a column shifts every index after it. Four fixtures in this file
+    broke on exactly that, which is the cheap version of the failure; the
+    expensive version is a silent off-by-one where `time_played` reads a
+    damage figure.
+    """
+    import inspect
+
+    from website.backend.services import session_matrix_service as mod
+
+    # Read the MODULE source, not the private method off the class: this test
+    # is about the SQL text, and reaching through the class for a private
+    # attribute is the coupling the linter objects to.
+    source = inspect.getsource(mod)
+    source = source[source.index("async def _fetch_stats"):]
+    columns = [c.strip() for c in
+               source.split("SELECT", 1)[1].split("FROM", 1)[0].split(",")]
+    names = [c.split(" AS ")[-1].strip() for c in columns if " AS " in c or "." in c]
+    assert "damage_received" in " ".join(names)
+    # and it must sit immediately after damage, which is what the indices assume
+    joined = " ".join(names)
+    assert joined.index("damage_received") > joined.index("damage"), (
+        "damage_received moved before damage — the positional reads shift")
