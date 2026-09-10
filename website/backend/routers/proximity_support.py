@@ -7,7 +7,9 @@ from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.routers.api_helpers import handle_router_errors
 from website.backend.routers.proximity_helpers import (
     ProximityQueryBuilder,
+    _probe_unavailable,
     _table_column_exists,
+    resolve_player_guid,
 )
 
 router = APIRouter()
@@ -24,7 +26,10 @@ async def get_proximity_support_summary(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Support summary — medic support uptime per round."""
-    if not await _table_column_exists(db, 'proximity_support_summary', 'support_uptime_pct'):
+    exists = await _table_column_exists(db, 'proximity_support_summary', 'support_uptime_pct')
+    if exists is None:
+        return _probe_unavailable('proximity_support_summary', 'support_uptime_pct', summary={}, rounds=[], by_map=[])
+    if not exists:
         return {"status": "ok", "summary": {}, "rounds": [], "by_map": []}
 
     where_sql, params = (
@@ -101,6 +106,7 @@ async def get_proximity_movement_stats(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-player aggregated movement analytics from path samples."""
+    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params = (
         ProximityQueryBuilder(["peak_speed IS NOT NULL"])
         .with_session_scope(session_date, range_days)

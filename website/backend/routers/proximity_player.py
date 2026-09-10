@@ -4,15 +4,77 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
-from website.backend.routers.proximity_helpers import logger
+from website.backend.routers.proximity_helpers import logger, resolve_player_guid
 
 router = APIRouter()
 
 
-@router.get("/proximity/player/{guid}/profile")
+class ProxPlayerProfile(BaseModel):
+    """GET /proximity/player/{guid}/profile — the flat shape the SPA's
+    ProximityPlayerPage reads. Counts are integers, rates and speeds floats;
+    an unknown guid answers 200 with every number 0 and player_name echoing
+    the guid (0 engagements = nothing captured, never a real profile of
+    zeros). `requested_guid` is what the caller sent (the 8-char key the
+    session page carries, or the full guid); `guid` is the resolved full one."""
+    player_name: str
+    guid: str
+    #: Absent on recordings made before 2026-09-06; always sent since.
+    requested_guid: str | None = None
+    total_engagements: int
+    escapes: int
+    deaths: int
+    escape_rate: float
+    avg_duration_ms: int
+    total_kills: int
+    crossfire_count: int
+    avg_speed: float
+    sprint_pct: float
+    avg_distance_per_life: int
+    avg_return_fire_ms: int
+    avg_dodge_ms: int
+    avg_support_reaction_ms: int
+    spawn_avg_score: float
+    timed_kills: int
+    avg_denial_ms: int
+    trades_made: int
+
+
+class RadarAxis(BaseModel):
+    label: str
+    value: float
+
+
+class ProxRadarUnscored(BaseModel):
+    """Measured but deliberately outside the radar and the composite; all
+    three are null on the degraded form (recorded live)."""
+    mechanical: float | None
+    avg_return_fire_ms: int | None
+    avg_dodge_reaction_ms: int | None
+
+
+class ProxPlayerRadar(BaseModel):
+    """GET /proximity/player/{guid}/radar — four axes plus the teamplay
+    formula contract (IMP-003). The two `teamplay_*` fields with defaults
+    exist only on the CF/TR fallback form (recorded both ways)."""
+    axes: list[RadarAxis]
+    unscored: ProxRadarUnscored
+    formula_version: str
+    axis_definitions_from: str
+    composite: float
+    teamplay_source: str
+    teamplay_observation_window_days: int
+    teamplay_formula_version: str | None
+    teamplay_degraded: bool
+    teamplay_sample_count: int | None = None
+    teamplay_fallback_reason: str | None = None
+
+
+
+@router.get("/proximity/player/{guid}/profile", response_model=ProxPlayerProfile, response_model_exclude_unset=True)
 async def get_proximity_player_profile(
     guid: str,
     range_days: int = 90,
@@ -20,6 +82,10 @@ async def get_proximity_player_profile(
 ):
     """Aggregated player proximity stats for profile page."""
     since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
+    # The session page keys players on the 8-char prefix; the tables store
+    # the full guid. Resolve once, bind the full form in every query below.
+    requested_guid = guid
+    guid = await resolve_player_guid(db, guid) or guid
     try:
         # All 7 queries below hit different tables with no ordering
         # dependency. Parallelising them turns 7 × RTT into 1 × RTT
@@ -36,17 +102,19 @@ async def get_proximity_player_profile(
             FROM combat_engagement
             WHERE target_guid = $1 AND session_date >= $2
         """
+        # Containment instead of jsonb_array_elements EXISTS: the same
+        # predicate (proven row-equal on live data for two active guids)
+        # but answerable by the GIN jsonb_path_ops index from migration
+        # 080 -- 3.4 s of the profile's 3.5 s warm latency was this scan.
+        # got_kill is boolean in every stored element (measured), so the
+        # containment element matches exactly the COALESCE'd EXISTS.
         kill_query = """
             SELECT COUNT(*) AS total_kills
             FROM combat_engagement e
             WHERE e.outcome = 'killed'
               AND e.session_date >= $2
-              AND EXISTS (
-                    SELECT 1
-                    FROM jsonb_array_elements(COALESCE(e.attackers, '[]'::jsonb)) AS attacker
-                    WHERE attacker->>'guid' = $1
-                      AND COALESCE((attacker->>'got_kill')::boolean, FALSE)
-              )
+              AND e.attackers @> jsonb_build_array(
+                    jsonb_build_object('guid', $1::text, 'got_kill', TRUE))
         """
         spawn_query = """
             SELECT ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
@@ -96,6 +164,7 @@ async def get_proximity_player_profile(
         return {
             "player_name": player_name,
             "guid": guid,
+            "requested_guid": requested_guid,
             "total_engagements": int(eng_stats[0] or 0) if eng_stats else 0,
             "escapes": int(eng_stats[1] or 0) if eng_stats else 0,
             "deaths": int(eng_stats[2] or 0) if eng_stats else 0,
@@ -119,7 +188,7 @@ async def get_proximity_player_profile(
         raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
-@router.get("/proximity/player/{guid}/radar")
+@router.get("/proximity/player/{guid}/radar", response_model=ProxPlayerRadar, response_model_exclude_unset=True)
 async def get_proximity_player_radar(
     guid: str,
     range_days: int = 90,
@@ -130,6 +199,7 @@ async def get_proximity_player_radar(
     Mechanical left the radar with the 2026-07-25 validity pass; it and the
     raw reaction times are returned under `unscored`."""
     since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
+    guid = await resolve_player_guid(db, guid) or guid
     try:
         # 5 independent axis queries — parallelise. Teamplay axis stays
         # below since it branches on awareness_row's engagement count and

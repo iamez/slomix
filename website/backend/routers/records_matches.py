@@ -3,6 +3,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -18,6 +19,197 @@ from website.backend.routers.records_helpers import (
 )
 
 router = APIRouter()
+
+
+class VizPlayerRow(BaseModel):
+    """One player's row in a round's visualisation payload.
+
+    ⚠️ MEASURED, NOT DESIGNED — types are the union over 14 rounds including
+    edge cases (the four oldest in the database, and four with fewer than four
+    players). `dpm`, `efficiency` and `xp` are fractional; typing any of them
+    `int` would truncate silently, still with a 200.
+    """
+
+    guid: str
+    name: str
+    kills: int
+    deaths: int
+    damage_given: int
+    damage_received: int
+    team_damage_given: int
+    team_damage_received: int
+    time_played_seconds: int
+    time_dead_seconds: int
+    revives_given: int
+    gibs: int
+    self_kills: int
+    denied_playtime: int
+    kill_assists: int
+    xp: float
+    efficiency: float
+    dpm: float
+
+
+class VizTopDamage(BaseModel):
+    name: str
+    damage_given: int
+
+
+class VizTopKills(BaseModel):
+    name: str
+    kills: int
+
+
+class VizMvp(BaseModel):
+    name: str
+    dpm: float
+
+
+class EmptyHighlights(BaseModel):
+    """`highlights: {}` — the round produced no player rows at all.
+
+    ⛔ ITS OWN MODEL, BECAUSE OPTIONAL FIELDS SERIALISE AS NULLS. Making the
+    three entries optional on `VizHighlights` stopped the 500, but FastAPI
+    then sent `{"most_damage": null, "most_kills": null, "mvp": null}` where
+    the handler had written `{}` — a payload change on the very state the
+    optionality was added for (Codex on #830).
+
+    ⚠️ AND HERE THE UNION ORDER IS LOAD-BEARING, unlike the day's other
+    unions. `VizHighlights` has three optional fields, so it accepts `{}` too;
+    written first it wins and re-introduces the three nulls. `EmptyHighlights`
+    must come first, and `extra="forbid"` keeps it from swallowing a populated
+    payload. Measured both orders before choosing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class VizHighlights(BaseModel):
+    """⚠️ EMPTY WHEN THE ROUND HAS NO PLAYER ROWS.
+
+    Present on all 80 rounds I sampled, which is why the first version required
+    all three — but the handler leaves `highlights` as `{}` when `players` is
+    empty (ingestion incomplete, or a round that never recorded stats).
+    Requiring them turned that valid empty payload into a 500.
+
+    Optional here means "the round produced none", not "the field may be
+    forgotten": the three names stay declared, so a handler that renames one
+    still fails the drop-nothing test.
+    """
+
+    most_damage: VizTopDamage | None = None
+    most_kills: VizTopKills | None = None
+    mvp: VizMvp | None = None
+
+
+class RoundViz(BaseModel):
+    """⛔ `response_model` FILTERS: a field the handler returns and this model
+    omits vanishes from the payload, silently, with a 200. The guard is
+    `tests/unit/test_response_models_drop_nothing.py` plus the ASGI check in
+    `tests/integration/test_response_models_survive_fastapi.py` — pydantic
+    round-tripping alone does not prove what the client receives."""
+
+    round_id: int
+    #: `rounds.map_name` is nullable and passed through raw — Codex on #830.
+    map_name: str | None
+    #: `str(round_row[2]) if round_row[2] else None` — the column is nullable.
+    round_date: str | None
+    #: ⚠️ `!session_start` inserts an active placeholder WITHOUT a round
+    #: number, and this endpoint does not filter on status — the same state
+    #: `RoundAwards` already models as nullable (Codex on #830).
+    round_number: int | None
+    #: Human label such as "R1" — rendered by the handler, not a number.
+    round_label: str
+    #: Nullable in the schema and passed through unchanged: an active or
+    #: unresolved round has no winner yet. The legacy frontend contract
+    #: (`RoundVizData`) already declares this `number | null`; typing it
+    #: non-null here would have made this model stricter than the page it
+    #: feeds.
+    winner_team: int | None
+    #: ⚠️ NULL on rounds whose clock could not be resolved. My first sample of
+    #: 14 rounds had none, so the model typed this `int` and REJECTED five of
+    #: the oldest rounds outright — a 500 where the page used to render. Found
+    #: by widening to 60 randomly drawn rounds; `duration_seconds` was the only
+    #: field that turned out nullable. A sample that happens to miss the null
+    #: branch types the field wrongly and looks thorough doing it.
+    duration_seconds: int | None
+    player_count: int
+    players: list[VizPlayerRow]
+    highlights: EmptyHighlights | VizHighlights
+
+
+class RecentRound(BaseModel):
+    """One entry in the round picker.
+
+    ⛔ TYPED FROM THE SCHEMA AND THE HANDLER, NOT FROM A SAMPLE. Every live
+    response has these fields populated, and three of them are nullable
+    anyway: `rounds.map_name`, `round_date` and `round_number` all allow NULL,
+    and the handler writes `str(row[2]) if row[2] else None` for the date
+    outright. Sampling shows the branches that fired; the schema shows the
+    ones that can.
+    """
+
+    id: int
+    map_name: str | None
+    round_date: str | None
+    round_number: int | None
+    #: Rendered by `serialize_round_label` — "R1"/"R2" or its fallback.
+    round_label: str
+    player_count: int
+
+
+class RoundAwardEntry(BaseModel):
+    """One award within a category.
+
+    `value` is a PRE-FORMATTED string and `numeric` its sortable counterpart;
+    they are two views of one figure and both must survive — dropping
+    `numeric` would leave the client unable to rank, dropping `value` would
+    leave it re-implementing the handler's formatting.
+    """
+
+    award: str
+    player: str
+    #: ⚠️ NULL when the award could not be resolved to a player: the handler
+    #: writes `effective_guid` and branches on `if effective_guid else ...`,
+    #: and `round_awards.player_guid` is nullable with 496 such rows today.
+    #: They currently resolve through the alias map, which is why 80 sampled
+    #: rounds showed none — the schema and the code both say otherwise.
+    guid: str | None
+    value: str
+    #: ⚠️ NULL for awards whose figure is not sortable — a rendered string with
+    #: no number behind it. My first sample of 14 rounds contained none, so
+    #: this was typed `float` and REJECTED three rounds out of forty, turning
+    #: a rendering page into a 500. A field is nullable when the data says so,
+    #: not when the first few rows agree.
+    numeric: float | None
+
+
+class RoundAwardCategory(BaseModel):
+    name: str
+    emoji: str
+    awards: list[RoundAwardEntry]
+
+
+class RoundAwards(BaseModel):
+    """⚠️ `categories` stays a mapping on purpose.
+
+    Seven categories exist today (combat, deaths, objectives, skills,
+    teamwork, timing, weapons) and the handler builds them from a table it can
+    extend. Naming them here would make this model the gate on which
+    categories may exist: adding one without editing this class would drop it
+    from the response with a 200.
+    """
+
+    round_id: int
+    #: Nullable for the same reason as `RoundViz.map_name` (Codex on #830).
+    map_name: str | None
+    #: ⚠️ NULL for the placeholder row `!session_start` inserts — that insert
+    #: omits `round_number` and this handler does not filter on status, so an
+    #: active session would otherwise answer 500 instead of an empty award set.
+    round_number: int | None
+    round_date: str | None
+    categories: dict[str, RoundAwardCategory]
+
 logger = get_app_logger("api.records.matches")
 
 
@@ -114,22 +306,25 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
                 -- honestly instead of picking one and hoping.
                 headshot_kills
             FROM player_comprehensive_stats
-            WHERE round_date = $1
-              AND map_name = $2
-              AND round_number = $3
+            -- By the round's id, not by (date, map, half): a map replayed on
+            -- the same date with the same half number shares all three, and
+            -- the DISTINCT ON would then mix two matches into one box score
+            -- (Codex on #988).
+            WHERE round_id = $1
             ORDER BY player_name, damage_given DESC
         ) AS deduplicated
         ORDER BY team, damage_given DESC
     """
 
     try:
-        rows = await db.fetch_all(query, (round_date, map_name, round_number))
+        rows = await db.fetch_all(query, (round_id,))
     except Exception as e:
         logger.error(f"Error fetching match details: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    if not rows:
-        raise HTTPException(status_code=404, detail="No player stats found")
+    # A round that exists with no player rows is a known absence, not an
+    # error: both teams come back empty and the caller shows "no rows",
+    # instead of a 404 the client can only render as "unavailable".
 
     # Group players by team
     team1_players = []
@@ -233,7 +428,7 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
     }
 
 
-@router.get("/rounds/{round_id}/awards")
+@router.get("/rounds/{round_id}/awards", response_model=RoundAwards)
 async def get_round_awards(round_id: int, db: DatabaseAdapter = Depends(get_db)):
     """
     Get awards for a specific round, grouped by category.
@@ -246,11 +441,42 @@ async def get_round_awards(round_id: int, db: DatabaseAdapter = Depends(get_db))
         raise HTTPException(status_code=404, detail="Round not found")
 
     # Get awards
+    #
+    # ⛔⛔ THE BOT FILTER IS NOT DECORATION — it is what the session-level
+    # aggregate over this same table already does
+    # (`sessions_router.py:2634`), and without it the two views of one fact
+    # disagree: 2120 of the 27269 award rows are bots, spread over 83 rounds,
+    # and a person opening a round saw names the session summary had hidden.
+    #
+    # ⭐ Measured before changing anything: 2059 of those 2120 (97%) sit in
+    # rounds that contain NO human award at all. So this does not thin a mixed
+    # round's list — it empties an all-bot round, which is the right answer.
+    # An award won against nobody is not an award, and the empty-state copy
+    # already says "no awards for this round".
+    #
+    # ⛔⛔ DISTINCT IS NOT TIDYING — the table holds duplicate rows. Measured
+    # 2026-09-06: 1472 (round, award) groups hold more than one row, and 929
+    # of them are the SAME player with the SAME value written twice within
+    # the same second. Round 9831 shows two "Most damage given" lines; a
+    # visitor reads that as a broken page, because it is.
+    #
+    # ⚠️ Only the identical ones go. 282 further groups hold DIFFERENT
+    # players, written minutes apart — a re-import that reached another
+    # answer. Those are a real disagreement about the data and collapsing
+    # them here would hide it behind a display fix. They stay visible, and
+    # they are written up for the owner rather than silently resolved.
+    #
+    # ⛔ ORDER BY id cannot stay: it is not in the DISTINCT list, and
+    # PostgreSQL rejects that outright. Ordering by the award name gives a
+    # stable, readable sequence instead of insertion order.
     awards_query = """
-        SELECT award_name, player_name, player_guid, award_value, award_value_numeric
+        SELECT DISTINCT award_name, player_name, player_guid,
+                        award_value, award_value_numeric
         FROM round_awards
         WHERE round_id = $1
-        ORDER BY id
+          AND (player_guid IS NULL OR UPPER(player_guid) NOT LIKE 'OMNIBOT%')
+          AND player_name NOT LIKE '%[BOT]%'
+        ORDER BY award_name, player_name
     """
     awards_rows = await db.fetch_all(awards_query, (round_id,))
 
@@ -341,7 +567,7 @@ async def get_round_vs_stats(round_id: int, db: DatabaseAdapter = Depends(get_db
     }
 
 
-@router.get("/rounds/recent")
+@router.get("/rounds/recent", response_model=list[RecentRound])
 async def get_recent_rounds(
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
@@ -356,7 +582,12 @@ async def get_recent_rounds(
                COUNT(pcs.id) AS player_count
         FROM rounds r
         JOIN player_comprehensive_stats pcs ON pcs.round_id = r.id
+        -- Same gate as the calendar: a bot or invalid round is not something
+        -- to offer in a round picker. `round_number > 0` already excludes the
+        -- R0 summary rows.
         WHERE r.round_number > 0
+          AND r.is_valid IS NOT FALSE
+          AND NOT COALESCE(r.is_bot_round, FALSE)
         GROUP BY r.id, r.map_name, r.round_date, r.round_number
         ORDER BY r.id DESC
         LIMIT $1
@@ -377,7 +608,7 @@ async def get_recent_rounds(
     ]
 
 
-@router.get("/rounds/{round_id}/viz")
+@router.get("/rounds/{round_id}/viz", response_model=RoundViz)
 async def get_round_viz(
     round_id: int,
     db: DatabaseAdapter = Depends(get_db),

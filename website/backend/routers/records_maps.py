@@ -1,6 +1,7 @@
 """Records sub-router: Map stats endpoints."""
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from shared.round_time import round_duration_sql
 from website.backend.dependencies import get_db
@@ -8,6 +9,93 @@ from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 
 router = APIRouter()
+
+
+class MapStats(BaseModel):
+    """One map's aggregate line.
+
+    ⚠️ THIS ENDPOINT USED TO SWALLOW ITS EXCEPTION AND RETURN `[]`, which made
+    a failed query indistinguishable from a database with no maps. Three
+    sibling endpoints solved that with an explicit `status` field; this one
+    returns a bare ARRAY read by four callers, so a wrapper would reshape the
+    payload for all of them.
+
+    ⭐ The third option was the right one, and it came from the workstream that
+    renders this: the ambiguity was never a missing `status`, it was the
+    `except` turning a failure into a valid answer. Removing it restores `[]`
+    to meaning exactly one thing, with HTTP carrying the other — no new
+    channel, no reshaped payload, and no field the OpenAPI generator cannot
+    see.
+
+    ⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes
+    through a `x or 0` / `int(x) if x else 0` guard, so they are genuinely
+    non-null — the handler already decided that. `last_played` is the one that
+    does NOT: `row[8]` goes through untouched and `rounds.round_date` is a
+    nullable column, so it is typed nullable even though no live row shows it.
+    """
+
+    name: str
+    total_rounds: int
+    matches_played: int
+    allies_wins: int
+    axis_wins: int
+    allies_win_rate: float
+    axis_win_rate: float
+    avg_duration: int
+    min_duration: int
+    max_duration: int
+    #: Passed through unguarded from a nullable column.
+    last_played: str | None
+    total_kills: int
+    total_deaths: int
+    avg_dpm: float
+    unique_players: int
+    grenade_kills: int
+    panzer_kills: int
+    mortar_kills: int
+
+
+class MapObjectiveRecord(BaseModel):
+    """The fastest completion recorded for one map."""
+
+    #: `rounds.map_name` is nullable; the group-by carries the null through.
+    map_name: str | None
+    fastest_seconds: int
+    #: `M:SS`, rendered from the MEASURED duration — not the `actual_time`
+    #: header, which is the stopwatch target and overstates ~15% of rounds.
+    fastest_time: str
+    #: `rounds.round_date` is nullable and the segments query does not
+    #: exclude undated rows — Codex on #830.
+    played: str | None
+    #: Nullable column: an unresolved round has no winner.
+    winner_team: int | None
+    #: 'Axis' | 'Allies' | 'Draw' — derived, so never null.
+    winner_side: str
+    gaming_session_id: int | None
+
+
+class MapObjectiveRecords(BaseModel):
+    """⛔ THREE STATES, NOT TWO, AND NONE OF THEM DERIVED FROM LENGTH.
+
+    The handler catches its own exception and answers 200. Before this it said
+    `status: "error"` on failure and `"ok"` otherwise, which left the page
+    deriving "no records" from `records.length === 0` — and that reads a
+    measured emptiness and an unmeasured one the same way.
+
+      ok           the query ran and returned records
+      no_data      the query ran and there are none
+      unavailable  the query failed; the empty list means we do not know
+
+    A plain string, not an enum: a state added later must not be filtered out
+    by the schema before anyone sees it.
+    """
+
+    #: 'ok' | 'no_data' | 'unavailable'
+    status: str
+    #: One short sentence when the state is not `ok`; null otherwise.
+    note: str | None = None
+    records: list[MapObjectiveRecord]
+
 logger = get_app_logger("api.records.maps")
 
 # Measured duration (webhook first, header text fallback) — actual_time
@@ -16,7 +104,7 @@ logger = get_app_logger("api.records.maps")
 _DUR = round_duration_sql("r")
 
 
-@router.get("/stats/maps")
+@router.get("/stats/maps", response_model=list[MapStats])
 async def get_maps(db: DatabaseAdapter = Depends(get_db)):
     """
     Get comprehensive statistics for all maps.
@@ -129,12 +217,30 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
             )
 
         return maps
-    except Exception as e:
-        logger.error(f"Error fetching map stats: {e}")
-        return []
+    except Exception:
+        # ⛔ NO `return []` HERE. Swallowing the error made a failed query
+        # indistinguishable from a database with no maps: both answered 200
+        # with an empty array, and MapsPage renders `maps.length === 0` as
+        # nothing at all — so an outage looked like a quiet week.
+        #
+        # The three sibling endpoints gained an explicit `status` field, but
+        # this one returns a bare ARRAY and four callers consume it that way.
+        # Letting the error through is the smaller change AND the more honest
+        # one: `[]` then means exactly one thing again, and HTTP carries the
+        # other. `/stats/weapons` has always worked this way.
+        #
+        # Checked before doing it — every caller already handles a throw:
+        #   matches.js:119   catch → renders "Failed to load map statistics"
+        #                    (a message that until now could never appear)
+        #   records.js:73    catch → logs, leaves the filter empty
+        #   queries.ts       react-query → isError
+        # `fetchJSON` (utils.js:120) raises on !res.ok, so the legacy pair
+        # reach their catch blocks rather than dying mid-render.
+        logger.exception("Error fetching map stats")
+        raise
 
 
-@router.get("/records/maps/segments")
+@router.get("/records/maps/segments", response_model=MapObjectiveRecords)
 async def get_map_objective_records(db: DatabaseAdapter = Depends(get_db)):
     """Fastest objective-completion time per map + when/which side held it.
 
@@ -176,8 +282,16 @@ async def get_map_objective_records(db: DatabaseAdapter = Depends(get_db)):
                 "winner_side": side,
                 "gaming_session_id": row[5],
             })
-        records.sort(key=lambda r: r["map_name"])
-        return {"status": "ok", "records": records}
+        records.sort(key=lambda r: r["map_name"] or "")
+        return {
+            "status": "ok" if records else "no_data",
+            "note": None if records else "no objective records for these maps",
+            "records": records,
+        }
     except Exception as e:
         logger.error(f"Error fetching map objective records: {e}")
-        return {"status": "error", "records": []}
+        return {
+            "status": "unavailable",
+            "note": "the objective-records query failed; this is not an empty set",
+            "records": [],
+        }

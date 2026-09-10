@@ -7,6 +7,7 @@ Extracted from api.py to reduce file size and improve maintainability.
 import json
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -35,7 +36,12 @@ class LinkPlayerRequest(BaseModel):
     player_name: str
 
 
-@router.get("/player/search")
+#: ⛔ `list[str]`, not a wrapper object. The handler returns a bare list and
+#: the SPA reads it as one; declaring an envelope here would silently reshape
+#: the payload. The names may include `[BOT]` entries — a deliberate decision
+#: recorded in the ordering comment below, not an oversight: `[BOT]` is a
+#: naming convention, and filtering on it would be treating it as identity.
+@router.get("/player/search", response_model=list[str])
 @limiter.limit("30/minute")
 async def search_player(request: Request, query: str, db: DatabaseAdapter = Depends(get_db)):
     """Search for player aliases. Rate-limited to deter enumeration."""
@@ -159,16 +165,42 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
     """
     Get current live session status.
     """
-    # Check if session is active (last activity within 30 minutes)
-    # Postgres specific query
+    # Check if session is active (last activity within 30 minutes).
+    #
+    # ⛔ Codex on #855, confirmed live: pcs.round_date is a DATE-ONLY text
+    # ('YYYY-MM-DD'), so the old `round_date::timestamp >= NOW() - 30 min`
+    # compared against MIDNIGHT — after 00:30 the endpoint answered
+    # {active: false} for the rest of the day (measured at 22:26 during an
+    # evening with 12 rounds imported in the prior two hours), and
+    # COUNT(DISTINCT round_date) collapsed every same-day round to 1.
+    # rounds.created_at is the import timestamp — about a minute behind
+    # play, which is exactly the claim the UI makes ("imported in the last
+    # half hour"). A historical backfill would read as live for its half
+    # hour; that is the honest trade for having a working clock at all.
+    # current_players comes from the LATEST round, not the window union:
+    # a substitution mid-window would otherwise count both the leaver and
+    # the joiner as "current" (Codex on #855, round four).
     query = """
         SELECT
-            MAX(round_date) as last_round,
-            COUNT(DISTINCT round_date) as rounds,
-            COUNT(DISTINCT player_guid) as players
-        FROM player_comprehensive_stats
-        WHERE round_date::timestamp >= CURRENT_DATE
-            AND round_date::timestamp >= NOW() - INTERVAL '30 minutes'
+            MAX(r.created_at) as last_round,
+            COUNT(DISTINCT r.id) as rounds,
+            (SELECT COUNT(DISTINCT p.player_guid)
+               FROM player_comprehensive_stats p
+              WHERE p.round_id = (
+                    SELECT r2.id FROM rounds r2
+                     WHERE r2.round_number IN (1, 2)
+                       AND r2.is_bot_round IS DISTINCT FROM TRUE
+                       AND r2.created_at >= NOW() - INTERVAL '30 minutes'
+                     ORDER BY r2.created_at DESC LIMIT 1
+              )) as players
+        FROM rounds r
+        WHERE r.round_number IN (1, 2)
+            -- A bot test round imported in the window must not announce a
+            -- live evening on the public home page — /api/stats/tonight
+            -- already drops bot-only evenings for exactly this distinction
+            -- (Codex on #855, round six).
+            AND r.is_bot_round IS DISTINCT FROM TRUE
+            AND r.created_at >= NOW() - INTERVAL '30 minutes'
     """
     try:
         result = await db.fetch_one(query)
@@ -181,14 +213,14 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
 
     # Get latest round details (actual_duration_seconds lives on rounds table)
     latest_query = """
-        SELECT DISTINCT ON (p.round_date)
-            p.map_name,
-            p.round_date,
+        SELECT
+            r.map_name,
+            r.created_at,
             r.actual_duration_seconds
-        FROM player_comprehensive_stats p
-        LEFT JOIN rounds r ON r.id = p.round_id
-        WHERE p.round_date::timestamp >= CURRENT_DATE
-        ORDER BY p.round_date DESC
+        FROM rounds r
+        WHERE r.round_number IN (1, 2)
+          AND r.is_bot_round IS DISTINCT FROM TRUE
+        ORDER BY r.created_at DESC
         LIMIT 1
     """
     try:
@@ -412,7 +444,143 @@ def _tonight_director_line(score: dict, momentum: list, current: dict,
     return f"{lead}{tail}{chase}."
 
 
-@router.get("/stats/tonight")
+class TonightRound(BaseModel):
+    round: int
+    #: None when the Lua winner value is outside 1/2 — a live or
+    #: unlinked round, not an error (Codex on #830).
+    winner: str | None
+    axis_score: int
+    allies_score: int
+    #: None when neither `actual_duration_seconds` nor a usable timestamp
+    #: pair exists (Codex on #830).
+    duration: int | None
+    a_on_axis: bool
+    is_fullhold: bool
+
+
+class TonightMap(BaseModel):
+    #: `lua_round_teams.map_name` is nullable and preserved as null by
+    #: `_store_lua_round_teams` — Codex on #830.
+    map: str | None
+    map_number: int
+    rounds: list[TonightRound]
+    winner: str
+    a_points: int
+    b_points: int
+
+
+class TonightTeam(BaseModel):
+    name: str
+    #: Player display names, sorted case-insensitively.
+    roster: list[str]
+
+
+class TonightTeams(BaseModel):
+    a: TonightTeam
+    b: TonightTeam
+
+
+class TonightScore(BaseModel):
+    a_maps: int
+    b_maps: int
+    a_rounds: int
+    b_rounds: int
+    maps_completed: int
+
+
+class TonightMomentum(BaseModel):
+    a: float
+    b: float
+
+
+class TonightCurrent(BaseModel):
+    """The map being played right now.
+
+    `beat_seconds` is the R1 duration R2's attack has to beat, and it is
+    populated ONLY while `r2_pending` is true. All four sampled nights had
+    already finished their R2, so every sample showed null — the int branch is
+    typed from `cur_by_round.get(1, {}).get("duration")`, not from a reading.
+    """
+
+    map: str | None
+    round: int
+    status: str
+    r2_pending: bool
+    beat_seconds: int | None
+
+
+class TonightHoldPoint(BaseModel):
+    t: int
+    p: float
+
+
+class TonightHoldProbability(BaseModel):
+    """⭐ `map` IS NON-NULL HERE WHILE `TonightMap.map` AND `current_map` ARE
+    NOT, and the asymmetry is structural rather than an oversight. The handler
+    computes the curve as `_hold_prob_curve(db, current_map) if current_map
+    else []`, and then emits this object only `if hold` — so a null map name
+    yields an empty curve, an empty curve yields `hold_probability: None`, and
+    this object never exists with a null map. Same kind of guarantee as
+    `head_pct` under its `HAVING` floor: a fact about the code, not about
+    today's rows."""
+
+    map: str
+    curve: list[TonightHoldPoint]
+
+
+class TonightLive(BaseModel):
+    """A night with rounds in it — the TWELVE-key shape."""
+
+    status: str
+    active: bool
+    #: Nullable for the same reason as `TonightMap.map`.
+    current_map: str | None
+    last_update_unix: int
+    age_seconds: int
+    teams: TonightTeams
+    score: TonightScore
+    maps: list[TonightMap]
+    momentum: list[TonightMomentum]
+    current: TonightCurrent
+    #: `_tonight_director_line` is annotated `str | None` and returns None
+    #: before there is anything to say. All four samples had a sentence.
+    director: str | None
+    #: `{"map": …, "curve": […]} if hold else None` — null when the curve is
+    #: empty, which no sampled night was.
+    hold_probability: TonightHoldProbability | None
+
+
+class TonightIdle(BaseModel):
+    """No live session — the NINE-key shape, with `{}` and `[]` where the live
+    shape carries structure.
+
+    ⛔ SAMPLING THIS ENDPOINT TODAY RETURNS THIS SHAPE AND ONLY THIS SHAPE, and
+    that is the reverse of the trap on `/stats/last-session`. The query is
+    `WHERE captured_at::date = CURRENT_DATE`, the last capture was two days
+    ago, so the live response is the EMPTY one and the twelve-key shape is the
+    unreachable branch. Measured by rewriting CURRENT_DATE to five days that do
+    have captures: 2026-08-27/26/23/20 answer twelve keys, and 2026-08-21
+    answers nine — that is the SECOND idle return, where rows exist but every
+    one was a bot round the identity filter dropped.
+
+    ⚠️ `teams` and `score` are `{}` here and structured objects there, so the
+    two shapes are a union, not one model with optional fields. `current`,
+    `director` and `hold_probability` are literally None on this branch.
+    """
+
+    status: str
+    active: bool
+    teams: dict[str, Any]
+    maps: list[Any]
+    momentum: list[Any]
+    score: dict[str, Any]
+    current: None
+    director: None
+    hold_probability: None
+
+
+@router.get("/stats/tonight",
+            response_model=TonightLive | TonightIdle)
 async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     """Consolidated live payload for the Tonight hub. Reads the real-time
     lua_round_teams feed and resolves it into LOGICAL TEAMS (not Axis/Allies —
@@ -675,6 +843,12 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         LEFT JOIN rounds r ON r.id = p.round_id
         WHERE p.player_guid = $1
           AND p.round_number IN (1, 2)
+          -- Codex on #855: the profile's lifetime numbers carry this gate
+          -- (players_profile_router), so the milestones computed here must
+          -- count the same rounds — measured 490 vs 454 kills for one guid
+          -- without it. IS DISTINCT FROM keeps LEFT-JOIN NULLs, the same
+          -- reading as everywhere else.
+          AND r.is_valid IS DISTINCT FROM FALSE
     """
     if not use_guid:
         query = query.replace("p.player_guid = $1", "p.player_name ILIKE $1")
@@ -685,7 +859,12 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         logger.error(f"Error fetching player stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    if not row or not row[0]:  # No kills usually means no stats found
+    # "Not found" is COUNT(round_id) == 0, never SUM(kills) == 0: a support
+    # player or newcomer with counted rounds and zero kills exists, and the
+    # milestones panel must show their zero progress rather than a 404
+    # (Codex on #855). The aggregate always returns one row; games is the
+    # existence signal.
+    if not row or not row[4]:
         raise HTTPException(status_code=404, detail="Player not found")
 
     (kills, deaths, damage, time, games, xp, wins, last_seen) = row
@@ -751,19 +930,28 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         favorite_map = None
 
     # Get highest and lowest DPM (single round)
+    # ⛔ R0 rows carry CUMULATIVE damage over NON-cumulative playtime
+    # (CLAUDE.md), so without the round filter the "highest dpm" is the R0
+    # artifact almost by construction — measured 790 vs a real 403 for one
+    # guid. Same validity gate as the aggregate above.
     dpm_query = """
         SELECT
-            MAX(CASE WHEN time_played_seconds > 60 THEN damage_given * 60.0 / time_played_seconds END) as max_dpm,
-            MIN(CASE WHEN time_played_seconds > 60 THEN damage_given * 60.0 / time_played_seconds END) as min_dpm
-        FROM player_comprehensive_stats
-        WHERE player_guid = $1 AND time_played_seconds > 60
+            MAX(CASE WHEN p.time_played_seconds > 60 THEN p.damage_given * 60.0 / p.time_played_seconds END) as max_dpm,
+            MIN(CASE WHEN p.time_played_seconds > 60 THEN p.damage_given * 60.0 / p.time_played_seconds END) as min_dpm
+        FROM player_comprehensive_stats p
+        LEFT JOIN rounds r ON r.id = p.round_id
+        WHERE p.player_guid = $1 AND p.time_played_seconds > 60
+          AND p.round_number IN (1, 2)
+          AND r.is_valid IS DISTINCT FROM FALSE
     """
     if not use_guid:
-        dpm_query = dpm_query.replace("player_guid = $1", "player_name ILIKE $1")
+        dpm_query = dpm_query.replace("p.player_guid = $1", "p.player_name ILIKE $1")
     try:
         dpm_row = await db.fetch_one(dpm_query, (identifier,))
-        highest_dpm = int(dpm_row[0]) if dpm_row and dpm_row[0] else None
-        lowest_dpm = int(dpm_row[1]) if dpm_row and dpm_row[1] else None
+        # `is not None`, not truthiness: a genuine 0-dpm record is a value,
+        # and SQL NULL is the only "no qualifying round" (Codex on #855).
+        highest_dpm = int(dpm_row[0]) if dpm_row and dpm_row[0] is not None else None
+        lowest_dpm = int(dpm_row[1]) if dpm_row and dpm_row[1] is not None else None
     except Exception as e:
         logger.error(f"Error fetching DPM records for {player_name}: {e}")
         highest_dpm = None
@@ -984,11 +1172,64 @@ async def compare_players(
     }
 
 
-@router.get("/stats/leaderboard")
+class LeaderboardRow(BaseModel):
+    """One row of the generic stat leaderboard, as this endpoint returns it.
+
+    ⚠️ MEASURED, NOT DESIGNED: 635 rows over all 9 valid `stat` values × all 4
+    distinct `period` branches (`7d`, `30d`, `season`, and the else-branch
+    all-time). Zero nulls in every field.
+
+    ⚠️ `kills` and `deaths` are `int | None`, AND THIS IS A CORRECTION. They
+    were typed `int` on the argument that `SUM(x)` is null only for an
+    all-null group, that there is no null `kills` row in the table, and that
+    widening "buys nothing but a null check on every consumer". Comparing this
+    file against the frontend's hand-written types showed the flaw: exactly
+    the same evidence — column nullable, zero nulls observed — had produced
+    `RecentRound.map_name: str | None` two endpoints away. The rule cannot be
+    "it depends on how I felt".
+
+    ⛔ The tiebreak is which mistake is recoverable. A `| None` the data never
+    exercises costs one `?? 0` on the consumer. An `int` the data eventually
+    contradicts is a 500 on a page that was rendering, and no test can catch
+    it — only the table can. A response_model is a promise about what the
+    server MAY send, and with a nullable column passed through raw (unlike
+    `value` and `kd` three lines away, which the handler coalesces) the server
+    may send null.
+
+    `value` is `float` and not `int | float`: the handler's `else 0` branch
+    (an int) needs a NULL `SUM`, unreachable for the same reason.
+    """
+
+    rank: int
+    guid: str
+    name: str
+    value: float
+    #: Rounds, NOT sessions — the field was renamed, the participation unit
+    #: changed with it, and the handler still carries the old comment.
+    rounds: int
+    kills: int | None
+    deaths: int | None
+    kd: float
+
+
+@router.get("/stats/leaderboard", response_model=list[LeaderboardRow])
 async def get_leaderboard(
     stat: str = "dpm",
     period: str = "30d",
-    min_games: int = 3,
+    #: ⛔ ACCEPTED AND IGNORED. `having` below is the empty string, so this
+    #: value never reaches the query: `min_games=1` and `min_games=999` return
+    #: identical rows (measured). It is NOT removed, because removing it would
+    #: change an observable response — `min_games=abc` answers 422 today and
+    #: would answer 200 once FastAPI stops knowing the parameter — and no
+    #: caller sends it, so that change would buy nothing. Left declared and
+    #: labelled instead: a parameter that VALIDATES a value and then discards
+    #: it is the worst of the three states, because rejecting bad input is
+    #: exactly what makes it look like it works.
+    min_games: int = Query(
+        default=3,
+        description="Accepted and ignored — the handler applies no HAVING "
+                    "clause. Kept only so that existing callers do not change "
+                    "behaviour; do not build on it."),
     limit: int = 50,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -1215,7 +1456,58 @@ async def get_leaderboard(
         )
     return leaderboard
 
-@router.get("/stats/quick-leaders")
+class XpLeaderRow(BaseModel):
+    """One row of the XP board. ⚠️ Its participation field is `rounds`."""
+
+    rank: int
+    guid: str
+    name: str
+    #: `SUM(xp)` — measured as a float on the live database, not an int.
+    value: float
+    rounds: int
+    label: str
+
+
+class DpmLeaderRow(BaseModel):
+    """One row of the DPM board. ⚠️ Its participation field is `sessions`.
+
+    ⛔ A SEPARATE MODEL, not one row type with both fields optional. The two
+    boards genuinely differ, and a shared model with `rounds?`/`sessions?`
+    would let either board claim the other's shape — a client could then read
+    `rounds` off a DPM row and get `undefined` with the type system's blessing.
+    """
+
+    rank: int
+    guid: str
+    name: str
+    value: float
+    sessions: int
+    label: str
+
+
+class QuickLeaders(BaseModel):
+    """Two small boards for the homepage, and their own failures.
+
+    ⭐ `errors` IS THE POINT. Either board can fail INSIDE a 200: the query
+    raises, the list comes back empty, and a token names which one. Without
+    reading it, an empty board is indistinguishable from a quiet week — which
+    is how "no data in this window" ended up on a page whose database was
+    simply unreachable.
+
+    ⚠️ `list[str]`, measured. The hand-written client type had `unknown[]`,
+    which is weaker than the truth: the producer appends exactly
+    `xp_query_failed` or `dpm_query_failed` and nothing else
+    (`players_router`, the two `except` branches).
+    """
+
+    #: Fixed at 7 in the handler, not a parameter — the label cannot lie.
+    window_days: int
+    xp: list[XpLeaderRow]
+    dpm_sessions: list[DpmLeaderRow]
+    errors: list[str]
+
+
+@router.get("/stats/quick-leaders", response_model=QuickLeaders)
 async def get_quick_leaders(
     limit: int = 5,
     db: DatabaseAdapter = Depends(get_db),
@@ -1446,26 +1738,51 @@ async def get_player_matches(
     use_guid = player_guid is not None
     identifier = player_guid if use_guid else player_name
 
+    # ⛔ ROUND-LEVEL FIELDS THE ROUND ALREADY HAS.
+    # This returned 13 fields while the row carries 39 populated ones, and the
+    # three it omitted — gibs, damage_received, time_played_seconds — are the
+    # ones a player asks about first. The website had no other per-round path
+    # to them: the session matrix drops damage_received too, so "how much did I
+    # take" was answerable nowhere outside a Discord command.
+    #
+    # `round_status` comes along because a cancelled round is still a round the
+    # player played. Filtering it out here would repeat the defect the session
+    # endpoint has: the row vanishes and nothing says why.
     query = """
         SELECT
-            round_id,
-            round_date,
-            map_name,
-            round_number,
-            kills,
-            deaths,
-            damage_given,
-            time_played_seconds,
-            team,
-            xp,
-            accuracy
-        FROM player_comprehensive_stats
-        WHERE player_guid = $1
-        ORDER BY round_date DESC, round_number DESC
+            pcs.round_id,
+            pcs.round_date,
+            pcs.map_name,
+            pcs.round_number,
+            pcs.kills,
+            pcs.deaths,
+            pcs.damage_given,
+            pcs.time_played_seconds,
+            pcs.team,
+            pcs.xp,
+            pcs.accuracy,
+            pcs.gibs,
+            pcs.damage_received,
+            pcs.headshot_kills,
+            pcs.revives_given,
+            r.round_status,
+            r.gaming_session_id,
+            r.is_valid
+        FROM player_comprehensive_stats pcs
+        LEFT JOIN rounds r ON r.id = pcs.round_id
+        WHERE pcs.player_guid = $1
+          -- Codex on #855, twice over: without the round filter the R0
+          -- match-summary aggregates render as if they were rounds (the
+          -- recorded fixture carried round 10208 with round_number 0), and
+          -- ordering by the date-only round_date groups every R2 ahead of
+          -- every R1 within a day, so LIMIT could drop the newest rounds.
+          -- round_id is monotonic — the same ordering the profile uses.
+          AND pcs.round_number IN (1, 2)
+        ORDER BY pcs.round_id DESC
         LIMIT $2
     """
     if not use_guid:
-        query = query.replace("player_guid = $1", "player_name ILIKE $1")
+        query = query.replace("pcs.player_guid = $1", "pcs.player_name ILIKE $1")
 
     try:
         rows = await db.fetch_all(query, (identifier, limit))
@@ -1497,6 +1814,19 @@ async def get_player_matches(
                 "accuracy": row[10],
                 "dpm": round(dpm, 1),
                 "kd": round(kd, 2),
+                "gibs": row[11] or 0,
+                "damage_received": row[12] or 0,
+                "headshot_kills": row[13] or 0,
+                "revives_given": row[14] or 0,
+                #: 'cancelled' rounds were played and have rows; the caller
+                #: decides whether to count them, but must be able to SEE them.
+                "round_status": row[15],
+                "gaming_session_id": row[16],
+                #: is_valid FALSE with a completed status is a real state
+                #: (sessions 151/147/146/128/127) — without the flag the
+                #: caller cannot mark those rows uncounted (Codex on #855,
+                #: round six).
+                "is_valid": row[17],
             }
         )
 
@@ -1511,6 +1841,11 @@ async def get_player_form(
 ):
     """
     Get player's recent form - session DPM (aggregated per gaming session).
+
+    R1/R2 only: the importer still writes a round_number = 0 "summary" row per
+    map whose damage is the two halves added again (docs/CLAUDE.md). Measured
+    2026-09-07 for one regular: 26 R0 rows carried 96,970 damage against
+    99,536 across their 56 R1+R2 rows, so this series was ~1.9x too high.
     """
     player_guid = await resolve_player_guid(db, player_name)
     use_guid = player_guid is not None
@@ -1528,6 +1863,7 @@ async def get_player_form(
         FROM player_comprehensive_stats p
         JOIN rounds r ON p.round_id = r.id
         WHERE p.player_guid = $1
+        AND p.round_number IN (1, 2)
         AND p.time_played_seconds > 0
         AND r.gaming_session_id IS NOT NULL
         GROUP BY r.gaming_session_id
@@ -1610,6 +1946,7 @@ async def get_player_rounds(
             p.time_played_seconds
         FROM player_comprehensive_stats p
         WHERE p.player_guid = $1
+        AND p.round_number IN (1, 2)
         AND p.time_played_seconds > 60
         ORDER BY p.round_date DESC, p.round_id DESC
         LIMIT $2
