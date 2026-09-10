@@ -579,10 +579,12 @@ describe('SessionDetail — stats 2.0 summary', () => {
   it('a header click re-sorts the basics', async () => {
     renderPage();
     const kills = await screen.findByRole('button', { name: /^dmg/ });
+    // The sort state is on the columnheader wrapping the button (a11y pass).
+    const header = screen.getByRole('columnheader', { name: /^dmg/ });
     fireEvent.click(kills);
-    expect(kills).toHaveAttribute('aria-sort', 'descending');
+    expect(header).toHaveAttribute('aria-sort', 'descending');
     fireEvent.click(kills);
-    expect(kills).toHaveAttribute('aria-sort', 'ascending');
+    expect(header).toHaveAttribute('aria-sort', 'ascending');
   });
 
   it('the awards read as sentences with the nickname and the engine name behind it', async () => {
