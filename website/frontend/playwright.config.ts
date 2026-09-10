@@ -20,12 +20,6 @@ import { defineConfig, devices } from '@playwright/test';
 //   3. npm --prefix website/frontend run build   (website/static/modern/ is
 //      gitignored + generated; the skill-rating route imports
 //      /static/modern/route-host.js and 404s without this)
-//   3b. npm --prefix website/frontend run build:app   (a SECOND and separate
-//      bundle — website/static/app/, also gitignored. main.py mounts /app
-//      only `if os.path.isdir(APP_DIST)` and evaluates that at STARTUP, so
-//      app-tokens.spec.ts gets a 404 without this step, and building it
-//      after the server is already running still 404s until a restart.
-//      Order that works: build, then start the backend.)
 //   4. cd website && ../venv/bin/uvicorn backend.main:app --port 8000
 //      (must run from website/, not the repo root — there is no root-level
 //      `backend` package, it's website/backend; the venv lives at the repo
@@ -54,31 +48,9 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
-    // H3 (docs/design/09): two eyes, not one. `anon` is the old `chromium`
-    // project under its real name — everything a logged-out visitor sees.
-    // `owner` runs the same browser with a storage state minted by
-    // owner.setup.ts (a session cookie signed with the backend's own
-    // SESSION_SECRET — see scripts/e2e_owner_session.py), because the only
-    // real login is Discord OAuth and a headless run cannot walk it.
-    // Surfaces only a signed-in visitor sees were unreviewed by
-    // construction until this project existed.
     {
-      name: 'anon',
+      name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
-      testIgnore: /app-owner\.spec\.ts|owner\.setup\.ts/,
-    },
-    {
-      name: 'owner-setup',
-      testMatch: /owner\.setup\.ts/,
-    },
-    {
-      name: 'owner',
-      use: {
-        ...devices['Desktop Chrome'],
-        storageState: 'e2e/.auth/owner.json',
-      },
-      dependencies: ['owner-setup'],
-      testMatch: /app-owner\.spec\.ts/,
     },
   ],
 });
