@@ -22,7 +22,8 @@
 
 ### Kje smo
 
-> **Predaja 9. 9. 2026 (owner ~3 mesece odsoten): `docs/HANDOFF-fable-2026-09-09.md`** — vrstni red za vrnitev
+> **Predaja 10. 9. 2026 (owner ~3 mesece odsoten): `docs/HANDOFF-fable-2026-09-10.md`** — vrstni red za vrnitev
+> (prejšnja, 9. 9., ostaja kot posnetek tistega večera: `docs/HANDOFF-fable-2026-09-09.md`)
 > je §3 tam (ownerjeve odločitve → merilnik → dolg nazaj strani). Spider web je zaključen (STATUS), release 1.46.0
 > (#956) čaka ownerja, Astrini PR-ji so nedotaknjeni.
 
