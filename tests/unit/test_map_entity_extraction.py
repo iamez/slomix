@@ -228,3 +228,40 @@ def test_full_turn_objective_angles_are_equivalent_to_no_rotation():
 
     assert len(catalog.objective_volumes) == 2
     assert all(volume.contains_point((0.0, 0.0, 0.0)) for volume in catalog.objective_volumes)
+
+
+def _model_with_bounds(mins, maxs):
+    bsp = _synthetic_bsp(({"classname": "func_static", "model": "*1"},))
+    return replace(bsp, models=(bsp.models[0], replace(bsp.models[1], mins=mins, maxs=maxs)))
+
+
+def test_flat_inline_model_is_geometry_not_corruption():
+    """A zero-thickness axis-aligned brush is ordinary BSP geometry.
+
+    `etl_frostbite` entity 191 is a `func_static` named `TJ_clip` whose model
+    has mins.x == maxs.x == -2880. The bounds check used `>=`, so one clip plane
+    out of 329 entities cost the map its entire catalog — and with it the 1,549
+    recorded kills that had no geometry left to be checked against.
+    """
+    bsp = _model_with_bounds((-2880.0, 1544.0, -8.0), (-2880.0, 2264.0, 1024.0))
+    catalog = extract_entity_catalog(bsp, "test_map")
+    assert catalog.collision_entities
+
+
+def test_flat_on_two_axes_is_still_geometry():
+    bsp = _model_with_bounds((0.0, 0.0, -8.0), (0.0, 0.0, 512.0))
+    assert extract_entity_catalog(bsp, "test_map").collision_entities
+
+
+def test_inverted_bounds_are_still_refused():
+    """Inverted is mins > maxs. That is corruption and must keep failing."""
+    bsp = _model_with_bounds((10.0, 0.0, 0.0), (-10.0, 10.0, 10.0))
+    with pytest.raises(EntityExtractionError, match="inverted bounds"):
+        extract_entity_catalog(bsp, "test_map")
+
+
+def test_a_single_point_carries_no_volume_and_is_refused():
+    """Degenerate on all three axes is a point, not a surface."""
+    bsp = _model_with_bounds((5.0, 5.0, 5.0), (5.0, 5.0, 5.0))
+    with pytest.raises(EntityExtractionError, match="single point"):
+        extract_entity_catalog(bsp, "test_map")
