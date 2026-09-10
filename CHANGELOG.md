@@ -6,6 +6,83 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.46.0](https://github.com/iamez/slomix/compare/v1.45.0...v1.46.0) (2026-09-10)
+
+
+### Features
+
+* **ci:** the datapoint ledger, and the endpoint ratchet reads trailing interpolations as shapes ([04d73fc](https://github.com/iamez/slomix/commit/04d73fce5665937f1ff54e17dd6983dce92e2377))
+* **lua:** fair 1v1 on dots_arena — kill the winner too, and level the shields ([4f653c0](https://github.com/iamez/slomix/commit/4f653c016b61a55ea60e38010bccbd0d377a0bd5))
+* **ops:** the dev services run from a clone on main, not from the working tree ([71de6b6](https://github.com/iamez/slomix/commit/71de6b65662d7a327359a7f56ec36a9093a3d970))
+* **proximity:** layer 4 measured under §8 — the harness sees the control, nothing ships ([6766a48](https://github.com/iamez/slomix/commit/6766a482313b70a3ba3593df39d18a97683118fd))
+* **proximity:** the player profile and radar say what they return ([3fdfd88](https://github.com/iamez/slomix/commit/3fdfd88ba97fd0dcc9e646f39a4c118dc0778bf6))
+* **website:** a clicked player in a round opens the breakdown of that half ([072d06c](https://github.com/iamez/slomix/commit/072d06c44561485fde9e755d33f73fca0d598694))
+* **website:** a latest-games row opens the box score of that half ([6fa129a](https://github.com/iamez/slomix/commit/6fa129ae09c3025e7a0389331856db983e3d3889))
+* **website:** a pending label counts the seconds and, past fifteen, says why the first query of a window is slow ([057915f](https://github.com/iamez/slomix/commit/057915f80206d2f3b7b37481a34510a42d825e85))
+* **website:** a round's awards, and the bot filter that made them agree ([07d332c](https://github.com/iamez/slomix/commit/07d332ca9db0e6d961a1677229d45b6eb8dce3ae))
+* **website:** a table can be taken away — CSV export of what is on screen ([ba199da](https://github.com/iamez/slomix/commit/ba199da8f5ec4118317f7e93ff805475444c532e))
+* **website:** a wide table pins its first column so a phone knows whose row it is ([d47f6ee](https://github.com/iamez/slomix/commit/d47f6ee85bcc1634014d931f3202e8a344b47d9d))
+* **website:** Connect ID comes back to the /app page it was pressed on ([c315f99](https://github.com/iamez/slomix/commit/c315f99bbdf5a68b318b2abe6e22ddb8163b9013))
+* **website:** every section head is a real h2, so the page outline has more than one stop ([7850dbc](https://github.com/iamez/slomix/commit/7850dbc9d015a0421f873f559e9e7b9ed3723987))
+* **website:** line of sight on the spider web, as the oracle diagnostic it is ([9340f54](https://github.com/iamez/slomix/commit/9340f542f7b8c30bef1d5ab41e427d0043d6e771))
+* **website:** the admin panel shows the watchdog's last run and the dataset register ([467b6a6](https://github.com/iamez/slomix/commit/467b6a6072c5593446a64c371d1a51f3c94ae9d6))
+* **website:** the board you are looking at is the board you can send — filters live in the address bar ([b23c3a6](https://github.com/iamez/slomix/commit/b23c3a63f7e05697b1ecc7cdaa1bc92bfc4b36f2))
+* **website:** the camp board's parts, the kill-impact row's kinds of kill, and every objective run ([21494be](https://github.com/iamez/slomix/commit/21494be22211f115139aa4fdbe400d31d512709c))
+* **website:** the demo page shows the cross-reference against the database ([0c6b857](https://github.com/iamez/slomix/commit/0c6b857b2b86ac85d64e66f5a4d2912566309c1d))
+* **website:** the demo's header and scanner counts, the crossref's round facts, the night's maps and checks, the diagnostics' counts ([b82e4c9](https://github.com/iamez/slomix/commit/b82e4c948c331f2b3ee340b51f9c32c78b77bb92))
+* **website:** the engineering pages move out of the public footer and under About ([bf5c379](https://github.com/iamez/slomix/commit/bf5c37971c228289c417c17edf82ebc720d78d8c))
+* **website:** the fields the app fetched and dropped — outcomes in full, kill by kill, every season leader, the days as a heatmap, SSR components ([7c5849b](https://github.com/iamez/slomix/commit/7c5849bde652be67eb258dc060b2479b2b1f1604))
+* **website:** the live page draws a mini map from the positions and kills the state carries ([9178861](https://github.com/iamez/slomix/commit/9178861ff23d355b8fe5727e18b0cfd1d8013b80))
+* **website:** the live page reads the evening — the now strip, the tonight board, and what the last half ended on ([162296b](https://github.com/iamez/slomix/commit/162296b1f2d90904ba828a4f8f220ac675c9b449))
+* **website:** the live reducer keeps the last positions and the recent kills with their positions ([9287fbf](https://github.com/iamez/slomix/commit/9287fbfbd528cc361ec4adba71ceeafab49f73f1))
+* **website:** the live state says which side attacks, how the last half ended, and the time to beat ([dd966bc](https://github.com/iamez/slomix/commit/dd966bca93fcacfc7be02dacd92d7eb97ec59cbe))
+* **website:** the long tail — activity summaries, the voice room, the memory card's nights, the form's weights, the night's tally, match scores, map extremes ([58942da](https://github.com/iamez/slomix/commit/58942dade338d1e36250b5838978e1580aa61621))
+* **website:** the long tail, bundle H — identity extras, sprint clock, per-weapon hit split, viz support columns, scope chip counts; aim/advanced and the preference form decided ([9938978](https://github.com/iamez/slomix/commit/9938978da737b5050a4b848f0a07416baec1cfad))
+* **website:** the long tail, bundle I — last rated, the night's rating, movers' baseline and weights, season active days, hall-of-fame computed-at, round played_at, maps scored ([5cc6f66](https://github.com/iamez/slomix/commit/5cc6f66e47b918d5118611ec119874328894052a))
+* **website:** the long tail, bundle J — server clock and sampler stamps, who is in voice, last round and import time, mastery headcount, linkage breaches, composite source rows, kis compute mode, deaths behind kills ([fc3ed0c](https://github.com/iamez/slomix/commit/fc3ed0c4b0ae269bbc5905987962761eefa6197c))
+* **website:** the long tail, bundle K — danger-zone classes and kill-line weapons, both sides of a hotzone, the capture roadmap's sources, the card's window, the teamplay formula version ([19f1f69](https://github.com/iamez/slomix/commit/19f1f695bf18e231c25c7716412c0a13ed43b861))
+* **website:** the long tail, bundle L — denial per side, lock and revive distance, the stagger bar, what a record stands on, the vehicle's own distance ([17dd617](https://github.com/iamez/slomix/commit/17dd617ac121ad363d14f9c38498cb1bd9414504))
+* **website:** the long tail, bundle M — which side and how long, the avenge attempt, when a trade happened, what an upload is about ([fc99440](https://github.com/iamez/slomix/commit/fc99440b52560f5a26e06575eb5471182e484358))
+* **website:** the palette's contrast is measured, and the footer stops failing it ([8329320](https://github.com/iamez/slomix/commit/8329320c6f293b18ef17bc7d1c4f6a84e5c8e61e))
+* **website:** the panel frame is a component, and the profile shows form by session ([08b4a87](https://github.com/iamez/slomix/commit/08b4a87c3345e6279a6a9c4dab5f63fb47d81397))
+* **website:** the player card on the profile, and the session clock on the basics ([60ae0a2](https://github.com/iamez/slomix/commit/60ae0a240726b946dc142ccdd0509c776d3dc92d))
+* **website:** the player finder lives in the header too, and an unknown path gets a real 404 ([83846f9](https://github.com/iamez/slomix/commit/83846f9ef01b47d7abab18ec5414e4049aeff20f))
+* **website:** the profile asks for name history, gathers and combat timing, and shows them ([6c67ef8](https://github.com/iamez/slomix/commit/6c67ef83be6053de128849475b55a50e902ba239))
+* **website:** the profile draws the last halves round by round ([9be5466](https://github.com/iamez/slomix/commit/9be5466139a82f3a42c0ebdc3a5b6b62b61f6b64))
+* **website:** the profile shows its long tail — objectives, dynamite, sprees, duels, weapon deaths ([2f530f6](https://github.com/iamez/slomix/commit/2f530f622969cd9164370045f6ce0093beaf0c79))
+* **website:** the proximity date panels print the boards, duos, dodges, clocks and carries their endpoints already carried ([0f3a1bb](https://github.com/iamez/slomix/commit/0f3a1bba1a9324215a6ee0da803b225583b12c70))
+* **website:** the proximity instruments, intel, outcomes, replay, player and leaderboard read the rest of their wires ([465c600](https://github.com/iamez/slomix/commit/465c600f1efc74424a3a9d789fdc66fd5ec508bf))
+* **website:** the proximity panels print what their endpoints already carried ([372b65f](https://github.com/iamez/slomix/commit/372b65f80e65fe69ea7e9f406141be3d2f16c85e))
+* **website:** the proximity player's score breakdown, stance hours, life journeys and aim direction, read in full ([84f763e](https://github.com/iamez/slomix/commit/84f763ed2129d3deab9e928185206f5e83ab1c16))
+* **website:** the rating page shows the formula's weights, meanings and sources ([5b7cfbc](https://github.com/iamez/slomix/commit/5b7cfbcfdae94f51a0c2d53044fed5d5f97ad7a5))
+* **website:** the role boards show the numbers behind each score ([2567f92](https://github.com/iamez/slomix/commit/2567f92db78ca9970dbdd8d841d7af62d440b8e6))
+* **website:** the rounds tab shows what the webhook and the round row recorded and nobody read ([118c3d1](https://github.com/iamez/slomix/commit/118c3d1c07ca08c17187a3f7402cdc08ee2f19c6))
+* **website:** the scanner's header, the upload's file facts, the 14-day figures and the dataset register in full ([0b6cdaf](https://github.com/iamez/slomix/commit/0b6cdafce059fc23abe49911ae7cc586862c5d56))
+* **website:** the session summary draws the player × map matrix ([92282ff](https://github.com/iamez/slomix/commit/92282ff54bd75b5cf7b255ce6fe278df08634e56))
+* **website:** the session's graphs, keyed by gaming session and gated like the basics ([c98d97b](https://github.com/iamez/slomix/commit/c98d97b7fa5b4ba34fd4f8ce6f10c2593fb6422c))
+* **website:** the SPA's head speaks for itself — description and og tags, a tab title per route, robots.txt ([389d338](https://github.com/iamez/slomix/commit/389d338e0e443bfd66147145e3ba2c30a5b5c5c1))
+* **website:** the spider web shows what each player knows, the placed players' track fields, and the accuracy it cites ([10a95b7](https://github.com/iamez/slomix/commit/10a95b7c2caf79e898d8465096d132b903d73094))
+* **website:** the spider web's scene carries the legacy canvas whole — camera, belief regions, labels, the moment in the URL ([fc379d4](https://github.com/iamez/slomix/commit/fc379d407cb5ea88747d2d7b77bdb34ec7610ccc))
+* **website:** the story page prints its scope once and the fields its panels dropped ([e6466ca](https://github.com/iamez/slomix/commit/e6466ca0ccb4532bb061f2dbf89ac7653959eceb))
+* **website:** the tables say they are tables — columnheader, row and cell roles on the one DataTable ([8cccb90](https://github.com/iamez/slomix/commit/8cccb900ef18153781102428415f380533543a28))
+* **website:** the ticker reads its events — sentences, and the doubles folded ([b169845](https://github.com/iamez/slomix/commit/b16984544ef7f354cef447658e715969a8af93eb))
+* **website:** twelve panels stop hand-rolling their states (modularity slice 2) ([0a35d16](https://github.com/iamez/slomix/commit/0a35d16e9964c2c8c1e57757b6ef272782a69eb7))
+
+
+### Bug Fixes
+
+* **bot:** the supastats check keeps running but no longer reacts on supa's posts ([84dd5d4](https://github.com/iamez/slomix/commit/84dd5d4669af02f5607f29e1f6ba8736f47f2ab5))
+* **ci:** the datapoint ledger matches a key only in code that can hold the answer ([03aaefe](https://github.com/iamez/slomix/commit/03aaefe8febc6dcccce9c2c6f6ceb58fc238c073))
+* **ops:** dev_deploy refuses a bundle older than its source ([7ced943](https://github.com/iamez/slomix/commit/7ced9435ea1a89ac13800559fc632ab7bc39be97))
+* **scripts:** --anon-only no longer needs the owner's secret ([0934e25](https://github.com/iamez/slomix/commit/0934e258326adaef36544d90b6612fa62d43f199))
+* **website:** a self-kill carries no killer point in the live state ([a531508](https://github.com/iamez/slomix/commit/a5315081689af8a15749e53161961b3872b5b452))
+* **website:** the skill form series counts the two halves, not the R0 copy ([d68088d](https://github.com/iamez/slomix/commit/d68088d33fe8d8cbabd18965e19427eeda17a9be))
+
+
+### Performance Improvements
+
+* **website:** every page is its own chunk — the entry drops from 1,104 KB to 205 KB ([bbf642e](https://github.com/iamez/slomix/commit/bbf642ea12f23cde49e735b7e5afdb74803bbef0))
+
 ## [1.45.0](https://github.com/iamez/slomix/compare/v1.44.0...v1.45.0) (2026-09-06)
 
 
