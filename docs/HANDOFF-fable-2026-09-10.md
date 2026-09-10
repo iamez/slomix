@@ -99,9 +99,12 @@ Skupine, po velikosti:
   Odločeno v `datapoint_decisions.json`, ne pozabljeno.
 - `availability/promotion-preferences` (7) — telegram/signal/šifriranje/tihe ure; owner tier 4 (2 uporabnika), odločeno.
 - `storytelling/scopes` (8) — mrtev picker; hook ostane zaradi H1/inventarja (ownerjev O9).
-- proximity ostanek: `competitive/*` (man-advantage po ekipah, personal-bests, stagger), `escort-credits`,
-  `objective-focus`, `revives`, `spawn-timing`, `vehicle-progress`, `aim-lock`, `event/{}` — vsi so **sirote brez
-  strani**: endpoint obstaja, nobena stran ga ne kliče. Zaprejo se z novim panelom ali z odločitvijo, ne z branjem.
+- proximity ostanek: `competitive/*`, `escort-credits`, `objective-focus`, `revives`, `spawn-timing`,
+  `vehicle-progress`, `aim-lock`. ⚠️ **NISO sirote** — to sem najprej narobe sklepal. Klicani so prek GENERIČNIH
+  hookov (`useProxInstrument`, `useCompetitive`, `useIntel`), ki dobijo pot kot argument v enovrstični arrow
+  funkciji, zato jih iskanje »endpoint v telesu hooka« ne najde. Vsak ima svojo stran (Instruments, Competitive,
+  ObjectiveIntel); nebrana so posamezna POLJA in se zaprejo z izrisom, kot vsi prejšnji svežnji — sveženj L
+  (#1033) je zaprl 15 od njih.
 - posamezniki: `player/{player_name}/matches` (legacy pot), `uploads/resumable/{}/finalize`, `stats/session/{}/detail
   team_matrix.rounds_detail`, `diagnostics database.tests`, `status service`, `hall-of-fame` ostanki.
 - Pravilo (nespremenjeno): vrstica se zapre s KLICEM + IZRISOM + TESTOM; odločitev le z razlogom, ki ga recenzent
@@ -160,6 +163,12 @@ Bundle nosi novo sceno, če `grep -c "line of sight (oracle)" website/static/app
   trije obstoječi testi so to ujeli takoj. Vloga glave stolpca OVIJE kontrolo.
 - ⛔ **Vlak obstane, dokler niti niso RAZREŠENE, ne popravljene.** `cycle.sh` šteje neresolvane niti; po popravku jih
   je treba zapreti (`resolveReviewThread`), sicer PR čaka v nedogled.
+- ⛔ **»Nobena stran ga ne kliče« je bila napačna meritev.** Iskal sem endpoint v telesu hooka; devet proximity
+  poti je klicanih prek generičnih hookov, ki pot dobijo kot ARGUMENT (`useProxInstrument('/api/...', d)`), in
+  enovrstična arrow funkcija ni imela telesa, ki bi ga regex našel. Meri po IMENU hooka in njegovih klicateljih,
+  ali pa preprosto grepaj pot čez `lib/` — in preveri, preden zapišeš »sirota« v predajo.
+- ⛔ **Odstranitev enega izrisa lahko odpre DVE vrstici ledgerja**: skener veže na ime polja, zato je `total_samples`
+  v eni vrstici pokrival dva endpointa (escort-credits in objective-focus).
 - ⛔ **Isti CI job pade zaradi apt zrcala** (`luac5.4: command not found`, exit 127) — to ni naša koda; `gh run rerun`.
 - ⚠️ Štiri žive strani v enem testu presežejo 40 s na CI; odmontiraj vsako drevo, preden zgradiš naslednje.
 
