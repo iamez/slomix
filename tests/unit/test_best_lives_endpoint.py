@@ -67,3 +67,57 @@ class TestParseDate:
         with pytest.raises(Exception) as exc:
             _parse_date("not-a-date")
         assert getattr(exc.value, "status_code", None) == 400
+
+
+class _FakeScopeDB:
+    """Serves the one fetch_all the payload builder runs. Rows mimic the SQL
+    shape (dict rows, as the adapter returns them)."""
+
+    def __init__(self, rows):
+        self._rows = rows
+        self.queries = []
+
+    async def fetch_all(self, query, params=()):
+        self.queries.append(query)
+        return self._rows
+
+
+def _scope():
+    from website.backend.services.session_scope import GamingSessionScope
+    return GamingSessionScope(
+        gaming_session_id=154,
+        dates=("2026-08-27",),
+        round_keys=((500, "etl_adlernest", 1), (600, "etl_adlernest", 2)),
+        accepted_round_count=2,
+        distinct_map_names=("etl_adlernest",),
+    )
+
+
+class TestQualifyingTotal:
+    """`total` is len(lives) AFTER the cut — a field named total that is not
+    a total, kept for wire compatibility. `qualifying_total` counts every
+    life that cleared the minimum, so the UI can disclose the cutoff
+    ("top 5 of N"). Codex on #842.
+    """
+
+    @pytest.mark.asyncio
+    async def test_qualifying_total_counts_past_the_cut(self):
+        from website.backend.routers.storytelling_router import _best_lives_payload
+        rows = [_row(guid=f"GUID{i:04d}AA", kills=8 - i) for i in range(7)]
+        payload = await _best_lives_payload(_scope(), 5, _FakeScopeDB(rows))
+        assert payload["qualifying_total"] == 7
+        assert len(payload["lives"]) == 5
+        # The historical field keeps its historical meaning.
+        assert payload["total"] == 5
+        assert payload["qualifying_total"] > payload["total"]
+        # The published threshold is the one the SQL enforces.
+        from website.backend.routers.storytelling_router import _BEST_LIFE_MIN_KILLS
+        assert payload["min_kills"] == _BEST_LIFE_MIN_KILLS
+
+    @pytest.mark.asyncio
+    async def test_short_session_counts_equal(self):
+        from website.backend.routers.storytelling_router import _best_lives_payload
+        rows = [_row(guid=f"GUID{i:04d}BB", kills=5) for i in range(3)]
+        payload = await _best_lives_payload(_scope(), 5, _FakeScopeDB(rows))
+        assert payload["qualifying_total"] == 3
+        assert payload["total"] == 3

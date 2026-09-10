@@ -97,12 +97,23 @@ async def test_admin_channel_falls_back_to_legacy_id():
 
 @pytest.mark.asyncio
 async def test_admin_channel_silently_denies_wrong_channel():
-    """Wrong channel returns False — DOES NOT raise. Silent ignore is
-    the documented contract; raising would spam users."""
+    """Wrong channel RAISES ChannelCheckFailure — and that is what keeps it silent.
+
+    ⚠️ THIS TEST USED TO ASSERT THE OPPOSITE, on a premise nobody measured:
+    "raising would spam users". Measured, the reverse was true. A bare `False`
+    becomes a generic `commands.CheckFailure`, and the handler's typed branch
+    (`isinstance(error, ChannelCheckFailure)`) could never match — so every
+    channel decline fell through to the branch that REPLIES in the channel and
+    logs an ERROR with a traceback.
+
+    This Discord runs more than one bot. On 2026-08-27 a `!teams` meant for the
+    team-building bot got "❌ The check functions for command teams failed."
+    from ours, four times. The silence the contract promises needs the raise.
+    """
     pred = _extract_predicate(is_admin_channel())
     ctx = _ctx(channel_id=999, bot_attrs={"admin_channels": [42]})
-    result = await pred(ctx)
-    assert result is False
+    with pytest.raises(ChannelCheckFailure):
+        await pred(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +166,8 @@ async def test_public_channel_allows_in_listed_channel():
 async def test_public_channel_silently_denies_wrong_channel():
     pred = _extract_predicate(is_public_channel())
     ctx = _ctx(channel_id=999, bot_attrs={"public_channels": [42]})
-    assert await pred(ctx) is False
+    with pytest.raises(ChannelCheckFailure):
+        await pred(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -174,7 +186,8 @@ async def test_allowed_channel_accepts_listed():
 async def test_allowed_channel_silently_denies_unlisted():
     pred = _extract_predicate(is_allowed_channel([1, 2, 3]))
     ctx = _ctx(channel_id=99)
-    assert await pred(ctx) is False
+    with pytest.raises(ChannelCheckFailure):
+        await pred(ctx)
 
 
 @pytest.mark.asyncio
@@ -183,7 +196,8 @@ async def test_allowed_channel_empty_list_denies_everything():
     feature-flag-off behaviour."""
     pred = _extract_predicate(is_allowed_channel([]))
     ctx = _ctx(channel_id=42)
-    assert await pred(ctx) is False
+    with pytest.raises(ChannelCheckFailure):
+        await pred(ctx)
 
 
 # ---------------------------------------------------------------------------
