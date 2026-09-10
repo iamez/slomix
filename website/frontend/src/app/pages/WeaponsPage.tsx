@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useUrlState } from '../lib/urlState';
 import { hasFailed } from '../lib/responseStatus';
 import { useWeapons, useWeaponsByPlayer, useWeaponsHof } from '../lib/queries';
 import type { WeaponPeriod } from '../lib/queries';
@@ -163,8 +164,8 @@ function MasteryGrid({ period }: { period: WeaponPeriod }) {
 }
 
 export function WeaponsPage() {
-  const [period, setPeriod] = useState<WeaponPeriod>('all');
-  const [category, setCategory] = useState('all');
+  const [period, setPeriod] = useUrlState<WeaponPeriod>('period', 'all', PERIODS);
+  const [category, setCategory] = useUrlState<string>('category', 'all');
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>weapons · what the kills were made with</Lbl>
