@@ -105,8 +105,13 @@ export function DataTable<Row>({
 
   return (
     <div data-parity={parity} role="region" aria-label={label} style={{ overflowX: 'auto' }}>
-      <div style={{ minWidth: minWidth ?? undefined }}>
-        <div className="row" style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
+      {/* The layout is a CSS grid, so the table semantics are declared rather
+        * than inherited from <table>: without them a screen reader reads 22
+        * columns of loose text with no header to tie a number to (visitor
+        * review 2026-09-07, a11y). aria-sort belongs on the columnheader,
+        * not on the button inside it — a button has no sort state. */}
+      <div role="table" aria-label={label} aria-rowcount={sorted.length + 1} aria-colcount={columns.length} style={{ minWidth: minWidth ?? undefined }}>
+        <div className="row" role="row" aria-rowindex={1} style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
           {columns.map((col, i) => {
             const activeDir = sort != null && sort.key === col.key ? sort.dir : null;
             const active = activeDir != null;
@@ -118,35 +123,51 @@ export function DataTable<Row>({
               color: active ? 'var(--color-accent)' : lblStyle.color,
               ...(i === 0 ? stickyFirst : undefined),
             } as const;
-            return sortable ? (
-              <button
+            // The columnheader WRAPS the control; putting the role on the
+            // button itself would take its button role away, and the header
+            // would stop being clickable to anything that reads roles.
+            return (
+              <span
                 key={col.key}
-                type="button"
-                title={col.title}
-                aria-sort={activeDir == null ? 'none' : activeDir === 'asc' ? 'ascending' : 'descending'}
-                onClick={() => { toggleSort(col); }}
-                style={style}
+                role="columnheader"
+                aria-colindex={i + 1}
+                aria-sort={sortable ? (activeDir == null ? 'none' : activeDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                style={{ ...style, display: 'block', minWidth: 0 }}
               >
-                {col.label}{activeDir == null ? '' : activeDir === 'asc' ? ' ▴' : ' ▾'}
-              </button>
-            ) : (
-              <span key={col.key} title={col.title} style={style}>{col.label}</span>
+                {sortable ? (
+                  <button
+                    type="button"
+                    title={col.title}
+                    onClick={() => { toggleSort(col); }}
+                    style={{ ...style, display: 'inline', width: '100%' }}
+                  >
+                    {col.label}{activeDir == null ? '' : activeDir === 'asc' ? ' ▴' : ' ▾'}
+                  </button>
+                ) : (
+                  <span title={col.title}>{col.label}</span>
+                )}
+              </span>
             );
           })}
         </div>
-        <div className="rows">
-          {sorted.map((row) => {
+        {/* rowgroup, and the per-row wrapper is presentational: an element
+          * with no role between the table and its rows breaks the tree, so
+          * the wrapper that pairs a row with its expanded block is skipped. */}
+        <div className="rows" role="rowgroup">
+          {sorted.map((row, rowIndex) => {
             const key = rowKey(row);
             const isOpen = open === key;
             return (
-              <div key={key}>
-                <div className="row" style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
+              <div key={key} role="none">
+                <div className="row" role="row" aria-rowindex={rowIndex + 2} style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
                   {columns.map((col, i) => {
                     const content = col.format ? col.format(row) : col.sortValue ? col.sortValue(row) : null;
                     const shown = content == null || content === '' ? DASH : content;
                     return (
                       <span
                         key={col.key}
+                        role="cell"
+                        aria-colindex={i + 1}
                         className={col.align === 'left' ? undefined : 'm'}
                         style={{ textAlign: col.align ?? 'right', fontSize: 'var(--fs-small)', color: col.color?.(row), minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(i === 0 ? stickyFirst : undefined) }}
                       >

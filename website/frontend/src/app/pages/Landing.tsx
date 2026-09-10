@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
 import { useLiveState, useOverview, useQuickLeaders, useSessions, useVoiceCurrent } from '../lib/queries';
 import type { QuickLeaderRow, SessionSummary } from '../lib/types';
-import { Absent, ActLink, actStyle, figure, KpiTile, Lbl, lblStyle, Pending, rowStyle, SectionHead, StatusDot, Unavailable } from '../components/ui';
+import { Absent, ActLink, actStyle, figure, KpiTile, Lbl, lblStyle, Pending, rowStyle, SectionHead, StatusDot, Unavailable, Meta } from '../components/ui';
 
 /**
  * Landing — the first page of the new design (docs/design/12 row L), a
@@ -139,6 +139,15 @@ function LivePanel() {
                   : ' · age unknown')
                 : ''}
             </span>
+            {/* Who, and where: the channels with their headcount, then the names. */}
+            {(voiceData.channels ?? []).length > 0 && (
+              <Meta style={{ display: 'block' }}>
+                {(voiceData.channels ?? []).map((c) => `${c.name} (${figure(c.members.length)})`).join(' · ')}
+              </Meta>
+            )}
+            {(voiceData.members ?? []).length > 0 && (
+              <Meta style={{ display: 'block' }}>{(voiceData.members ?? []).map((m) => m.name).join(', ')}</Meta>
+            )}
           </>
         )}
       </div>

@@ -637,7 +637,7 @@ function PulseRow() {
         <Panel
           label="challenge of the week"
           q={challenge}
-          empty="no challenge this week"
+          empty={`no challenge this week${challenge.data?.week_start_date ? ` (week of ${challenge.data.week_start_date})` : ''}`}
           isEmpty={(d) => !d.challenge}
         >
           {(d) => d.challenge && (
@@ -753,6 +753,11 @@ function Tonight() {
           {liveSession.data.rounds_completed} round{liveSession.data.rounds_completed === 1 ? '' : 's'} imported in the last half hour
           {' · '}{liveSession.data.current_map}
           {' · '}{liveSession.data.current_players} player{liveSession.data.current_players === 1 ? '' : 's'}
+          {/* "0:00" is the formatter's output for a round whose duration has
+            * not been linked yet (Codex on #1026) — a sentinel, not a time. */}
+          {liveSession.data.last_round_time && liveSession.data.last_round_time !== '0:00'
+            && ` · last round ${liveSession.data.last_round_time}`}
+          {liveSession.data.last_update && ` · as of ${utcStamp(liveSession.data.last_update)}`}
         </Meta>
       )}
       {availability.isPending && <div style={{ marginTop: 'var(--space-3)' }}><Pending label="availability" /></div>}
