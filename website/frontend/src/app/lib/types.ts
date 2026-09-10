@@ -3323,6 +3323,8 @@ export interface CompPersonalBests {
     sessions_played: number;
   }[];
   scope_note: string;
+  /** What the server narrowed to, echoed back — a date, or nothing. */
+  scope_applied?: Record<string, string | number | null> | null;
 }
 
 export interface CompManAdvantage {
