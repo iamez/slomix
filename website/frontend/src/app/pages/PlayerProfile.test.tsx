@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { PlayerProfilePage } from './PlayerProfile';
 import profile from './__fixtures__/api_players_identifier_profile.json';
+import skillPlayer from './__fixtures__/api_skill_player_identifier.json';
 import skillForm from './__fixtures__/api_skill_player_identifier_form.json';
 import skillHistory from './__fixtures__/api_skill_player_identifier_history.json';
 import memoryCard from './__fixtures__/api_players_identifier_memory_card.json';
@@ -595,5 +596,24 @@ describe('PlayerProfilePage long tail', () => {
     const arms = ((w.arms / w.total) * 100).toFixed(1);
     expect(screen.getByText(new RegExp(`head ${w.head_pct.toFixed(1)}% · arms ${arms}%`))).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`against a ${f.relationships.baseline_dpm.toFixed(1)} dpm baseline`))).toBeInTheDocument();
+  });
+});
+
+describe('PlayerProfile — the rated identity', () => {
+  it('names who the rating was made for and when it was last made', async () => {
+    // The profile fixture's own guid is not the one the skill endpoint was
+    // recorded for, so the rated NAME is the thing worth printing: it is
+    // how a reader sees the rating belongs to this player at all.
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/skill\/player\/[^/]+$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(skillPlayer) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    const sp = skillPlayer as { player: { display_name: string } };
+    await waitFor(() => expect(
+      screen.getByText(new RegExp(`rated as ${sp.player.display_name}, last 2026-08-30 \\d\\d:\\d\\d UTC`)),
+    ).toBeInTheDocument());
   });
 });
