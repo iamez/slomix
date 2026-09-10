@@ -152,7 +152,11 @@ export function AppShell() {
           style={{
             maxWidth: 'var(--layout-max)', margin: '0 auto', padding: 'var(--space-4) var(--space-6)', display: 'flex',
             justifyContent: 'space-between', fontSize: 'var(--fs-label)', letterSpacing: '0.14em',
-            textTransform: 'uppercase', color: 'var(--color-text-600)',
+            // text-600 measures 2.2:1 on every ground this app paints —
+            // below AA large, let alone body — and the footer carries LINKS.
+            // text-500 is the quietest colour that still clears AA body
+            // (4.58:1 on ink-800), which lib/contrast.test.ts now holds.
+            textTransform: 'uppercase', color: 'var(--color-text-500)',
           }}
         >
           <span>slomix · kept since january 2025</span>
