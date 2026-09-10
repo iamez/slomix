@@ -17,6 +17,7 @@ import type {
   PlayerRoundsSeries,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
+import { mmss } from '../components/RoundsTable';
 import { utcStamp } from '../lib/utcStamp';
 import { Absent, ActLink, decimals, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 import { Panel } from '../components/Panel';
@@ -1048,7 +1049,7 @@ function RecentDetail({ playerId }: { playerId: string }) {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                {['date', 'map', 'r', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc'].map((h, i) => (
+                {['date', 'map', 'r', 'side', 'played', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc'].map((h, i) => (
                   <th key={h} style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textAlign: i < 2 ? 'left' : 'right', padding: 'var(--space-1) var(--space-2)' }}>{h}</th>
                 ))}
               </tr>
@@ -1072,6 +1073,11 @@ function RecentDetail({ playerId }: { playerId: string }) {
                     )}
                   </td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.round_number}</td>
+                  {/* team is pcs.team, an INTEGER (1 = Axis, 2 = Allies on this
+                    * wire); a round played on neither side is a dash, not a
+                    * guess. `played` is the minutes behind every rate above. */}
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.team === 1 ? 'axis' : r.team === 2 ? 'allies' : '—'}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.time_played != null ? mmss(r.time_played) : '—'}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.headshot_kills)}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.gibs)}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.revives_given)}</td>
