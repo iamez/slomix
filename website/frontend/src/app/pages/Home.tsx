@@ -17,6 +17,7 @@ import {
 } from '../components/ui';
 import { MatchBoxScore } from '../components/MatchBoxScore';
 import { Panel } from '../components/Panel';
+import { PlayerSearch } from '../components/PlayerSearch';
 import { utcStamp } from '../lib/utcStamp';
 
 /**
@@ -792,56 +793,13 @@ function Tonight() {
   );
 }
 
-interface SearchHit { guid: string; name: string }
-
 function FindYourStats() {
   const overview = useOverview();
-  const [query, setQuery] = useState('');
-  // 300 ms debounce, the legacy value: /auth/players/search is rate-limited
-  // to 30/min, so a query key per keystroke would burn the budget in one
-  // typed name (Codex on #811).
-  const [debounced, setDebounced] = useState('');
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-  const trimmed = debounced;
-  const search = useQuery({
-    queryKey: ['player-search', trimmed],
-    enabled: trimmed.length >= 2,
-    queryFn: () => apiGet('/auth/players/search', { query: { q: trimmed } }) as Promise<SearchHit[]>,
-  });
   const known = overview.data?.players_all_time;
   return (
     <div data-parity="home.search">
       <Lbl>find your stats</Lbl>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="player name or alias"
-        aria-label="Find your stats"
-        className="m"
-        style={{
-          width: '100%', marginTop: 'var(--space-3)', background: 'var(--color-ink-800)',
-          border: '1px solid var(--color-rule-700)', color: 'var(--color-text-100)',
-          fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-3)', boxSizing: 'border-box',
-        }}
-      />
-      {trimmed.length >= 2 && (
-        <div style={{ marginTop: 'var(--space-2)' }}>
-          {search.isPending && <Pending label="search" />}
-          {search.isError && <Unavailable what="search" />}
-          {search.data?.length === 0 && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no player matches "{trimmed}"</div>
-          )}
-          {search.data?.slice(0, 6).map((hit) => (
-            <Link key={hit.guid} to={`/profile/${hit.guid}`} style={{ ...rowStyle, display: 'block', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
-              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{hit.name}</span>
-            </Link>
-          ))}
-        </div>
-      )}
+      <PlayerSearch ariaLabel="Find your stats" placeholder="player name or alias" />
       <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
         {known != null ? `${known} players known · ` : ''}names resolve through every alias we have seen
       </Lbl>

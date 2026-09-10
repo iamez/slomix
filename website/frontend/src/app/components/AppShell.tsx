@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { titleFor } from '../lib/pageTitle';
 import { APP_ROUTES } from '../routes';
+import { PlayerSearch } from './PlayerSearch';
 
 /**
  * The one navigation (docs/design/11 §A AppShell; layout and labels from
@@ -116,6 +117,7 @@ export function AppShell() {
             })}
           </nav>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <PlayerSearch compact ariaLabel="Find a player" placeholder="find a player" />
             <span className="m" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#454340' }} />
               DEV

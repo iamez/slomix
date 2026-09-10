@@ -14,6 +14,7 @@ import { installErrorReporting } from './lib/errorReporting';
 // it. The PAGES map below still names each page component, so
 // routes.test.ts keeps reading the wiring from source unchanged.
 const Landing = React.lazy(() => import('./pages/Landing').then((m) => ({ default: m.Landing })));
+const NotFound = React.lazy(() => import('./pages/NotFound').then((m) => ({ default: m.NotFound })));
 const About = React.lazy(() => import('./pages/About').then((m) => ({ default: m.About })));
 const SystemPage = React.lazy(() => import('./pages/SystemPage').then((m) => ({ default: m.SystemPage })));
 const SmartStatsDiag = React.lazy(() => import('./pages/SmartStatsDiag').then((m) => ({ default: m.SmartStatsDiag })));
@@ -151,7 +152,7 @@ const router = createBrowserRouter(
         // and bookmarks keep working — a redirect, not a 404 and not a stub.
         ...REDIRECTS.map((r) => ({ path: r.from, element: <Navigate to={r.to} replace /> })),
         ...PARAM_REDIRECTS.map((r) => ({ path: r.from, element: <ParamRedirect to={r.to} /> })),
-        { path: '*', element: <Stub label="Not found" phase={0} /> },
+        { path: '*', element: <NotFound /> },
       ],
     },
   ],
