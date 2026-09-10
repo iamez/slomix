@@ -189,11 +189,11 @@
   "/api/voice-activity/history": "17 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3441,
-  "unread": 100,
-  "dropped": 148,
+  "read": 3452,
+  "unread": 70,
+  "dropped": 167,
   "endpoints": 180,
-  "endpoints_fully_read": 135,
+  "endpoints_fully_read": 139,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -209,8 +209,8 @@
   },
   "/api/availability/promotion-preferences": {
    "read": 4,
-   "unread": 7,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 7
   },
   "/api/availability/promotions/campaign": {
    "read": 1,
@@ -348,9 +348,9 @@
    "dropped": 0
   },
   "/api/players/{identifier}/profile": {
-   "read": 117,
-   "unread": 17,
-   "dropped": 0
+   "read": 122,
+   "unread": 0,
+   "dropped": 12
   },
   "/api/players/{identifier}/wrapped": {
    "read": 10,
@@ -633,8 +633,8 @@
    "dropped": 0
   },
   "/api/proximity/scopes": {
-   "read": 14,
-   "unread": 3,
+   "read": 17,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/spawn-timing": {
@@ -728,8 +728,8 @@
    "dropped": 0
   },
   "/api/rounds/{round_id}/viz": {
-   "read": 28,
-   "unread": 3,
+   "read": 31,
+   "unread": 0,
    "dropped": 0
   },
   "/api/seasons/current": {
@@ -1219,12 +1219,14 @@
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "encryption_enabled",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "notify_threshold",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
@@ -1234,27 +1236,32 @@
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "quiet_hours",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "signal_handle",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "signal_handle_masked",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "telegram_handle",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "telegram_handle_masked",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
@@ -3249,62 +3256,74 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "advanced",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "advanced.available",
-   "status": "read"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "advanced.bait",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "advanced.utro",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "aim",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "aim.available",
-   "status": "read"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "aim.burst",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "aim.enemy_relative",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "aim.flick",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "aim.lifetime",
-   "status": "read"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "aim.per_weapon",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "aim.spread",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deferred by cost: the SPA never requests sections=aim/advanced (8–46 s cold, docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md); the rows return when a producer warms the migration-077 cache — owner's path A–F"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3404,7 +3423,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "hit_regions.per_weapon",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3429,12 +3448,12 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "identity.country",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "identity.discord_linked",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3469,7 +3488,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "identity.twitch",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3714,7 +3733,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "movement.sprint_sec",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3769,7 +3788,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "relationships.baseline_dpm",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3894,12 +3913,12 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "weapons.overall_accuracy",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "weapons.overall_hs_accuracy",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -9865,7 +9884,7 @@
   {
    "endpoint": "/api/proximity/scopes",
    "key": "sessions.map_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/scopes",
@@ -9875,12 +9894,12 @@
   {
    "endpoint": "/api/proximity/scopes",
    "key": "sessions.maps_played",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/scopes",
    "key": "sessions.round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/scopes",
@@ -12189,7 +12208,7 @@
   {
    "endpoint": "/api/rounds/{round_id}/viz",
    "key": "players.kill_assists",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/rounds/{round_id}/viz",
@@ -12209,7 +12228,7 @@
   {
    "endpoint": "/api/rounds/{round_id}/viz",
    "key": "players.self_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/rounds/{round_id}/viz",
@@ -12234,7 +12253,7 @@
   {
    "endpoint": "/api/rounds/{round_id}/viz",
    "key": "players.xp",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/rounds/{round_id}/viz",
