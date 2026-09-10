@@ -87,7 +87,6 @@ async def test_kills_bucket_into_correct_life() -> None:
     assert res["summary"] == {
         "lives": 2, "kills": 1, "deaths": 1,
         "avg_life_s": 12.5, "objective_events": 0,
-        "objective_events_unavailable": None,
     }
     life1, life2 = res["lives"]
     assert len(life1["kills"]) == 1
