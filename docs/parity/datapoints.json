@@ -190,10 +190,10 @@
  },
  "summary": {
   "read": 3466,
-  "unread": 39,
-  "dropped": 184,
+  "unread": 31,
+  "dropped": 192,
   "endpoints": 180,
-  "endpoints_fully_read": 160,
+  "endpoints_fully_read": 161,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -1039,8 +1039,8 @@
   },
   "/api/storytelling/scopes": {
    "read": 0,
-   "unread": 8,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 8
   },
   "/api/storytelling/space-created": {
    "read": 21,
@@ -18800,42 +18800,50 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "scope_version",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.accepted_round_count",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.distinct_map_names",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.end_date",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.gaming_session_id",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.scope_version",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.start_date",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/space-created",
