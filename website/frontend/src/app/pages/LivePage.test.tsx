@@ -304,3 +304,22 @@ describe('LivePage — the evening', () => {
     expect(screen.queryByText(/R1 pending/)).toBeNull();
   });
 });
+
+describe('LivePage long tail (ledger 2026-09-09)', () => {
+  it('names the server clock on the ticker, the last record of each sampler, and the api by its service name', async () => {
+    stub();
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <MemoryRouter initialEntries={['/live']}>
+          <LivePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    // feed.server_time is epoch seconds (recorded 1788349751.86 → 2026-09-02 11:49 UTC).
+    await waitFor(() => expect(screen.getByText(/server clock 2026-09-02 11:49 UTC/)).toBeInTheDocument());
+    // monitoring.server.last_recorded_at, recorded 2026-09-02T11:45:40Z.
+    expect(screen.getByText(/server sampling fresh · [\d,]+ records · last 2026-09-02 11:45 UTC/)).toBeInTheDocument();
+    expect(screen.getByText(/voice sampling fresh · [\d,]+ records · last 2026-09-02 11:48 UTC/)).toBeInTheDocument();
+    expect(screen.getByText(/^Slomix API: api /)).toBeInTheDocument();
+  });
+});

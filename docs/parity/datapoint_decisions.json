@@ -66,5 +66,12 @@
  "/api/awards/leaderboard filters": "request echo: the server repeats the player/award_type/days the page itself chose (Awards.tsx state); printing the reader's own selection back is not information",
  "/api/stats/session/{gaming_session_id}/basics players.denied_playtime_seconds": "the raw seconds behind denied_pct, which IS the basics column (owner's 17-column list, 2026-09-03; SessionDetail.test pins the count) — a second denied column would break the list for a number the ratio already carries",
  "/api/proximity/prox-scores/formula category_weights": "duplicate: the same three weights as categories[].weight_in_overall, which the page prints (fixture: 0.4/0.35/0.25 on both)",
- "/api/proximity/player/{guid}/radar unscored.avg_dodge_reaction_ms": "duplicate: the same AVG(r.dodge_reaction_ms) the movement endpoint returns as avg_dodge_ms, which the page already shows as the 'dodge' tile (proximity_movement.py:219/241; both read 1,431 ms in the recording)"
+ "/api/proximity/player/{guid}/radar unscored.avg_dodge_reaction_ms": "duplicate: the same AVG(r.dodge_reaction_ms) the movement endpoint returns as avg_dodge_ms, which the page already shows as the 'dodge' tile (proximity_movement.py:219/241; both read 1,431 ms in the recording)",
+ "/api/stats/records revived": "deliberate omission carried from legacy (RecordBook.tsx header): the backend sends a 'times revived' record, the legacy site never rendered it; adopting it is an owner decision",
+ "/api/records/maps/segments records.fastest_seconds": "alias: fastest_time is the m:ss of fastest_seconds and is the column shown (fixture: 205 → '3:25')",
+ "/api/records/maps/segments records.winner_team": "alias: winner_side is the server's string for winner_team and is the column shown (fixture: 1 → 'Axis')",
+ "/api/stats/last-session unassigned_players.time_dead_seconds_raw": "the pre-repair value behind time_dead_seconds (time-fields lane 2026-09-02); the page shows the repaired figure and the repaired flag, never the raw one",
+ "/api/stats/weapons/by-player player_count": "PlayerDrilldown asks this endpoint for ONE guid, so player_count is always 1 there; the period-wide count is rendered on WeaponsPage from /by_player",
+ "/api/availability statuses": "the status vocabulary the form's own options already enumerate (AvailabilityPage STATUS options); printing the enum would list the buttons twice",
+ "/api/availability/access website_user_id": "an internal id the page never shows — the viewer is named by display name and linked guid; ids only travel in requests"
 }
