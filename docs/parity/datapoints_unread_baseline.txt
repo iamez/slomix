@@ -2,13 +2,5 @@
 /api/proximity/vehicle-progress vehicles.end_z
 /api/proximity/vehicle-progress vehicles.start_z
 /api/stats/session/{gaming_session_id}/detail team_matrix.rounds_detail
-/api/storytelling/scopes scope_version
-/api/storytelling/scopes sessions
-/api/storytelling/scopes sessions.accepted_round_count
-/api/storytelling/scopes sessions.distinct_map_names
-/api/storytelling/scopes sessions.end_date
-/api/storytelling/scopes sessions.gaming_session_id
-/api/storytelling/scopes sessions.scope_version
-/api/storytelling/scopes sessions.start_date
 /api/uploads/resumable/{session_id}/finalize file_size_bytes
 /api/uploads/resumable/{session_id}/finalize share_url
