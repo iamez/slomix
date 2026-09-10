@@ -4,15 +4,14 @@ Round Replay Timeline Router
 GET /api/replay/round/{round_id}/timeline
 GET /api/replay/round/{round_id}/positions?t={time_ms}
 GET /api/replay/round/{round_id}/paths?from={from_ms}&to={to_ms}
-GET /api/replay/round/{round_id}/web?t={time_ms}
 """
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.rate_limit import limiter
-from website.backend.services import replay_service, round_web_service
+from website.backend.services import replay_service
 
 logger = get_app_logger("api.replay")
 router = APIRouter()
@@ -53,62 +52,3 @@ async def get_player_paths(
 ):
     """Get player movement paths for a time window (for trail rendering)."""
     return await replay_service.get_player_paths(db, round_id, from_ms, to_ms)
-
-
-@router.get("/replay/round/{round_id}/web")
-# 60, not the router's 10: the spider-web page asks for a new moment on
-# every nudge (+200 ms) and for every point of view a reader tries, and ten
-# clicks a minute is ordinary exploring, not abuse (Codex on #1005). One
-# snapshot costs 2 ms without geometry and 45–110 ms with line of sight
-# (measured 2026-09-09), off the event loop — sixty a minute is nothing.
-@limiter.limit("60/minute")
-async def get_round_web(
-    round_id: int,
-    request: Request,
-    # ge=0 on both: a negative `t` cannot select a sample, and a negative
-    # `max_stale_ms` excludes every state with non-negative staleness — i.e. all
-    # of them — which looks like an empty round rather than a bad argument
-    # (CodeRabbit, PR #792).
-    t: int = Query(..., ge=0, description="Time in milliseconds"),
-    max_stale_ms: int | None = Query(
-        None, ge=0,
-        description="Exclude states older than this; omit to get everything "
-                    "with its staleness stated"),
-    velocity_max_dt_ms: int | None = Query(
-        None, gt=0,
-        description="Longest gap a causal velocity pair may span; omit to use "
-                    "the round's own declared capture interval, or no bound "
-                    "at all when the round never declared one"),
-    pov: str | None = Query(
-        None, max_length=64,
-        description="Whose information state to return: a player GUID, or "
-                    "'world' for the oracle view. Omitted means 'world'."),
-    db: DatabaseAdapter = Depends(get_db),
-):
-    """Layer 1: the relational reconstruction of one moment.
-
-    Distinct from `/positions`, which serves the replay slider. This one picks
-    the LATEST overlapping life rather than the earliest, never answers with a
-    sample from after `t`, and carries `stale_ms`, `overlap_conflict` and
-    `velocity_reason` alongside the values they qualify.
-
-    `information_state` carries §6 Layer 3: what each player could plausibly
-    have known, per holder. `pov` restricts it to one player; `world` returns
-    the oracle view for every holder.
-
-    ⛔ Reconstruction only — no score, no ranking (spec §4.6). Line-of-sight is
-    deliberately absent from the beliefs: a clear ray is a necessary but not
-    sufficient condition for having seen someone, so it stays an oracle upper
-    bound and never becomes knowledge.
-    """
-    # A round that does not exist is 404; a round that exists but has no linked
-    # tracks is 200 with `unavailable` set. Collapsing the two would tell a
-    # caller "no such round" when the round is real and the data is thin — a
-    # different problem with a different fix (CodeRabbit, PR #792).
-    exists = await db.fetch_all("SELECT 1 FROM rounds WHERE id = $1", (round_id,))
-    if not exists:
-        raise HTTPException(status_code=404, detail=f"round {round_id} not found")
-    return await round_web_service.get_round_snapshot(
-        db, round_id, t, max_stale_ms=max_stale_ms, pov=pov,
-        velocity_max_dt_ms=velocity_max_dt_ms,
-    )
