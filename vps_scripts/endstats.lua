@@ -23,6 +23,9 @@ kills = {}
 deaths = {}
 worst_enemy = {}
 easiest_prey = {}
+vsstats = {}
+vsstats_kills = {}
+vsstats_deaths = {}
 hitters = {}
 light_weapons = {1,2,3,5,6,7,8,9,10,11,12,13,14,17,37,38,44,45,46,50,51,53,54,55,56,61,62,66}
 explosives = {15,16,18,19,20,22,23,26,39,40,41,42,52,63,64}
@@ -51,85 +54,6 @@ bluelimbo2 = 0
 changedred = false
 changedblue = false
 paused = false
-
--- BEGIN frame_health v6.13 (identical in every module; tests/unit/test_lua_frame_health_block_identical.py pins it)
--- Every Lua module runs in its own VM, and the engine calls their
--- et_RunFrame hooks one after another (g_lua.c G_LuaHook_RunFrame). They
--- share one clock (et.trap_Milliseconds) and one process, so each module
--- can append its own frame cost to the SAME log the tracker's gap watcher
--- writes, and the reader attributes a gap offline: sum of the modules'
--- `self` inside the gap window is "our Lua", the rest is engine/host.
---   FH init wall=<ms> version=6.13 mod=<name>   one per map load (write-path proof)
---   FM wall=<frame end ms> mod=<name> self=<ms> top=<section>:<ms>
---                                          when a frame cost >= self_threshold_ms
--- Rate-limited to one line per second per module and capped per lua state.
--- trap_FS paths are relative to the homepath game dir, so this is the
--- tracker's ~/.etlegacy/legacy/proximity/frame_health.log for every module.
-local FH_MOD = "endstats"
-local fh = {
-    version = "6.13", log = "proximity/frame_health.log",
-    self_threshold_ms = 50, min_write_interval_ms = 1000, max_lines_per_state = 3000,
-    writes = 0, last_write = -math.huge, frame_start = nil, top_name = nil, top_ms = 0,
-    error_printed = false,
-}
-local function fh_now()
-    return (et and et.trap_Milliseconds and et.trap_Milliseconds()) or 0
-end
-local function fh_write(line)
-    if fh.writes >= fh.max_lines_per_state then return end
-    -- endstats append idiom: the SECOND return signals an open failure
-    local fd, open_len = et.trap_FS_FOpenFile(fh.log, et.FS_APPEND)
-    if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
-    fh.writes = fh.writes + 1
-    et.trap_FS_Write(line, string.len(line), fd)
-    et.trap_FS_FCloseFile(fd)
-end
-local function fh_guard(what, f, ...)
-    local ok, err = pcall(f, ...)
-    if not ok and not fh.error_printed then
-        fh.error_printed = true
-        et.G_Print("[" .. FH_MOD .. "] frame_health " .. what .. " error: " .. tostring(err) .. "\n")
-    end
-end
--- Call from et_InitGame: a map load (and map_restart) starts a fresh cadence.
-local function fh_init()
-    fh_guard("init", function()
-        fh.writes = 0
-        fh.last_write = -math.huge
-        fh.frame_start = nil
-        fh.top_name = nil
-        fh.top_ms = 0
-        fh_write(string.format("FH init wall=%d version=%s mod=%s\n", fh_now(), fh.version, FH_MOD))
-    end)
-end
-local function fh_begin()
-    fh.frame_start = fh_now()
-    fh.top_name = nil
-    fh.top_ms = 0
-end
--- Call right after a known-costly section with the wall time taken before
--- it: the costliest section of the frame is what the FM line names.
-local function fh_section(name, t0)
-    local ms = fh_now() - t0
-    if ms > fh.top_ms then
-        fh.top_ms = ms
-        fh.top_name = name
-    end
-end
-local function fh_end()
-    fh_guard("end", function()
-        if fh.frame_start == nil then return end
-        local now = fh_now()
-        local self_ms = now - fh.frame_start
-        fh.frame_start = nil
-        if self_ms < fh.self_threshold_ms then return end
-        if now - fh.last_write < fh.min_write_interval_ms then return end
-        fh.last_write = now
-        fh_write(string.format("FM wall=%d mod=%s self=%d top=%s:%d\n",
-            now, FH_MOD, self_ms, fh.top_name or "-", fh.top_ms))
-    end)
-end
--- END frame_health v6.13
 
 local function es_to_int(value)
 	value = tonumber(value) or 0
@@ -215,7 +139,6 @@ end
 topshot_names = { [1]="Most damage given", [2]="Most damage received", [3]="Most team damage given", [4]="Most team damage received", [5]="Most teamkills", [6]="Most selfkills", [7]="Most deaths", [8]="Most kills per minute", [9]="Quickest multikill w/ light weapons", [11]="Farthest riflenade kill", [12]="Most light weapon kills", [13]="Most pistol kills", [14]="Most rifle kills", [15]="Most riflenade kills", [16]="Most sniper kills", [17]="Most knife kills", [18]="Most air support kills", [19]="Most mine kills", [20]="Most grenade kills", [21]="Most panzer kills", [22]="Most mortar kills", [23]="Most panzer deaths", [24]="Mortarmagnet", [25]="Most multikills", [26]="Most MG42 kills", [27]="Most MG42 deaths", [28]="Most revives", [29]="Most revived", [30]="Best K/D ratio", [31]="Most dynamites planted", [32]="Most dynamites defused", [33]="Most doublekills", [34]="Longest killing spree", [35]="Longest death spree", [36]="Most objectives stolen", [37]="Most objectives returned", [38]="Most corpse gibs", [39]="Most kill assists", [40]="Most killsteals", [41]="Most headshot kills", [42]="Most damage per minute", [43]="Tank/Meatshield (Refuses to die)", [44]="Most useful kills (>Half respawn time left)", [45]="Full respawn king", [46]="Least time dead (What spawn?)", [47]="Most playtime denied", [48]="Most useless kills" }
 
 function et_InitGame(levelTime, randomSeed, restart)
-    fh_init()
 
     et.RegisterModname("endstats.lua "..et.FindSelf())
     sv_maxclients = ensure_sv_maxclients()
@@ -297,22 +220,15 @@ end
 
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
 	if gamestate == 0 then
-		-- ensure_sv_maxclients(), not a raw cvar read: this is the only place
-		-- in the file that bypassed the helper, and it runs on EVERY damage
-		-- event. read_sv_maxclients() also accepts the sv_maxClients
-		-- spelling and falls back to 64, so a server where the cvar reads
-		-- empty gives a number here instead of nil — comparing a number
-		-- with nil would throw inside et_Damage (CodeRabbit, #787).
-		local max_clients = ensure_sv_maxclients()
-		if target ~= attacker and attacker ~= 1022 and attacker ~= 1023 and not (tonumber(target) < 0) and not (tonumber(target) >= max_clients) then
+		if target ~= attacker and attacker ~= 1022 and attacker ~= 1023 and not (tonumber(target) < 0) and not (tonumber(target) > tonumber(et.trap_Cvar_Get("sv_maxclients"))) then
 			if has_value(light_weapons, meansOfDeath) or has_value(explosives, meansOfDeath) then
 				local v_team = et.gentity_get(target, "sess.sessionTeam")
 				local k_team = et.gentity_get(attacker, "sess.sessionTeam")
 				local v_health = et.gentity_get(target, "health")
-				local hit_region = hitType(attacker)
-				if hit_region == HR_HEAD then
+				local hitType = hitType(attacker)
+				if hitType == HR_HEAD then
 					if not has_value(explosives, meansOfDeath) then
-						table.insert(hitters[target], {et.trap_Milliseconds(), attacker, damage, meansOfDeath})
+						hitters[target][et.trap_Milliseconds()] = {[1]=attacker, [2]=damage, [3]=meansOfDeath}
 						if v_team ~= k_team then
 							if damage >= v_health then
 								topshots[attacker][31] = topshots[attacker][31] + 1
@@ -320,7 +236,7 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
 						end
 					end
 				else
-					table.insert(hitters[target], {et.trap_Milliseconds(), attacker, damage, meansOfDeath})
+					hitters[target][et.trap_Milliseconds()] = {[1]=attacker, [2]=damage, [3]=meansOfDeath}
 				end
 			end
 		end
@@ -603,7 +519,7 @@ function topshots_f(id)
 				max_id[44] = i
 			end
 			--most time dead
-			if timeplayed > 600000 or timeplayed >= (tonumber(et.trap_Cvar_Get("timelimit")) or 0) * 60000 then
+			if timeplayed > 600000 or timeplayed == et.trap_Cvar_Get("timelimit") then
 				if (death_time_total[i] / timeplayed) * 100 > max[45] then
 					max[45] = (death_time_total[i] / timeplayed) * 100
 					max_id[45] = i
@@ -611,7 +527,7 @@ function topshots_f(id)
 				end
 			end
 			-- least time dead
-			if timeplayed > 600000 or timeplayed >= (tonumber(et.trap_Cvar_Get("timelimit")) or 0) * 60000 then
+			if timeplayed > 600000 or timeplayed == et.trap_Cvar_Get("timelimit") then
 				if (death_time_total[i] / timeplayed) * 100 < max[46] then
 					max[46] = (death_time_total[i] / timeplayed) * 100
 					max_id[46] = i
@@ -800,7 +716,7 @@ function topshots_f(id)
 		end
 		local es_mapname = et.trap_Cvar_Get("mapname")
 		local es_round = tonumber(et.trap_Cvar_Get("g_currentRound")) == 0 and 2 or 1
-		local es_filename = string.format("gamestats/%s%s-round-%d-endstats.txt", os.date('%Y-%m-%d-%H%M%S-'), es_mapname, es_round)
+		local es_filename = string.format("gamestats\\%s%s-round-%d-endstats.txt", os.date('%Y-%m-%d-%H%M%S-'), es_mapname, es_round)
 		send_table(-1, {
 			{name = "Award"                 },
 			{name = "Player",  align = "right"},
@@ -847,18 +763,6 @@ function topshots_f(id)
 								})
 							end
 						end
-					end
-				end
-				-- Write VS_HEADER with player name + GUID before their opponent block
-				if #players2 > 0 then
-					local userinfo = et.trap_GetUserinfo(p)
-					local p_guid = string.upper(et.Info_ValueForKey(userinfo, "cl_guid"))
-					local p_name = et.Q_CleanStr(et.gentity_get(p, "pers.netname"))
-					local hdr_fd, hdr_len = et.trap_FS_FOpenFile(es_filename, et.FS_APPEND)
-					if hdr_len ~= -1 then
-						local hdr_line = "VS_HEADER\t" .. p_name .. "\t" .. p_guid .. "\n"
-						et.trap_FS_Write(hdr_line, string.len(hdr_line), hdr_fd)
-						et.trap_FS_FCloseFile(hdr_fd)
 					end
 				end
 				send_table(p, {
@@ -1174,20 +1078,19 @@ function et_Obituary(victim, killer, mod)
 			local assist_dmg = {}
 			local last_assist_wpn = {}
 			local ms = et.trap_Milliseconds()
-			local cutoff = ms - 1500
-			for idx = #hitters[victim], 1, -1 do
-				local h = hitters[victim][idx]
-				if h[1] < cutoff then break end
-				if h[2] == killer then
-					killer_dmg = killer_dmg + h[3]
-				else
-					if assist_dmg[h[2]] == nil then
-						assist_dmg[h[2]] = h[3]
+			for m=ms, ms-1500, -1 do
+				if hitters[victim][m] then
+					if hitters[victim][m][1] == killer then
+						killer_dmg = killer_dmg + hitters[victim][m][2]
 					else
-						assist_dmg[h[2]] = assist_dmg[h[2]] + h[3]
-					end
-					if not last_assist_wpn[h[2]] then
-						last_assist_wpn[h[2]] = h[4]
+						if assist_dmg[hitters[victim][m][1]] == nil then
+							assist_dmg[hitters[victim][m][1]] = hitters[victim][m][2]
+						else
+							assist_dmg[hitters[victim][m][1]] = assist_dmg[hitters[victim][m][1]] + hitters[victim][m][2]
+						end
+						if not last_assist_wpn[hitters[victim][m][1]] then
+							last_assist_wpn[hitters[victim][m][1]] = hitters[victim][m][3]
+						end
 					end
 				end
 			end
@@ -1241,7 +1144,7 @@ function et_RunFrame(levelTime)
 				local team = et.gentity_get(i, "sess.sessionTeam")
 				if team == 1 or team == 2 then
 					if denies[i][1] == true then
-						topshots[denies[i][2]][35] = topshots[denies[i][2]][35] + (et.trap_Milliseconds() - denies[i][3] - paused_death[i][2])
+						topshots[denies[i][2]][35] = topshots[denies[i][2]][35] + (et.trap_Milliseconds() - denies[i][3] - (paused_death[i][2] - paused_death[i][1]))
 						denies[i] = { [1]=false, [2]=-1, [3]=0 }
 					end
 				end
@@ -1271,7 +1174,7 @@ function et_RunFrame(levelTime)
 	if math.fmod(levelTime, 100) ~= 0 then return end
 	local cs = tonumber(et.trap_GetConfigstring(et.CS_SERVERTOGGLES))
 	if paused == false then
-		if bit.band(bit.lshift(1, 4), cs) ~= 0 then
+		if bit.band(bit.lshift(1, 4), cs) == 1 then
 			paused = true
 			changedred = true
 			redflag = false
@@ -1295,9 +1198,8 @@ function et_RunFrame(levelTime)
 				if et.gentity_get(i, "pers.connected") == 2 then
 					local team = et.gentity_get(i, "sess.sessionTeam")
 					if team == 1 or team == 2 then
-						if denies[i][1] == true and paused_death[i][1] > 0 then
-							paused_death[i][2] = paused_death[i][2] + (et.trap_Milliseconds() - paused_death[i][1])
-							paused_death[i][1] = 0
+						if denies[i][1] == true then
+							paused_death[i][2] = et.trap_Milliseconds()
 						end
 					end
 				end
@@ -1311,9 +1213,7 @@ function et_RunFrame(levelTime)
 	if eomap_done then
 	    if eomaptime < ltm then
 		    eomap_done = false
-			local fh_t0 = fh_now()
 			topshots_f(-2)
-			fh_section("topshots", fh_t0)
 	    end
 	end
 	
@@ -1366,11 +1266,11 @@ function et_ClientUserinfoChanged(clientNum)
        spawns[clientNum] = nil
 		if team == 3 then
 			if death_time[clientNum] ~= 0 then
-				local diff = et.trap_Milliseconds() - death_time[clientNum] - paused_death[clientNum][2]
+				local diff = et.trap_Milliseconds() - death_time[clientNum] - (paused_death[clientNum][2] - paused_death[clientNum][1])
 				death_time_total[clientNum] = death_time_total[clientNum] + diff
 			end
 			if denies[clientNum][1] == true then
-				topshots[denies[clientNum][2]][35] = topshots[denies[clientNum][2]][35] + (et.trap_Milliseconds() - denies[clientNum][3] - paused_death[clientNum][2])
+				topshots[denies[clientNum][2]][35] = topshots[denies[clientNum][2]][35] + (et.trap_Milliseconds() - denies[clientNum][3] - (paused_death[clientNum][2] - paused_death[clientNum][1]))
 			end
 			denies[clientNum] = { [1]=false, [2]=-1, [3]=0 }
 			paused_death[clientNum] = { [1]=0, [2]=0 }
@@ -1438,12 +1338,12 @@ function et_ClientSpawn(id, revived)
 	hitRegionsData[id] = getAllHitRegions(id)
 	if team == 1 or team == 2 then
 		if death_time[id] ~= 0 then
-			local diff = et.trap_Milliseconds() - death_time[id] - paused_death[id][2]
+			local diff = et.trap_Milliseconds() - death_time[id] - (paused_death[id][2] - paused_death[id][1])
 			death_time_total[id] = death_time_total[id] + diff
 		end
 
 		if denies[id][1] == true then
-			topshots[denies[id][2]][35] = topshots[denies[id][2]][35] + (et.trap_Milliseconds() - denies[id][3] - paused_death[id][2])
+			topshots[denies[id][2]][35] = topshots[denies[id][2]][35] + (et.trap_Milliseconds() - denies[id][3] - (paused_death[id][2] - paused_death[id][1]))
 			denies[id] = { [1]=false, [2]=-1, [3]=0 }
 		end
 		paused_death[id] = { [1]=0, [2]=0 }
@@ -1584,7 +1484,7 @@ function send_table(id, columns, rows, separator, pre_filename)
     if not filename then
         local mapname = et.trap_Cvar_Get("mapname")
         local round = tonumber(et.trap_Cvar_Get("g_currentRound")) == 0 and 2 or 1
-        filename = string.format("gamestats/%s%s-round-%d-endstats.txt", os.date('%Y-%m-%d-%H%M%S-'), mapname, round)
+        filename = string.format("gamestats\\%s%s-round-%d-endstats.txt", os.date('%Y-%m-%d-%H%M%S-'), mapname, round)
     end
 
     if #rows > 0 then
@@ -1602,16 +1502,3 @@ function send_table(id, columns, rows, separator, pre_filename)
         end
     end
 end
-
--- BEGIN frame_health hook v6.13 (identical in every module)
--- Wraps the module's own et_RunFrame so its whole cost -- early returns
--- included -- lands in fh_end. An error inside is re-raised unchanged so
--- the engine still prints it; the measurement is taken first.
-local fh_wrapped_run_frame = et_RunFrame
-function et_RunFrame(levelTime)
-    fh_begin()
-    local ok, err = pcall(fh_wrapped_run_frame, levelTime)
-    fh_end()
-    if not ok then error(err, 0) end
-end
--- END frame_health hook v6.13
