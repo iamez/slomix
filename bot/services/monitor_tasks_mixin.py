@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import random
 import re
 import time
 from datetime import datetime
@@ -41,24 +40,6 @@ from bot.core.dead_hours import DEAD_HOURS_END, is_dead_hour
 from bot.logging_config import get_logger
 
 logger = get_logger("bot.core")
-
-async def _stagger(interval_seconds: float) -> None:
-    """Offset a task loop's first tick by a random slice of its own interval.
-
-    ⛔⛔ THE POLLERS WERE ALIGNED. endstats (60s), the proximity scan (120s)
-    and the console sentinel (120s) all start from `wait_until_ready`, so they
-    tick together — on 2026-09-06 every successful connection in the log lands
-    on the same second (`:01`). Each one opens its own SSH connection, and
-    OpenSSH's MaxStartups limits CONCURRENT unauthenticated connections
-    (paramiko #874, #664: a refused one surfaces as "Error reading SSH
-    protocol banner"). Three simultaneous handshakes against a host that is
-    already slow is a self-inflicted burst on top of somebody else's load.
-
-    A tenth of the interval is enough to break the alignment without moving
-    any loop meaningfully off its cadence.
-    """
-    await asyncio.sleep(random.uniform(0, interval_seconds * 0.1))  # noqa: S311 - jitter, not a secret
-
 
 
 class _MonitorTasksMixin:
@@ -223,14 +204,6 @@ class _MonitorTasksMixin:
 
             if not remote_files:
                 logger.debug("📂 No remote files found or SSH connection failed")
-                # ⛔⛔ THE SSH CALL SUCCEEDED. An empty listing is a healthy
-                # cycle — the server simply has nothing new — so the failure
-                # streak ends here, exactly as it would three lines further
-                # down. Without this the counter survives every quiet evening
-                # and "3 consecutive failures" comes to mean "3 since the bot
-                # last had files to fetch", which can be days apart. On
-                # 2026-09-06 this was the most-taken early return in the loop.
-                await self.reset_error_tracking("ssh_monitor")
                 return
 
             logger.debug(f"📂 Found {len(remote_files)} total files on remote server")
@@ -296,11 +269,6 @@ class _MonitorTasksMixin:
                                     posted = await self.round_publisher.publish_round_stats(filename, result)
                                     if posted:
                                         logger.info(f"✅ Successfully processed and posted: {filename}")
-                                        # A post that landed ends the posting streak. `discord_posting` alerts at
-                                        # TWO and is incremented from four unrelated paths, so without this the
-                                        # second failure since boot pages the owner — even if a thousand posts
-                                        # succeeded in between.
-                                        await self.reset_error_tracking("discord_posting")
                                     else:
                                         logger.info(f"✅ Successfully processed; round stats autopost skipped: {filename}")
                                 except Exception as post_err:
@@ -334,7 +302,7 @@ class _MonitorTasksMixin:
                 logger.info(f"🎉 Processed {new_files_count} new file(s) this check")
 
             # Reset error tracking on successful cycle
-            await self.reset_error_tracking("ssh_monitor")
+            self.reset_error_tracking("ssh_monitor")
 
         except Exception as e:
             logger.error(f"❌ endstats_monitor error: {e}", exc_info=True)
@@ -345,7 +313,6 @@ class _MonitorTasksMixin:
     async def before_endstats_monitor(self):
         """Wait for bot to be ready before starting SSH monitoring"""
         await self.wait_until_ready()
-        await _stagger(60)
         logger.info("✅ SSH monitoring task ready (optimized with voice detection)")
 
     @tasks.loop(seconds=30)
@@ -967,8 +934,6 @@ class _MonitorTasksMixin:
                 # authenticates only when the config happens to be absolute
                 key_filename=_os.path.expanduser(self.config.ssh_key_path),
                 timeout=10,
-                banner_timeout=45,
-                auth_timeout=45,
             )
             sftp = ssh.open_sftp()
             # a hung remote read would otherwise block the worker thread
@@ -1071,71 +1036,36 @@ class _MonitorTasksMixin:
     @lua_console_sentinel.before_loop
     async def before_lua_console_sentinel(self):
         await self.wait_until_ready()
-        await _stagger(120)
 
     # ── Daily data-plausibility sentinel (Data Trust pillar B, permanent) ────
     #
-    # scripts/data_plausibility_audit.py reports two classes. Per-row rules
-    # fire on a row that is individually impossible (backfill noise excluded
-    # by design); trend rules fire when a MONTHLY statistic departs from the
-    # months before it — the class that stays invisible while every single
-    # row is in range, which is how a halved dead-time measurement went five
-    # months unnoticed. Green is the steady state since 2026-08-18; a finding
-    # in either class means someone should look today, not at the next manual
-    # run. Same sensor family as lua_console_sentinel: quiet when healthy,
-    # loud in the admin channel when not.
+    # scripts/data_plausibility_audit.py exits with the number of rules that
+    # fired on LIVE rows (backfill noise excluded by design). Green (exit 0)
+    # is the steady state since 2026-08-18; any live finding means the CURRENT
+    # pipeline wrote an impossible row and someone should look today, not at
+    # the next manual run. Same sensor family as lua_console_sentinel: quiet
+    # when healthy, loud in the admin channel when not.
 
     @staticmethod
     def _summarize_audit_payload(payload) -> str | None:
         """Return an alert body for live violations, or None when clean.
 
-        Accepts the script's --json output: a list of rule dicts, or the
-        wrapped {"rules": [...], "trends": [...]} form. Tolerant of shape
-        drift: anything it cannot read is reported as such rather than
-        swallowed.
+        Accepts the script's --json output (a list of rule dicts, possibly
+        wrapped in {"rules": [...]}). Tolerant of shape drift: anything it
+        cannot read is reported as such rather than swallowed.
         """
         rules = payload.get("rules") if isinstance(payload, dict) else payload
         if not isinstance(rules, list):
             return "audit --json vrnil nepričakovano obliko — preveri skript"
-        # A rule carrying `acknowledged` fires on purpose: the reason is
-        # written down in the rule and the repair is already tracked. Alerting
-        # on it daily would train the reader to ignore this message, and the
-        # next real finding would arrive into that habit.
         live = [(r.get("name", "?"), int(r.get("live", 0) or 0))
-                for r in rules
-                if isinstance(r, dict) and (r.get("live") or 0) > 0
-                and not r.get("acknowledged")]
-
-        # Aggregate rules report a monthly statistic that MOVED — the class no
-        # per-row predicate can see (the 2026-03 dead-time fix halved the
-        # median dead share with every single row still inside every bound).
-        # A payload without a `trends` key is an older audit, not a clean one:
-        # absent and empty are different, and only the second is good news.
-        trends = payload.get("trends") if isinstance(payload, dict) else None
-        shifted: list[tuple[str, str]] = []
-        if isinstance(trends, list):
-            for tr in trends:
-                if not isinstance(tr, dict) or tr.get("acknowledged"):
-                    continue
-                months = [s.get("month", "?") for s in (tr.get("shifts") or [])
-                          if isinstance(s, dict) and not s.get("explanation")]
-                if months:
-                    shifted.append((tr.get("name", "?"), ", ".join(months[:4])))
-
-        if not live and not shifted:
+                for r in rules if isinstance(r, dict) and (r.get("live") or 0) > 0]
+        if not live:
             return None
-
-        parts: list[str] = []
-        if live:
-            lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])
-            more = f"\n… in še {len(live) - 8} pravil" if len(live) > 8 else ""
-            parts.append(f"{len(live)} pravil se je sprožilo na ŽIVIH vrsticah:\n{lines}{more}")
-        if shifted:
-            lines = "\n".join(f"• `{name}`: {months}" for name, months in shifted[:8])
-            more = f"\n… in še {len(shifted) - 8} metrik" if len(shifted) > 8 else ""
-            parts.append(f"{len(shifted)} metrik se je premaknilo brez razlage:\n{lines}{more}")
-        parts.append("Podrobnosti: `python scripts/data_plausibility_audit.py`")
-        return "\n".join(parts)
+        lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])
+        more = f"\n… in še {len(live) - 8} pravil" if len(live) > 8 else ""
+        return (f"{len(live)} pravil se je sprožilo na ŽIVIH vrsticah:\n"
+                f"{lines}{more}\n"
+                f"Podrobnosti: `python scripts/data_plausibility_audit.py`")
 
     @staticmethod
     def _run_audit_in_thread():
@@ -1158,11 +1088,9 @@ class _MonitorTasksMixin:
         conn = mod.get_connection()
         try:
             results = mod.run_audit(conn, mod.RULES, top_n=0)
-            trends = mod.run_trend_audit(conn, mod.TREND_RULES)
         finally:
             conn.close()
-        return {"rules": [r.to_dict() for r in results],
-                "trends": [t.to_dict() for t in trends]}
+        return [r.to_dict() for r in results]
 
     @tasks.loop(hours=24)
     async def data_plausibility_sentinel(self):

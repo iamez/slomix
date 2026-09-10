@@ -55,20 +55,12 @@ htmlcov/
 # NODE / REACT
 # ============================================
 node_modules/
-# ⚠️ Without the slash too: a worktree that shares the dev tree's packages does
-# it with a SYMLINK, and `node_modules/` matches directories only — so the link
-# showed up as untracked and one `git add -A` away from committing a pointer
-# into someone's home directory.
-node_modules
 website/frontend/test-results/
 website/frontend/playwright-report/
 gemini-website/dist/
 gemini-website/.next/
 build/
 website/static/modern/
-website/static/app/
-# corpus recorder output — phase tests commit chosen fixtures as copies
-tests/fixtures/api/recorded/
 # Deploy staging/rollback dirs for the modern build (deploy_release.sh step 3c).
 # MUST be ignored: the deploy's clean-tree guard aborts on any untracked path,
 # so an un-ignored static/modern.prev left after a deploy would break the next one.
@@ -186,8 +178,6 @@ nov2_*.txt
 !docs/*.html
 !website/*.html
 !website/index.html
-# The standalone app's Vite entry is source, not a report (docs/design/06 §1).
-!website/frontend/app.html
 
 # Field mapping dev files
 field_*.txt
@@ -350,7 +340,8 @@ WEBSITE_STAT_BUGS_FOUND.md
 !/scripts/
 !/tools/
 !/scripts/__init__.py
-!/!/tools/__init__.py
+!/scripts/backfill_gametimes.py
+!/tools/__init__.py
 !/tools/simple_bulk_import.py
 !/tools/verify_pipeline.py
 
@@ -448,19 +439,7 @@ docs/archive/
 # Internal research / prompt / report corpora stay local unless explicitly promoted.
 docs/reports/
 docs/instructions/
-docs/research/
-
-# Raw data corpora never belong in the repository, at any size. A 23.8 MB
-# spreadsheet of another player's stats reached the public repo on 2026-08-19
-# because nothing said no. The pre-push guard (scripts/git-hooks/pre-push)
-# refuses these too — this is the second net, not the first.
-# Only spreadsheets: the repo DOES deliberately track a research .csv that
-# tooling reads (FULL_PROJECT_AUDIT_COVERAGE_2026-07-14.csv, consumed by
-# scripts/git-hooks/pre-push), so a blanket rule for those would contradict
-# what is already versioned. Size is handled by the pre-push guard instead,
-# which is where the real risk was.
-*.xlsx
-*.xls
+docs/research/inbox/
 
 # ============================================
 # DOCS — INTERNAL DEV ARTIFACTS (gitignore)
@@ -743,171 +722,3 @@ gemini-website/
 
 # User-uploaded content (community upload library) — never in git
 website/data/uploads/
-
-# Repair-script artifacts (row backups + generated SQL) — data, never in git
-/playtime_repair_artifacts/
-/r2_repair_artifacts/
-/dead_time_repair_artifacts/
-
-# ============================================
-# DOCS RETIRED 2026-08-20 — working notes, kept local, not published
-# ============================================
-# These were dated working documents: audits, RCAs, sprint reports, plans and
-# handoffs that no code, test, workflow or living document refers to. They are
-# how the work was done, not how the product runs, and a public repo that
-# carries them makes the parts that DO matter harder to find.
-#
-# Nothing was thrown away. They stay in git history (restore any one with
-#   git show 1c9e100e:<path> > <path>
-# where 1c9e100e is the commit before this one), and a local copy lives in
-# /home/samba/share/slomix-archive/docs-retired-2026-08-20/.
-#
-# A doc that code cites was NOT retired: 24 dated documents stayed exactly
-# because a comment, test or router points at them — the citation is what
-# makes them documentation rather than sediment.
-#
-# docs/research/ and docs/archive/ are covered by the directory rules above.
-
-docs/ALL_SEEING_EYE_SITUATIONAL_SKILL_2026-07.md
-docs/ARCHITECTURE_AUDIT_2026-03-20.md
-docs/C4A_CRON_CLEANUP_2026-07-29.md
-docs/C4B_SSH_OPENVPN_CLEANUP_2026-07-29.md
-docs/DEEP_RCA_AUDIT_PLAN.md
-docs/DEEP_RCA_AUDIT_RESULTS_2026-03-26.md
-docs/DEEP_RCA_PROXIMITY_REVIEW.md
-docs/DEEP_RCA_SKILL_RATING_REVIEW.md
-docs/DEPLOY_CHECKLIST_2026-07-07.md
-docs/DEPLOY_CHECKLIST_2026-07-09.md
-docs/DESIGN_SKILL_PASSPORT_2026-07.md
-docs/DUAL_FRONTEND_REACHABILITY_2026-07-13.md
-docs/ESSENTIAL_RUNTIME_SCAN_RESULTS.md
-docs/EXTERNAL_ACCESS_PLAN.md
-docs/GO_LIVE_CHECKLIST_2026-06-30.md
-docs/LESSONS_LEARNED_2026-03-21.md
-docs/M2_HEALTH_CHECK_NOTES_2026-07-29.md
-docs/OKSII_COMPARISON_REPORT.md
-docs/PLAN_FULL_PROJECT_AUDIT_REMEDIATION_2026-07-14.md
-docs/PLAN_REVIEW_CLOSURE_AND_GOOD_NIGHT_2026-07-13.md
-docs/PLAN_internal_api_secret_2026-07-09.md
-docs/PLAN_session_lifecycle_fixes.md
-docs/PROXIMITY_AIM_ANALYTICS_PLAN.md
-docs/PROXIMITY_GAP_ANALYSIS_2026-06.md
-docs/PROXIMITY_LUA_V8_DRIFT_2026-05-16.md
-docs/PROXIMITY_REDESIGN_AUDIT_2026-05-16.md
-docs/PROXIMITY_REDESIGN_FINAL_REPORT_2026-05-17.md
-docs/PROXIMITY_REDESIGN_IA_BLUEPRINT.md
-docs/PROXIMITY_REDESIGN_MASTER_PLAN.md
-docs/PROXIMITY_REDESIGN_P6_REPORT_2026-05-16.md
-docs/PROXIMITY_REDESIGN_PARTB2_REPORT_2026-05-16.md
-docs/PROXIMITY_REDESIGN_PARTB_OWNERVISUAL_PLAN.md
-docs/PROXIMITY_V6_OBJECTIVE_INTELLIGENCE_RESEARCH.md
-docs/PROXIMITY_VISION_AUDIT_2026-07.md
-docs/PYTHON_313_UPGRADE_2026-07-31.md
-docs/RCA_2026-04-21_correlation_orphans.md
-docs/SLOMIX_GOOD_NIGHT_ENGINE_PLAN_2026-06-28.md
-docs/TRACKED_FILES_AUDIT_2026-03-17.md
-docs/W3_SLOW_QUERIES_2026-07-29.md
-docs/WEBSITE_FIRST_ROADMAP_2026-06.md
-docs/WEB_ERROR_TRIAGE_2026-07-27.md
-docs/audit_2026-05-08.md
-docs/deploy_plan_2026-05-07.md
-docs/proximity-round-selector-brief.md
-docs/skill-rating-redesign-brief.md
-
-# --- local-only tooling (removed from the repo 2026-08-26; the files
-# stay on the dev box — one-off backfills, executed backtests whose
-# results live as constants in code comments, and unreferenced docs.
-# Ignored so they cannot be re-added by a sweep. ---
-scripts/archive/
-!scripts/archive/__init__.py
-!scripts/archive/backfill_gametimes.py
-!scripts/archive/proximity_objective_coords_gate.py
-!scripts/archive/backfill_full_selfkills.py
-!scripts/archive/backfill_r2_time_played.py
-!scripts/archive/backfill_endstats.py
-!scripts/archive/backfill_lua_round_ids.py
-!scripts/archive/export_proximity_objective_zones.py
-!scripts/archive/export_proximity_map_assets.py
-!scripts/archive/objective_coords_to_lua.py
-!scripts/archive/update_proximity_objectives_from_json.py
-!scripts/archive/sync_objective_placeholders.py
-!scripts/archive/relink_lua_round_teams.py
-scripts/backtest_krogt_tds.sql
-scripts/backtest_life_cards.py
-scripts/backtest_moment_director.py
-scripts/linkage_inventory_report.py
-scripts/proximity_bsp_inventory.py
-scripts/validate_layer1_against_cohesion.py
-scripts/validate_round_web_layer1.py
-scripts/supastats_check.py
-scripts/deploy_release_v1.14.2.sh
-scripts/run_validation_bundle_from_env.sh
-scripts/system_smoke_tests.sh
-scripts/verify_post_deploy.sh
-scripts/smoke_pipeline.py
-scripts/check_ws11_objective_coords_gate.sh
-scripts/check_ws12_single_trigger_path.sh
-scripts/check_ws1_ws1c_gates.sh
-scripts/backtest_carrier_context.py
-scripts/backtest_clutch_v1.py
-scripts/backtest_good_night.py
-scripts/backtest_help_harm_ledger.py
-scripts/backtest_museum_memory_card.py
-scripts/backtest_objective_pressure.py
-scripts/backtest_s_effort.py
-docs/ACHIEVEMENT_SYSTEM.md
-docs/ARCHITECTURE_ONBOARDING.md
-docs/AUTOMATION_CHECKLIST.md
-docs/AUTOMATION_SETUP_GUIDE.md
-docs/AVAILABILITY_UI.md
-docs/COMMAND_CHEAT_SHEET.md
-docs/DISASTER_RECOVERY.md
-docs/DISCORD_LINKING_SETUP.md
-docs/EDGE_CASES.md
-docs/ESSENTIAL_RUNTIME_MAP.md
-docs/F12_LOOP_GUIDE.md
-docs/FUTURE_SCALING_GUIDE.md
-docs/GAMESERVER_CLAUDE.md
-docs/GRAPH_DESIGN_GUIDE.md
-docs/LAPTOP_MIGRATION_GUIDE.md
-docs/LINKING_ACCOUNTS.md
-docs/NOTIFICATIONS_LINKING.md
-docs/OMNIBOT_PROJECT.md
-docs/POSTGRESQL_MIGRATION_GUIDE.md
-docs/PRODUCT_MAP.md
-docs/PROMOTE_CAMPAIGNS.md
-docs/PROMOTIONS_SYSTEM.md
-docs/PROXIMITY_LUA_V9_DEPLOY_RUNBOOK.md
-docs/QUICK_FIX_GUIDE.md
-docs/SEASON_SYSTEM.md
-docs/SERVER_CONTROL_INSTALL.md
-docs/SKILL_RATING_IMPLEMENTATION_PLAN.md
-docs/STATS_GROUPING_GUIDE.md
-docs/SUBSTITUTION_DETECTION.md
-docs/TEAM_AND_SCORING.md
-docs/TESTING_GUIDE.md
-docs/UPLOAD_SECURITY.md
-docs/reference/c0rnp0rn7_prepatch_vs_current.diff
-docs/PRODUCTION_AUTOMATION_GUIDE.md
-docs/SERVER_CONTROL_QUICK_REF.md
-docs/SERVER_CONTROL_SETUP.md
-docs/W1_500_TRIAGE_2026-07-29.md
-docs/PROXIMITY_LUA_V9_DESIGN_2026-05-16.md
-docs/reference/c0rnp0rn7_prepatch_from_git_history.lua
-tools/README.md
-tools/verify_pipeline.py
-tools/pipeline_health_report.py
-
-# Generated from docs/api/openapi.json by `npm run generate:api`. NOT tracked:
-# it is derived, it grows with every typed endpoint, and it crossed the 500 kB
-# push/CI size guard on 2026-08-29. CI generates it BEFORE tsc, so the types
-# the frontend compiles against come from the committed schema, which
-# tests/integration/test_openapi_snapshot.py ties to the running app.
-website/frontend/src/api/generated/openapi.d.ts
-
-# Playwright owner storage state — embeds a signed session cookie
-website/frontend/e2e/.auth/
-.claude_session
-
-# Artifacts from scripts/backfill_time_played_percent.py (backup + repair SQL)
-tpp_backfill_artifacts/

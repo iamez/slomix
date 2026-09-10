@@ -181,11 +181,6 @@ class _EndstatsPipelineMixin:
                     posted = await self.round_publisher.publish_round_stats(filename, result)
                     if posted:
                         webhook_logger.info(f"✅ Successfully processed and posted: {filename}")
-                        # A post that landed ends the posting streak. `discord_posting` alerts at
-                        # TWO and is incremented from four unrelated paths, so without this the
-                        # second failure since boot pages the owner — even if a thousand posts
-                        # succeeded in between.
-                        await self.reset_error_tracking("discord_posting")
                     else:
                         webhook_logger.info(f"✅ Successfully processed; round stats autopost skipped: {filename}")
                 except Exception as post_err:

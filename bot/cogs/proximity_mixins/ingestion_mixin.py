@@ -6,11 +6,9 @@ All methods live on ProximityCog via mixin inheritance.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import os
-import random
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -242,41 +240,9 @@ class _ProximityIngestionMixin:
             except Exception as e:
                 self.error_count += 1
                 logger.error(f"Error in engagement scan: {e}", exc_info=True)
-                # ⛔⛔ THIS PATH HAD NO VOICE. On 2026-09-06, 19 of the 22 SSH
-                # failures came from this scan and not one of them could reach
-                # an admin — `error_count` is visible only inside the
-                # `!proximity` embed, if somebody thinks to look. The endstats
-                # loop alerted on its 3, so the owner was told about the
-                # smaller half of the outage. Same mechanism, own key: this
-                # scan runs every 2 minutes with no voice or dead-hours
-                # gating, so it must not share a counter with a loop that
-                # skips most of the day.
-                await self._report_scan_error(e)
-            else:
-                await self._report_scan_ok()
             finally:
                 if not self._startup_scan_completed:
                     self._startup_scan_completed = True
-
-    async def _report_scan_error(self, exc: Exception) -> None:
-        """Route a scan failure through the bot's admin alerting, if it has any.
-
-        The cog can be loaded by a bot without the alert mixin (tests, and the
-        standalone importer), so the capability is checked rather than assumed
-        — a missing alerting path must not turn a logged error into a crash.
-        """
-        track = getattr(self.bot, "track_error", None)
-        if track is None:
-            return
-        await track("proximity_ssh", str(exc), max_consecutive=3)
-
-    async def _report_scan_ok(self) -> None:
-        """Clear the streak after a clean scan, so the counter means what its
-        name says."""
-        reset = getattr(self.bot, "reset_error_tracking", None)
-        if reset is None:
-            return
-        await reset("proximity_ssh")
 
     @tasks.loop(minutes=2)
     async def scan_engagement_files(self):
@@ -287,11 +253,6 @@ class _ProximityIngestionMixin:
     async def before_scan(self):
         """Wait for bot to be ready before starting scan task"""
         await self.bot.wait_until_ready()
-        # ⛔ Break the alignment with the other SSH pollers. All of them start
-        # from `wait_until_ready`, so they tick on the same second and open
-        # their handshakes simultaneously — and MaxStartups counts CONCURRENT
-        # unauthenticated connections. See _stagger in monitor_tasks_mixin.
-        await asyncio.sleep(random.uniform(0, 12))  # noqa: S311 - jitter, not a secret
 
     async def _resolve_session_date(
         self, file_date: str, file_time: str, parts: list, filename: str

@@ -29,22 +29,7 @@ logger = logging.getLogger("bot.core.checks")
 
 
 class ChannelCheckFailure(commands.CheckFailure):
-    """Raised when a command is used outside its allowed channel.
-
-    ⛔ THE POINT IS SILENCE, AND IT USED TO BE A LIE. This class existed and was
-    never raised: every channel predicate returned False, discord.py turned that
-    into a plain `CheckFailure`, and the handler's `isinstance(error,
-    ChannelCheckFailure)` branch was therefore dead. Control fell through to the
-    generic branch, which REPLIES IN THE CHANNEL with "check functions failed"
-    and logs an ERROR with a traceback.
-
-    So a `!teams` meant for a different bot in the same Discord got an error
-    message from ours and four ERROR entries in errors.log — noise that hides
-    real failures, which is exactly what it did during the 2026-08-28 log review.
-
-    Raising this type is what makes the docstrings above true: the handler
-    recognises it, stays quiet, and logs at DEBUG.
-    """
+    """Custom exception for channel check failures (kept for backward compatibility)."""
 
 
 def is_admin_channel():
@@ -75,10 +60,9 @@ def is_admin_channel():
 
         # Check if command is in an admin channel
         if ctx.channel.id not in admin_channels:
-            # Raise, do not return False: a bare False becomes a generic
-            # CheckFailure, which the handler answers out loud.
+            # SILENTLY IGNORE - return False without sending error message
             logger.debug(f"Command ignored in channel {ctx.channel.id} (not admin channel)")
-            raise ChannelCheckFailure("admin channel only")
+            return False
 
         logger.debug(f"Admin command allowed from admin channel for {ctx.author}")
         return True
@@ -114,8 +98,9 @@ def is_public_channel():
 
         # Check if command is in a public channel
         if ctx.channel.id not in ctx.bot.public_channels:
+            # SILENTLY IGNORE - return False without sending error message
             logger.debug(f"Command ignored in channel {ctx.channel.id} (not public channel)")
-            raise ChannelCheckFailure("public channel only")
+            return False
 
         logger.debug(f"Public command allowed from channel {ctx.channel.id} for {ctx.author}")
         return True
@@ -142,8 +127,9 @@ def is_allowed_channel(allowed_channel_ids: list):
     """
     async def predicate(ctx):
         if ctx.channel.id not in allowed_channel_ids:
+            # SILENTLY IGNORE - return False without sending error message
             logger.debug(f"Command ignored in channel {ctx.channel.id} (not in allowed list)")
-            raise ChannelCheckFailure("not an allowed channel")
+            return False
         return True
 
     return commands.check(predicate)

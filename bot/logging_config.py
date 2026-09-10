@@ -71,40 +71,6 @@ class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
         self._fix_permissions()
 
 # Custom formatter with more context
-#: Third-party loggers that report a failure by emitting its whole traceback,
-#: one ERROR record per line. Our own code already logs these failures in a
-#: single line with a cause it has unwrapped, so the library's copy is a
-#: duplicate — an expensive one.
-#:
-#: ⛔⛔ MEASURED, not guessed. In one 2026-09-06 SSH incident the owner's
-#: `journalctl -u etlegacy-bot | grep -iE "warn|error"` showed 48 ERROR lines.
-#: Two of them were events. The other 46 were paramiko.transport printing two
-#: tracebacks — a 24x inflation that made a pair of failures read as an
-#: outage, and buried the SLOW QUERY and KIS-RECONCILE lines that mattered.
-NOISY_TRACEBACK_LOGGERS = ("paramiko.transport",)
-
-
-class SuppressNoisyTracebacks(logging.Filter):
-    """Drop records from libraries that duplicate what our own logger says.
-
-    ⛔ Attached to HANDLERS, never to the logger, and deliberately not to
-    bot.log. Setting the level on `paramiko.transport` itself would stop the
-    record from ever being created, and the full traceback is exactly what a
-    concurrency bug needs: `[Errno 9] Bad file descriptor` means a socket was
-    closed under paramiko's thread, and that is diagnosed from frames, not
-    from a summary. So the traceback stays whole in bot.log; only the two
-    surfaces a human reads for triage — the console (which is what journalctl
-    shows) and errors.log — are spared the copy.
-    """
-
-    def __init__(self, prefixes=NOISY_TRACEBACK_LOGGERS):
-        super().__init__()
-        self.prefixes = tuple(prefixes)
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        return not record.name.startswith(self.prefixes)
-
-
 class DetailedFormatter(logging.Formatter):
     """Custom formatter with color support for console and detailed info for files"""
 
@@ -174,9 +140,6 @@ def setup_logging(log_level=logging.INFO):
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     console_handler.setFormatter(DetailedFormatter(use_colors=True))
-    # The console is what `journalctl -u etlegacy-bot` prints, so this is the
-    # surface the owner actually greps.
-    console_handler.addFilter(SuppressNoisyTracebacks())
     root_logger.addHandler(console_handler)
 
     # ==================== MAIN BOT LOG FILE ====================
@@ -204,7 +167,6 @@ def setup_logging(log_level=logging.INFO):
     error_file_handler._fix_permissions()  # noqa: SLF001 - own subclass, fixing perms right after creation matters here
     error_file_handler.setLevel(logging.WARNING)  # Changed from ERROR to WARNING
     error_file_handler.setFormatter(DetailedFormatter(use_colors=False))
-    error_file_handler.addFilter(SuppressNoisyTracebacks())
     root_logger.addHandler(error_file_handler)
 
     def _reset_child_logger(logger_obj):
@@ -288,24 +250,6 @@ def _exc_info_for(error):
     return error if isinstance(error, BaseException) else False
 
 
-def _is_channel_decline(error) -> bool:
-    """True when a command was declined for being in the wrong channel.
-
-    Imported lazily and guarded: `bot.core.checks` imports discord.py, and this
-    module is also loaded by tooling that has no reason to. A missing import
-    must not turn every command log into a crash.
-    """
-    try:
-        from bot.core.checks import ChannelCheckFailure
-    except ImportError:  # pragma: no cover - tooling without discord.py
-        # ⛔ ImportError only. A bare `except Exception` here would also
-        # swallow a real fault inside `bot.core.checks` and quietly report
-        # every decline as a genuine failure — the exact confusion this
-        # function exists to remove.
-        return False
-    return isinstance(error, ChannelCheckFailure)
-
-
 def log_command_execution(ctx, command_name, start_time=None, end_time=None, error=None):
     """
     Log command execution with full context
@@ -331,21 +275,8 @@ def log_command_execution(ctx, command_name, start_time=None, end_time=None, err
         elapsed = end_time - start_time
         duration = f" [{elapsed:.2f}s]"
 
-    # Log based on success/failure.
-    #
-    # ⛔ A CHANNEL DECLINE IS NOT A FAILURE. This Discord runs more than one
-    # bot, so commands meant for another one reach ours and are declined by
-    # channel scope. Recording those at ERROR with a traceback fills errors.log
-    # with entries nothing went wrong in — and a log full of non-failures is
-    # how a real failure gets missed. (During the 2026-08-28 review, four
-    # `!teams` entries aimed at the team-building bot sat among the genuine
-    # ones and had to be ruled out by hand.)
-    if error and _is_channel_decline(error):
-        logger.debug(
-            f"↷ DECLINED (channel scope): {command_name} | User: {user} | "
-            f"Guild: {guild} | Channel: {channel}"
-        )
-    elif error:
+    # Log based on success/failure
+    if error:
         logger.error(
             f"❌ FAILED: {command_name}{duration} | User: {user} | Guild: {guild} | Channel: {channel} | Error: {error}",
             exc_info=_exc_info_for(error)

@@ -223,9 +223,7 @@ class ServerControl(commands.Cog):
             port=self.ssh_port,
             username=self.ssh_user,
             key_filename=self.ssh_key_path,
-            timeout=10,
-            banner_timeout=45,
-            auth_timeout=45,
+            timeout=10
         )
         return ssh
 

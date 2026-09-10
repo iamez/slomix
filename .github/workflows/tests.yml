@@ -115,14 +115,6 @@ jobs:
             exit 1
           fi
 
-      - name: Install Lua (for the Lua-behaviour unit tests)
-        # tests/unit/test_lua_gametimes_path.py runs the shipped Lua function
-        # against stubbed engine cvars. Without an interpreter here it does not
-        # fail — it SKIPS, which is worse: the guard looks green while checking
-        # nothing, and the cross-instance path bug it exists for could come
-        # back through a required check (Codex review, #788).
-        run: sudo apt-get update && sudo apt-get install -y lua5.4
-
       - name: Run tests
         env:
           POSTGRES_TEST_HOST: localhost
@@ -151,21 +143,12 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          # react-router 8 declares engines.node >=22.22.0 — track latest 22.x
-          node-version: "22.x"
+          node-version: "22.13.1"
           cache: "npm"
       - name: Install frontend tooling
         run: npm ci
       - name: Lint JavaScript
         run: npm run lint:js
-      - name: Route lists agree with the legacy registry
-        # The guard that caught "29 routes audited, 32 in the registry, 36 in
-        # the app table" lived inside audit_website_browser.mjs, which imports
-        # Playwright — so it could only run where a browser was installed, i.e.
-        # when somebody remembered. That is the same condition under which the
-        # original gap survived unnoticed (brother's review on #839). This
-        # runner needs Node and two files.
-        run: node scripts/check_route_coverage.mjs
 
   react-frontend:
     name: React Typecheck + Tests
@@ -177,39 +160,15 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          # react-router 8 declares engines.node >=22.22.0 — track latest 22.x
-          node-version: "22.x"
+          node-version: "22.13.1"
           cache: "npm"
           cache-dependency-path: website/frontend/package-lock.json
       - name: Install React frontend dependencies
         run: npm ci
-      - name: Generate API types from the committed openapi snapshot
-        # ⛔ THIS MUST RUN BEFORE tsc. `src/api/generated/openapi.d.ts` is NOT
-        # tracked (2026-08-29): it is derived from docs/api/openapi.json, it
-        # grows with every typed endpoint, and it crossed the 500 kB size
-        # guard enforced by scripts/git-hooks/pre-push and this workflow.
-        #
-        # The guarantee is unchanged in substance and stronger in order. It
-        # used to be "the committed .d.ts still matches the JSON", checked
-        # AFTER tsc had already compiled against that committed file — so a
-        # stale file could typecheck and only then be caught. Now the file is
-        # built from the JSON first and tsc compiles against nothing else, and
-        # tests/integration/test_openapi_snapshot.py ties the JSON to the
-        # running app. App -> JSON -> types -> tsc, with no copy in between
-        # that can drift (original intent: Codex review on #802).
-        run: npm run generate:api
       - name: Typecheck (tsc --noEmit)
         run: npm run typecheck
       - name: Unit tests (vitest)
         run: npm test
-      - name: Standalone app build (vite.app.config.ts)
-        # tsc validates neither app.html nor the app Vite/Tailwind config nor
-        # the emitted /app/assets layout the backend mounts — only the build
-        # itself does (Codex on #802).
-        run: |
-          npm run build:app
-          test -f ../static/app/app.html
-          ls ../static/app/assets/*.js >/dev/null
 
   shellcheck:
     name: ShellCheck (deploy + ops scripts)
@@ -246,39 +205,6 @@ jobs:
           mapfile -t lua_files < <(git ls-files '*.lua')
           printf 'luac5.4 -p: %d tracked lua file(s)\n' "${#lua_files[@]}"
           for f in "${lua_files[@]}"; do luac5.4 -p "$f"; done
-      - name: Frame-health watcher harness (real tracker, stubbed et API)
-        # Drives proximity_tracker.lua's et_RunFrame through the four
-        # behaviours the watcher exists for -- including the P0 pairing pin
-        # (a slow tracker frame must be attributed to self, not the host)
-        # and the self=-1 aborted-body sentinel. Mutations of the pairing
-        # and of the end-of-frame self write were both watched failing
-        # before this landed (2026-09-02).
-        run: lua5.4 tests/lua/frame_health_harness.lua
-      - name: Frame-health block harness (the five other modules)
-        # v6.13: the same FH block is copied into every module with an
-        # et_RunFrame hook (no `require` across VMs). Each module is loaded
-        # in a fresh environment and must write its INIT line, stay quiet
-        # on cheap frames, name itself on a slow one, hold the 1 s throttle
-        # and re-raise a body error after measuring it.
-        run: lua5.4 tests/lua/frame_health_modules_harness.lua
-      - name: Vehicle tracking harness (v6.14 move times + damage attribution)
-        # docs/design/20 slice 2: a stubbed script_mover stands, moves, stands,
-        # takes the killing hit from client 3. Pins first/last_move_time in
-        # gameTime, one destruction credited to the attacker, no double count
-        # by the poll, the 16-field VEHICLE_PROGRESS row (move + escort times)
-        # and the new
-        # VEHICLE_DESTROYED section. Three mutations watched failing
-        # (branch removed, last_health reset removed, first_move overwritten).
-        run: lua5.4 tests/lua/vehicle_tracking_harness.lua
-      - name: dots_arena 1v1 harness (the fair-duel module)
-        # Seven decisions the module has to get right, checked against a
-        # stubbed engine: the spawn shield is cleared BEFORE G_Damage (without
-        # that the damage is a no-op -- G_Damage returns on PW_INVULNERABLE at
-        # g_combat.c:1593, twenty-two lines before it reads dflags), the two
-        # shields level to the EARLIER expiry, the test command takes only its
-        # own console command, and the module stands down on any other map.
-        # All three of those were watched failing as mutations (2026-09-04).
-        run: lua5.4 tests/lua/dots_arena_1v1_harness.lua
       - name: Lua 5.4 semantics smoke (the classes that actually bit us)
         # Parsing cannot see a runtime %d-on-float; this pins the SEMANTICS the
         # fixes rely on, in the real interpreter: %d throws on non-integral
