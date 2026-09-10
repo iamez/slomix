@@ -46,9 +46,9 @@
   "/api/proximity/classes": "13 files reachable from the endpoint's callers",
   "/api/proximity/cohesion": "13 files reachable from the endpoint's callers",
   "/api/proximity/combat-position-stats": "13 files reachable from the endpoint's callers",
-  "/api/proximity/combat-positions/danger-zones": "12 files reachable from the endpoint's callers",
-  "/api/proximity/combat-positions/heatmap": "12 files reachable from the endpoint's callers",
-  "/api/proximity/combat-positions/kill-lines": "12 files reachable from the endpoint's callers",
+  "/api/proximity/combat-positions/danger-zones": "13 files reachable from the endpoint's callers",
+  "/api/proximity/combat-positions/heatmap": "13 files reachable from the endpoint's callers",
+  "/api/proximity/combat-positions/kill-lines": "13 files reachable from the endpoint's callers",
   "/api/proximity/competitive/clutch": "10 files reachable from the endpoint's callers",
   "/api/proximity/competitive/first-blood": "10 files reachable from the endpoint's callers",
   "/api/proximity/competitive/man-advantage": "10 files reachable from the endpoint's callers",
@@ -67,23 +67,23 @@
   "/api/proximity/focus-fire": "13 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions": "12 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions/by-weapon": "12 files reachable from the endpoint's callers",
-  "/api/proximity/hit-regions/headshot-rates": "14 files reachable from the endpoint's callers",
-  "/api/proximity/hotzones": "12 files reachable from the endpoint's callers",
-  "/api/proximity/kill-outcomes": "14 files reachable from the endpoint's callers",
+  "/api/proximity/hit-regions/headshot-rates": "15 files reachable from the endpoint's callers",
+  "/api/proximity/hotzones": "13 files reachable from the endpoint's callers",
+  "/api/proximity/kill-outcomes": "15 files reachable from the endpoint's callers",
   "/api/proximity/kill-outcomes/player-stats": "12 files reachable from the endpoint's callers",
-  "/api/proximity/leaderboards": "21 files reachable from the endpoint's callers",
+  "/api/proximity/leaderboards": "22 files reachable from the endpoint's callers",
   "/api/proximity/lua-trades": "13 files reachable from the endpoint's callers",
   "/api/proximity/movement-stats": "12 files reachable from the endpoint's callers",
-  "/api/proximity/movers": "12 files reachable from the endpoint's callers",
+  "/api/proximity/movers": "13 files reachable from the endpoint's callers",
   "/api/proximity/objective-focus": "14 files reachable from the endpoint's callers",
-  "/api/proximity/objective-pressure": "14 files reachable from the endpoint's callers",
+  "/api/proximity/objective-pressure": "15 files reachable from the endpoint's callers",
   "/api/proximity/objective-runs": "14 files reachable from the endpoint's callers",
-  "/api/proximity/player-aim": "12 files reachable from the endpoint's callers",
-  "/api/proximity/player-heatmap": "12 files reachable from the endpoint's callers",
+  "/api/proximity/player-aim": "13 files reachable from the endpoint's callers",
+  "/api/proximity/player-heatmap": "13 files reachable from the endpoint's callers",
   "/api/proximity/player-journey": "13 files reachable from the endpoint's callers",
   "/api/proximity/player/{guid}/profile": "12 files reachable from the endpoint's callers",
   "/api/proximity/player/{guid}/radar": "12 files reachable from the endpoint's callers",
-  "/api/proximity/players": "14 files reachable from the endpoint's callers",
+  "/api/proximity/players": "15 files reachable from the endpoint's callers",
   "/api/proximity/prox-scores": "12 files reachable from the endpoint's callers",
   "/api/proximity/prox-scores/formula": "12 files reachable from the endpoint's callers",
   "/api/proximity/push-deaths/heatmap": "13 files reachable from the endpoint's callers",
@@ -94,17 +94,17 @@
   "/api/proximity/round/{round_id}/team-comparison": "9 files reachable from the endpoint's callers",
   "/api/proximity/round/{round_id}/timeline": "11 files reachable from the endpoint's callers",
   "/api/proximity/round/{round_id}/tracks": "11 files reachable from the endpoint's callers",
-  "/api/proximity/scopes": "21 files reachable from the endpoint's callers",
+  "/api/proximity/scopes": "22 files reachable from the endpoint's callers",
   "/api/proximity/spawn-timing": "13 files reachable from the endpoint's callers",
-  "/api/proximity/summary": "14 files reachable from the endpoint's callers",
+  "/api/proximity/summary": "15 files reachable from the endpoint's callers",
   "/api/proximity/support-summary": "13 files reachable from the endpoint's callers",
-  "/api/proximity/teamplay": "14 files reachable from the endpoint's callers",
-  "/api/proximity/trades/events": "14 files reachable from the endpoint's callers",
+  "/api/proximity/teamplay": "15 files reachable from the endpoint's callers",
+  "/api/proximity/trades/events": "15 files reachable from the endpoint's callers",
   "/api/proximity/trades/player-stats": "14 files reachable from the endpoint's callers",
-  "/api/proximity/trades/summary": "14 files reachable from the endpoint's callers",
+  "/api/proximity/trades/summary": "15 files reachable from the endpoint's callers",
   "/api/proximity/v7-status": "10 files reachable from the endpoint's callers",
   "/api/proximity/vehicle-progress": "14 files reachable from the endpoint's callers",
-  "/api/proximity/weapon-accuracy": "14 files reachable from the endpoint's callers",
+  "/api/proximity/weapon-accuracy": "15 files reachable from the endpoint's callers",
   "/api/records/maps/segments": "7 files reachable from the endpoint's callers",
   "/api/replay/round/{round_id}/web": "14 files reachable from the endpoint's callers",
   "/api/rivalries/h2h/{guid1}/{guid2}": "7 files reachable from the endpoint's callers",
@@ -128,7 +128,7 @@
   "/api/skill/player/{identifier}": "12 files reachable from the endpoint's callers",
   "/api/skill/player/{identifier}/form": "12 files reachable from the endpoint's callers",
   "/api/skill/player/{identifier}/history": "12 files reachable from the endpoint's callers",
-  "/api/skill/ssr": "22 files reachable from the endpoint's callers",
+  "/api/skill/ssr": "23 files reachable from the endpoint's callers",
   "/api/stats/activity-calendar": "14 files reachable from the endpoint's callers",
   "/api/stats/last-session": "14 files reachable from the endpoint's callers",
   "/api/stats/leaderboard": "5 files reachable from the endpoint's callers",
@@ -189,11 +189,11 @@
   "/api/voice-activity/history": "17 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3455,
-  "unread": 52,
-  "dropped": 182,
+  "read": 3466,
+  "unread": 39,
+  "dropped": 184,
   "endpoints": 180,
-  "endpoints_fully_read": 151,
+  "endpoints_fully_read": 160,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -393,8 +393,8 @@
    "dropped": 0
   },
   "/api/proximity/combat-positions/danger-zones": {
-   "read": 7,
-   "unread": 1,
+   "read": 8,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/combat-positions/heatmap": {
@@ -403,8 +403,8 @@
    "dropped": 0
   },
   "/api/proximity/combat-positions/kill-lines": {
-   "read": 8,
-   "unread": 1,
+   "read": 9,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/competitive/clutch": {
@@ -428,8 +428,8 @@
    "dropped": 0
   },
   "/api/proximity/competitive/player-card": {
-   "read": 26,
-   "unread": 2,
+   "read": 28,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/competitive/side-splits": {
@@ -503,8 +503,8 @@
    "dropped": 0
   },
   "/api/proximity/hotzones": {
-   "read": 19,
-   "unread": 1,
+   "read": 20,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/kill-outcomes": {
@@ -573,9 +573,9 @@
    "dropped": 0
   },
   "/api/proximity/player/{guid}/radar": {
-   "read": 12,
-   "unread": 2,
-   "dropped": 0
+   "read": 13,
+   "unread": 0,
+   "dropped": 1
   },
   "/api/proximity/players": {
    "read": 10,
@@ -589,12 +589,12 @@
   },
   "/api/proximity/prox-scores/formula": {
    "read": 7,
-   "unread": 1,
-   "dropped": 1
+   "unread": 0,
+   "dropped": 2
   },
   "/api/proximity/push-deaths/heatmap": {
-   "read": 15,
-   "unread": 2,
+   "read": 17,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/pushes": {
@@ -673,8 +673,8 @@
    "dropped": 0
   },
   "/api/proximity/v7-status": {
-   "read": 10,
-   "unread": 2,
+   "read": 12,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/vehicle-progress": {
@@ -683,8 +683,8 @@
    "dropped": 0
   },
   "/api/proximity/weapon-accuracy": {
-   "read": 9,
-   "unread": 1,
+   "read": 10,
+   "unread": 0,
    "dropped": 0
   },
   "/api/records/maps/segments": {
@@ -4710,7 +4710,7 @@
   {
    "endpoint": "/api/proximity/combat-positions/danger-zones",
    "key": "zones.classes",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/combat-positions/danger-zones",
@@ -4800,7 +4800,7 @@
   {
    "endpoint": "/api/proximity/combat-positions/kill-lines",
    "key": "lines.weapon_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/combat-positions/kill-lines",
@@ -5260,7 +5260,7 @@
   {
    "endpoint": "/api/proximity/competitive/player-card",
    "key": "stagger.avg_score",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/competitive/player-card",
@@ -5290,7 +5290,7 @@
   {
    "endpoint": "/api/proximity/competitive/player-card",
    "key": "timeline_range_days",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/competitive/side-splits",
@@ -6867,7 +6867,7 @@
   {
    "endpoint": "/api/proximity/hotzones",
    "key": "hotzones.kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/hotzones",
@@ -8663,7 +8663,7 @@
   {
    "endpoint": "/api/proximity/player/{guid}/radar",
    "key": "teamplay_formula_version",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/player/{guid}/radar",
@@ -8683,7 +8683,8 @@
   {
    "endpoint": "/api/proximity/player/{guid}/radar",
    "key": "unscored.avg_dodge_reaction_ms",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: the same AVG(r.dodge_reaction_ms) the movement endpoint returns as avg_dodge_ms, which the page already shows as the 'dodge' tile (proximity_movement.py:219/241; both read 1,431 ms in the recording)"
   },
   {
    "endpoint": "/api/proximity/player/{guid}/radar",
@@ -8925,7 +8926,8 @@
   {
    "endpoint": "/api/proximity/prox-scores/formula",
    "key": "category_weights",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: the same three weights as categories[].weight_in_overall, which the page prints (fixture: 0.4/0.35/0.25 on both)"
   },
   {
    "endpoint": "/api/proximity/prox-scores/formula",
@@ -8995,7 +8997,7 @@
   {
    "endpoint": "/api/proximity/push-deaths/heatmap",
    "key": "perspective",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/push-deaths/heatmap",
@@ -9040,7 +9042,7 @@
   {
    "endpoint": "/api/proximity/push-deaths/heatmap",
    "key": "unique_deaths",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/pushes",
@@ -10851,7 +10853,7 @@
   {
    "endpoint": "/api/proximity/v7-status",
    "key": "capabilities.api",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/v7-status",
@@ -10891,7 +10893,7 @@
   {
    "endpoint": "/api/proximity/v7-status",
    "key": "doc",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/v7-status",
@@ -11036,7 +11038,7 @@
   {
    "endpoint": "/api/proximity/weapon-accuracy",
    "key": "weapon_breakdown",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/records/maps/segments",

@@ -6,6 +6,7 @@
  * the projection machinery is the spider-web work.
  */
 import { useState } from 'react';
+import { WEAPON_NAMES } from '../lib/weapons';
 import { Cluster, Stack } from '../components/layout';
 import { Lbl, Meta, figure, decimals } from '../components/ui';
 import { mapLabel } from '../lib/maps';
@@ -75,6 +76,9 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
               <DotCanvas pts={d.zones.map((z) => ({ x: z.x, y: z.y, count: z.deaths }))}
                 tone="var(--color-neg)" label={`danger zones on ${mapLabel(d.map_name)}`} />
               <Meta>grid {figure(d.grid_size)} u · deadliest cell {figure(Math.max(...d.zones.map((z) => z.deaths)))} deaths</Meta>
+              {/* Who dies there: the class split summed over every cell. */}
+              <Meta>by class: {Object.entries(d.zones.reduce<Record<string, number>>((acc, z) => { for (const [cls, n] of Object.entries(z.classes)) acc[cls] = (acc[cls] ?? 0) + (n ?? 0); return acc; }, {}))
+                .sort((a, b) => b[1] - a[1]).map(([cls, n]) => `${cls.toLowerCase()} ${figure(n)}`).join(' · ') || 'none recorded'}</Meta>
             </Stack>
           )}
         </ProxPanel>
@@ -103,6 +107,8 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                   ))}
                 </svg>
                 <Meta>{figure(d.lines.length)} kills with both positions known{d.lines.length > 400 ? ' · drawing the first 400' : ''}</Meta>
+                <Meta>by weapon: {Object.entries(d.lines.reduce<Record<string, number>>((acc, l) => { const w = WEAPON_NAMES[l.weapon_id] ?? `weapon ${l.weapon_id}`; acc[w] = (acc[w] ?? 0) + 1; return acc; }, {}))
+                  .sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w, n]) => `${w} ${figure(n)}`).join(' · ')}</Meta>
               </Stack>
             );
           }}
@@ -115,7 +121,7 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
           {(d) => (
             <Stack gap={2}>
               <DotCanvas pts={d.hotzones} tone="var(--color-accent-warm, var(--color-accent))" label={`hotzones on ${mapLabel(d.map_name)}`} />
-              <Meta>{figure(d.hotzones.reduce((a, z) => a + z.count, 0))} engagements across {figure(d.hotzones.length)} cells</Meta>
+              <Meta>{figure(d.hotzones.reduce((a, z) => a + z.count, 0))} engagements across {figure(d.hotzones.length)} cells · {figure(d.hotzones.reduce((a, z) => a + z.kills, 0))} kills, {figure(d.hotzones.reduce((a, z) => a + z.deaths, 0))} deaths</Meta>
             </Stack>
           )}
         </ProxPanel>

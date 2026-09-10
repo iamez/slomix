@@ -5,6 +5,7 @@
  * is rendered, not translated.
  */
 import { Cluster, Stack } from '../components/layout';
+import { WEAPON_NAMES } from '../lib/weapons';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { mmss } from '../components/RoundsTable';
 import { Lbl, Meta, SectionHead, figure } from '../components/ui';
@@ -236,6 +237,11 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
                   mid={`${figure(l.hits)} of ${figure(l.shots)} shots · ${figure(l.kills)} kills`}
                   val={`${figure(l.accuracy)}%`} />
               ))}
+              {d.weapon_breakdown.length > 0 && (
+                <Meta>
+                  by weapon: {d.weapon_breakdown.map((w) => `${WEAPON_NAMES[w.weapon_id] ?? `weapon ${w.weapon_id}`} ${figure(w.accuracy)}% (${figure(w.hits)}/${figure(w.shots)}, ${figure(w.kills)} kills)`).join(' · ')}
+                </Meta>
+              )}
             </Stack>
           )}
         </ProxPanel>
