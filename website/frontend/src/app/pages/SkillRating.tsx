@@ -1,0 +1,495 @@
+import { utcStamp } from '../lib/utcStamp';
+import { useState } from 'react';
+import { Link } from 'react-router';
+import { Cluster, Stack } from '../components/layout';
+import { Absent, Chip, figure, Lbl, Meta, Pending, SectionHead, Unavailable } from '../components/ui';
+import { Panel } from '../components/Panel';
+import { useAdjustedLifetime, useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
+import type { AdjustedLifetimePlayer, RatedPlayer, SsrPlayer, SkillFormula } from '../lib/types';
+
+/**
+ * ET Rating (docs/design/12 row 24).
+ *
+ * Two formulas live on this page and the danger is that a reader takes a
+ * number from one and compares it with a number from the other. ET Rating
+ * v2.1 is the published one — the figure the profile shows. SSR v0.3 is a
+ * second, session-scoped formula whose coverage is still partial: one of the
+ * fifteen rated players has three of its eight components measured. They are
+ * kept apart, labelled by version, and the SSR panel prints coverage beside
+ * every score rather than under a footnote.
+ *
+ * WHAT THE COMPONENT PANEL SHOWS. `constant + Σ contribution` produces the
+ * RAW score; the published rating is that shrunk toward the pool mean by
+ * `(n·raw + k·pool_mean)/(n+k)`. The first version of this page called the
+ * components "the sum the rating is", which skipped the second step — the
+ * review was right to stop it. The panel now prints BOTH steps.
+ *
+ * ⚠️ A correction to my own earlier note, which claimed "only 12 of 31 rows
+ * reconstruct" as evidence of inconsistent shrinkage. That was a bad read:
+ * three rows in the table were four months stale and were poisoning the
+ * pool mean I reconstructed with. With the cohort reconciled (see
+ * skill_rating_service.compute_and_store_ratings) every published rating
+ * reconstructs to within 0.0003 — the components' own rounding. Shrinkage
+ * was consistent all along; my pool was not.
+ */
+
+const TIER_COLOUR = new Map<string, string>([
+  ['veteran', 'var(--color-accent)'],
+  ['experienced', 'var(--color-text-200)'],
+  ['regular', 'var(--color-text-300)'],
+  ['newcomer', 'var(--color-text-400)'],
+]);
+
+/** Positive contributions read up, negative down — dpr's weight is -0.08. */
+function ContributionBar({ value, scale }: { value: number; scale: number }) {
+  const width = Math.min(100, (Math.abs(value) / scale) * 100);
+  const positive = value >= 0;
+  return (
+    <span style={{ display: 'flex', width: 120, height: 4, background: 'var(--color-rule-900)' }}>
+      <span style={{ width: '50%', display: 'flex', justifyContent: 'flex-end' }}>
+        {!positive && <span style={{ width: `${width}%`, background: 'var(--color-neg)' }} />}
+      </span>
+      <span style={{ width: '50%' }}>
+        {positive && <span style={{ display: 'block', width: `${width}%`, height: '100%', background: 'var(--color-pos)' }} />}
+      </span>
+    </span>
+  );
+}
+
+function Components({ player, constant, shrinkageK, poolMean }: {
+  player: RatedPlayer; constant: number; shrinkageK: number; poolMean: number | null;
+}) {
+  const entries = Object.entries(player.components);
+  const raw = constant + entries.reduce((sum, [, c]) => sum + c.contribution, 0);
+  // The shrinkage weight, computed rather than read: `confidence` in the
+  // payload is min(1, n/30), a different quantity that reads like this one.
+  const weight = player.games_rated / (player.games_rated + shrinkageK);
+  const shrunk = poolMean == null ? raw : weight * raw + (1 - weight) * poolMean;
+  const scale = Math.max(...entries.map(([, c]) => Math.abs(c.contribution)), 0.01);
+  const sorted = [...entries].sort((a, b) => Math.abs(b[1].contribution) - Math.abs(a[1].contribution));
+  return (
+    <Stack gap={1} className="rows" style={{ paddingTop: 'var(--space-2)', paddingBottom: 'var(--space-3)' }}>
+      <Cluster gap={3} justify="between">
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>what the raw score is made of</Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>measured · percentile · weight → contribution</Lbl>
+      </Cluster>
+      <Cluster gap={3} justify="between" className="row" style={{ padding: 'var(--space-1) 0' }}>
+        <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>
+          raw = constant + Σ = {raw.toFixed(4)}
+        </span>
+        {poolMean == null ? (
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)' }}>
+            published {player.et_rating.toFixed(4)} · pool mean unavailable, so the
+            shrinkage step cannot be shown
+          </span>
+        ) : (
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)' }}>
+            × {weight.toFixed(3)} + pool {poolMean.toFixed(4)} × {(1 - weight).toFixed(3)}
+            {' = '}{shrunk.toFixed(4)} → published {player.et_rating.toFixed(4)}
+          </span>
+        )}
+      </Cluster>
+      {sorted.map(([name, c]) => (
+        <Cluster key={name} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-1) 0' }}>
+          <span style={{ fontSize: 'var(--fs-small)' }}>{name.replace(/_/g, ' ')}</span>
+          <Cluster gap={3} align="center">
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 72, textAlign: 'right' }}>
+              {c.raw == null ? 'unmeasured' : figure(c.raw)}
+            </span>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 44, textAlign: 'right' }}>
+              {c.percentile == null ? '—' : `${(c.percentile * 100).toFixed(0)}%`}
+            </span>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)', width: 48, textAlign: 'right' }}>
+              {c.weight > 0 ? '+' : ''}{c.weight.toFixed(2)}
+            </span>
+            <ContributionBar value={c.contribution} scale={scale} />
+            <span className="m" style={{ fontSize: 'var(--fs-small)', width: 56, textAlign: 'right' }}>
+              {c.contribution >= 0 ? '+' : ''}{c.contribution.toFixed(4)}
+            </span>
+          </Cluster>
+        </Cluster>
+      ))}
+    </Stack>
+  );
+}
+
+/** The weights table the endpoint always carried: every metric with its
+ *  signed weight, what it measures, and which source feeds it (pcs = the
+ *  stats files, proximity = the tracker). Sorted by how much each one
+ *  moves the rating. */
+function FormulaWeights({ f }: { f: SkillFormula }) {
+  const source = new Map<string, string>();
+  for (const [src, list] of Object.entries(f.metric_sources ?? {})) for (const m of list) source.set(m, src);
+  const rows = Object.entries(f.weights ?? {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  if (rows.length === 0) return null;
+  return (
+    <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)' }}>
+      {rows.map(([metric, w]) => (
+        <Cluster key={metric} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0', flexWrap: 'wrap' }}>
+          <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
+            <span className="m" style={{ fontSize: 'var(--fs-small)' }}>{metric}</span>
+            <Meta>{f.metrics?.[metric] ?? ''}{source.has(metric) ? ` · ${source.get(metric)}` : ''}</Meta>
+          </Cluster>
+          {/* One text node with the word: the rated row already prints the bare
+            * signed weight in its explanation, and a second bare "+0.12" would be
+            * two answers to one question (the page test found them). */}
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: w < 0 ? 'var(--color-neg)' : undefined }}>{`weight ${w > 0 ? '+' : ''}${w}`}</span>
+        </Cluster>
+      ))}
+    </Stack>
+  );
+}
+
+function RatedRow({ player, open, onToggle, ambiguous, constant, shrinkageK, poolMean }: {
+  player: RatedPlayer; open: boolean; onToggle: () => void; ambiguous: boolean;
+  constant: number; shrinkageK: number; poolMean: number | null;
+}) {
+  return (
+    <Stack gap={1}>
+      <Cluster gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
+        <Cluster gap={3} align="baseline" style={{ minWidth: 0 }}>
+          <span className="m lbl" style={{ width: 26 }}>{String(player.rank).padStart(2, '0')}</span>
+          <Link to={`/profile/${player.player_guid}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
+            {player.display_name}
+          </Link>
+          {/* Two GUIDs, one display name — `ownator` sits at rank 7 and rank 9
+            * in the recording with different round counts. Identical names
+            * against different ratings is a board contradicting itself. */}
+          {ambiguous && <span className="m lbl" style={{ fontSize: 'var(--fs-caption)' }}>{player.player_guid}</span>}
+          <span className="lbl" style={{ color: TIER_COLOUR.get(player.tier) ?? 'var(--color-text-500)' }}>
+            {player.tier}
+          </span>
+        </Cluster>
+        <Cluster gap={3} align="center">
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 84, textAlign: 'right' }} title={player.last_rated_at != null ? `last rated ${utcStamp(player.last_rated_at)}` : undefined}>
+            {figure(player.games_rated)} rounds
+          </span>
+          {/* `confidence` is NOT the shrinkage weight, though it reads like
+            * one: the backend defines it as min(1, n/30) (skill_router:107)
+            * while shrinkage uses n/(n+k) with k=40. For a 22-round player
+            * those are 0.73 and 0.355 — printing the first as "weight" was
+            * wrong by a factor of two (Codex on #835). It is labelled as
+            * what it is now: a sample-size confidence. */}
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: player.confidence >= 1 ? 'var(--color-text-500)' : 'var(--color-accent-warm)', width: 128, textAlign: 'right' }}>
+            {player.confidence >= 1 ? 'full sample' : `sample conf. ${(player.confidence * 100).toFixed(0)}%`}
+          </span>
+          <span className="m" style={{ fontSize: 'var(--fs-lead)', width: 68, textAlign: 'right' }}>
+            {player.et_rating.toFixed(3)}
+          </span>
+          <button
+            type="button"
+            className="act"
+            aria-expanded={open}
+            onClick={onToggle}
+            style={{ background: 'transparent', border: 0, cursor: 'pointer', fontSize: 'var(--fs-caption)' }}
+          >
+            {open ? 'hide' : 'why'}
+          </button>
+        </Cluster>
+      </Cluster>
+      {open && <Components player={player} constant={constant} shrinkageK={shrinkageK} poolMean={poolMean} />}
+    </Stack>
+  );
+}
+
+function SsrRow({ player }: { player: SsrPlayer }) {
+  const [have, total] = player.coverage.split('/').map(Number);
+  const partial = Number.isFinite(have) && Number.isFinite(total) && have < total;
+  return (
+    <Cluster gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
+      <Link to={`/profile/${player.player_guid}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
+        {player.name}
+      </Link>
+      <Cluster gap={3} align="center">
+        <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 78, textAlign: 'right' }}>
+          {figure(player.n_sessions)} sessions
+        </span>
+        {/* Coverage sits BESIDE the score, not in a footnote: a score built
+          * on three of eight components is not the same measurement as one
+          * built on eight, and the two must not read alike. */}
+        <span
+          className="m"
+          style={{ fontSize: 'var(--fs-small)', width: 56, textAlign: 'right', color: partial ? 'var(--color-accent-warm)' : 'var(--color-text-500)' }}
+        >
+          {player.coverage}
+        </span>
+        <span className="m" style={{ fontSize: 'var(--fs-value)', width: 60, textAlign: 'right' }}>
+          {player.ssr.toFixed(4)}
+        </span>
+      </Cluster>
+    </Cluster>
+  );
+}
+
+/** Below this the correction does most of its work on the least evidence —
+ * measured, not chosen: |correction| averages 0.143 under five sessions and
+ * 0.028 at twenty or more. */
+/** The size of the correction for thin histories, measured from the rows the
+ *  board is actually showing. Buckets follow the sentence: under five
+ *  sessions against over twenty; players without a lifetime rating have no
+ *  delta to measure and are excluded. */
+function correctionClaim(players: AdjustedLifetimePlayer[]): string {
+  const rated = players.filter((p) => p.lifetime_rating != null);
+  const size = (xs: AdjustedLifetimePlayer[]) =>
+    xs.reduce((sum, p) => sum + Math.abs(p.adjusted_lifetime - (p.lifetime_rating as number)), 0) / xs.length;
+  const thin = rated.filter((p) => p.n_sessions < 5);
+  const deep = rated.filter((p) => p.n_sessions > 20);
+  // ⛔ The DIRECTION is derived too, not asserted (Codex on #846, and the
+  // verifier's #851 finding independently): the first version derived the
+  // number but still claimed "larger below five sessions" whatever the data
+  // said — a missing bucket produced the claim with nothing behind it, and a
+  // ratio near or below 1 produced "~0× larger", a sentence the data denies.
+  // Same class as the "~5×" constant this function replaced, moved from
+  // magnitude to sign.
+  if (thin.length === 0 || deep.length === 0 || size(deep) === 0 || size(thin) === 0) {
+    // No comparison exists — say what the correction IS, claim no direction.
+    // Neutral by review (Codex on #846): adjusted_lifetime() applies the
+    // same fixed damping to everyone and takes an UNWEIGHTED mean of
+    // per-session values — n_sessions is never a confidence weight, so
+    // the old sentence ('weighs each rating by the history behind it')
+    // invented a mechanism the algorithm does not have.
+    return 'the correction rates each session against the opponents who actually played it';
+  }
+  const ratio = size(thin) / size(deep);
+  if (ratio >= 1.5) {
+    return `the correction is ~${Math.round(ratio)}× larger below five sessions than above twenty`;
+  }
+  if (ratio <= 1 / 1.5) {
+    return `the correction is ~${Math.round(1 / ratio)}× larger above twenty sessions than below five`;
+  }
+  return 'the correction is similar-sized below five and above twenty sessions';
+}
+
+const THIN_SESSIONS = 5;
+
+/** The lifetime rating, and the same rating after the pool it was earned
+ * against is taken into account.
+ *
+ * Both numbers use the SAME rating units, so unlike SSR above these two ARE
+ * comparable — the difference between them is the whole panel. (Not "a 0–1
+ * scale": skill_rating_service permits ratings up to 1.5, the published
+ * formula advertises exceptional values around 1.15, and the pool correction
+ * adds without clamping — today's pool happens to sit at 0.44–0.75, which is
+ * a fact about the sample, not the scale. Codex on #846.) What the
+ * difference is not, is a ranking of who is best, and the measurement says
+ * why: the correction averages 0.143 for players with fewer than five
+ * sessions and 0.028 for players with twenty or more, five times larger
+ * exactly where the evidence is thinnest. Three of the top ten by adjusted
+ * rating have played one or two sessions.
+ *
+ * So `n_sessions` sits beside every row rather than in a footnote, and the
+ * thin ones are marked. A board that hides its sample size is a board that
+ * invites the reader to trust its top.
+ */
+function AdjustedLifetimeBoard() {
+  const [open, setOpen] = useState(false);
+  const q = useAdjustedLifetime(open);
+  return (
+    <Stack gap={2} parity="skill.adjusted" style={{ paddingTop: 'var(--space-6)' }}>
+      <SectionHead
+        label="adjusted for who they played"
+        aside={
+          <Chip
+            active={open}
+            label={open ? 'hide adjusted' : 'show adjusted'}
+            onClick={() => { setOpen(!open); }}
+          />
+        }
+      />
+      <Absent reason="the same lifetime rating, corrected for the strength of the pool each session was played against — same 0–1 scale, so the difference is readable" />
+      {open && (
+        <>
+          {q.isPending && <Pending label="adjusted ratings" />}
+          {q.isError && <Unavailable what="adjusted ratings" />}
+          {/* ⚠️ Claims only what the wire can back (Codex on #846): the
+              * service filters history to the CURRENT formula_version
+              * (s_effort_service.py:243), so an empty list also covers
+              * "history exists, but under an earlier formula" — and the
+              * response carries no count of the filtered-out rows, so this
+              * line cannot tell the two apart. The version is quoted from
+              * the payload, never a constant; if the wire ever grows a
+              * stale-rows count, this is where it lands. */}
+          {q.data && !q.data.available && (
+            <Absent
+              reason={`no session history under the current formula (${q.data.formula_version}) has been persisted — history scored under an earlier formula, if any, is not adjustable`}
+            />
+          )}
+          {q.data?.available && (
+            <>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+                {q.data.formula_version} · {figure(q.data.players.length)} players ·
+                {/* ⛔ Derived from the rows on screen, not hard-coded (Codex on
+                  * #846): the "~5×" was measured against the committed fixture,
+                  * and the endpoint recomputes from THIS deployment's history —
+                  * a snapshot observation was being presented as a property of
+                  * every pool. When either bucket is empty the sentence drops
+                  * its number rather than inventing one. */}
+                {' '}{correctionClaim(q.data.players)}
+              </Lbl>
+              <Stack gap={1} className="rows">
+                {q.data.players.map((p) => {
+                  const thin = p.n_sessions < THIN_SESSIONS;
+                  const delta = p.lifetime_rating == null ? null : p.adjusted_lifetime - p.lifetime_rating;
+                  const shownName = p.name ?? p.player_guid.slice(0, 8);
+                  const dup = q.data.players.filter(
+                    (o) => (o.name ?? o.player_guid.slice(0, 8)) === shownName).length > 1;
+                  return (
+                    <Cluster key={p.player_guid} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0' }}>
+                      <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
+                        <Link to={`/profile/${p.player_guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
+                          {shownName}
+                        </Link>
+                        {/* Same disambiguation as the main board (its fixture
+                          * proves the need: EF561EAA and FB0EC840 are both
+                          * "ownator"): identical names against different
+                          * ratings is a board contradicting itself. */}
+                        {dup && <span className="m lbl" style={{ fontSize: 'var(--fs-caption)' }}>{p.player_guid.slice(0, 8)}</span>}
+                        {thin && (
+                          <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>
+                            {p.n_sessions} session{p.n_sessions === 1 ? '' : 's'}
+                          </span>
+                        )}
+                      </Cluster>
+                      <Cluster gap={3} align="baseline">
+                        <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 52, textAlign: 'right' }}>
+                          {/* No lifetime row to correct — a delta against 0
+                            * would invent a 0.63 improvement out of nothing. */}
+                          {p.lifetime_rating == null ? '—' : p.lifetime_rating.toFixed(3)}
+                        </span>
+                        <span className="m" style={{ fontSize: 'var(--fs-value)', width: 56, textAlign: 'right' }}>
+                          {p.adjusted_lifetime.toFixed(3)}
+                        </span>
+                        <span
+                          className="m"
+                          style={{
+                            fontSize: 'var(--fs-small)', width: 64, textAlign: 'right',
+                            color: delta == null ? 'var(--color-text-500)'
+                              : delta > 0 ? 'var(--color-pos)' : delta < 0 ? 'var(--color-neg)' : 'var(--color-text-400)',
+                          }}
+                        >
+                          {delta == null ? 'no lifetime yet' : `${delta > 0 ? '+' : ''}${delta.toFixed(3)}`}
+                        </span>
+                        <Meta style={{ width: 40, textAlign: 'right' }}>{p.n_sessions}</Meta>
+                      </Cluster>
+                    </Cluster>
+                  );
+                })}
+              </Stack>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+                lifetime · adjusted · correction · sessions — ordered by adjusted,
+                which is not the same as ordered by evidence
+              </Lbl>
+            </>
+          )}
+        </>
+      )}
+    </Stack>
+  );
+}
+
+export function SkillRating() {
+  const [open, setOpen] = useState<string | null>(null);
+  const [showSsr, setShowSsr] = useState(false);
+  const board = useSkillLeaderboard(50);
+  const formula = useSkillFormula();
+  const ssr = useSsr(showSsr);
+
+  const nameCounts = new Map<string, number>();
+  for (const p of board.data?.players ?? []) {
+    nameCounts.set(p.display_name, (nameCounts.get(p.display_name) ?? 0) + 1);
+  }
+
+  return (
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-8)' }}>
+      <Lbl>et rating · how the number is built</Lbl>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: 'var(--track-title)', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
+        Every rank, with its reasons.
+      </h1>
+
+      <Stack gap={2} parity="skill.formula" style={{ paddingTop: 'var(--space-4)' }}>
+        {formula.isPending && <Pending label="formula" />}
+        {formula.isError && <Unavailable what="formula" />}
+        {formula.data && (
+          <>
+            <SectionHead
+              label={`${formula.data.name} · v${formula.data.version}`}
+              aside={<span className="lbl">{formula.data.range}</span>}
+            />
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>
+              {formula.data.formula}
+            </span>
+            <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>
+              {formula.data.normalization} · at least {formula.data.min_rounds} rounds · shrinkage k={formula.data.shrinkage_k} · constant {formula.data.constant}
+            </span>
+            {formula.data.description && <Meta>{formula.data.description}</Meta>}
+            <FormulaWeights f={formula.data} />
+          </>
+        )}
+      </Stack>
+
+      <div data-parity="skill.leaderboard" style={{ paddingTop: 'var(--space-6)' }}>
+        <Panel
+          label="rated players"
+          aside="rounds · sample · rating"
+          q={board}
+          empty={`nobody has played the ${board.data?.meta.min_rounds ?? ''} rounds a rating needs yet`}
+          isEmpty={(d) => d.players.length === 0}
+        >
+          {(d) => (
+            <Stack gap={1} className="rows">
+              {d.players.map((p) => (
+                <RatedRow
+                  key={p.player_guid}
+                  player={p}
+                  open={open === p.player_guid}
+                  onToggle={() => { setOpen(open === p.player_guid ? null : p.player_guid); }}
+                  ambiguous={(nameCounts.get(p.display_name) ?? 0) > 1}
+                  constant={d.meta.constant}
+                  shrinkageK={d.meta.shrinkage_k}
+                  poolMean={d.meta.pool_mean ?? null}
+                />
+              ))}
+            </Stack>
+          )}
+        </Panel>
+      </div>
+
+      <AdjustedLifetimeBoard />
+
+      <Stack gap={2} parity="skill.ssr" style={{ paddingTop: 'var(--space-6)' }}>
+        <SectionHead
+          label="a second formula, still filling in"
+          aside={
+            <Chip
+              active={showSsr}
+              label={showSsr ? 'hide ssr' : 'show ssr'}
+              onClick={() => { setShowSsr(!showSsr); }}
+            />
+          }
+        />
+        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+          SSR is session-scoped and separate from the rating above — the two
+          numbers are not comparable, and neither is a player rated on three
+          components with one rated on eight.
+        </span>
+        {showSsr && (
+          <>
+            {ssr.isPending && <Pending label="ssr" />}
+            {ssr.isError && <Unavailable what="ssr" />}
+            {ssr.data && (
+              <>
+                <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>
+                  {ssr.data.formula_version} · {figure(ssr.data.rated)} rated ·
+                  {' '}needs {ssr.data.min_sessions} sessions and {ssr.data.min_components} measured components
+                </span>
+                <Stack gap={1} className="rows">
+                  {ssr.data.players.map((p) => <SsrRow key={p.player_guid} player={p} />)}
+                </Stack>
+              </>
+            )}
+          </>
+        )}
+      </Stack>
+    </div>
+  );
+}
