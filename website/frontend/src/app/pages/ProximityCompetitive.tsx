@@ -149,12 +149,12 @@ export function ProximityCompetitive({ sessionDate }: { sessionDate: string | nu
         <ProxPanel label="capture roadmap" q={v7} empty="the capability manifest is empty — nothing is reported as captured or planned" isEmpty={(d) => d.capabilities.length === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
-              <Meta>lua draft {d.lua_version_draft} · {d.deployed ? 'deployed' : 'not deployed'}</Meta>
+              <Meta>lua draft {d.lua_version_draft} · {d.deployed ? 'deployed' : 'not deployed'}{d.doc ? ` · ${d.doc}` : ''}</Meta>
               {d.capabilities.map((c) => (
                 <ProxRow
                   key={c.key}
                   name={c.title.toLowerCase()}
-                  mid={c.what}
+                  mid={`${c.what}${c.api ? ` — ${c.api}` : ''}`}
                   val={c.live ? `${figure(c.rows)} rows · ${figure(c.rounds)} rd` : 'not live'}
                 />
               ))}

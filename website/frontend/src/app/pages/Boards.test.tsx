@@ -67,6 +67,8 @@ describe('Leaderboards', () => {
     expect(row?.getAttribute('href')).toBe('/profile/3C0354D3');
     // K/D formats to two decimals from the recording.
     expect(screen.getByText('1.51')).toBeInTheDocument();
+    // The kills cell says the deaths on hover (every recorded row carries them).
+    await waitFor(() => expect(screen.getAllByTitle(/^[\d,]+ deaths$/).length).toBeGreaterThan(0));
   });
 
   it('switching the stat refetches with the new key', async () => {
@@ -142,6 +144,10 @@ describe('RecordBook', () => {
     expect(screen.getAllByText('.olz').length).toBeGreaterThan(0);
     // Champions band hides on the recorded empty awards — the NORMAL state.
     expect(screen.queryByText(/champions/i)).not.toBeInTheDocument();
+    // The board says when it was computed (recorded 2026-08-24 13:35 UTC);
+    // the recording has no delta window, so no window is claimed.
+    expect(screen.getByText(/computed 2026-08-24 13:35 UTC/)).toBeInTheDocument();
+    expect(screen.queryByText(/rank deltas over/)).toBeNull();
   });
 
   it('season tab shows leaders and says the awards are not engraved yet', async () => {

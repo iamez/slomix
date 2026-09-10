@@ -371,3 +371,32 @@ describe('Landing', () => {
     expect(screen.getByText(/age unknown/)).toBeInTheDocument();
   });
 });
+
+describe('Landing voice roster (ledger 2026-09-09)', () => {
+  it('lists the channel with its headcount and the names when the room has people', async () => {
+    const roster = {
+      ...(voice as object),
+      status: 'ok',
+      total_count: 2,
+      members: [{ name: 'vid', channel_name: 'Gaming' }, { name: '.olz', channel_name: 'Gaming' }],
+      channels: [{ id: null, name: 'Gaming', members: [{ name: 'vid', channel_name: 'Gaming' }, { name: '.olz', channel_name: 'Gaming' }] }],
+    };
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/voice-activity/current') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(roster) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    renderLanding();
+    await waitFor(() => expect(screen.getByText('Gaming (2)')).toBeInTheDocument());
+    expect(screen.getByText('vid, .olz')).toBeInTheDocument();
+  });
+
+  it('the recording has an empty room, so no roster line prints', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(fixtureFetch);
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/No one in voice/)).toBeInTheDocument());
+    expect(screen.queryByText(/Gaming \(/)).toBeNull();
+  });
+});
