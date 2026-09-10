@@ -101,7 +101,7 @@ const COLOURS: { token: string; meaning: string }[] = [
   { token: '--color-text-300', meaning: 'tertiary text' },
   { token: '--color-text-400', meaning: 'quiet text' },
   { token: '--color-text-500', meaning: 'labels' },
-  { token: '--color-text-600', meaning: 'footer' },
+  { token: '--color-text-600', meaning: 'rules and ornament — NOT text: 2.2:1, below AA (lib/contrast.test.ts)' },
   { token: '--color-accent', meaning: 'focus · active' },
   { token: '--color-accent-warm', meaning: 'callout · provenance' },
   { token: '--color-team-a', meaning: 'team a' },
