@@ -59,5 +59,10 @@
   "/api/availability/promotion-preferences signal_handle": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only",
   "/api/availability/promotion-preferences signal_handle_masked": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only",
   "/api/availability/promotion-preferences telegram_handle": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only",
-  "/api/availability/promotion-preferences telegram_handle_masked": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
+  "/api/availability/promotion-preferences telegram_handle_masked": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only",
+  "/api/skill/movers form_weights.*": "iterated: Home.tsx prints every weight through Object.entries",
+  "/api/skill/player/{identifier}/form form_weights.*": "iterated: PlayerProfile.tsx prints every weight through Object.entries",
+  "/api/awards filters": "request echo: the server repeats the player/award_type/days the page itself chose (Awards.tsx state); printing the reader's own selection back is not information",
+  "/api/awards/leaderboard filters": "request echo: the server repeats the player/award_type/days the page itself chose (Awards.tsx state); printing the reader's own selection back is not information",
+  "/api/stats/session/{gaming_session_id}/basics players.denied_playtime_seconds": "the raw seconds behind denied_pct, which IS the basics column (owner's 17-column list, 2026-09-03; SessionDetail.test pins the count) — a second denied column would break the list for a number the ratio already carries"
 }

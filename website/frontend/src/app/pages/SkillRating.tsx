@@ -1,3 +1,4 @@
+import { utcStamp } from '../lib/utcStamp';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
@@ -160,7 +161,7 @@ function RatedRow({ player, open, onToggle, ambiguous, constant, shrinkageK, poo
           </span>
         </Cluster>
         <Cluster gap={3} align="center">
-          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 84, textAlign: 'right' }}>
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 84, textAlign: 'right' }} title={player.last_rated_at != null ? `last rated ${utcStamp(player.last_rated_at)}` : undefined}>
             {figure(player.games_rated)} rounds
           </span>
           {/* `confidence` is NOT the shrinkage weight, though it reads like

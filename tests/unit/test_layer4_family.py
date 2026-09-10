@@ -5,6 +5,7 @@ individual interval)."""
 from __future__ import annotations
 
 import random
+import zlib
 
 from website.backend.services import layer4_family as l4
 from website.backend.services.layer4_family import Candidate, Row
@@ -66,8 +67,14 @@ class TestBootstrapAndVerdict:
     def test_a_planted_signal_ships_and_a_null_does_not(self):
         rows = self._corpus(signal=1.5)
         for r in rows:
-            # the negative control: a seeded uniform that knows nothing of the outcome
-            r.metrics["n"] = random.Random(hash((r.round_id, r.player)) & 0xFFFF).random()  # noqa: S311
+            # The negative control: a seeded uniform that knows nothing of the
+            # outcome. ⛔ NOT `hash(...)`: Python randomises string hashing per
+            # process, so the control drew a different sample on every run and
+            # the test failed roughly one run in ten (#1017, #1025 on CI) with
+            # nothing changed. crc32 over the same pair is stable across
+            # processes, which is what "seeded" was supposed to mean.
+            key = f"{r.round_id}|{r.player}".encode()
+            r.metrics["n"] = random.Random(zlib.crc32(key)).random()  # noqa: S311
         cands = [Candidate("m", "planted", "positive", kind="positive_control"), Candidate("n", "noise", "positive", kind="negative_control")]
         out = l4.analyse(rows, cands, resamples=300, seed=7)
         by = {t["id"]: t for t in out["table"]}
