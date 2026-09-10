@@ -34,10 +34,10 @@
   "/api/monitoring/status": "17 files reachable from the endpoint's callers",
   "/api/planning/today": "8 files reachable from the endpoint's callers",
   "/api/player/{guid}/vs-stats": "14 files reachable from the endpoint's callers",
-  "/api/player/{player_name}/matches": "12 files reachable from the endpoint's callers",
-  "/api/players/{identifier}/card": "12 files reachable from the endpoint's callers",
-  "/api/players/{identifier}/memory-card": "12 files reachable from the endpoint's callers",
-  "/api/players/{identifier}/profile": "14 files reachable from the endpoint's callers",
+  "/api/player/{player_name}/matches": "13 files reachable from the endpoint's callers",
+  "/api/players/{identifier}/card": "13 files reachable from the endpoint's callers",
+  "/api/players/{identifier}/memory-card": "13 files reachable from the endpoint's callers",
+  "/api/players/{identifier}/profile": "15 files reachable from the endpoint's callers",
   "/api/players/{identifier}/wrapped": "7 files reachable from the endpoint's callers",
   "/api/proximity/aim-lock": "13 files reachable from the endpoint's callers",
   "/api/proximity/carrier-events": "14 files reachable from the endpoint's callers",
@@ -67,16 +67,16 @@
   "/api/proximity/focus-fire": "13 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions": "12 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions/by-weapon": "12 files reachable from the endpoint's callers",
-  "/api/proximity/hit-regions/headshot-rates": "15 files reachable from the endpoint's callers",
+  "/api/proximity/hit-regions/headshot-rates": "16 files reachable from the endpoint's callers",
   "/api/proximity/hotzones": "13 files reachable from the endpoint's callers",
-  "/api/proximity/kill-outcomes": "15 files reachable from the endpoint's callers",
+  "/api/proximity/kill-outcomes": "16 files reachable from the endpoint's callers",
   "/api/proximity/kill-outcomes/player-stats": "12 files reachable from the endpoint's callers",
-  "/api/proximity/leaderboards": "22 files reachable from the endpoint's callers",
+  "/api/proximity/leaderboards": "23 files reachable from the endpoint's callers",
   "/api/proximity/lua-trades": "13 files reachable from the endpoint's callers",
   "/api/proximity/movement-stats": "12 files reachable from the endpoint's callers",
   "/api/proximity/movers": "13 files reachable from the endpoint's callers",
   "/api/proximity/objective-focus": "14 files reachable from the endpoint's callers",
-  "/api/proximity/objective-pressure": "15 files reachable from the endpoint's callers",
+  "/api/proximity/objective-pressure": "16 files reachable from the endpoint's callers",
   "/api/proximity/objective-runs": "14 files reachable from the endpoint's callers",
   "/api/proximity/player-aim": "13 files reachable from the endpoint's callers",
   "/api/proximity/player-heatmap": "13 files reachable from the endpoint's callers",
@@ -94,17 +94,17 @@
   "/api/proximity/round/{round_id}/team-comparison": "9 files reachable from the endpoint's callers",
   "/api/proximity/round/{round_id}/timeline": "11 files reachable from the endpoint's callers",
   "/api/proximity/round/{round_id}/tracks": "11 files reachable from the endpoint's callers",
-  "/api/proximity/scopes": "22 files reachable from the endpoint's callers",
+  "/api/proximity/scopes": "23 files reachable from the endpoint's callers",
   "/api/proximity/spawn-timing": "13 files reachable from the endpoint's callers",
-  "/api/proximity/summary": "15 files reachable from the endpoint's callers",
+  "/api/proximity/summary": "16 files reachable from the endpoint's callers",
   "/api/proximity/support-summary": "13 files reachable from the endpoint's callers",
-  "/api/proximity/teamplay": "15 files reachable from the endpoint's callers",
-  "/api/proximity/trades/events": "15 files reachable from the endpoint's callers",
+  "/api/proximity/teamplay": "16 files reachable from the endpoint's callers",
+  "/api/proximity/trades/events": "16 files reachable from the endpoint's callers",
   "/api/proximity/trades/player-stats": "14 files reachable from the endpoint's callers",
-  "/api/proximity/trades/summary": "15 files reachable from the endpoint's callers",
+  "/api/proximity/trades/summary": "16 files reachable from the endpoint's callers",
   "/api/proximity/v7-status": "10 files reachable from the endpoint's callers",
   "/api/proximity/vehicle-progress": "14 files reachable from the endpoint's callers",
-  "/api/proximity/weapon-accuracy": "15 files reachable from the endpoint's callers",
+  "/api/proximity/weapon-accuracy": "16 files reachable from the endpoint's callers",
   "/api/records/maps/segments": "7 files reachable from the endpoint's callers",
   "/api/replay/round/{round_id}/web": "14 files reachable from the endpoint's callers",
   "/api/rivalries/h2h/{guid1}/{guid2}": "7 files reachable from the endpoint's callers",
@@ -125,10 +125,10 @@
   "/api/skill/formula": "9 files reachable from the endpoint's callers",
   "/api/skill/leaderboard": "9 files reachable from the endpoint's callers",
   "/api/skill/movers": "16 files reachable from the endpoint's callers",
-  "/api/skill/player/{identifier}": "12 files reachable from the endpoint's callers",
-  "/api/skill/player/{identifier}/form": "12 files reachable from the endpoint's callers",
-  "/api/skill/player/{identifier}/history": "12 files reachable from the endpoint's callers",
-  "/api/skill/ssr": "23 files reachable from the endpoint's callers",
+  "/api/skill/player/{identifier}": "13 files reachable from the endpoint's callers",
+  "/api/skill/player/{identifier}/form": "13 files reachable from the endpoint's callers",
+  "/api/skill/player/{identifier}/history": "13 files reachable from the endpoint's callers",
+  "/api/skill/ssr": "24 files reachable from the endpoint's callers",
   "/api/stats/activity-calendar": "14 files reachable from the endpoint's callers",
   "/api/stats/last-session": "14 files reachable from the endpoint's callers",
   "/api/stats/leaderboard": "5 files reachable from the endpoint's callers",
@@ -137,9 +137,9 @@
   "/api/stats/matches": "14 files reachable from the endpoint's callers",
   "/api/stats/matches/{match_id}": "12 files reachable from the endpoint's callers",
   "/api/stats/overview": "18 files reachable from the endpoint's callers",
-  "/api/stats/player/{player_name}": "12 files reachable from the endpoint's callers",
-  "/api/stats/player/{player_name}/form": "12 files reachable from the endpoint's callers",
-  "/api/stats/player/{player_name}/rounds": "12 files reachable from the endpoint's callers",
+  "/api/stats/player/{player_name}": "13 files reachable from the endpoint's callers",
+  "/api/stats/player/{player_name}/form": "13 files reachable from the endpoint's callers",
+  "/api/stats/player/{player_name}/rounds": "13 files reachable from the endpoint's callers",
   "/api/stats/quick-leaders": "15 files reachable from the endpoint's callers",
   "/api/stats/records": "6 files reachable from the endpoint's callers",
   "/api/stats/session-leaderboard": "23 files reachable from the endpoint's callers",
@@ -189,23 +189,23 @@
   "/api/voice-activity/history": "17 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3466,
-  "unread": 39,
-  "dropped": 184,
+  "read": 3473,
+  "unread": 29,
+  "dropped": 187,
   "endpoints": 180,
-  "endpoints_fully_read": 160,
+  "endpoints_fully_read": 167,
   "unmeasured": 3
  },
  "per_endpoint": {
   "/api/availability": {
    "read": 14,
-   "unread": 1,
-   "dropped": 1
+   "unread": 0,
+   "dropped": 2
   },
   "/api/availability/access": {
    "read": 4,
-   "unread": 1,
-   "dropped": 1
+   "unread": 0,
+   "dropped": 2
   },
   "/api/availability/promotion-preferences": {
    "read": 4,
@@ -269,8 +269,8 @@
   },
   "/api/diagnostics": {
    "read": 28,
-   "unread": 1,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 1
   },
   "/api/diagnostics/storytelling-completeness": {
    "read": 23,
@@ -333,8 +333,8 @@
    "dropped": 0
   },
   "/api/player/{player_name}/matches": {
-   "read": 18,
-   "unread": 2,
+   "read": 20,
+   "unread": 0,
    "dropped": 0
   },
   "/api/players/{identifier}/card": {
@@ -658,13 +658,13 @@
    "dropped": 0
   },
   "/api/proximity/trades/events": {
-   "read": 24,
-   "unread": 2,
+   "read": 26,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/trades/player-stats": {
-   "read": 20,
-   "unread": 2,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/trades/summary": {
@@ -1073,8 +1073,8 @@
    "dropped": 0
   },
   "/api/uploads": {
-   "read": 18,
-   "unread": 1,
+   "read": 19,
+   "unread": 0,
    "dropped": 0
   },
   "/api/uploads/resumable/{session_id}/finalize": {
@@ -1168,7 +1168,8 @@
   {
    "endpoint": "/api/availability",
    "key": "viewer",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: the same {authenticated, linked_discord} pair the access endpoint returns (availability.py:686 vs :430), which the page already reads and acts on"
   },
   {
    "endpoint": "/api/availability",
@@ -1193,7 +1194,8 @@
   {
    "endpoint": "/api/availability/access",
    "key": "can_submit",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: the server computes it as `authenticated and linked` (availability.py:435) and the page already holds both halves, which is also why it can say WHY submitting is unavailable"
   },
   {
    "endpoint": "/api/availability/access",
@@ -1609,7 +1611,8 @@
   {
    "endpoint": "/api/diagnostics",
    "key": "database.tests",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "always empty: diagnostics_router.py:498 is the only mention of the key — it is initialised and never appended to, so rendering it would be dressing up a structure nobody fills"
   },
   {
    "endpoint": "/api/diagnostics",
@@ -2984,12 +2987,12 @@
   {
    "endpoint": "/api/player/{player_name}/matches",
    "key": "team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/player/{player_name}/matches",
    "key": "time_played",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/player/{player_name}/matches",
@@ -10563,7 +10566,7 @@
   {
    "endpoint": "/api/proximity/trades/events",
    "key": "events.round_date",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/trades/events",
@@ -10573,7 +10576,7 @@
   {
    "endpoint": "/api/proximity/trades/events",
    "key": "events.round_time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/trades/events",
@@ -10668,12 +10671,12 @@
   {
    "endpoint": "/api/proximity/trades/player-stats",
    "key": "players.avenger_attempt_damage",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/trades/player-stats",
    "key": "players.avenger_attempt_events",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/trades/player-stats",
@@ -19451,7 +19454,7 @@
   {
    "endpoint": "/api/uploads",
    "key": "items.description_preview",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads",
