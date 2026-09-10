@@ -37,7 +37,7 @@ vprašaj znova za vsak PR, restart in deploy. Prod (`slomix-*` na VM) je zamrznj
 | main | glej `git log -1 origin/main`; dev `/api/build` = isti hash po zadnjem vlaku |
 | dev spletna stran | `http://127.0.0.1:8000/app` (SPA), legacy `/`; `scripts/health_check.sh` |
 | spider web | ZAKLJUČEN 9. 9.: SW-2 scena (#1005), SW-3 vidna linija kot oracle diagnostika (#1006), SW-4 sloj 4 po §8 (#1007); `docs/SPIDERWEB_STATUS.md` nosi tabelo §8.5 — **nič ne gre na stran** |
-| merilnik podatkovnih točk (`docs/parity/datapoints.json` unread) | 583 (7. 9.) → 420 (po spider webu) → 238 (#1008–#1011) → **92 na mainu 10. 9.**, in **79** ko se #1028 merga; ratchet: `tests/unit/test_datapoint_ledger.py`; instrument `scripts/datapoint_ledger.py` (scope po klicateljih; type-union literali niso klici; »dead: no caller« = vse vrstice nepokrite). Preostanek je opisan v §3b. |
+| merilnik podatkovnih točk (`docs/parity/datapoints.json` unread) | 583 (7. 9.) → 420 (spider web) → 238 (#1008–#1011) → 92 (10. 9. dopoldne) → **6 na mainu `ba199da8`**; ratchet `tests/unit/test_datapoint_ledger.py`, instrument `scripts/datapoint_ledger.py`. Kar ostane, je opisano v §3b — vsaka vrstica je bodisi ODLOČENA z razlogom bodisi čaka na površino, ki je še ni. |
 | endpoint gap (H1) | **8** (`tests/data/endpoint_gap.txt`; PLAN kvota mora biti enaka — `test_plan_quotes_the_measured_gap`) |
 | bot (dev) | `SUPASTATS_REACTIONS_ENABLED=false` (#1013): preverba Supovega lista + DM tečeta, reakcij v kanalu ni |
 | izdaja | vlak release-please **#956 (1.46.0)** je odprt in NI mergan — owner odloči ob vrnitvi |
@@ -93,36 +93,38 @@ vprašaj znova za vsak PR, restart in deploy. Prod (`slomix-*` na VM) je zamrznj
 7. Astrini odprti PR-ji (#1012 runtime events journal, #979 artifact preflight, #969 node pin, #966 review snapshots,
    #965/#962 watchdog, #964 ledger docs) — ownerjev pregled; ni jih pregledal Fable.
 
-### 3b. Merilnik — kaj ostane nepokrito (92 vrstic na mainu 10. 9., 79 po #1028)
-Skupine, po velikosti:
-- `players/{}/profile` **aim/advanced (10 vrstic)** — odločitev 2; SPA teh sekcij namerno ne zahteva (8–46 s hladno).
-  Odločeno v `datapoint_decisions.json`, ne pozabljeno.
-- `availability/promotion-preferences` (7) — telegram/signal/šifriranje/tihe ure; owner tier 4 (2 uporabnika), odločeno.
-- `storytelling/scopes` (8) — mrtev picker; hook ostane zaradi H1/inventarja (ownerjev O9).
-- proximity ostanek: `competitive/*`, `escort-credits`, `objective-focus`, `revives`, `spawn-timing`,
-  `vehicle-progress`, `aim-lock`. ⚠️ **NISO sirote** — to sem najprej narobe sklepal. Klicani so prek GENERIČNIH
-  hookov (`useProxInstrument`, `useCompetitive`, `useIntel`), ki dobijo pot kot argument v enovrstični arrow
-  funkciji, zato jih iskanje »endpoint v telesu hooka« ne najde. Vsak ima svojo stran (Instruments, Competitive,
-  ObjectiveIntel); nebrana so posamezna POLJA in se zaprejo z izrisom, kot vsi prejšnji svežnji — sveženj L
-  (#1033) je zaprl 15 od njih.
-- posamezniki: `player/{player_name}/matches` (legacy pot), `uploads/resumable/{}/finalize`, `stats/session/{}/detail
-  team_matrix.rounds_detail`, `diagnostics database.tests`, `status service`, `hall-of-fame` ostanki.
-- Pravilo (nespremenjeno): vrstica se zapre s KLICEM + IZRISOM + TESTOM; odločitev le z razlogom, ki ga recenzent
-  lahko preveri (»iterated«, »alias«, »duplicate«, »tier 4«); prefiks `<endpoint> <sub>.*` velja le za pod-objekt.
-  ⚠️ Dvakrat v tej seji je bila »nova vrstica« v resnici **ista meritev pod drugim imenom** (dodge reaction na radarju
-  = `avg_dodge_ms` iz movementa; `category_weights` = `categories[].weight_in_overall`). Preveri IZVOR, ne imena.
+### 3b. Merilnik — kaj ostane nepokrito (**6 vrstic**, main `ba199da8`)
+```
+/api/proximity/event/{event_id}                       attacker_guid
+/api/proximity/vehicle-progress                       vehicles.end_z, vehicles.start_z
+/api/stats/session/{gsid}/detail                      team_matrix.rounds_detail
+/api/uploads/resumable/{session_id}/finalize          file_size_bytes, share_url
+```
+Vse ostalo je bodisi izrisano bodisi ODLOČENO z razlogom v `docs/parity/datapoint_decisions.json` (81 vnosov):
+aim/advanced (cena, odločitev 2), promocijske nastavitve (tier 4), storytelling scopes (mrtev picker, O9),
+podvojitve (isti podatek pod drugim imenom), iteracije (`Object.entries`) in aliasi.
+
+Teh šest: `attacker_guid` in `rounds_detail` rabita panel, ki ga še ni; `start_z`/`end_z` sta v posnetku 0
+(višina vozila — brez vrednosti, dokler je karta ravna); `finalize` polji vrne POST po nalaganju, ki ga stran
+uporabi, a ne izriše.
+
+Pravilo (nespremenjeno): vrstica se zapre s KLICEM + IZRISOM + TESTOM; odločitev le z razlogom, ki ga recenzent
+lahko preveri. ⚠️ Dvakrat v tej seji je bila »nova vrstica« ista meritev pod drugim imenom (dodge reaction na
+radarju = `avg_dodge_ms` iz movementa; `category_weights` = `categories[].weight_in_overall`). Preveri IZVOR.
+⚠️ In: skener veže na IME polja — odstranitev enega izrisa je odprla DVE vrstici hkrati (`total_samples`).
 
 ### 3c. Spletna stran — kaj od dolga nazaj še ostane (pregled B3)
-Zaprto 9.–10. 9.: og/meta + naslov zavihka, `robots.txt`, iskalnik v navigaciji, hladna pečina (pošten napis, ne
-predizračun — glej odločitev 2), mobile prvi stolpec, pravi 404, route splitting, `SectionHead` = h2, ARIA vloge tabel.
-Ostane:
-- **P1 filtri v URL**: samo `RecordBook`, `Rivalries` in `WrappedPage` držijo stanje v naslovu; ostalih ~60 strani ne
-  (izbrani stat na lestvici, obdobje orožij, datum/mapa/runda proximity, zavihki sej). Deljiv pogled = ena poteza za
-  vsako stran: `useSearchParams` namesto `useState`, privzetek ostane privzetek (brez parametra v naslovu).
-- **P2**: CSV/JSON izvoz; kontakt in zasebnost v nogi; `system`/`diag` pod About; izmerjen kontrast
-  `--color-text-500/600`; fokusni obroč in past tipkovnice (rabi Playwright, ownerjev OK za Chromium).
-- **Odprto vprašanje brez odgovora**: prvi obisk hladnega cache okna še vedno plača 6–26 s na proximity/skill.
-  #1019 to zdaj POVE, ne pospeši. Pospešek je odločitev 2 (poti B+E takoj, A kot ops poskus, C proizvajalec cachea).
+**Zaprto 9.–10. 9.:** og/meta + naslov zavihka, `robots.txt`, iskalnik v navigaciji, pošten napis ob hladni
+poizvedbi, mobilni prvi stolpec, prava stran 404, route splitting (1 104 → 205 KB), `SectionHead` = `<h2>`,
+ARIA vloge tabel, **filtri v naslovu strani**, **CSV izvoz**, `system`/`diag` pod About, **izmerjen kontrast**.
+
+**Ostane:**
+- **P2 kontakt in zasebnost v nogi** — NAMERNO neizvedeno: kdo je kontakt in kaj piše v izjavi o zasebnosti,
+  je ownerjeva odločitev, ne agentova. Stran, ki bi si to izmislila, bi bila slabša od odsotne.
+- **P2 fokus in past tipkovnice** — `:focus-visible` obroč OBSTAJA (`tokens.css:273`, 2 px akcent); kar manjka,
+  je meritev s pravim brskalnikom (Playwright, ownerjev OK za Chromium).
+- **Hladna pečina ostaja hladna:** prvi obisk okna plača 6–26 s na proximity/skill. #1019 to POVE, ne pospeši.
+  Pospešek je odločitev 2 (poti B+E takoj, A kot ops poskus, C proizvajalec cachea 077).
 
 ### 3d2. Varnost: Dependabot PR **#1027** čaka na ownerja
 `@vitest/mocker` < 4.1.11 (medium, path traversal / arbitrary file read prek Redirect Mock). **Razvojna odvisnost,
@@ -205,3 +207,27 @@ Bundle nosi novo sceno, če `grep -c "line of sight (oracle)" website/static/app
 **Zadnja meritev te seje:** main `7850dbc9` + PR-ji #1021, #1025, #1026, #1028, #1029 v vlaku 43;
 merilnik 92 → 79; dev se po vsakem vlaku zgradi in deploya prek `scripts/dev_deploy.sh`.
 Prod ostaja **v1.39.0** in ni bil dotaknjen.
+
+---
+
+## 7. Zaključni posnetek seje 10. 9. (Opus 5 nadaljuje Fable 5.1)
+
+Main `ba199da8`, dev deployan na isti hash po vsakem vlaku. **Merilnik: 92 → 6 nebranih.**
+Testi na mainu: **6 533 zalednih** (`pytest tests/unit`, 3.13) in **839 frontend** (`npx vitest run`), vse zeleno.
+
+Kaj je bilo mergano danes (poleg #1017–#1025 iz jutranjega dela):
+| PR | kaj |
+|---|---|
+| #1026 | sveženj J: ura strežnika in vzorčevalnikov, kdo je v voice, zadnja runda in čas uvoza, kontrolne vrstice |
+| #1028 | sveženj K: razredi smrtnih con, orožja linij ubojev, obe strani celice, viri zajema, okno kartice |
+| #1029 | tabele dobijo ARIA vloge (`table`/`row`/`columnheader`/`cell`); `aria-sort` z gumba na glavo stolpca |
+| #1030 | predaja posodobljena (ta datoteka) |
+| #1031 | filtri v naslovu strani (`lib/urlState.ts`) + `testTimeout: 30 s` |
+| #1034 | `system`/`diag` iz javne noge pod About |
+| #1035 | kontrast palete IZMERJEN; noga je nehala uporabljati token pod pragom AA |
+| #1036 | sveženj M: stran in odigran čas v profilu, poskusi maščevanja, opis nalaganja |
+| #1032, #1033, #1037 | CSV izvoz, sveženj L, odločitev o mrtvem pickerju — zadnji vlak |
+
+⚠️ **Vzorec, ki se je ponovil petkrat:** ko med čakanjem merge vlaka pushneš na isto vejo, cycle.sh javi
+`sha=NE` in PR PRESKOČI (varovalo, ne napaka). Rešuj konflikte, dokler vlak NE teče, ali pa pripravi vlak,
+ki na koncu še enkrat prečeše preostale PR-je.
