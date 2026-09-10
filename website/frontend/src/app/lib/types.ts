@@ -995,6 +995,8 @@ export interface VizPlayer {
   revives_given: number;
   denied_playtime: number;
   gibs: number;
+  self_kills: number;
+  kill_assists: number;
   dpm: number;
   efficiency: number;
   xp: number;
@@ -1282,6 +1284,9 @@ export interface ProfileHitRegions extends ProfileSection {
     head: number; arms: number; body: number; legs: number;
     head_pct: number; arms_pct: number; body_pct: number; legs_pct: number;
   } | null;
+  /** The same split per weapon, hit COUNTS plus the head share; the other
+   *  shares are derived on the page from `total`. */
+  per_weapon?: { weapon: string; head: number; arms: number; body: number; legs: number; total: number; head_pct: number }[];
 }
 
 export interface ProfileMovement extends ProfileSection {
@@ -1292,6 +1297,8 @@ export interface ProfileMovement extends ProfileSection {
   avg_distance_per_life: number | null;
   /** Units covered in the first seconds after a spawn — the "how far before the first fight" figure. */
   avg_post_spawn_distance?: number | null;
+  /** Seconds spent sprinting across every tracked life. */
+  sprint_sec?: number | null;
   stance?: {
     standing_pct: number; crouching_pct: number; prone_pct: number;
   } | null;
@@ -3100,6 +3107,8 @@ export interface ProxScopes {
     session_date: string;
     engagements: number;
     map_count: number;
+    /** Replays count separately (completed R1s, the box score's rule) — can be 0 on a date with telemetry. */
+    maps_played: number;
     round_count: number;
     /** The full hierarchy — slice 5's map and round chips read it; slice 2
      *  only needed the dates and typed these away until the picker did. */
