@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useUrlState } from '../lib/urlState';
 import { Link } from 'react-router';
 import { useLeaderboard } from '../lib/queries';
 import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable, figure } from '../components/ui';
@@ -41,9 +42,11 @@ function formatValue(stat: string, value: number): string {
 
 
 export function Leaderboards() {
-  // Legacy defaults: stat=games ("Rounds"), period=season.
-  const [stat, setStat] = useState('games');
-  const [period, setPeriod] = useState('season');
+  // Legacy defaults: stat=games ("Rounds"), period=season. Both live in the
+  // address bar so a board can be linked as the reader is seeing it; the
+  // default is never written, so a bare /leaderboards is still the default.
+  const [stat, setStat] = useUrlState('stat', 'games', STATS.map((s) => s.key));
+  const [period, setPeriod] = useUrlState('period', 'season', PERIODS.map((p) => p.key));
   const board = useLeaderboard(stat, period);
   const data = board.isError ? undefined : board.data;
   const statLabel = STATS.find((s) => s.key === stat)?.label ?? stat.toUpperCase();

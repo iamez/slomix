@@ -1,8 +1,3 @@
-/api/availability viewer
-/api/availability/access can_submit
-/api/diagnostics database.tests
-/api/player/{player_name}/matches team
-/api/player/{player_name}/matches time_played
 /api/proximity/aim-lock leaders.avg_dist
 /api/proximity/aim-lock leaders.total_lock_ms
 /api/proximity/competitive/man-advantage teams.ALLIES
@@ -19,13 +14,8 @@
 /api/proximity/revives leaders.avg_enemy_dist
 /api/proximity/revives summary.avg_enemy_distance
 /api/proximity/spawn-timing team_averages
-/api/proximity/trades/events events.round_date
-/api/proximity/trades/events events.round_time
-/api/proximity/trades/player-stats players.avenger_attempt_damage
-/api/proximity/trades/player-stats players.avenger_attempt_events
 /api/proximity/vehicle-progress vehicles.end_z
 /api/proximity/vehicle-progress vehicles.start_z
 /api/stats/session/{gaming_session_id}/detail team_matrix.rounds_detail
-/api/uploads items.description_preview
 /api/uploads/resumable/{session_id}/finalize file_size_bytes
 /api/uploads/resumable/{session_id}/finalize share_url
