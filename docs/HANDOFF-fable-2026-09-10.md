@@ -124,6 +124,13 @@ Ostane:
 - **Odprto vprašanje brez odgovora**: prvi obisk hladnega cache okna še vedno plača 6–26 s na proximity/skill.
   #1019 to zdaj POVE, ne pospeši. Pospešek je odločitev 2 (poti B+E takoj, A kot ops poskus, C proizvajalec cachea).
 
+### 3d2. Varnost: en odprt Dependabot alert (10. 9.)
+`@vitest/mocker` < 4.1.11 (medium, path traversal / arbitrary file read prek Redirect Mock); repo ima `vitest ^4.1.0`
+(`website/frontend/package.json:53`). **Razvojna odvisnost, ne produkcijska** — zadeva stroj, ki poganja teste, ne
+strežnika. Popravek je dvig na `^4.1.11` + `npm install`, NAMERNO neizveden 10. 9.: `node_modules` so deljeni prek
+symlinka med delovnimi drevesi in vlak je prav takrat gradil SPA iz njih; namestitev sredi builda je tveganje brez
+nujnosti. Naredi ob mirnem drevesu in poženi cel `npx vitest run` pred pushem.
+
 ### 3d. Ostalo iz BACKLOG/KNOWN_ISSUES (nespremenjeno)
 Streli (`shot_fired`) so na puranu vklopljeni od 26. 8. (v6.11); lag populaciji A/B; `round_awards` podvojene vrstice;
 watchdog; `full_selfkills` clamp; W4b navigacijski graf (raziskava); C1–C7 Lua zajemi (ownerjeva vrata).
