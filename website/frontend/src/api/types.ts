@@ -757,10 +757,7 @@ export interface UploadItem {
   extension: string;
   file_size_bytes: number;
   uploader_name: string;
-  /** A STRING: an 18-digit Discord snowflake exceeds Number.MAX_SAFE_INTEGER,
-   *  so a JSON number loses its last digit in every browser. The wire changed
-   *  in #830; this declaration is the other side of that boundary. */
-  uploader_discord_id: string | null;
+  uploader_discord_id: number;
   download_count: number;
   created_at: string | null;
   share_url: string;
@@ -781,10 +778,7 @@ export interface UploadDetail {
   file_size_bytes: number;
   mime_type: string;
   uploader_name: string;
-  /** A STRING: an 18-digit Discord snowflake exceeds Number.MAX_SAFE_INTEGER,
-   *  so a JSON number loses its last digit in every browser. The wire changed
-   *  in #830; this declaration is the other side of that boundary. */
-  uploader_discord_id: string | null;
+  uploader_discord_id: number;
   download_count: number;
   content_hash: string;
   created_at: string | null;
@@ -823,8 +817,7 @@ export interface AvailabilityDayCounts {
 }
 
 export interface AvailabilityUser {
-  /** A STRING, for the same reason as uploader_discord_id above. */
-  user_id: string;
+  user_id: number;
   display_name: string;
 }
 

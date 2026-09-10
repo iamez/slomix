@@ -32,12 +32,3 @@ route `mode` to `VIEW_MODE.MODERN` in `route-registry.js` and verify parity.
   (gitignored; produced on deploy, not committed).
 - Cache-bust: deploy sets `modern-route-host.js` `BUILD_VERSION` to the git SHA.
 - Full rationale + plan: `docs/research/DUAL_FRONTEND_DEPLOY_PLAN_2026-06-29.md`.
-
-## Known dead path in this tree (2026-09-08)
-
-`Availability.tsx` calls `/api/availability/planning/today`. That endpoint has never
-existed: `website/backend/main.py` mounts the planning router at `/api/planning`, so
-the old React planning panel (20 fields) always rendered its 404 branch. The new
-app (`src/app`) does not carry the panel; the `planning_*` tables hold 0 rows
-(measured 2026-09-08). Left as a note rather than fixed: this tree is the one
-being replaced, and the fix would be to a page nobody routes to.
