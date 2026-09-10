@@ -20,10 +20,24 @@
 
 ## Track: runtime v2 R01 (Astra)
 
-Last updated: 2026-09-09. Owner priority: system runtime; frontend stays with
+Last updated: 2026-09-10. Owner priority: system runtime; frontend stays with
 Fable. Worktree `/tmp/slomix-astra-runtime-r01`, branch
 `feat/db-runtime-events-r01`. Code and isolated PostgreSQL proof complete;
-ready for PR review. NOT merged, live-migrated, enabled or deployed.
+PR #1012 open. NOT merged, live-migrated, enabled or deployed.
+
+- Review follow-up (2026-09-10): fixed all three reported gaps: migration 083
+  now ships in the newest release config and canonical fresh-bootstrap dump;
+  CI explicitly opts into its loopback PostgreSQL service. Local runs retain
+  the private-socket gate; CI requires GITHUB_ACTIONS plus exact test host,
+  database and role. No application DB fallback. Added workflow/connection
+  guards and exact journal DDL mirror check.
+  Isolated rerun: 90 passed, zero skipped, including four real journal PG
+  tests and full dump/migrations/baseline parity (`Validation: CLEAN`).
+  The omitted-release-config test was seen failing before the fix. Mutation
+  of CI opt-in to false failed (`assert 'false' == 'true'`), restored with
+  patch and cmp. Temporary PG stopped; log and pg_ctl confirmed independently.
+  This is local evidence, not a claim that GitHub Actions has executed the
+  updated workflow; external CI status must be checked after push.
 
 - R01: migration 083 and neutral initial-import emitter on the existing
   canonical importer transaction; `EVENT_STREAM_ENABLED=false`. R1/R2 only,

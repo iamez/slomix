@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-10) PR #1012 review fixes: release-config registration,
+  fresh-bootstrap journal mirror, and explicit CI test-service opt-in.
+  90 local tests pass with real disposable PostgreSQL, including complete
+  dump/migrations/baseline parity. CI opt-in mutation failed and was restored
+  byte-identically. Cluster stopped. Next: push/reply to the three review
+  threads and verify external checks; R02 remains a separate slice.
+
 - (Astra, 2026-09-08) Runtime v2 R01 code prepared on
   `feat/db-runtime-events-r01` in `/tmp/slomix-astra-runtime-r01`: migration 083,
   default-OFF canonical import journal, transactional wake-up, unit and opt-in

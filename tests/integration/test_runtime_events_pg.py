@@ -1,7 +1,8 @@
 """Opt-in journal proof against an owner-approved disposable PG cluster.
 
 RUNTIME_EVENTS_TEST_SOCKET must name a private /tmp/slomix-runtime-pg-* socket
-directory. No fallback to the application's database or POSTGRES_* settings.
+directory. Alternatively CI explicitly opts into its loopback test service.
+No fallback to the application's database or POSTGRES_* settings.
 This file never starts a server. Two connections observe visibility and NOTIFY.
 """
 
@@ -17,10 +18,21 @@ import pytest
 from shared.runtime_events import emit_round_stats_imported
 
 
-@pytest.fixture
-async def journal_db():
+def connection_options():
+    """Fail closed: local private socket OR explicitly opted-in CI service."""
     socket = os.getenv("RUNTIME_EVENTS_TEST_SOCKET")
     if not socket:
+        if os.getenv("RUNTIME_EVENTS_TEST_CI") == "true":
+            if (os.getenv("GITHUB_ACTIONS") != "true"
+                    or os.getenv("POSTGRES_TEST_HOST") != "127.0.0.1"
+                    or os.getenv("POSTGRES_TEST_DATABASE") != "etlegacy_test"
+                    or os.getenv("POSTGRES_TEST_USER") != "etlegacy_user"):
+                pytest.fail("Runtime journal CI requires the explicit loopback test service")
+            return dict(
+                host="127.0.0.1", port=5432, database="etlegacy_test",
+                user="etlegacy_user", password=os.environ["POSTGRES_TEST_PASSWORD"],
+                timeout=5,
+            )
         pytest.skip("Disposable PostgreSQL not explicitly configured")
     path = Path(socket).resolve()
     if path.parent != Path("/tmp") or not path.name.startswith("slomix-runtime-pg-"):
@@ -28,7 +40,12 @@ async def journal_db():
     info = path.stat()
     if not path.is_dir() or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
         pytest.fail("Disposable PostgreSQL directory must be owned by this user with mode 0700")
-    options = dict(host=str(path), database="postgres", timeout=5)
+    return dict(host=str(path), database="postgres", timeout=5)
+
+
+@pytest.fixture
+async def journal_db():
+    options = connection_options()
     writer = await asyncpg.connect(**options)
     reader = None
     schema = "runtime_events_test_" + uuid.uuid4().hex
@@ -57,6 +74,42 @@ async def journal_db():
 async def migrate(conn):
     migration = Path(__file__).resolve().parents[2] / "migrations/083_runtime_events.sql"
     await conn.execute(migration.read_text())
+
+
+@pytest.mark.parametrize("bad_key", [None, "GITHUB_ACTIONS", "POSTGRES_TEST_HOST",
+                                    "POSTGRES_TEST_DATABASE", "POSTGRES_TEST_USER"])
+def test_ci_connection_guard(monkeypatch, bad_key):
+    monkeypatch.delenv("RUNTIME_EVENTS_TEST_SOCKET", raising=False)
+    for key, value in {
+        "RUNTIME_EVENTS_TEST_CI": "true", "GITHUB_ACTIONS": "true",
+        "POSTGRES_TEST_HOST": "127.0.0.1", "POSTGRES_TEST_DATABASE": "etlegacy_test",
+        "POSTGRES_TEST_USER": "etlegacy_user", "POSTGRES_TEST_PASSWORD": "test-only",
+    }.items():
+        monkeypatch.setenv(key, value)
+    if bad_key:
+        monkeypatch.setenv(bad_key, "wrong")
+        with pytest.raises(pytest.fail.Exception, match="explicit loopback test service"):
+            connection_options()
+    else:
+        assert connection_options()["database"] == "etlegacy_test"
+        assert connection_options()["host"] == "127.0.0.1"
+
+
+def test_ci_workflow_opts_into_journal_tests():
+    import yaml
+
+    root = Path(__file__).resolve().parents[2]
+    workflow = yaml.safe_load((root / ".github/workflows/tests.yml").read_text())
+    step = next(s for s in workflow["jobs"]["python"]["steps"] if s.get("name") == "Run tests")
+    assert step["env"]["RUNTIME_EVENTS_TEST_CI"] == "true"
+    assert step["env"]["POSTGRES_TEST_HOST"] == "127.0.0.1"
+    assert step["env"]["POSTGRES_TEST_DATABASE"] == "etlegacy_test"
+
+
+def test_bootstrap_journal_definition_matches_migration():
+    root = Path(__file__).resolve().parents[2]
+    migration = (root / "migrations/083_runtime_events.sql").read_text().strip()
+    assert migration in (root / "tools/schema_postgresql.sql").read_text()
 
 
 async def emit(conn, round_id=1, enabled=True):

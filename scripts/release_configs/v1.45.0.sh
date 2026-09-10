@@ -89,6 +89,8 @@ MIGRATIONS=(
   # Adding a nullable column, no default, no rewrite of existing rows.
   "081_time_dead_reconstructed_flag.sql"
   "082_vehicle_progress_move_times.sql"
+  # Runtime v2 journal schema only; EVENT_STREAM_ENABLED remains false.
+  "083_runtime_events.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"

@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-10 · A migration has three installation paths to keep aligned.**
+  R01 initially added SQL alone, omitting the latest release config and the
+  canonical dump used before deploy_clean's baseline. Register it in the
+  release array and mirror DDL in the dump; run release-contract and real
+  fresh-bootstrap parity tests. A local opt-in PG test also needs an explicit
+  CI path or its only real SQL coverage silently skips in the matrix.
+
 - **2026-09-08 · Import success must be logged after transaction exit.**
   `pg_notify` participates in the import transaction and can fail at COMMIT;
   the emitter returning does not prove persistence. R01 moves success counts
