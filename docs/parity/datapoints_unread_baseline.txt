@@ -1,13 +1,4 @@
-/api/availability viewer
-/api/availability/access can_submit
-/api/diagnostics database.tests
-/api/player/{player_name}/matches team
-/api/player/{player_name}/matches time_played
 /api/proximity/event/{event_id} attacker_guid
-/api/proximity/trades/events events.round_date
-/api/proximity/trades/events events.round_time
-/api/proximity/trades/player-stats players.avenger_attempt_damage
-/api/proximity/trades/player-stats players.avenger_attempt_events
 /api/proximity/vehicle-progress vehicles.end_z
 /api/proximity/vehicle-progress vehicles.start_z
 /api/stats/session/{gaming_session_id}/detail team_matrix.rounds_detail
@@ -19,6 +10,5 @@
 /api/storytelling/scopes sessions.gaming_session_id
 /api/storytelling/scopes sessions.scope_version
 /api/storytelling/scopes sessions.start_date
-/api/uploads items.description_preview
 /api/uploads/resumable/{session_id}/finalize file_size_bytes
 /api/uploads/resumable/{session_id}/finalize share_url
