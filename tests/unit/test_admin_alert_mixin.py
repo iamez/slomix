@@ -39,9 +39,6 @@ class _StubBot(_AdminAlertMixin):
         self._channel = channel
         self._channels = channels or {}
         self._consecutive_errors: dict[str, int] = {}
-        self._alerted_keys: set[str] = set()
-        self._error_streak_started: dict[str, object] = {}
-        self._error_last_seen: dict[str, object] = {}
 
     def get_channel(self, channel_id):
         if self._channels:
@@ -332,22 +329,20 @@ async def test_track_error_custom_threshold():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.asyncio
-async def test_reset_error_tracking_zeroes_existing_counter():
+def test_reset_error_tracking_zeroes_existing_counter():
     bot = _StubBot()
     bot._consecutive_errors["svc"] = 7
-    await bot.reset_error_tracking("svc")
+    bot.reset_error_tracking("svc")
     assert bot._consecutive_errors["svc"] == 0
 
 
-@pytest.mark.asyncio
-async def test_reset_error_tracking_no_op_for_unknown_key():
+def test_reset_error_tracking_no_op_for_unknown_key():
     """Reset for a key that was never tracked → no-op (does NOT add a
     zero entry). Pin so a flood of resets for non-existent keys doesn't
     bloat the dict."""
     bot = _StubBot()
     bot._consecutive_errors["other"] = 5
-    await bot.reset_error_tracking("nonexistent")
+    bot.reset_error_tracking("nonexistent")
     assert "nonexistent" not in bot._consecutive_errors
     assert bot._consecutive_errors == {"other": 5}
 
@@ -359,141 +354,5 @@ async def test_reset_then_track_starts_count_from_one():
     bot = _StubBot()
     for _ in range(5):
         await bot.track_error("svc", "x")
-    await bot.reset_error_tracking("svc")
+    bot.reset_error_tracking("svc")
     assert await bot.track_error("svc", "x") == 1
-
-
-# ---------------------------------------------------------------------------
-# recovery — the half of the state machine that did not exist until 2026-09-06
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_recovery_is_announced_after_an_alert():
-    """The owner saw an ERROR at 14:56 and never learnt it was healthy at
-    15:02. From Discord alone the outage was still running."""
-    ch = _channel_with_send()
-    bot = _StubBot(admin_channel_id=1, channel=ch)
-    for _ in range(3):
-        await bot.track_error("ssh_monitor", "banner timeout")
-    assert ch.send.await_count == 1                      # the failure alert
-    await bot.reset_error_tracking("ssh_monitor")
-    assert ch.send.await_count == 2                      # …and the recovery
-    embed = ch.send.await_args.kwargs["embed"]
-    assert "Recovered" in embed.title
-    assert "Back to normal" in embed.description
-    assert "3 consecutive failures" in embed.description
-
-
-@pytest.mark.asyncio
-async def test_recovery_is_silent_when_nobody_was_alerted():
-    """⛔ THE CONTROL. A reset runs on every healthy cycle for several
-    services. If recovery announced itself unconditionally, the admin channel
-    would fill with notices that nothing happened — and an ignored channel is
-    worse than the missing notice this change fixes."""
-    ch = _channel_with_send()
-    bot = _StubBot(admin_channel_id=1, channel=ch)
-    await bot.track_error("ssh_monitor", "one blip")     # below the threshold
-    await bot.reset_error_tracking("ssh_monitor")
-    assert ch.send.await_count == 0
-    # …and a reset with no failures at all is likewise silent.
-    await bot.reset_error_tracking("ssh_monitor")
-    assert ch.send.await_count == 0
-
-
-@pytest.mark.asyncio
-async def test_recovery_is_announced_once_not_on_every_healthy_cycle():
-    ch = _channel_with_send()
-    bot = _StubBot(admin_channel_id=1, channel=ch)
-    for _ in range(3):
-        await bot.track_error("svc", "x")
-    await bot.reset_error_tracking("svc")
-    before = ch.send.await_count
-    for _ in range(5):
-        await bot.reset_error_tracking("svc")            # five more good cycles
-    assert ch.send.await_count == before
-
-
-@pytest.mark.asyncio
-async def test_recovery_says_unknown_when_the_streak_predates_the_process():
-    """The counters live in memory only, so after a bot restart a key can be
-    alerted with no start time. Say the duration is unknown rather than print
-    a number that would be invented."""
-    ch = _channel_with_send()
-    bot = _StubBot(admin_channel_id=1, channel=ch)
-    for _ in range(3):
-        await bot.track_error("svc", "x")
-    bot._error_streak_started.pop("svc")                  # simulate the restart
-    await bot.reset_error_tracking("svc")
-    embed = ch.send.await_args.kwargs["embed"]
-    assert "unknown period" in embed.description
-
-
-# ---------------------------------------------------------------------------
-# STREAK_WINDOW — "consecutive" finally means consecutive
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_an_idle_gap_ends_the_streak():
-    """⛔⛔ Six of the nine tracked keys have no success path that clears their
-    counter, so before this their counters were monotonic for the life of the
-    process: `discord_posting` alerts at 2, and "2 consecutive" meant "the 2nd
-    failure since the bot booted" — which can be days apart."""
-    from datetime import timedelta
-
-    from bot.services.admin_alert_mixin import STREAK_WINDOW
-
-    ch = _channel_with_send()
-    bot = _StubBot(admin_channel_id=1, channel=ch)
-
-    assert await bot.track_error("svc", "x", max_consecutive=3) == 1
-    assert await bot.track_error("svc", "x", max_consecutive=3) == 2
-
-    # Two failures, then a long quiet period, then a third.
-    bot._error_last_seen["svc"] -= STREAK_WINDOW + timedelta(seconds=1)
-    assert await bot.track_error("svc", "x", max_consecutive=3) == 1
-    assert ch.send.await_count == 0, "an isolated failure must not page anybody"
-
-
-@pytest.mark.asyncio
-async def test_failures_inside_the_window_still_count_together():
-    """⛔ THE CONTROL, and it must fail if the window is made too aggressive:
-    a real outage produces failures minutes apart, and those must still add
-    up. A window that ended the streak on every gap would silence the alert
-    entirely — the opposite defect, and a quieter one to miss."""
-    from datetime import timedelta
-
-    from bot.services.admin_alert_mixin import STREAK_WINDOW
-
-    ch = _channel_with_send()
-    bot = _StubBot(admin_channel_id=1, channel=ch)
-
-    for _ in range(2):
-        await bot.track_error("svc", "x", max_consecutive=3)
-        # A gap well inside the window — the endstats loop polls every 60s.
-        bot._error_last_seen["svc"] -= STREAK_WINDOW / 3
-
-    assert await bot.track_error("svc", "x", max_consecutive=3) == 3
-    assert ch.send.await_count == 1
-
-
-@pytest.mark.asyncio
-async def test_a_window_expiry_also_forgets_that_it_alerted():
-    """If the streak is gone, so is the obligation to announce its recovery —
-    otherwise the next healthy cycle would report the end of an outage nobody
-    is still watching."""
-    from datetime import timedelta
-
-    from bot.services.admin_alert_mixin import STREAK_WINDOW
-
-    ch = _channel_with_send()
-    bot = _StubBot(admin_channel_id=1, channel=ch)
-    for _ in range(3):
-        await bot.track_error("svc", "x")
-    assert ch.send.await_count == 1
-
-    bot._error_last_seen["svc"] -= STREAK_WINDOW + timedelta(seconds=1)
-    await bot.track_error("svc", "x")          # starts a fresh streak at 1
-    await bot.reset_error_tracking("svc")
-    assert ch.send.await_count == 1, "no recovery notice for a forgotten streak"
