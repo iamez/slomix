@@ -151,8 +151,8 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          # react-router 8 declares engines.node >=22.22.0 — track latest 22.x
-          node-version: "22.x"
+          # Share the exact supported Node 22 patch with local development.
+          node-version-file: ".nvmrc"
           cache: "npm"
       - name: Install frontend tooling
         run: npm ci
@@ -177,8 +177,8 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          # react-router 8 declares engines.node >=22.22.0 — track latest 22.x
-          node-version: "22.x"
+          # setup-node resolves this from the checkout, not defaults.run.cwd.
+          node-version-file: ".nvmrc"
           cache: "npm"
           cache-dependency-path: website/frontend/package-lock.json
       - name: Install React frontend dependencies
