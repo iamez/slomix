@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-08 · A non-symlink file can have a symlink parent.** Checking
+  only static/app missed static/ pointing outside the checkout; build cleanup
+  could delete external provenance before rejecting the dirty source. Apply:
+  validate all source/output path components before the first unlink or build,
+  and run website/static parents before activation. The parent-symlink mutation
+  was seen deleting the proof in a disposable fixture; restoration verified.
+
 - **2026-09-07 · A directory's mtime is not its contents' mtime.** `ls -la
   <dir>` reports when the directory entry list last changed (a file added or
   removed), not when files inside were written; a rebuilt bundle that reuses
@@ -125,3 +132,10 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+- **2026-09-07 · Bundle mtime does not identify its source or target.**
+  A fresh-looking SPA can belong to another commit or contain changed assets;
+  checking after checkout already changes the run tree on failure. Apply:
+  commit before `npm run build:app`, retain generated provenance, and validate
+  exact target/input/output identity in a private staging directory before dev
+  checkout. SKIP_STATIC no longer bypasses this check. Legacy provenance is
+  separate; keep its existing bundle rather than copying unverified bytes.

@@ -11,9 +11,11 @@
 # local_gametimes/ and logs/ are the run dir's own. .env lives in the run
 # dir with its four absolute paths pointing there.
 #
-# The SPA (website/static/app) and the legacy bundle (static/modern) are
-# BUILT in the agents' tree (the run dir has no node_modules — this box has
-# 1.8 GB RAM, a vite build here would thrash) and COPIED by this script.
+# The SPA is built with npm run build:app after committing the exact target.
+# Its provenance and staged bytes are checked before the run clone changes.
+# Legacy static/modern is preserved, not copied without provenance.
+# Only the owner runs deployment. DEV_PREFLIGHT_ONLY=1 checks/stages without
+# changing the run clone or services; SKIP_STATIC=1 is intentionally rejected.
 #
 # Usage: scripts/dev_deploy.sh [ref]     (default: origin/main)
 set -euo pipefail
@@ -21,55 +23,43 @@ RUN="${DEV_RUN_DIR:-/home/samba/share/slomix-dev-run}"
 SRC="${DEV_SRC_DIR:-/home/samba/share/slomix_discord}"
 REF="${1:-origin/main}"
 
-[ -d "$RUN/.git" ] || { echo "no run dir at $RUN — see docs/CLAUDE.md (Building & Running)" >&2; exit 2; }
-git -C "$RUN" fetch -q --tags origin
-before=$(git -C "$RUN" rev-parse --short HEAD)
-git -C "$RUN" checkout -q -B main "$REF"
-after=$(git -C "$RUN" rev-parse --short HEAD)
-echo "run dir: $before -> $after ($(git -C "$RUN" log -1 --format=%s))"
-
-# The bundles are artefacts, not code: the tree can be on the right commit
-# while a bundle was built hours before its source last changed (2026-09-07:
-# static/app 11:03, src/app 00:23 next day — /api/build reads the commit and
-# would have looked right). Each bundle is checked against ITS source:
-#   app    <- website/frontend/src/app, src/api, package.json  (the SPA; stale = refuse)
-#   modern <- website/frontend/src minus src/app               (legacy React; stale = skip, warn)
-# SKIP_STATIC=1 deploys the code alone.
-bundle_is_fresh() {  # name, marker file, pathspecs...
-  local name=$1 marker=$2; shift 2
-  local newest_src built
-  newest_src=$(git -C "$SRC" log -1 --format=%ct -- "$@")
-  built=$(stat -c %Y "$SRC/website/static/$name/$marker" 2>/dev/null || echo 0)
-  if [ "$built" -lt "$newest_src" ]; then
-    echo "⛔ static/$name in $SRC was built $(date -d @"$built" +%F\ %R) but its source changed $(date -d @"$newest_src" +%F\ %R)" >&2
-    return 1
-  fi
+[ "${SKIP_STATIC:-0}" != "1" ] || { echo "SKIP_STATIC=1 is no longer supported: every dev deploy requires proven SPA artifacts" >&2; exit 3; }
+[ -d "$RUN/.git" ] || { echo "no run clone at $RUN" >&2; exit 2; }
+[ "$(realpath "$RUN")" != "$(realpath "$SRC")" ] || { echo "source and run clone must differ" >&2; exit 2; }
+[ ! -L "$RUN/website" ] && [ ! -L "$RUN/website/static" ] && [ ! -L "$RUN/website/static/app" ] || { echo "symlinked run artifacts are unsupported" >&2; exit 3; }
+[ -z "$(git -C "$RUN" status --porcelain --untracked-files=no)" ] || { echo "run clone has tracked changes; refusing deploy" >&2; exit 3; }
+# Resolve the requested source once. Fetch source refs explicitly BEFORE building.
+target=$(git -C "$SRC" rev-parse --verify "$REF^{commit}")
+helper="$(cd "$(dirname "$0")" && pwd)/spa_artifact.py"
+# Same filesystem as RUN, but outside its active tree; no stale .new directory reuse.
+stage=$(mktemp -d "$(dirname "$RUN")/.slomix-artifact.XXXXXXXX")
+cleanup() {
+  python3 -c 'import shutil,sys; shutil.rmtree(sys.argv[1])' "$stage"
 }
-
-copy_bundle() {  # name
-  local d=$1
-  [ -d "$SRC/website/static/$d" ] || return 0
-  rm -rf "$RUN/website/static/$d.new"
-  cp -a "$SRC/website/static/$d" "$RUN/website/static/$d.new"
-  rm -rf "$RUN/website/static/$d.prev"
-  [ -d "$RUN/website/static/$d" ] && mv "$RUN/website/static/$d" "$RUN/website/static/$d.prev"
-  mv "$RUN/website/static/$d.new" "$RUN/website/static/$d"
-  echo "static/$d copied from the agents' tree ($(du -sh "$RUN/website/static/$d" | cut -f1))"
-}
-
-if [ "${SKIP_STATIC:-0}" != "1" ]; then
-  if bundle_is_fresh app app.html website/frontend/src/app website/frontend/src/api website/frontend/package.json; then
-    copy_bundle app
-  else
-    echo "   run (cd $SRC/website/frontend && npm run build:app) first, or SKIP_STATIC=1 to deploy the code alone" >&2
-    exit 3
-  fi
-  if bundle_is_fresh modern route-host.js website/frontend/src ':!website/frontend/src/app' ':!website/frontend/src/api/generated'; then
-    copy_bundle modern
-  else
-    echo "   static/modern left as it is in the run dir (legacy React gets fixes only; rebuild with npm run build when it matters)" >&2
-  fi
+trap cleanup EXIT
+python3 "$helper" stage --source "$SRC" --target "$target" --stage "$stage/app"
+if [ "${DEV_PREFLIGHT_ONLY:-0}" = "1" ]; then
+  echo "preflight passed; staged artifact verified; run checkout and services unchanged"
+  exit 0
 fi
+
+# No fetch, checkout or service action occurs before artifact staging succeeds.
+git -C "$RUN" fetch -q "$SRC" "$target"
+python3 "$helper" verify --source "$SRC" --target "$target" --stage "$stage/app"
+before=$(git -C "$RUN" rev-parse --short HEAD)
+git -C "$RUN" checkout -q -B main "$target"
+after=$(git -C "$RUN" rev-parse --short HEAD)
+echo "run dir: $before -> $after"
+mkdir -p "$RUN/website/static"
+# Preserve previous assets in a unique recovery directory; never delete by glob.
+if [ -e "$RUN/website/static/app" ]; then
+  previous=$(mktemp -d "$(dirname "$RUN")/.slomix-app-previous.XXXXXXXX")
+  mv "$RUN/website/static/app" "$previous/app"
+  echo "previous SPA retained at $previous/app"
+fi
+mv "$stage/app" "$RUN/website/static/app"
+echo "SPA copied from verified stage for $target"
+echo "WARNING: legacy static/modern preserved; its provenance is not verified or copied" >&2
 
 if [ "${SKIP_RESTART:-0}" != "1" ]; then
   sudo -n systemctl restart etlegacy-bot etlegacy-web

@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "vite build",
-    "build:app": "vite build --config vite.app.config.ts",
+    "build:app": "python3 ../../scripts/spa_artifact.py build",
     "dev": "vite",
     "dev:app": "vite --config vite.app.config.ts",
     "generate:api": "openapi-typescript ../../docs/api/openapi.json -o src/api/generated/openapi.d.ts",
