@@ -231,7 +231,25 @@ def collect_disk(path: str = "/") -> dict[str, Any]:
         # journalctl missing or hanging: the journal size stays None, which
         # check_disk renders as "unknown" rather than as zero.
         journal_bytes = None
-    return {"used_pct": round(usage.used / usage.total * 100, 1), "free_gb": round(usage.free / 2**30, 2),
+    # ⛔⛔ `used / total` IS NOT THE NUMBER A HUMAN SEES. `df` reports
+    # `used / (used + available)`, and on ext4 roughly 5% of the filesystem is
+    # reserved for root, so the two diverge. Measured on this box 2026-09-07:
+    # shutil says 84.9%, df says 89.5% — 4.6 points apart, on the same disk at
+    # the same second.
+    #
+    # That gap sits exactly where it hurts: the 85% warn threshold fires only
+    # once df reads ~89.6%, and the 92% fail once df reads ~96.5%. An operator
+    # who runs `df -h`, sees 90% and finds the watchdog reporting `ok` has to
+    # decide which of the two is lying. Neither is — they answer different
+    # questions — but a monitor is worth less than nothing when it disagrees
+    # with the command the operator will actually type.
+    #
+    # `usage.free` is the space this user can really use, so used/(used+free)
+    # matches df. `total_pct` keeps the old figure for anyone who wants it.
+    denominator = usage.used + usage.free
+    return {"used_pct": round(usage.used / denominator * 100, 1) if denominator else 0.0,
+            "used_pct_of_total": round(usage.used / usage.total * 100, 1) if usage.total else 0.0,
+            "free_gb": round(usage.free / 2**30, 2),
             "journal_bytes": journal_bytes}
 
 
