@@ -3,20 +3,23 @@ import {
   usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer,
   useMemoryCard, useSkillPlayerForm, useSkillPlayerHistory,
   usePlayerSessionForm,
-  usePlayerRoundsSeries,
+  usePlayerRoundsSeries, usePlayerCard,
 } from '../lib/queries';
+import { ApiError } from '../lib/api';
 import { sparkPathRanged } from '../lib/spark';
 import { Cluster, Stack } from '../components/layout';
 import { stripEtColors } from '../lib/names';
 import type {
-  PlayerIdentity, PlayerMatchRound,
+  PlayerCard, PlayerIdentity, PlayerMatchRound,
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
   ProfileOpponent, ProfileTeammate, ProfileWeaponRow, SkillPlayerComponent,
   PlayerSessionForm,
   PlayerRoundsSeries,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
-import { Absent, ActLink, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { mmss } from '../components/RoundsTable';
+import { utcStamp } from '../lib/utcStamp';
+import { Absent, ActLink, decimals, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 import { Panel } from '../components/Panel';
 
 /**
@@ -123,6 +126,12 @@ function Header({ p }: { p: Profile }) {
             {id.first_seen ?? '—'} → {id.last_seen ?? '—'} · {figure(id.rounds ?? 0)} rounds
             {aliases.length > 0 && ` · also ${aliases.slice(0, 3).join(', ')}`}
             <IdentityLink link={id.identity_link} />
+            {/* Locale-derived, not a verified country (players_profile_router:118). */}
+            {id.country?.flag && ` · ${id.country.flag}${id.country.country ? ` ${id.country.country}` : ''}`}
+            {id.discord_linked && ' · discord linked'}
+            {id.twitch?.url && (
+              <> · <a href={id.twitch.url} style={{ color: 'inherit' }}>twitch{id.twitch.login ? `/${id.twitch.login}` : ''}</a></>
+            )}
           </div>
         ) : (
           <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="identity" /></div>
@@ -256,13 +265,13 @@ function Streaks({ p }: { p: Profile }) {
   );
 }
 
-function Weapons({ rows, available, totals }: { rows: ProfileWeaponRow[] | undefined; available: boolean; totals?: { total_shots?: number; total_hits?: number } }) {
+function Weapons({ rows, available, totals }: { rows: ProfileWeaponRow[] | undefined; available: boolean; totals?: { total_shots?: number; total_hits?: number; overall_accuracy?: number | null; overall_hs_accuracy?: number | null } }) {
   // An unavailable section carries no list at all — read defensively, then
   // let SectionBody name the state (Codex, #822).
   const top = [...(rows ?? [])].sort((a, b) => b.kills - a.kills).slice(0, 8);
   return (
     <div data-parity="profile.weapons" style={{ marginTop: 'var(--space-6)' }}>
-      <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>head hits, not headshot kills{totals?.total_shots != null && <> · {figure(totals.total_hits ?? 0)} of {figure(totals.total_shots)} shots hit</>}</Lbl>} />
+      <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>head hits, not headshot kills{totals?.total_shots != null && <> · {figure(totals.total_hits ?? 0)} of {figure(totals.total_shots)} shots hit</>}{totals?.overall_accuracy != null && <> · {pct(totals.overall_accuracy)} overall, {pct(totals.overall_hs_accuracy)} to the head</>}</Lbl>} />
       <SectionBody available={available} empty={top.length === 0} what="weapon stats">
         <div style={{ marginTop: 'var(--space-2)' }}>
           <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto auto', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
@@ -311,6 +320,15 @@ function Body({ p }: { p: Profile }) {
                 <span>body {pct(t.body_pct)}</span>
                 <span>legs {pct(t.legs_pct)}</span>
               </div>
+              {/* Per weapon: head share is the server's, the rest derived from the counts. */}
+              {(p.hit_regions.per_weapon ?? []).slice(0, 6).map((w) => (
+                <div key={w.weapon} className="m" style={{ ...rowStyle, display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-400)', padding: 'var(--space-1) 0' }}>
+                  <span style={{ textTransform: 'uppercase' }}>{w.weapon}</span>
+                  <span>
+                    head {pct(w.head_pct)} · arms {pct(w.total ? (w.arms / w.total) * 100 : null)} · body {pct(w.total ? (w.body / w.total) * 100 : null)} · legs {pct(w.total ? (w.legs / w.total) * 100 : null)} · {figure(w.total)} hits
+                  </span>
+                </div>
+              ))}
             </>
           )}
         </SectionBody>
@@ -320,6 +338,7 @@ function Body({ p }: { p: Profile }) {
         <SectionBody available={m.available} empty={!m.tracks} what="movement">
           <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             {([['avg speed', num(m.avg_speed)], ['peak', num(m.peak_speed)], ['sprint', pct(m.sprint_pct)],
+              ['sprinting', m.sprint_sec == null ? '—' : `${decimals(m.sprint_sec / 3600, 1)} h`],
               ['dist / life', num(m.avg_distance_per_life)], ['after spawn', num(m.avg_post_spawn_distance)],
               ['standing', pct(stance?.standing_pct)], ['crouching', pct(stance?.crouching_pct)]] as const)
               .map(([k, v]) => (
@@ -419,7 +438,7 @@ function Relationships({ p }: { p: Profile }) {
   const empty = killers.length === 0 && best.length === 0;
   return (
     <div data-parity="profile.relationships" style={{ marginTop: 'var(--space-6)' }}>
-      <SectionHead label="the people" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>the leading figure is what each list ranks by · synergy = dpm delta together</Lbl>} />
+      <SectionHead label="the people" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>the leading figure is what each list ranks by · synergy = dpm delta together{r.baseline_dpm != null && ` against a ${figure(r.baseline_dpm)} dpm baseline`}</Lbl>} />
       <SectionBody available={r.available} empty={empty} what="head-to-head history">
         <div className="about-grid-4" style={{ gap: 'var(--space-5)', marginTop: 'var(--space-2)' }}>
           {/* Measured at the source (rivalries_service): kills_by_player comes
@@ -619,6 +638,79 @@ function Spark({ values, w = 110, h = 26 }: { values: number[]; w?: number; h?: 
  *  profile". The new convention says a missing thing names itself, so a 404
  *  becomes a reason, not a silence: a keepsake that vanishes without a word is
  *  indistinguishable from one that broke. */
+/** The hover card the legacy player list showed on mouse-over
+ *  (player-card.js): the rating and its trend, the archetype, the 90-day
+ *  form with percentiles against the pool, a dpm sparkline, the badges and
+ *  the career totals. Five of its fields were on the endpoint ratchet. */
+function PlayerCardSection({ playerId }: { playerId: string }) {
+  const q = usePlayerCard(playerId);
+  // The endpoint answers 404 for a profile with no valid round in the window
+  // — a known absence, not a failed request (Codex on #1001).
+  if (q.isError && q.error instanceof ApiError && q.error.status === 404) {
+    return (
+      <Stack gap={2} parity="profile.card">
+        <SectionHead label="player card" />
+        <Absent reason="no card — no counted round in the last 90 days" />
+      </Stack>
+    );
+  }
+  return (
+    <Panel<PlayerCard>
+      parity="profile.card"
+      label="player card"
+      aside={q.data ? `${figure(q.data.window_days)}-day form${q.data.small_sample ? ' · small sample' : ''}` : undefined}
+      q={q}
+      empty="no card yet — the card needs rated rounds behind it"
+      isEmpty={(d) => d.form.rounds === 0 && d.career.kills === 0}
+    >
+      {(d) => (
+        <Stack gap={2}>
+          <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap' }}>
+            {d.rating?.value != null ? (
+              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>
+                rating {d.rating.value.toFixed(3)} <Meta>{d.rating.tier ?? '—'} · trend {d.rating.trend ?? '—'} · {figure(d.rating.games_rated ?? 0)} rated</Meta>
+              </span>
+            ) : <Meta>not rated yet</Meta>}
+            {d.archetype && <Meta>archetype {d.archetype.replace(/_/g, ' ')}</Meta>}
+            <Meta>career {figure(d.career.kills)} kills · {figure(d.career.sessions)} sessions</Meta>
+          </Cluster>
+          <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
+            {([['kills', d.form.kills], ['deaths', d.form.deaths], ['k/d', d.form.kd], ['dpm', d.form.dpm], ['revives', d.form.revives], ['hs %', d.form.headshot_pct], ['dead %', d.form.time_dead_pct], ['rounds', d.form.rounds]] as [string, number][]).map(([k, v]) => (
+              <span key={k} style={{ fontSize: 'var(--fs-small)' }}><Meta>{k} </Meta>{figure(v)}</span>
+            ))}
+          </Cluster>
+          <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>percentile in the pool</Lbl>
+            {/* The endpoint ranks revives per ROUND (revives / rounds against
+              * the pool) while the form row above shows the window's total —
+              * one name, two measurements, so the label says which. */}
+            {Object.entries(d.percentiles).map(([k, v]) => (
+              <span key={k} style={{ fontSize: 'var(--fs-small)' }}><Meta>{k === 'revives' ? 'revives/round' : k} </Meta>{v == null ? <Meta>withheld</Meta> : figure(v)}</span>
+            ))}
+            {d.small_sample && <Meta>percentiles withheld under 10 rounds in the window</Meta>}
+            <Meta>a different pool and window than the rating components — the two do not agree, on purpose</Meta>
+          </Cluster>
+          {d.sparkline_dpm.length >= 2 && (
+            <Cluster gap={3} align="baseline">
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>dpm, last {figure(d.sparkline_dpm.length)} sessions</Lbl>
+              <Spark values={d.sparkline_dpm} />
+            </Cluster>
+          )}
+          {d.badges.length > 0 && (
+            <Cluster gap={3} align="baseline" style={{ flexWrap: 'wrap' }}>
+              {d.badges.map((b) => (
+                <span key={`${b.type}-${String(b.threshold)}`} title={`${b.type} ≥ ${figure(b.threshold)}`} style={{ fontSize: 'var(--fs-small)' }}>
+                  {b.emoji} {b.title}
+                </span>
+              ))}
+            </Cluster>
+          )}
+        </Stack>
+      )}
+    </Panel>
+  );
+}
+
 function MemoryCardSection({ playerId }: { playerId: string }) {
   const card = useMemoryCard(playerId);
   const facts = card.data?.facts ?? [];
@@ -628,6 +720,13 @@ function MemoryCardSection({ playerId }: { playerId: string }) {
       <Meta>a keepsake of your slomix history — measured against your own past, never a ladder</Meta>
       {card.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="memory card" /></div>}
       {card.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="memory card" /></div>}
+      {card.data != null && (card.data.nights != null || card.data.playing_since != null || card.data.signature_map != null) && (
+        <Meta>
+          {card.data.nights != null ? `${figure(card.data.nights)} nights` : ''}
+          {card.data.playing_since ? ` · playing since ${card.data.playing_since}` : ''}
+          {card.data.signature_map ? ` · signature map ${card.data.signature_map.map_name} (${figure(card.data.signature_map.rounds)} rounds, ${card.data.signature_map.lift_pct >= 0 ? '+' : ''}${figure(card.data.signature_map.lift_pct)}% over your own average)` : ''}
+        </Meta>
+      )}
       {card.data != null && facts.length === 0 && (
         <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="nothing to keep yet — the card needs rounds behind it" /></div>
       )}
@@ -670,6 +769,8 @@ function PlayerForm({ playerId }: { playerId: string }) {
             <Delta pct={comp.delta_pct} />
             <Spark values={comp.series} />
             {d.session_date != null && <Meta>last session {d.session_date}</Meta>}
+            {comp.is_new && <Meta>new to the form window — no earlier baseline to compare against</Meta>}
+            {d.form_weights && <Meta>form weights: {Object.entries(d.form_weights).map(([k, v]) => `${k} ${figure(v)}`).join(' · ')}</Meta>}
           </Cluster>
           {/* The server's sentence, not a paraphrase of it. */}
           {d.baseline_desc != null && <Meta>{d.baseline_desc}</Meta>}
@@ -819,6 +920,8 @@ function RatingHistory({ playerId }: { playerId: string }) {
                 <Lbl>{s.session_date}</Lbl>
                 <Cluster gap={4} align="baseline">
                   <Meta>{figure(s.rounds)} rounds · {figure(s.maps)} maps</Meta>
+                  {/* That night's own rating, before it is folded into the running figure. */}
+                  {s.session_rating != null && <Meta><span title="that session's rating">night {s.session_rating}</span></Meta>}
                   <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{s.cumulative_rating}</span>
                   {/* ⛔ A null delta is the FIRST session, not a flat one. */}
                   {s.delta == null ? <Meta>first</Meta>
@@ -848,6 +951,7 @@ function RatingComponents({ playerId }: { playerId: string }) {
         <div style={{ marginTop: 'var(--space-2)' }}>
           <Meta style={{ display: 'block', marginBottom: 'var(--space-2)' }}>
             et rating {skill.data.player.et_rating.toFixed(3)} · rank {skill.data.player.rank} of {skill.data.player.total_rated}
+            {' · '}<span>{`rated as ${skill.data.player.display_name}${skill.data.player.last_rated_at != null ? `, last ${utcStamp(skill.data.player.last_rated_at)}` : ''}`}</span>
             {/* games_rated STORES rounds (skill_rating_service writes the
               * aggregate's rounds into this column; the skill page labels
               * it rounds) — "games" would overstate the sample ~2x. */}
@@ -945,7 +1049,7 @@ function RecentDetail({ playerId }: { playerId: string }) {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                {['date', 'map', 'r', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc'].map((h, i) => (
+                {['date', 'map', 'r', 'side', 'played', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc'].map((h, i) => (
                   <th key={h} style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textAlign: i < 2 ? 'left' : 'right', padding: 'var(--space-1) var(--space-2)' }}>{h}</th>
                 ))}
               </tr>
@@ -969,6 +1073,11 @@ function RecentDetail({ playerId }: { playerId: string }) {
                     )}
                   </td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.round_number}</td>
+                  {/* team is pcs.team, an INTEGER (1 = Axis, 2 = Allies on this
+                    * wire); a round played on neither side is a dash, not a
+                    * guess. `played` is the minutes behind every rate above. */}
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.team === 1 ? 'axis' : r.team === 2 ? 'allies' : '—'}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.time_played != null ? mmss(r.time_played) : '—'}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.headshot_kills)}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.gibs)}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.revives_given)}</td>
@@ -1009,6 +1118,7 @@ export function PlayerProfilePage() {
           <Header p={p} />
           <Lifetime p={p} />
           <RatingComponents playerId={playerId} />
+          <PlayerCardSection playerId={playerId} />
           <MemoryCardSection playerId={playerId} />
           <PlayerForm playerId={playerId} />
           <RatingHistory playerId={playerId} />

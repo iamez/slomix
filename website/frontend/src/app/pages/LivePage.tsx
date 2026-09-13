@@ -7,7 +7,8 @@
  */
 import { useEffect, useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, decimals } from '../components/ui';
+import { LiveMiniMap } from '../components/LiveMiniMap';
 import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { mmss } from '../components/RoundsTable';
@@ -17,10 +18,11 @@ import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
 import { svgPath } from '../lib/spark';
 import {
-  useApiHealth, useLiveFeed, useLiveState, useMonitoringStatus,
+  useApiHealth, useLiveFeed, useLiveState, useMapMesh, useMonitoringStatus,
   useServerActivityHistory, useTonight, useVoiceActivityHistory,
 } from '../lib/queries';
 import type { LiveRosterMember, LiveState, TonightMap, TonightStatus } from '../lib/types';
+import { utcStamp } from '../lib/utcStamp';
 
 function Spark({ pts, label }: { pts: { t: string; v: number }[]; label: string }) {
   if (pts.length < 2) return <Absent reason="not enough history for a line" />;
@@ -284,6 +286,7 @@ export function LivePage() {
   const tonight = useTonight();
   const running = state.data?.is_live === true && state.data.game_state === 'live';
   const elapsed = useTickingSeconds(state.data?.round_elapsed_seconds ?? null, state.dataUpdatedAt, running);
+  const mesh = useMapMesh(state.data?.is_live ? state.data.current_map : null);
   const importedMaps = new Set((tonight.data?.maps ?? []).map((m) => m.map).filter((m): m is string => m != null));
   // The feed cursor ADVANCES: since=0 fetches the newest ring page, every
   // later poll asks only for seq > since, per the /api/live/feed contract.
@@ -331,6 +334,7 @@ export function LivePage() {
         )}
         {state.isError && <Unavailable what="live state" />}
         {state.data && <NowStrip state={state.data} elapsed={elapsed} beatFromDb={tonight.data?.current?.beat_seconds ?? null} importedMaps={importedMaps} />}
+        {state.data?.is_live && <LiveMiniMap state={state.data} mesh={mesh.data} />}
       </Stack>
 
       <TonightBoard q={tonight} liveElapsed={elapsed} />
@@ -346,7 +350,7 @@ export function LivePage() {
       )}
 
       <div data-parity="live.feed">
-        <SectionHead label="the ticker" aside={feed.data ? `seq ${figure(feed.data.last_seq)}` : undefined} />
+        <SectionHead label="the ticker" aside={feed.data ? `seq ${figure(feed.data.last_seq)}${feed.data.server_time != null ? ` · server clock ${utcStamp(feed.data.server_time)}` : ''}` : undefined} />
         {feed.isPending && log.length === 0 && <Pending label="feed" />}
         {feed.isError && <Unavailable what="feed" />}
         {gapNote != null && <Meta>{gapNote}</Meta>}
@@ -385,6 +389,14 @@ export function LivePage() {
           <Spark label="players over 24h"
             pts={server.data.data_points.map((p) => ({ t: p.timestamp, v: p.player_count }))} />
         )}
+        {server.data && (
+          <Meta>
+            {figure(server.data.summary.total_records)} samples · avg {decimals(server.data.summary.avg_players, 1)} players
+            {server.data.summary.peak_time ? ` · peak at ${utcStamp(server.data.summary.peak_time)}` : ' · no peak recorded'}
+            {' · '}online in {figure(server.data.data_points.filter((p) => p.online).length)} of {figure(server.data.data_points.length)} samples
+            {server.data.data_points.length > 0 && server.data.data_points[0].max_players != null ? ` · slots ${figure(server.data.data_points[0].max_players)}` : ''}
+          </Meta>
+        )}
       </div>
 
       <div data-parity="live.voice-activity">
@@ -394,6 +406,13 @@ export function LivePage() {
         {voice.data && (
           <Spark label="voice members over 24h"
             pts={voice.data.data_points.map((p) => ({ t: p.timestamp, v: p.member_count }))} />
+        )}
+        {voice.data && (
+          <Meta>
+            {figure(voice.data.summary.total_records)} samples · {figure(voice.data.summary.total_sessions)} voice sessions · avg {decimals(voice.data.summary.avg_members, 1)} members
+            {voice.data.summary.peak_time ? ` · peak at ${utcStamp(voice.data.summary.peak_time)}` : ' · no peak recorded'}
+            {(() => { const names = [...new Set(voice.data!.data_points.map((p) => p.channel_name).filter((n): n is string => n != null))]; return names.length > 0 ? ` · channels ${names.join(', ')}` : ' · no channel named in the samples'; })()}
+          </Meta>
         )}
       </div>
 
@@ -406,10 +425,10 @@ export function LivePage() {
               return m.is_stale ? (
                 <Absent key={k} reason={`${k} sampling is STALE — last record ${m.age_seconds != null ? `${figure(Math.round(m.age_seconds / 60))} min ago` : 'unknown'} (threshold ${figure(Math.round(m.stale_threshold_seconds / 60))} min)`} />
               ) : (
-                <Meta key={k}>{k} sampling fresh · {figure(m.count)} records</Meta>
+                <Meta key={k}>{k} sampling fresh · {figure(m.count)} records{m.last_recorded_at != null && ` · last ${utcStamp(m.last_recorded_at)}`}</Meta>
               );
             })}
-            {health.data && <Meta>api {health.data.status} · database {health.data.database}</Meta>}
+            {health.data && <Meta>{health.data.service}: api {health.data.status} · database {health.data.database}</Meta>}
           </Stack>
         )}
         {monitoring.isError && <Unavailable what="monitoring" />}

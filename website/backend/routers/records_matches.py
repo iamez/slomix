@@ -306,22 +306,25 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
                 -- honestly instead of picking one and hoping.
                 headshot_kills
             FROM player_comprehensive_stats
-            WHERE round_date = $1
-              AND map_name = $2
-              AND round_number = $3
+            -- By the round's id, not by (date, map, half): a map replayed on
+            -- the same date with the same half number shares all three, and
+            -- the DISTINCT ON would then mix two matches into one box score
+            -- (Codex on #988).
+            WHERE round_id = $1
             ORDER BY player_name, damage_given DESC
         ) AS deduplicated
         ORDER BY team, damage_given DESC
     """
 
     try:
-        rows = await db.fetch_all(query, (round_date, map_name, round_number))
+        rows = await db.fetch_all(query, (round_id,))
     except Exception as e:
         logger.error(f"Error fetching match details: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    if not rows:
-        raise HTTPException(status_code=404, detail="No player stats found")
+    # A round that exists with no player rows is a known absence, not an
+    # error: both teams come back empty and the caller shows "no rows",
+    # instead of a 404 the client can only render as "unavailable".
 
     # Group players by team
     team1_players = []

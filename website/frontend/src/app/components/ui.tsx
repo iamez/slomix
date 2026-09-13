@@ -1,4 +1,4 @@
-import { Fragment, isValidElement } from 'react';
+import { Fragment, isValidElement, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
 
@@ -47,9 +47,13 @@ export function ActLink({ to, children, style }: { to: string; children: ReactNo
  * frozen-inventory diff and the H3 sweep key on these attributes, so every
  * section head can carry its identity without extra markup. */
 export function SectionHead({ label, aside, parity }: { label: ReactNode; aside?: ReactNode; parity?: string }) {
+  // A real <h2>, styled as the caption it always was: the page outline used
+  // to be one h1 and nothing else, so a screen reader could not jump
+  // between panels (visitor review 2026-09-07, a11y). Same size and colour
+  // as the label style, margin and weight reset so nothing moves.
   return (
     <div data-parity={parity} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-      <span style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{label}</span>
+      <h2 style={{ fontWeight: 'inherit', ...lblStyle, fontSize: 'var(--fs-caption)', margin: 0 }}>{label}</h2>
       {aside}
     </div>
   );
@@ -174,8 +178,27 @@ export function Tabs<T extends string>({
   );
 }
 
+/** Seconds after which a pending label starts counting, and after which it
+ *  says why: the proximity and skill backbones answer a cold cache window
+ *  in 5–26 s (audit 2026-09-07 B3), and a dot that never moves reads as
+ *  broken, not slow. */
+const PENDING_COUNT_AFTER_S = 3;
+const PENDING_EXPLAIN_AFTER_S = 15;
+
 export function Pending({ label }: { label: string }) {
-  return <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>{label}…</span>;
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = window.setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }} aria-live="polite">
+      {label}…
+      {elapsed >= PENDING_COUNT_AFTER_S ? ` ${figure(elapsed)} s so far` : ''}
+      {elapsed >= PENDING_EXPLAIN_AFTER_S ? ' — the first query of a cache window computes from the tables and can take ~20 s; the next ones are instant' : ''}
+    </span>
+  );
 }
 
 export function Unavailable({ what }: { what: string }) {
@@ -292,4 +315,17 @@ export function Meta({ children, style }: { children: ReactNode; style?: CSSProp
 /** Integer figures grouped, non-integers to one decimal — columns must not dance. */
 export function figure(value: number): string {
   return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(1);
+}
+
+/** A byte count as MB to one decimal — the shared file-size formatter, so no
+ *  page carries its own (website/frontend/AGENTS.md). */
+export function megabytes(bytes: number): string {
+  return `${figure(Math.round(bytes / 104857.6) / 10)} MB`;
+}
+
+/** A ratio or a p-value at a fixed number of places — the one place a page
+ *  may ask for more than figure()'s decimal, so `.toFixed` never spreads
+ *  through pages/ (website/frontend/AGENTS.md). */
+export function decimals(value: number, places = 2): string {
+  return value.toFixed(places);
 }

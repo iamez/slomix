@@ -119,3 +119,34 @@ def test_a_heterogeneous_list_yields_the_union_of_its_keys_and_an_id_table_is_on
     keys = dict(mod.leaf_keys({"player_stats": {"vid": {"kills": 1, "deaths": 2}, "olz": {"kills": 3, "deaths": 4}, "qmr": {"kills": 0, "deaths": 1}}}))
     assert "player_stats.<map>" in keys and "player_stats.vid" not in keys, "nick-keyed tables are data, not fields"
     assert mod.leaf_keys([]) is None and mod.leaf_keys({}) is None
+
+
+def test_a_reference_counts_only_inside_the_endpoint_scope():
+    """Codex on #988/#990: one token set over src/app let a new panel that
+    names `advanced` for ITS endpoint flip the profile's `advanced` row to
+    read. A reference is evidence only in code that can hold the answer —
+    the files calling the endpoint's hook and what they import."""
+    mod = _load_script()
+    real = mod.app_sources()
+    key = "zz_scoped_probe_2026_09_08"
+    fixture_key = ("/api/stats/overview", key)
+    # 1. a file NOBODY imports names the key: still unread for /api/stats/overview
+    sources = {**real, "pages/Stray.tsx": f"export function Stray(d) {{ return d.{key}; }}"}
+    overview_scope = mod.scope_files("/api/stats/overview", sources)
+    assert overview_scope is not None and "pages/Stray.tsx" not in overview_scope
+    assert key in mod.referenced_names(sources["pages/Stray.tsx"])
+    names_in_scope = mod.referenced_names("\n".join(sources[f] for f in sorted(overview_scope)))
+    assert key not in names_in_scope
+    # 2. the same line in a file the overview's caller imports: read
+    caller = next(f for f in overview_scope if f.startswith("pages/") and "useOverview" in sources.get(f, "") or "'/api/stats/overview'" in sources.get(f, ""))
+    sources2 = {**real, caller: real[caller] + f"\nexport const zz = (d) => d.{key};"}
+    names2 = mod.referenced_names("\n".join(sources2[f] for f in sorted(mod.scope_files("/api/stats/overview", sources2))))
+    assert key in names2
+
+
+def test_every_measured_endpoint_has_a_scope_note_and_almost_none_fall_back_to_global():
+    ledger = json.loads(LEDGER.read_text(encoding="utf-8"))
+    for ep in ledger["per_endpoint"]:
+        assert ep in ledger["scope"], f"{ep}: no scope note"
+    global_ = [ep for ep, note in ledger["scope"].items() if note.startswith("global")]
+    assert len(global_) <= 1, f"endpoints matched over the whole app (no caller found): {global_}"

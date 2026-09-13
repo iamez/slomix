@@ -58,6 +58,8 @@ describe('SkillRating', () => {
     await waitFor(() => expect(screen.getByText('vid')).toBeInTheDocument());
     expect(screen.getByText('0.748')).toBeInTheDocument();
     expect(screen.getAllByText('veteran').length).toBeGreaterThan(0);
+    // The rounds cell says on hover when the player was last rated (recorded 2026-08-29).
+    expect(screen.getAllByTitle(/^last rated 2026-08-29 \d\d:\d\d UTC$/).length).toBeGreaterThan(0);
   });
 
   it('explains the RAW score, and says so rather than claiming the published one', async () => {

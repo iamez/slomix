@@ -7,6 +7,9 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-13) PR #1012: all three review replies confirmed saved;
+  synchronized main, preserving both runtime and Supastats opt-outs and both
+  agents' backlog entries. External Python CI execution remains unconfirmed.
 - (Astra, 2026-09-10) PR #1012 review fixes: release-config registration,
   fresh-bootstrap journal mirror, and explicit CI test-service opt-in.
   90 local tests pass with real disposable PostgreSQL, including complete
@@ -23,6 +26,43 @@
   No live DB/services changed. Next: review/PR; not R02 consumers yet.
   Fable retains frontend ownership.
 
+- (Opus 5, 2026-09-10) **PREDAJA POSODOBLJENA**: `docs/HANDOFF-fable-2026-09-10.md` — merilnik 238 → 92 (→ 79 s #1028),
+  P0 in P1 dolga nazaj zaprta razen filtrov v URL, tabele dobile ARIA vloge; ostane §3b (sirote proximity) in §3c (filtri, izvoz, kontakt).
+- (Fable 5.1, 2026-09-09, zvečer) **PREDAJA PRED DOPUSTOM**: `docs/HANDOFF-fable-2026-09-09.md`
+  (owner odsoten ~3 mesece; vnaprejšnji DA je veljal le za to sejo). Mergano danes:
+  #1001–#1011, #1013 (ledger + spider web + bot brez reakcij); dev deployan po
+  vsakem vlaku. Odprto brez ownerja: #956 (1.46.0), Astrini #1012/#979/#969/
+  #966/#965/#964/#962, review #924–#943/#967 (NEVER MERGE).
+- (Fable 5.1, 2026-09-09, 17:30) ⛔ Skok (pravilo): owner je med vlakom train29
+  (#1008–#1011, ledger) prosil, naj bot NEHA reagirati na SuperBoyyeve slike v
+  slomix kanalu, a naj jih še preverja → `SUPASTATS_REACTIONS_ENABLED`
+  (privzeto false) v `bot/config.py`, `_react` v `supastats_cog.py` je no-op;
+  preverba in DM poročilo tečeta naprej (PR #1013). Vrnitev: vlak + dev deploy.
+- (Fable 5.1, 2026-09-09, 10:30) Owner: »ko vse končaš … celoten spiderweb
+  do konca avtonomno«. MERGANO: #1001 (kartica + stenska ura), #1002 (story;
+  13 Codex niti). V VLAKU: #1003 → #1004 (12 Codex niti popravljenih), nato
+  build + dev deploy. SPIDER WEB (proga v `docs/PLAN.md`): #1005 SW-2 scena
+  (SVG, kamera, regije prepričanj, `?t=&pov=`; 9 Codex niti), #1006 SW-3
+  vidna linija kot oracle diagnostika (stacked; 10 niti; ledger `/web` 0),
+  SW-4 sloj 4 = §8 harness na veji `feat/spider-web-layer4-harness`
+  (`services/layer4_family.py`, `scripts/spiderweb_layer4_family.py`);
+  zbiralnik teče čez 901 rund. ⛔ Vsi trije čakajo DA za merge. Naslednje:
+  tabela §8.5 + manifest → STATUS/PLAN → PR; ena AskUserQuestion za DA; dev
+  deploy + živ dokaz spider weba (`/app/spider-web/round/11344?t=120000`).
+- (Fable 5.1, 2026-09-08, 22:00) Avtonomni popoldan (owner: »kar nadaljuj, čim
+  več«). MERGANO: #992 (merilnik meri po endpointu; unread 517 → 789 je
+  popravek instrumenta, ne strani), #987 R3a, #993 R4b. V VLAKU (DA dan):
+  #988 R3b → #989 R3c → #990 R3d → #991 R4a → #994 R5 → #995 R4c, nato build +
+  dev deploy. ODPRTO BREZ DA: #996 R6 (živi reducer obdrži pozicije in zadnje
+  uboje), #997 R6b (mini zemljevid na živi strani, naložen na #996).
+  ⛔ Skok (pravilo): owner je vprašal za ENG% z gibhub.gg → raziskano, ne
+  zgrajeno: bojni ENG% je DPM v drugi enoti (r 0,74–0,96), s štirimi kanali
+  (revivi, objektivi, streli) pa se odklopi (r −0,75 / 0,62 / −0,47) in
+  postane metrika AKTIVNOSTI; doc lokalno
+  `docs/research/ENG_PCT_RESEARCH_2026-09-08.md` §6, odločitev ownerja.
+  Naslednje: R7 higiena (community.js, keymap »Charts« → session.graphs,
+  »Map Distribution« odločitev), ENG% kanali le z DA, kill-impact/greatshot/
+  proximity/event ostanki merilnika.
 - (Fable 5.1, 2026-09-08, 12:05) Vlak zaključen: #980 (live glava; 11 Codex
   niti + drift tipov popravljeni), #981 (profil: name history, gathers,
   combat timing), #982 (story role boards s številkami), #983 (skill

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DataTable, type DataColumn } from './DataTable';
 
 type Row = { id: string; name: string; dpm: number; kis: number | null };
@@ -24,9 +24,12 @@ describe('DataTable', () => {
     render(<DataTable columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} defaultSort={{ key: 'dpm', dir: 'desc' }} />);
     expect(names()).toEqual(['bravo', 'alpha', 'charlie']);
     const dpm = screen.getByRole('button', { name: /^dpm/ });
-    expect(dpm).toHaveAttribute('aria-sort', 'descending');
+    // The sort state is on the columnheader that wraps the control, not on
+    // the button: a button has no sort state to report (a11y pass).
+    const dpmHeader = screen.getByRole('columnheader', { name: /^dpm/ });
+    expect(dpmHeader).toHaveAttribute('aria-sort', 'descending');
     fireEvent.click(dpm);
-    expect(dpm).toHaveAttribute('aria-sort', 'ascending');
+    expect(dpmHeader).toHaveAttribute('aria-sort', 'ascending');
     expect(names()).toEqual(['charlie', 'alpha', 'bravo']);
   });
 
@@ -34,7 +37,7 @@ describe('DataTable', () => {
     render(<DataTable columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} defaultSort={{ key: 'dpm', dir: 'desc' }} />);
     const kis = screen.getByRole('button', { name: /^kis/ });
     fireEvent.click(kis);
-    expect(kis).toHaveAttribute('aria-sort', 'descending');
+    expect(screen.getByRole('columnheader', { name: /^kis/ })).toHaveAttribute('aria-sort', 'descending');
     expect(names()).toEqual(['charlie', 'alpha', 'bravo']);
     fireEvent.click(kis);
     expect(names()).toEqual(['alpha', 'charlie', 'bravo']);
@@ -73,8 +76,87 @@ describe('DataTable', () => {
     expect(screen.queryByRole('button', { name: 'weapons for a' })).toBeNull();
   });
 
+  it('pins the first column only when the table is wider than its panel', () => {
+    const { unmount } = render(<DataTable<Row> label="wide" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} minWidth={1400} />);
+    expect(screen.getByRole('button', { name: 'player' })).toHaveStyle({ position: 'sticky', left: '0px' });
+    expect(screen.getByText('alpha')).toHaveStyle({ position: 'sticky' });
+    expect(screen.getByRole('button', { name: 'dpm' })).not.toHaveStyle({ position: 'sticky' });
+    unmount();
+    render(<DataTable<Row> label="narrow" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} />);
+    expect(screen.getByText('alpha')).not.toHaveStyle({ position: 'sticky' });
+  });
+
   it('says no rows on an empty input instead of rendering nothing', () => {
     render(<DataTable columns={COLUMNS} rows={[]} rowKey={(r) => r.id} />);
     expect(screen.getByText('no rows')).toBeInTheDocument();
+  });
+});
+
+describe('DataTable export', () => {
+  it('offers a CSV only when asked, and writes the rows in the order on screen', () => {
+    const saved: { name: string; text: string }[] = [];
+    const createURL = vi.fn(() => 'blob:x');
+    vi.stubGlobal('URL', { ...URL, createObjectURL: createURL, revokeObjectURL: vi.fn() });
+    // Capture what the anchor would download: jsdom has no real save path.
+    const realClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+      saved.push({ name: this.download, text: '' });
+    };
+    const blobText: string[] = [];
+    const RealBlob = globalThis.Blob;
+    vi.stubGlobal('Blob', class extends RealBlob {
+      constructor(parts: BlobPart[], options?: BlobPropertyBag) {
+        super(parts, options);
+        blobText.push(parts.map(String).join(''));
+      }
+    });
+
+    const plain = render(<DataTable<Row> label="players" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} />);
+    expect(screen.queryByRole('button', { name: /csv/i })).toBeNull();
+    plain.unmount();
+
+    render(<DataTable<Row> label="players" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} defaultSort={{ key: 'dpm', dir: 'desc' }} exportable />);
+    fireEvent.click(screen.getByRole('button', { name: /csv/i }));
+
+    expect(saved).toHaveLength(1);
+    expect(saved[0].name).toMatch(/^slomix-players-\d{4}-\d\d-\d\d\.csv$/);
+    const csv = blobText[0].replace(/^﻿/, '');
+    // Header from the labels, then the rows in the SORTED order (dpm desc),
+    // with the null kis exported as an empty field, never as 0.
+    expect(csv).toBe('player,dpm,kis\r\nbravo,450,\r\nalpha,300,12.5\r\ncharlie,120,40');
+
+    HTMLAnchorElement.prototype.click = realClick;
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('DataTable semantics', () => {
+  it('is a table: a header row of columnheaders, then one row of cells per record', () => {
+    render(<DataTable<Row> label="players" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} />);
+    const table = screen.getByRole('table', { name: 'players' });
+    expect(table).toHaveAttribute('aria-colcount', String(COLUMNS.length));
+    // header + one per row
+    expect(table).toHaveAttribute('aria-rowcount', String(ROWS.length + 1));
+    expect(screen.getAllByRole('row')).toHaveLength(ROWS.length + 1);
+    expect(screen.getAllByRole('columnheader')).toHaveLength(COLUMNS.length);
+    expect(screen.getAllByRole('cell')).toHaveLength(COLUMNS.length * ROWS.length);
+  });
+
+  it('the sort state lives on the columnheader, where a reader looks for it', () => {
+    render(<DataTable<Row> label="players" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} defaultSort={{ key: 'dpm', dir: 'desc' }} />);
+    expect(screen.getByRole('columnheader', { name: /^dpm/ })).toHaveAttribute('aria-sort', 'descending');
+    expect(screen.getByRole('columnheader', { name: /^kis/ })).toHaveAttribute('aria-sort', 'none');
+    fireEvent.click(screen.getByRole('button', { name: /^dpm/ }));
+    expect(screen.getByRole('columnheader', { name: /^dpm/ })).toHaveAttribute('aria-sort', 'ascending');
+    // A column with no sortValue is a header, but never claims a sort state:
+    // "none" would say it can be sorted and currently is not.
+    const fixed: readonly DataColumn<Row>[] = [
+      { key: 'name', label: 'player', align: 'left', format: (r) => r.name },
+      ...COLUMNS.slice(1),
+    ];
+    const { container } = render(<DataTable<Row> label="fixed" columns={fixed} rows={ROWS} rowKey={(r) => r.id} />);
+    const header = container.querySelector('[role="columnheader"]');
+    expect(header?.textContent).toBe('player');
+    expect(header).not.toHaveAttribute('aria-sort');
   });
 });

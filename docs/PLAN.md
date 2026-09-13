@@ -20,10 +20,15 @@
 
 ## Track: runtime v2 R01 (Astra)
 
-Last updated: 2026-09-10. Owner priority: system runtime; frontend stays with
+Last updated: 2026-09-13. Owner priority: system runtime; frontend stays with
 Fable. Worktree `/tmp/slomix-astra-runtime-r01`, branch
 `feat/db-runtime-events-r01`. Code and isolated PostgreSQL proof complete;
 PR #1012 open. NOT merged, live-migrated, enabled or deployed.
+
+- 2026-09-13: confirmed all three review replies persisted. Synchronized
+  main 75ee10b5, retaining Supastats and runtime default-OFF flags and both
+  backlog lanes. GitHub previously reported conflicts and only static checks;
+  do not describe Python CI as green until an actual run is observed.
 
 - Review follow-up (2026-09-10): fixed all three reported gaps: migration 083
   now ships in the newest release config and canonical fresh-bootstrap dump;
@@ -72,6 +77,11 @@ PR #1012 open. NOT merged, live-migrated, enabled or deployed.
 
 ### Kje smo
 
+> **Predaja 10. 9. 2026 (owner ~3 mesece odsoten): `docs/HANDOFF-fable-2026-09-10.md`** — vrstni red za vrnitev
+> (prejšnja, 9. 9., ostaja kot posnetek tistega večera: `docs/HANDOFF-fable-2026-09-09.md`)
+> je §3 tam (ownerjeve odločitve → merilnik → dolg nazaj strani). Spider web je zaključen (STATUS), release 1.46.0
+> (#956) čaka ownerja, Astrini PR-ji so nedotaknjeni.
+
 Nova SPA (website/frontend/src/app) — faza 5 ZAKLJUČENA, faza 6 v teku.
 Prod ZAMRZNJEN na v1.39.0 (ownerjeva odločitev 2026-08-28); dev soaka;
 deploy NI naloga.
@@ -79,13 +89,31 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **11** — prešteto v `tests/data/endpoint_gap.txt` 8. 9. ob 09:00 (⛔ 9 → 11 je korekcija merilnika: klic, ki se konča z interpolacijo, je oblika `{}`, ne prefiks — `/api/stats/matches/{}` in `/api/sessions/{}` sta bila skrita; prej 9 po `/api/stats/player/{}/rounds` v #975) |
+| endpoint gap (H1) | **8** — prešteto v `tests/data/endpoint_gap.txt` 9. 9. ob 00:30 (8 po `/api/players/{}/card` R3e; prej 9 (9 po `/api/stats/matches/{}` R3b in `/api/rounds/{}/player/{}/details` R3a); prej 11 (⛔ 9 → 11 je korekcija merilnika: klic, ki se konča z interpolacijo, je oblika `{}`, ne prefiks — `/api/stats/matches/{}` in `/api/sessions/{}` sta bila skrita; prej 9 po `/api/stats/player/{}/rounds` v #975) |
 | proximity inventory pending | **0** (#884) |
+| merilnik podatkovnih točk (`docs/parity/datapoints.json` unread) | 583 → **420** po spider webu (9. 9. zjutraj) → v PR-jih #1008 (tier-4 odločitve: planning brez vrstic; `/storytelling/scopes` ostane nepokrit in viden — hook ostane zaradi H1/inventarja, ki ju je owner zamrznil; promotion prefs ostanejo odprte do posnetka druge veje), #1009 R4g proximity igralec, #1010 R4h proximity po datumu, #1011 R4i greatshot/Home/diagnostika; odloženo: profil aim/advanced (17, ownerjeva pot A–F) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
 | availability r. 2 (ta veja) | linked formi (settings, kanali prek link-tokena, DELETE), promotions (status+jobs, preview z recipients, schedule), betting (bazen, multiplikator, stava, denarnica; BREZ admin kontrol — owner 2. 9.); fixturi povezane stopnje prek dev sentinela (`scripts/e2e_sentinel_rows.py`) + harness posnetkov |
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
+
+## Proga: spider web do konca (Fable 5.1, 9. 9. 2026) — owner: »celoten spiderweb naredi do konca avtonomno«
+
+Stanje slojev je v `docs/SPIDERWEB_STATUS.md`; spec `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`.
+»Do konca« pomeni: vse, kar spec dovoli brez ownerjevih vrat (Lua/prod) — narisano, izmerjeno
+ali z zapisanim razlogom, zakaj ne.
+
+| rezina | kaj | stanje |
+|---|---|---|
+| SW-2 platno | legacy kamera (axonometrična, vleka/kolešček/plan), floors po višini, p90 obroč, oznake brez premika, regije prepričanj pod team/player POV z obzorjem, merilo 512, POV po igralcu, trenutek v URL; `lib/spiderWeb.ts` + 48 prenesenih testov, SVG s tokeni | PR odprt 9. 9. |
+| SW-3 vidna linija | `edges[].line_of_sight` iz W6-validiranega BSP tracerja (99,92 %), SAMO v world POV kot **oracle diagnostika** (§6.1: prosta pot je nujen, ne zadosten pogoj; nikoli vir prepričanja); null z razlogom, kjer mape ni v etmain; na sceni preklop »line of sight (oracle)« + izpostavljenost (koliko živih nasprotnikov ima čist žarek) kot diagnostična številka, ne metrika | PR odprt 9. 9. (stacked na SW-2) |
+| SW-4 sloj 4 harness | §8 referenčna implementacija: (igralec, runda) nabor, mediana ZNOTRAJ runde, kronološka delitev blokov 70/30, bootstrap po blokih (max-T), zamrznjen družinski manifest s hashem; kandidati, ki so danes izračunljivi: gibanje v nepokrit prostor (sloj 3), izpostavljenost (W6 LOS), poravnava z valom (oracle diagnostika, ne za ladjo), geometrijska izolacija (diagnostika); izid = tabela §8.5 v `docs/research/` (lokalno) + povzetek v STATUS; **na stran gre le, kar preživi §8.4** | IZMERJENO 9. 9.: 901 rund, 57 blokov; kontrola dpm prestane, šum pade; nič ne gre na stran (tabela v STATUS) — PR |
+| SW-5 dokumenti | STATUS/PLAN/BACKLOG vrstice, ledger vrstice `replay/round/{}/web` na 0 | sproti |
+
+⛔ Ne v obsegu (ownerjeva vrata ali brez podatkov): Lua C1–C7 zajemi, `etl_supply` mesh (BSP ni v
+indeksiranem etmain), W4b navigacijski graf (rabi validacijo proti opazovanim potem — raziskava, ne
+rezina), objavljanje 12 neobjavljenih meshov (odločitev »premalo rund za bajte v javnem repu«).
 
 ## Proga: Astra (Codex CLI) — delovni paket predaje (7. 9. 2026)
 
@@ -302,7 +330,7 @@ watchdog r. 1 (obseg `docs/design/24`, lokalno).
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | **11** — ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.) → 12 (#955) → 11 (#970) → 10 (#974) → 9 (#975) → 11 (korekcija merilnika 8. 9., trailing interpolacija). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
+| endpoint gap | **8** — (9. 9. 00:30, R3a–R3e) ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.) → 12 (#955) → 11 (#970) → 10 (#974) → 9 (#975) → 11 (korekcija merilnika 8. 9., trailing interpolacija). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)

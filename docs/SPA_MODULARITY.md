@@ -109,6 +109,20 @@ baseline drops it. 574 unread rows over 176 read endpoints on 2026-09-08. A row
 closes when a page reads the key — through `<Panel>`, with a fixture-driven test —
 never by editing the baseline by hand.
 
+**Scoped references (2026-09-08, afternoon).** The first version matched a
+fixture key against one token set over the whole of `src/app`, so a new
+panel that named `advanced` or `survival_rate` for ITS endpoint flipped the
+rows of unrelated endpoints to read (Codex on #988 and #990). A reference is
+evidence only in code that can hold the answer: the pass now runs per
+endpoint over the files that call its hook (or carry the path literal) and
+everything they import, transitively (`scope_files()`); the ledger's `scope`
+block says how many files each endpoint was matched over, and names the one
+that fell back to the whole app. Correcting the instrument made the number
+go UP — unread 517 → 789 — which is what `--reseed-baseline` exists for: it
+rewrites the baseline to the current set and prints every row that came back,
+so the commit can state the delta. `--rebase-baseline` still only removes.
+
+
 ## Guards that already exist (11) — extend, do not duplicate
 
 | guard | value (2026-09-07) | what it pins |

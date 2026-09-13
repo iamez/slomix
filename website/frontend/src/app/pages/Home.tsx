@@ -13,9 +13,12 @@ import {
 import type { LastSession, RecentPrediction, SkillMoverRow, StatsTrends } from '../lib/types';
 import {
   Absent, ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
-  figure, lblStyle, rowStyle,
+  decimals, figure, lblStyle, rowStyle,
 } from '../components/ui';
+import { MatchBoxScore } from '../components/MatchBoxScore';
 import { Panel } from '../components/Panel';
+import { PlayerSearch } from '../components/PlayerSearch';
+import { utcStamp } from '../lib/utcStamp';
 
 /**
  * Home (docs/design/12 row 1) — visual canon is home.dc.html (decision O8);
@@ -89,6 +92,14 @@ function TopBand() {
                 {data.voice_channel.count > 0 ? `${data.voice_channel.count} in voice` : 'No one in voice'}
               </span>
             ))}
+          {data && !data.voice_channel.error && (
+            <Meta>
+              {data.voice_channel.channel_name ? `${data.voice_channel.channel_name}` : 'channel unnamed'}
+              {Array.isArray(data.voice_channel.members) && data.voice_channel.members.length > 0 ? ` · ${data.voice_channel.members.map(String).join(', ')}` : ''}
+              {data.voice_channel.updated_at ? ` · voice seen ${utcStamp(String(data.voice_channel.updated_at))}` : ''}
+              {data.game_server.updated_at ? ` · server seen ${utcStamp(String(data.game_server.updated_at))}` : ''}
+            </Meta>
+          )}
         </div>
       </div>
     </div>
@@ -122,6 +133,16 @@ function Hero() {
         </div>
         <div className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)', marginTop: 'var(--space-3)' }}>
           {d.rounds} rounds · {mapsPlayed} maps · {d.player_count} players
+          {/* what the endpoint counts beside the box score (ledger 2026-09-09): maps by name, the scoring's map count, and the checks it raised */}
+          {/* plays per map from the R1 rows of matches — map_counts counts ROUNDS (an ordinary map is 2) */}
+          {(() => {
+            const plays = new Map<string, number>();
+            for (const m of d.matches) if (m.round_number === 1 && m.map_name) plays.set(m.map_name, (plays.get(m.map_name) ?? 0) + 1);
+            return plays.size > 0 ? <> · {[...plays.entries()].map(([m, n]) => `${m}${n > 1 ? ` ×${n}` : ''}`).join(', ')}</> : null;
+          })()}
+          {d.scoring.available && (d.scoring as { total_maps?: number }).total_maps != null && <> · {(d.scoring as { total_maps?: number }).total_maps} maps scored</>}
+          {d.stats_checks.length > 0 && <> · checks: {d.stats_checks.join('; ')}</>}
+          {(d.warnings?.length ?? 0) > 0 && <> · ⚠ {(d.warnings as unknown[]).map(String).join('; ')}</>}
         </div>
         {/* No session id on the latest rounds is a supported backend state —
           * the date route is the fallback that still identifies the evening. */}
@@ -262,6 +283,7 @@ function Insights() {
           </span>
         }
       />
+      {data?.dates && data.dates.length > 0 && <Meta>{data.dates[0]} to {data.dates[data.dates.length - 1]} · {figure(data.dates.length)} days answered</Meta>}
       {trends.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="activity" /></div>}
       <div className="home-cols3" style={{ gap: 'var(--space-6)', marginTop: 'var(--space-4)' }}>
         {chart('rounds per day', data?.rounds, 'var(--color-accent)', `last ${days} days`)}
@@ -316,6 +338,9 @@ function SeasonBlock() {
         { k: 'maps', v: seasonFig('maps_count', totals.maps) },
         { k: 'sessions', v: seasonFig('sessions_count', totals.sessions) },
         { k: 'kills', v: seasonFig('kills_total', totals.kills) },
+        { k: 'active days', v: seasonFig('active_days', totals.active_days) },
+        // Derived from rounds ÷ active days on the server, so it fails with active_days.
+        { k: 'rounds / day', v: seasonFig('active_days', totals.avg_rounds_per_day) },
         {
           // {name: null, plays: 0} is the endpoint's EMPTY season shape —
           // the object is truthy, the name is the gate (Codex wave 3).
@@ -329,11 +354,24 @@ function SeasonBlock() {
   // wire names them since #862, and a filtered-away row must not read as
   // "nobody led" (the absence-is-not-agreement class).
   const failedLeaders = new Set(leaders.data?.status === 'partial' ? leaders.data.failed_metrics : []);
-  const leaderRows = [
+  // Every category the wire carries (ledger 2026-09-08: team damage, time
+  // alive, time dead were fetched and never shown). Units: time_alive is
+  // seconds over the season, time_dead minutes (records_seasons.py).
+  const leaderRows: { k: string; row: { player: string; value: number } | null | undefined; fmt?: (v: number) => string }[] = [
     { k: 'kills', row: lead?.kills },
     { k: 'dpm', row: lead?.dpm },
     { k: 'xp', row: lead?.xp },
+    { k: 'damage', row: lead?.damage_given },
+    { k: 'taken', row: lead?.damage_received },
+    { k: 'team dmg', row: lead?.team_damage },
+    { k: 'revives', row: lead?.revives },
+    { k: 'gibs', row: lead?.gibs },
+    { k: 'objectives', row: lead?.objectives },
+    { k: 'deaths', row: lead?.deaths },
+    { k: 'alive', row: lead?.time_alive, fmt: (v: number) => `${figure(Math.round(v / 360) / 10)} h` },
+    { k: 'dead', row: lead?.time_dead, fmt: (v: number) => `${figure(Math.round(v))} min` },
   ].filter((r) => r.row != null || failedLeaders.has(r.k));
+  const longest = lead?.longest_session ?? null;
   // An empty activity object is the endpoint's failure shape inside a 200
   // (and a 90-day window with zero active days does not happen in this
   // dataset) — no line beats a false 'active on 0 days' (Codex wave 3).
@@ -350,6 +388,7 @@ function SeasonBlock() {
   return (
     <div data-parity="home.season">
       <SectionHead label={s.name} aside={<span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{s.days_left} days left</span>} />
+      {s.next_season_id != null && <Meta>{`then ${s.next_season_name} (season ${s.next_season_id})`}</Meta>}
       <div style={{ height: 3, background: 'var(--color-rule-900)', marginTop: 'var(--space-2)', position: 'relative' }}>
         <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct.toFixed(0)}%`, background: 'var(--color-accent-warm)', display: 'block' }} />
       </div>
@@ -368,13 +407,13 @@ function SeasonBlock() {
       {leaders.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="season leaders" /></div>}
       {leaderRows.length > 0 && (
         <div style={{ marginTop: 'var(--space-4)', borderTop: '1px solid var(--color-rule-900)' }}>
-          {leaderRows.map(({ k, row }) => (
+          {leaderRows.map(({ k, row, fmt }) => (
             <div key={k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
               {row != null ? (
                 <>
                   <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.player}</span>
-                  <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row.value)}</span>
+                  <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{fmt ? fmt(row.value) : figure(row.value)}</span>
                 </>
               ) : (
                 // Kept by failed_metrics: the query for THIS category
@@ -386,9 +425,17 @@ function SeasonBlock() {
           ))}
         </div>
       )}
-      {activeDays != null && (
+      {longest && (
         <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
-          active on {activeDays} of the last {calendar.data?.days} days
+          longest evening: {figure(longest.rounds)} rounds on {longest.date}
+        </div>
+      )}
+      {activeDays != null && calendar.data && (
+        <div style={{ marginTop: 'var(--space-3)' }}>
+          <ActivityHeatmap days={calendar.data.days} activity={calendar.data.activity} />
+          <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
+            active on {activeDays} of the last {calendar.data.days} days · darker is more rounds
+          </div>
         </div>
       )}
       <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>next: {s.next_season_name} starts {s.next_season_start}</div>
@@ -396,9 +443,40 @@ function SeasonBlock() {
   );
 }
 
+/** The last N days as one cell each, shaded by rounds played — the values
+ *  the calendar answers and the page used to reduce to a count. */
+function ActivityHeatmap({ days, activity }: { days: number; activity: Record<string, number> }) {
+  const max = Math.max(1, ...Object.values(activity));
+  // The window ends today — unless nothing was recorded inside it, when it
+  // ends on the last recorded day instead (an old recording, or a long
+  // quiet spell), and the label says so.
+  const newest = Object.keys(activity).sort().at(-1);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const windowStart = new Date(Date.parse(todayIso) - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const endIso = newest != null && newest < windowStart ? newest : todayIso;
+  const cells: { date: string; n: number }[] = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = new Date(Date.parse(endIso) - i * 86_400_000).toISOString().slice(0, 10);
+    cells.push({ date, n: activity[date] ?? 0 });
+  }
+  return (
+    <div role="img" aria-label={`rounds per day, ${String(days)} days ending ${endIso}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)' }}>
+      {cells.map((c) => (
+        <span
+          key={c.date}
+          title={`${c.date}: ${figure(c.n)} rounds`}
+          style={{ width: 'var(--space-3)', height: 'var(--space-3)', background: 'var(--color-accent)', opacity: c.n === 0 ? 0.08 : 0.25 + 0.75 * (c.n / max) }}
+        />
+      ))}
+    </div>
+  );
+}
+
 function LatestGames() {
   const matches = useRecentMatches(5);
   const data = matches.isError ? undefined : matches.data;
+  // The half whose box score is open under its row (R3b, 2026-09-08).
+  const [openMatch, setOpenMatch] = useState<number | null>(null);
   return (
     <div data-parity="home.latest-games">
       <SectionHead
@@ -425,10 +503,11 @@ function LatestGames() {
             <>
               <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                 <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {m.team1_players.join(' · ')} vs {m.team2_players.join(' · ')}
+                  {m.team1_name ? `${m.team1_name}: ` : ''}{m.team1_players.join(' · ')} vs {m.team2_name ? `${m.team2_name}: ` : ''}{m.team2_players.join(' · ')}
                 </span>
                 <span className="m" style={{ fontSize: 'var(--fs-small)', flex: 'none', color: m.outcome === 'Fullhold' ? 'var(--color-pos)' : m.winner === m.team1_name ? 'var(--color-accent)' : 'var(--color-accent-warm)' }}>
                   {m.winner.toLowerCase()} · {m.duration}
+                  {m.score_display ? ` · ${m.score_display}` : (m.axis_score != null && m.allies_score != null ? ` · axis ${m.axis_score}–${m.allies_score} allies` : '')}
                 </span>
               </span>
               <span className="m" style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-1)' }}>
@@ -443,10 +522,26 @@ function LatestGames() {
             </>
           );
           const rowLook = { ...rowStyle, display: 'block', padding: 'var(--space-3) 0', textDecoration: 'none', color: 'var(--color-text-100)' };
-          return to === null ? (
-            <div key={m.id} style={rowLook} title="this round is not attributed to an evening">{rowBody}</div>
-          ) : (
-            <Link key={m.id} to={to} style={rowLook}>{rowBody}</Link>
+          const open = openMatch === m.id;
+          return (
+            <div key={m.id}>
+              {to === null ? (
+                <div style={rowLook} title="this round is not attributed to an evening">{rowBody}</div>
+              ) : (
+                <Link to={to} style={rowLook}>{rowBody}</Link>
+              )}
+              <button
+                type="button"
+                aria-expanded={open}
+                aria-controls={`box-score-${String(m.id)}`}
+                aria-label={`${open ? 'hide ' : ''}box score · ${m.map_name ?? 'unknown map'} R${String(m.round_number)}`}
+                onClick={() => { setOpenMatch(open ? null : m.id); }}
+                style={{ background: 'none', border: 0, padding: 0, font: 'inherit', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.08em', textTransform: 'uppercase', color: open ? 'var(--color-text-100)' : 'var(--color-text-500)' }}
+              >
+                {open ? 'hide box score' : 'box score'}
+              </button>
+              {open && <div id={`box-score-${String(m.id)}`} style={{ marginTop: 'var(--space-2)' }}><MatchBoxScore roundId={m.id} /></div>}
+            </div>
           );
         })}
       </div>
@@ -531,7 +626,10 @@ function PulseRow() {
             {md.movers_up.length + md.movers_down.length + md.new_players.length === 0 && (
               <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no session to compare yet</div>
             )}
-            <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>vs each player's own trailing form — not a ranking</Lbl>
+            {/* The server's own words for the baseline, and the weights the
+              * movement is scored with — so nobody reads it as a ladder. */}
+            <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>{md.baseline_desc ?? "vs each player's own trailing form — not a ranking"}</Lbl>
+            {md.form_weights && <Meta>weights: {Object.entries(md.form_weights).map(([k, v]) => `${k} ${decimals(v, 2)}`).join(' · ')}</Meta>}
           </div>
         )}
       </div>
@@ -539,7 +637,7 @@ function PulseRow() {
         <Panel
           label="challenge of the week"
           q={challenge}
-          empty="no challenge this week"
+          empty={`no challenge this week${challenge.data?.week_start_date ? ` (week of ${challenge.data.week_start_date})` : ''}`}
           isEmpty={(d) => !d.challenge}
         >
           {(d) => d.challenge && (
@@ -655,6 +753,11 @@ function Tonight() {
           {liveSession.data.rounds_completed} round{liveSession.data.rounds_completed === 1 ? '' : 's'} imported in the last half hour
           {' · '}{liveSession.data.current_map}
           {' · '}{liveSession.data.current_players} player{liveSession.data.current_players === 1 ? '' : 's'}
+          {/* "0:00" is the formatter's output for a round whose duration has
+            * not been linked yet (Codex on #1026) — a sentinel, not a time. */}
+          {liveSession.data.last_round_time && liveSession.data.last_round_time !== '0:00'
+            && ` · last round ${liveSession.data.last_round_time}`}
+          {liveSession.data.last_update && ` · as of ${utcStamp(liveSession.data.last_update)}`}
         </Meta>
       )}
       {availability.isPending && <div style={{ marginTop: 'var(--space-3)' }}><Pending label="availability" /></div>}
@@ -695,56 +798,13 @@ function Tonight() {
   );
 }
 
-interface SearchHit { guid: string; name: string }
-
 function FindYourStats() {
   const overview = useOverview();
-  const [query, setQuery] = useState('');
-  // 300 ms debounce, the legacy value: /auth/players/search is rate-limited
-  // to 30/min, so a query key per keystroke would burn the budget in one
-  // typed name (Codex on #811).
-  const [debounced, setDebounced] = useState('');
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-  const trimmed = debounced;
-  const search = useQuery({
-    queryKey: ['player-search', trimmed],
-    enabled: trimmed.length >= 2,
-    queryFn: () => apiGet('/auth/players/search', { query: { q: trimmed } }) as Promise<SearchHit[]>,
-  });
   const known = overview.data?.players_all_time;
   return (
     <div data-parity="home.search">
       <Lbl>find your stats</Lbl>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="player name or alias"
-        aria-label="Find your stats"
-        className="m"
-        style={{
-          width: '100%', marginTop: 'var(--space-3)', background: 'var(--color-ink-800)',
-          border: '1px solid var(--color-rule-700)', color: 'var(--color-text-100)',
-          fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-3)', boxSizing: 'border-box',
-        }}
-      />
-      {trimmed.length >= 2 && (
-        <div style={{ marginTop: 'var(--space-2)' }}>
-          {search.isPending && <Pending label="search" />}
-          {search.isError && <Unavailable what="search" />}
-          {search.data?.length === 0 && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no player matches "{trimmed}"</div>
-          )}
-          {search.data?.slice(0, 6).map((hit) => (
-            <Link key={hit.guid} to={`/profile/${hit.guid}`} style={{ ...rowStyle, display: 'block', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
-              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{hit.name}</span>
-            </Link>
-          ))}
-        </div>
-      )}
+      <PlayerSearch ariaLabel="Find your stats" placeholder="player name or alias" />
       <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
         {known != null ? `${known} players known · ` : ''}names resolve through every alias we have seen
       </Lbl>

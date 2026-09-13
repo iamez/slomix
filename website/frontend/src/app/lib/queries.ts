@@ -18,6 +18,7 @@ import type {
   BetsMarketCurrent,
   MarketOpenResponse,
   MemoryCard,
+  PlayerCard,
   PlayerVsStats,
   SkillPlayerForm,
   SkillPlayerHistory,
@@ -120,7 +121,9 @@ import type {
   RecentPrediction,
   RecentRound,
   RivalryLeaderboard,
+  MatchDetails,
   RoundAwards,
+  RoundPlayerDetails,
   RoundViz,
   SeasonAwards,
   SeasonCurrent,
@@ -129,6 +132,7 @@ import type {
   SessionAwards,
   SessionBasics,
   SessionDetail,
+  SessionGraphs,
   SessionGoodNight,
   SessionLeaderRow,
   SessionLineups,
@@ -428,6 +432,17 @@ export function useRecentMatches(limit = 5) {
   });
 }
 
+/** The box score of one half. Mounted only once a row is opened — a
+ *  disabled query is pending forever in React Query v5. */
+export function useMatchDetails(roundId: number | null) {
+  return useQuery({
+    queryKey: ['match-details', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/stats/matches/{match_id}', { pathParams: { match_id: String(roundId!) } }) as Promise<MatchDetails>,
+  });
+}
+
 export function useAvailabilityOverview() {
   return useQuery({
     queryKey: ['availability-overview'],
@@ -629,6 +644,20 @@ export function useRecentRounds() {
  * rounds table lists up to 18 of them and eagerly fetching each one would be
  * 18 calls to answer a question nobody asked.
  */
+/** One player's breakdown of one half. Disabled until both ids are known —
+ *  and a disabled query is pending forever in React Query v5, so the caller
+ *  mounts it only once a row was clicked. */
+export function useRoundPlayerDetails(roundId: number | null, playerGuid: string | null) {
+  return useQuery({
+    queryKey: ['round-player-details', roundId, playerGuid],
+    enabled: roundId != null && playerGuid != null,
+    queryFn: () =>
+      apiGet('/api/rounds/{round_id}/player/{player_guid}/details', {
+        pathParams: { round_id: roundId!, player_guid: playerGuid! },
+      }) as Promise<RoundPlayerDetails>,
+  });
+}
+
 export function useRoundAwards(roundId: number | null) {
   return useQuery({
     queryKey: ['round-awards', roundId],
@@ -927,6 +956,16 @@ export function useStoryKisDetails(gsid: number, playerGuid: string | null) {
 /** Everything the session totals are built from: matches, per-player totals,
  *  stopwatch scoring and the team matrix. One 39 KB response rather than the
  *  legacy page's five calls. */
+/** The graphs of an evening over its counted rounds — keyed by gaming
+ *  session, never by date (a day can hold several). */
+export function useSessionGraphs(sessionId: number) {
+  return useQuery({
+    queryKey: ['session-graphs', sessionId],
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/graphs', { pathParams: { gaming_session_id: sessionId } }) as Promise<SessionGraphs>,
+  });
+}
+
 export function useSessionDetail(sessionId: number | null) {
   return useQuery({
     queryKey: ['session-detail', sessionId],
@@ -1536,11 +1575,20 @@ export function useProxRoundTracks(roundId: number | null) {
  *  the last moment on screen while scrubbing; react-query's keying makes
  *  the winner commit (a superseded response can never overwrite a newer
  *  key's cache entry). */
+/** The previous snapshot may stand in while a new moment loads — but only
+ *  within the SAME point of view. Across a switch the oracle's players and
+ *  beliefs would be drawn under a team's label until the request landed
+ *  (Codex on #1005), so a snapshot of another view is not a placeholder. */
+export function sameView(prev: SpiderWebSnapshot | undefined, pov: string): SpiderWebSnapshot | undefined {
+  if (!prev) return undefined;
+  return (prev.information_state?.pov ?? 'world') === pov ? prev : undefined;
+}
+
 export function useSpiderWebMoment(roundId: number | null, tMs: number, pov: string) {
   return useQuery({
     queryKey: ['spider-web', roundId, tMs, pov],
     enabled: roundId != null,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev) => sameView(prev, pov),
     queryFn: () =>
       apiGet('/api/replay/round/{round_id}/web', {
         pathParams: { round_id: roundId! },
@@ -2103,6 +2151,18 @@ export function usePlayerVsStats(guid: string, sessionId: number) {
 }
 
 /** The career keepsake behind the profile's "memory card" section. */
+/** The hover card of the legacy player list, on the profile since 2026-09-08. */
+export function usePlayerCard(guid: string | null) {
+  return useQuery({
+    queryKey: ['player-card', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/players/{identifier}/card', {
+      pathParams: { identifier: guid! },
+    }) as Promise<PlayerCard>,
+  });
+}
+
 export function useMemoryCard(guid: string | null) {
   return useQuery({
     queryKey: ['memory-card', guid],
