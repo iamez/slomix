@@ -501,3 +501,37 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
 - hosting ticket, če watcher potrdi populacijo B (host stall).
+
+## Astra — immutable review snapshot safety (2026-09-07)
+
+- Implemented locally on `fix/ci-immutable-review-snapshots`; not pushed,
+  merged or deployed. Existing review PRs #924–943 remain NEVER MERGE and
+  their refs are not modified. Source examined: `4f653c01`.
+- `review_slices.sh` delegates to a private-index snapshot builder: pin source
+  and baseline commits once, partition at 25 files / 8,000 changed lines
+  (also below the 500-file reviewer cap), preflight all areas before refs or
+  remote writes, reject oversize single files and unmeasurable binary files.
+- SHA-versioned base/head pairs have deterministic commits. Existing identical
+  refs are reused; conflicting refs block. No checkout, fetch, worktree removal,
+  forced push or hook bypass. Explicit `cut --push` uses ordinary atomic Git
+  pushes per pair; a later pair failure can leave earlier pairs published,
+  and retry reuses them. Historical credential-scanner hits remain blockers.
+- `prs` now refuses automatic PR creation. For a new generation, create draft
+  NEVER MERGE PRs explicitly using the emitted immutable base/head refs and
+  measured part sizes; old generated area bodies are historical context, not
+  current per-part measurements. Fetch explicitly before choosing the source.
+- Evidence: seven disposable-repository CLI tests passed, including a local
+  bare remote and the actual pre-push hook: two guarded pushes for 26 files,
+  no pushes on identical rerun, historical credential rejection, unsplit
+  26-file rejection, local/remote conflict rejection, oversize/binary preflight,
+  preserved dirty/untracked files, deletion and space-containing paths.
+- Mutation `MAX_FILES=26` was seen failing the 25+1 split assertion, then
+  restored; `cmp` against the saved original passed and all seven tests passed
+  again. Ruff and shell syntax checks passed. This is CLI runtime proof with
+  synthetic repositories, not evidence of GitHub publication or live services.
+- Read-only real-repo measurement yielded 26 parts at the examined source.
+  First area: 23 files / 8,094 lines, independently confirmed by direct Git
+  numstat; split into 22 / 7,868 and 1 / 226. No real snapshot refs created.
+- Next: parent review, ordinary feature PR through real pre-push protections,
+  then owner-specific merge decision. No permission to publish review snapshots
+  or merge any review vehicle is implied by this implementation.
