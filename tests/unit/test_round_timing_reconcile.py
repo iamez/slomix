@@ -1,6 +1,7 @@
 """Default-OFF and schema/workflow contracts for the bounded timing journal."""
 
 from pathlib import Path
+from fnmatch import fnmatchcase
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -29,6 +30,18 @@ def test_bootstrap_mirrors_timing_migration():
     root = Path(__file__).resolve().parents[2]
     migration = (root / "migrations/084_runtime_timing_events.sql").read_text().strip()
     assert migration in (root / "tools/schema_postgresql.sql").read_text()
+
+
+def test_ci_covers_stacked_runtime_pushes_without_broadening_other_branches():
+    import yaml
+
+    root = Path(__file__).resolve().parents[2]
+    # BaseLoader preserves the YAML key 'on' instead of interpreting a bool.
+    workflow = yaml.load((root / ".github/workflows/tests.yml").read_text(), Loader=yaml.BaseLoader)
+    branches = workflow["on"]["push"]["branches"]
+    assert any(fnmatchcase("feat/db-runtime-timing-r02", p) for p in branches)
+    assert not any(fnmatchcase("feat/unrelated-example", p) for p in branches)
+    assert workflow["on"]["pull_request"]["branches"] == ["main", "develop"]
 
 
 @pytest.mark.parametrize("enabled,fails", [(False, False), (True, False), (True, True)])
