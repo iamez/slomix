@@ -25,6 +25,10 @@
 Branch `feat/db-runtime-timing-r02`, worktree `/tmp/slomix-astra-runtime-r02`,
 stacked on R01 b81221d6 (PR #1012 CI/CodeQL/Hygiene confirmed success).
 R01 remains unmerged. R02a is development only; both event flags default OFF.
+Published as draft PR #1039, base `feat/db-runtime-events-r01`, code 0eceda4c.
+The existing CI triggers target main/develop, not this stacked draft base;
+do not claim external R02 CI success. Retarget only after the parent is merged
+by explicit owner permission, or separately arrange an authorized CI run.
 
 - New immutable migration 084 extends the journal for `round_timing_reconciled`;
   initial import keeps its partial unique index, later transitions append.
@@ -52,6 +56,16 @@ R01 remains unmerged. R02a is development only; both event flags default OFF.
   bounded batch and require investigation; no silent timing-only partial commit.
 - Independent R02 review was not performed: helper hit its usage limit before
   reviewing. Parent self-review/lint/tests completed; external review still due.
+
+**Resume checkpoint:** clean code is in PR #1039; R01 #1012 is b81221d6 with
+successful CI 34813122019, CodeQL 34813122027 and Hygiene 34813122066.
+First refresh both PRs/review comments. R02a local proof is recorded above;
+104 additional focused unit cases passed after wrapper tests were added.
+No helper or test server remains running. Next R02b candidate is
+`_detect_and_mark_restarts`: it changes an OLDER round's status on the current
+import connection, and its broad catch must not swallow journal failure.
+Then Lua overrides/DPM and endstats transaction producers; consumers and the
+independent Linux ingest remain later stages, not already implemented.
 
 ### R01 position
 
