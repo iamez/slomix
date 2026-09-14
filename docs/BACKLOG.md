@@ -7,6 +7,16 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-14) R02b in `/tmp/slomix-astra-runtime-r02b`, branch
+  `feat/db-runtime-status-r02b`, parent R02a 78aaf3a8 (CI 34859363030 passed).
+  Default-OFF older-round status producer + migration085 implemented.
+  113 combined tests passed incl. real PG/bootstrap, zero skipped; later
+  create-catch test added (14 status unit cases passed). Guard mutation
+  failed twice, restored/cmp; temporary PG stopped. Read-only helper review
+  found no blocker; both suggested coverage additions implemented.
+  Next: draft PR against #1039 branch, exact-SHA CI/external review. PLAN
+  records transaction contract and boundaries; no live migration or deploy.
+
 - (Astra, 2026-09-14) R02a on `feat/db-runtime-timing-r02`, stacked on
   R01 b81221d6 (green CI/CodeQL/Hygiene; still unmerged). Migration084 and
   default-OFF transactional Lua timing fill implemented. 106-case PG run

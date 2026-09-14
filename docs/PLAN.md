@@ -20,6 +20,39 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02b restart-status contract (2026-09-14, Astra; locally verified)
+
+Worktree `/tmp/slomix-astra-runtime-r02b`, branch `feat/db-runtime-status-r02b`,
+stacked on R02a 78aaf3a8. No merge, activation, live migration or deploy.
+Contract: require EVENT_STREAM_ENABLED and ROUND_STATUS_EVENTS_ENABLED (both
+default OFF). Keep existing restart heuristics; only journal actual completed
+to cancelled/substitution transitions for R1/R2, on the canonical import
+connection. Guard the update against stale selection; no event on a no-op.
+Record old/new status and causing round ID, no player data. Event + status +
+ID-only NOTIFY commit atomically; enabled-path errors must reach import rollback
+and retry eligibility rather than the detector's legacy best-effort catch.
+Migration 085 extends event checks; register release and mirror bootstrap.
+Prove commit visibility, rollback, concurrent no-op, R0 exclusion, both flags,
+and failure propagation. Existing OFF behavior and complete-match guards stay.
+This is not all status writers, historical replay, or independent ingestion.
+
+Implementation and local proof complete: 113 combined cases passed, zero
+skipped, including six real status-PG cases, R01/R02a regressions and full
+fresh-bootstrap parity. Later real-create-catch unit added: 14 status unit
+cases passed. Parser/current INSERT/stat writers are stubbed in canonical PG
+proof; real detector and outer import transaction run. Actual create method's
+catch returning None is separately pinned; process_file rejects None inside
+its transaction. Both statuses, R0/no-op, concurrency, commit-only notification,
+event/NOTIFY rollback and retry without terminal marker are exercised.
+Mutation removing completed-status predicate failed both no-op guards with
+`assert not True`; restored with patch and cmp before the combined run.
+Temporary private PG stopped, independently confirmed by pg_ctl and log.
+Reviewer status_contract_audit found no blocker; recommended enabled complete-
+match protection and real-create-catch tests, both now added. Separate roster/
+counterpart reads remain heuristic, not newly proven concurrency-safe.
+Next: commit/push as a draft stacked on #1039, self-review, exact-SHA CI and
+external review. R02a 78aaf3a8 passed CI 34859363030. No live changes.
+
 ### R02a timing-fill slice (2026-09-14, Astra)
 
 Branch `feat/db-runtime-timing-r02`, worktree `/tmp/slomix-astra-runtime-r02`,

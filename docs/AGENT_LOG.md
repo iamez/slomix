@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-14 · Best-effort catches are unsafe around opt-in journal writes.**
+  Restart detection used to swallow errors. With the status producer enabled,
+  failures must reach the canonical import rollback; actual status update,
+  event and notification share that transaction. Guard completed status in
+  the UPDATE, not only the earlier SELECT, to avoid journaling stale no-ops.
+  Atomic recording does not prove the restart heuristic itself correct.
+
 - **2026-09-14 · Lock the selected source, not only the destination.** A
   NULL-only timing fill can commit stale Lua values if its source changes
   concurrently. Lock both selected rows with SKIP LOCKED until commit; prove
