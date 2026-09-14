@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-14 · Lock the selected source, not only the destination.** A
+  NULL-only timing fill can commit stale Lua values if its source changes
+  concurrently. Lock both selected rows with SKIP LOCKED until commit; prove
+  both source-first skip/retry and fill-first blocked relinking on real PG.
+  This is not a guarantee against later changes or newly inserted sources.
+
 - **2026-09-14 · Initial-event dedup is not update-event dedup.** A timing
   source can undergo value -> NULL -> value across a repair. A permanent
   round/type or content-hash key would hide the later real transition. R02a

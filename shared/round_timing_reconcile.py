@@ -35,7 +35,7 @@ async def reconcile_missing_round_timing(adapter, *, enabled: bool) -> int:
                       WHERE other.round_id = r.id AND other.id <> lrt.id
                         AND other.actual_duration_seconds IS NOT NULL
                   )
-                ORDER BY r.id LIMIT 100 FOR UPDATE OF r SKIP LOCKED
+                ORDER BY r.id LIMIT 100 FOR UPDATE OF r, lrt SKIP LOCKED
             )
             UPDATE rounds r SET
                 actual_duration_seconds = lrt.actual_duration_seconds,

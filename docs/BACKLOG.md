@@ -14,7 +14,11 @@
   Additional wrapper cases + mutation pass after restore (104 focused unit
   cases). Published code 0eceda4c as draft PR #1039 against R01, not main.
   Helper exhausted usage before independent review; no helper/server running.
-  Next: external review (stacked base not covered by normal CI triggers), then
+  Narrow runtime push trigger added: CI 34858646087 passed for 2e2359db.
+  Codex review 4006494535: lock the selected Lua row as well as the round;
+  two real-PG concurrency guards pass and both fail when the lock is removed.
+  20 focused cases passed; source restored byte-identically after mutation.
+  Next: source-lock fix exact-SHA CI and remaining external review, then
   older-round restart status events as separate R02b. Full resume in PLAN.
 
 - (Astra, 2026-09-14) R01 retry and CI fixes: structured retryable failures

@@ -26,9 +26,10 @@ Branch `feat/db-runtime-timing-r02`, worktree `/tmp/slomix-astra-runtime-r02`,
 stacked on R01 b81221d6 (PR #1012 CI/CodeQL/Hygiene confirmed success).
 R01 remains unmerged. R02a is development only; both event flags default OFF.
 Published as draft PR #1039, base `feat/db-runtime-events-r01`, code 0eceda4c.
-The existing CI triggers target main/develop, not this stacked draft base;
-do not claim external R02 CI success. Retarget only after the parent is merged
-by explicit owner permission, or separately arrange an authorized CI run.
+Push CI now narrowly includes `feat/db-runtime-*`; PR targets stay main/develop.
+Exact commit 2e2359db passed CI run 34858646087. The branch-pattern guard passed
+and failed when the runtime pattern was removed, then was restored with cmp.
+Later review fixes require their own exact-SHA CI; do not transfer this result.
 
 - New immutable migration 084 extends the journal for `round_timing_reconciled`;
   initial import keeps its partial unique index, later transitions append.
@@ -54,12 +55,23 @@ by explicit owner permission, or separately arrange an authorized CI run.
   are installed. Original R01 SQL without the conflict-index predicate cannot
   target 084's partial index. Persistent canonical-ID conflicts fail the whole
   bounded batch and require investigation; no silent timing-only partial commit.
-- Independent R02 review was not performed: helper hit its usage limit before
-  reviewing. Parent self-review/lint/tests completed; external review still due.
+- Independent helper review was not performed: helper hit its usage limit before
+  reviewing. External Codex review arrived afterward; finding and proof below.
+
+- External Codex review 4006494535 identified an unlocked selected Lua source.
+  Candidate selection now locks both round and source with SKIP LOCKED. Two
+  real-PG tests prove a concurrent source update is skipped then retried with
+  its committed value, and source relinking cannot pass the fill transaction.
+  20 focused cases passed (eight PG, twelve unit). Removing the source lock
+  failed both new guards (`assert 1 == 0` and missing LockNotAvailableError);
+  restored by patch and byte-identical cmp. This does not cover changes made
+  after the fill commits or concurrent insertion of another usable source.
+  Restored PG rerun: eight passed. Temporary cluster stopped, confirmed by
+  pg_ctl and shutdown log; no live services or data changed.
 
 **Resume checkpoint:** clean code is in PR #1039; R01 #1012 is b81221d6 with
 successful CI 34813122019, CodeQL 34813122027 and Hygiene 34813122066.
-First refresh both PRs/review comments. R02a local proof is recorded above;
+First refresh both PRs/review comments and the source-lock fix CI. R02a local proof is recorded above;
 104 additional focused unit cases passed after wrapper tests were added.
 No helper or test server remains running. Next R02b candidate is
 `_detect_and_mark_restarts`: it changes an OLDER round's status on the current

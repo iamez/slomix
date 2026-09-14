@@ -132,6 +132,39 @@ async def test_concurrent_fill_and_repeat_transition(timing_db):
     assert len(await reader.fetch("SELECT * FROM runtime_events")) == 2
 
 
+async def test_locked_lua_source_is_skipped_then_retried(timing_db):
+    writer, reader, adapter = timing_db
+    await seed(writer)
+    async with reader.transaction():
+        await reader.execute("UPDATE lua_round_teams SET actual_duration_seconds=75 WHERE id=1")
+        assert await asyncio.wait_for(fill(adapter), 2) == 0
+        assert await writer.fetchval("SELECT actual_duration_seconds FROM rounds WHERE id=1") is None
+        assert await writer.fetchval("SELECT count(*) FROM runtime_events") == 0
+    assert await fill(adapter) == 1
+    assert await reader.fetchval("SELECT actual_duration_seconds FROM rounds WHERE id=1") == 75
+    details = json.loads(await reader.fetchval("SELECT event_details FROM runtime_events"))
+    assert details["actual_duration_seconds"] == 75
+    print("R02a source-lock proof: concurrent source update skipped; retry uses committed timing")
+
+
+async def test_selected_lua_source_stays_locked_until_commit(timing_db):
+    writer, reader, _ = timing_db
+    await seed(writer)
+
+    @asynccontextmanager
+    async def observed_transaction():
+        async with writer.transaction():
+            yield writer
+            async with reader.transaction():
+                await reader.execute("SET LOCAL lock_timeout = '100ms'")
+                with pytest.raises(asyncpg.LockNotAvailableError):
+                    await reader.execute("UPDATE lua_round_teams SET round_id=NULL WHERE id=1")
+
+    assert await fill(SimpleNamespace(transaction=observed_transaction)) == 1
+    assert await reader.fetchval("SELECT round_id FROM lua_round_teams WHERE id=1") == 1
+    print("R02a source-lock proof: relinking selected source cannot pass reconciliation commit")
+
+
 async def test_initial_import_dedup_survives_schema_upgrade(timing_db):
     writer, reader, adapter = timing_db
     await seed(writer)
