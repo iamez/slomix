@@ -20,6 +20,41 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02a timing-fill slice (2026-09-14, Astra)
+
+Branch `feat/db-runtime-timing-r02`, worktree `/tmp/slomix-astra-runtime-r02`,
+stacked on R01 b81221d6 (PR #1012 CI/CodeQL/Hygiene confirmed success).
+R01 remains unmerged. R02a is development only; both event flags default OFF.
+
+- New immutable migration 084 extends the journal for `round_timing_reconciled`;
+  initial import keeps its partial unique index, later transitions append.
+  Register in release config and mirror in canonical dump.
+- One producer: NULL duration -> timing from exactly one usable Lua row.
+  R1/R2 only, at most 100 rows/poll, row locks + SKIP LOCKED. Timing, scoped
+  canonical ID, event metadata and ID-only NOTIFY share an adapter transaction.
+  Event/commit failure rolls back; NULL remains eligible on the next poll.
+- Two flags required: EVENT_STREAM_ENABLED and ROUND_TIMING_EVENTS_ENABLED.
+  OFF preserves the existing path. ON excludes R0 and ambiguous Lua matches;
+  canonical-ID work is restricted to changed rows, not the historical corpus.
+- Not covered: corrections to already-present duration, restart status repair
+  of older rounds inside canonical import, Lua override/DPM writers, endstats,
+  proximity. No consumers/finalization claim, production migration or deploy.
+- Verification: 106-case isolated PostgreSQL run passed (zero skipped), including
+  six R02 PG cases for commit-only notification, no-op repeat, concurrency,
+  rollback/retry, exclusion of R0/ambiguous sources, initial-event compatibility,
+  repeated NULL-to-value transition and 100-row bound; bootstrap parity CLEAN.
+  Cluster stopped (shutdown log + pg_ctl). Later wrapper tests confirm no
+  fallback legacy writes after an enabled-path failure. Disabled-guard mutation
+  failed with AttributeError on transaction(), restored by patch and cmp.
+- Deployment caveat: keep EVENT_STREAM_ENABLED=false until R02 code AND 084
+  are installed. Original R01 SQL without the conflict-index predicate cannot
+  target 084's partial index. Persistent canonical-ID conflicts fail the whole
+  bounded batch and require investigation; no silent timing-only partial commit.
+- Independent R02 review was not performed: helper hit its usage limit before
+  reviewing. Parent self-review/lint/tests completed; external review still due.
+
+### R01 position
+
 Last updated: 2026-09-14. Owner priority: system runtime; frontend stays with
 Fable. Worktree `/tmp/slomix-astra-runtime-r01`, branch
 `feat/db-runtime-events-r01`. Code and isolated PostgreSQL proof complete;

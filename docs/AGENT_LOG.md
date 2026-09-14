@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-14 · Initial-event dedup is not update-event dedup.** A timing
+  source can undergo value -> NULL -> value across a repair. A permanent
+  round/type or content-hash key would hide the later real transition. R02a
+  keeps only the initial import key unique; row-locked NULL-to-value fills
+  emit each actual transition and repeated successful fills are no-ops.
+  Consumers still cannot use sequence ID as commit order.
+
 - **2026-09-14 · Rollback is not retry eligibility.** FileTracker treats
   success=false processed_files rows as terminal too; UltimateBot also cached
   them in RAM. DB/preflight/transaction failures must return a structured

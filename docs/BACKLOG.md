@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-14) R02a on `feat/db-runtime-timing-r02`, stacked on
+  R01 b81221d6 (green CI/CodeQL/Hygiene; still unmerged). Migration084 and
+  default-OFF transactional Lua timing fill implemented. 106-case PG run
+  passed incl. six new R02 PG cases and bootstrap parity; cluster stopped.
+  Additional wrapper cases + mutation pass after restore. Helper exhausted
+  usage before independent review. Next: commit/push, draft stacked PR,
+  external review; then older-round restart status events as separate R02b.
+
 - (Astra, 2026-09-14) R01 retry and CI fixes: structured retryable failures
   prevent terminal suppression after DB preflight/transaction errors; optional
   SSH wrapper respects failure. Journal explicitly exempt from relinking.
