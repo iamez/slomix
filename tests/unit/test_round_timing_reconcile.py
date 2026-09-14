@@ -1,7 +1,7 @@
 """Default-OFF and schema/workflow contracts for the bounded timing journal."""
 
-from pathlib import Path
 from fnmatch import fnmatchcase
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -36,12 +36,13 @@ def test_ci_covers_stacked_runtime_pushes_without_broadening_other_branches():
     import yaml
 
     root = Path(__file__).resolve().parents[2]
-    # BaseLoader preserves the YAML key 'on' instead of interpreting a bool.
-    workflow = yaml.load((root / ".github/workflows/tests.yml").read_text(), Loader=yaml.BaseLoader)
-    branches = workflow["on"]["push"]["branches"]
+    workflow = yaml.safe_load((root / ".github/workflows/tests.yml").read_text())
+    # PyYAML's YAML 1.1 loader interprets the GitHub key 'on' as True.
+    triggers = workflow.get("on", workflow.get(True))
+    branches = triggers["push"]["branches"]
     assert any(fnmatchcase("feat/db-runtime-timing-r02", p) for p in branches)
     assert not any(fnmatchcase("feat/unrelated-example", p) for p in branches)
-    assert workflow["on"]["pull_request"]["branches"] == ["main", "develop"]
+    assert triggers["pull_request"]["branches"] == ["main", "develop"]
 
 
 @pytest.mark.parametrize("enabled,fails", [(False, False), (True, False), (True, True)])
