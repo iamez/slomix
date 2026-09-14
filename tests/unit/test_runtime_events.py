@@ -91,7 +91,7 @@ async def test_event_errors_propagate(operation):
         await emit(conn)
 
 
-@pytest.mark.parametrize("failure", [None, "event", "commit"])
+@pytest.mark.parametrize("failure", [None, "event", "commit", "lookup"])
 async def test_canonical_import_transaction(monkeypatch, failure):
     import postgresql_database_manager as module
 
@@ -111,6 +111,8 @@ async def test_canonical_import_transaction(monkeypatch, failure):
         ("_insert_weapon_stats", 0), ("_validate_round_data", (True, "ok")),
     ]:
         setattr(manager, name, AsyncMock(return_value=result))
+    if failure == "lookup":
+        manager.is_file_processed.side_effect = RuntimeError("journal unavailable")
     state = []
     event_fails = failure is not None
     conn = connection()
@@ -149,10 +151,15 @@ async def test_canonical_import_transaction(monkeypatch, failure):
     manager.pool = MagicMock()
     manager.pool.acquire = acquire
     monkeypatch.setattr(module, "emit_round_stats_imported", emitter)
-    success, message = await manager.process_file(Path("fixture-round-2.txt"))
+    result = await manager.process_file(Path("fixture-round-2.txt"))
+    success, message = result
     assert success is not event_fails
-    assert state == ["begin", "rollback" if event_fails else "commit"]
+    expected_state = [] if failure == "lookup" else ["begin", "rollback" if event_fails else "commit"]
+    assert state == expected_state
     if event_fails:
         assert message == "journal unavailable"
         assert manager.stats["files_processed"] == 0
-    manager.mark_file_processed.assert_awaited_once()
+        assert result.retryable is True
+        manager.mark_file_processed.assert_not_awaited()
+    else:
+        manager.mark_file_processed.assert_awaited_once()

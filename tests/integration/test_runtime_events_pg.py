@@ -10,7 +10,10 @@ import asyncio
 import os
 import stat
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import asyncpg
 import pytest
@@ -200,3 +203,56 @@ async def test_r0_exclusion_and_concurrent_retry(journal_db):
     assert await writer.fetchval("SELECT count(*) FROM runtime_events") == 1
     assert len(await reader.fetch("SELECT * FROM runtime_events")) == 1
     print("R01 concurrency proof: two initial writers, exactly one event; no R0")
+
+
+async def test_canonical_import_retries_after_journal_failure(journal_db):
+    """Real canonical transaction/marker flow; parser and stat writers stubbed."""
+    from postgresql_database_manager import PostgreSQLDatabaseManager
+
+    writer, reader = journal_db
+    await writer.execute("CREATE TABLE processed_files (filename TEXT PRIMARY KEY, success BOOLEAN)")
+    manager = object.__new__(PostgreSQLDatabaseManager)
+    manager.event_stream_enabled = True
+    manager.stats = dict.fromkeys([
+        "files_processed", "files_skipped", "files_failed", "rounds_created",
+        "players_inserted", "weapons_inserted",
+    ], 0)
+    manager.parser = SimpleNamespace(parse_stats_file=MagicMock(return_value={"players": [], "round_num": 2}))
+    manager._compute_file_hashes = MagicMock(return_value=("a" * 64, "a" * 64))  # noqa: SLF001
+    manager._extract_date_time_from_filename = MagicMock(return_value=("2026-09-14", "120000"))  # noqa: SLF001
+    manager.find_processed_by_hash = AsyncMock(return_value=None)
+    manager._insert_player_stats = AsyncMock(return_value=0)  # noqa: SLF001
+    manager._insert_weapon_stats = AsyncMock(return_value=0)  # noqa: SLF001
+    manager._validate_round_data = AsyncMock(return_value=(True, "ok"))  # noqa: SLF001
+
+    @asynccontextmanager
+    async def acquire():
+        yield writer
+
+    async def create_round(conn, *args):
+        await conn.execute("INSERT INTO rounds VALUES (1, 2, 42)")
+        return 1
+
+    async def processed(filename):
+        return bool(await writer.fetchval("SELECT count(*) FROM processed_files WHERE filename=$1", filename))
+
+    async def mark(filename, *, success, **kwargs):
+        await writer.execute("INSERT INTO processed_files VALUES ($1, $2)", filename, success)
+
+    manager.pool = SimpleNamespace(acquire=acquire)
+    manager._create_round_postgresql = create_round  # noqa: SLF001
+    manager.is_file_processed = processed
+    manager.mark_file_processed = mark
+    path = Path("fixture-round-2.txt")
+    first = await manager.process_file(path)  # journal deliberately missing
+    assert first[0] is False and first.retryable
+    assert await reader.fetchval("SELECT count(*) FROM rounds") == 0
+    assert await reader.fetch("SELECT * FROM processed_files") == []
+    await migrate(writer)
+    second = await manager.process_file(path)
+    assert second[0] is True
+    for table in ("rounds", "runtime_events", "processed_files"):
+        assert await reader.fetchval(f"SELECT count(*) FROM {table}") == 1
+        assert len(await reader.fetch(f"SELECT * FROM {table}")) == 1
+    assert await reader.fetchval("SELECT success FROM processed_files") is True
+    print("R01 retry proof: failed journal leaves no marker; next import commits round/event/success")

@@ -20,10 +20,25 @@
 
 ## Track: runtime v2 R01 (Astra)
 
-Last updated: 2026-09-13. Owner priority: system runtime; frontend stays with
+Last updated: 2026-09-14. Owner priority: system runtime; frontend stays with
 Fable. Worktree `/tmp/slomix-astra-runtime-r01`, branch
 `feat/db-runtime-events-r01`. Code and isolated PostgreSQL proof complete;
 PR #1012 open. NOT merged, live-migrated, enabled or deployed.
+
+- 2026-09-14: CI actually ran: Python 3.13 had 6736 passed, 153 skipped,
+  two failures in round-ID coverage (journal exemption missing). Added the
+  explicit immutable-history exemption; no relinker may rewrite journal IDs.
+  Review 4000153306 exposed terminal failure marking after rollback. Added a
+  tuple-compatible retryable failure result; DB preflight/acquisition/write/
+  NOTIFY/COMMIT failures leave no terminal DB/RAM marker. Known parse rejects
+  remain terminal. Optional SSH monitor now propagates failed result rather
+  than reporting success. Existing poll/activity/lookback limits still apply;
+  this is retry eligibility, not a durable scheduler or exactly-once replay.
+  Real isolated PG run: 106 passed, including canonical failed-journal import
+  followed by successful round/event/marker commit (parser/stat writers stubbed),
+  plus full fresh-bootstrap parity. Additional preflight unit case added after
+  review. Retry flag mutation failed two guards, showing the terminal-mark log;
+  restored by patch and cmp. Test cluster stopped. All live services unchanged.
 
 - 2026-09-13: confirmed all three review replies persisted. Synchronized
   main 75ee10b5, retaining Supastats and runtime default-OFF flags and both

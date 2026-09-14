@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-14 · Rollback is not retry eligibility.** FileTracker treats
+  success=false processed_files rows as terminal too; UltimateBot also cached
+  them in RAM. DB/preflight/transaction failures must return a structured
+  retryable result without either marker. Keep deterministic parse failures
+  separate. R01 proves a failed journal import can retry and commit; existing
+  activity/lookback windows still limit automatic recovery.
+
 - **2026-09-10 · A migration has three installation paths to keep aligned.**
   R01 initially added SQL alone, omitting the latest release config and the
   canonical dump used before deploy_clean's baseline. Register it in the
@@ -17,7 +24,8 @@ data here.
   `pg_notify` participates in the import transaction and can fail at COMMIT;
   the emitter returning does not prove persistence. R01 moves success counts
   and logs after COMMIT; a canonical-import test injects commit failure and
-  checks that only the failed processed-file marker is written. This mock is
+  checks that no success is reported. Updated 2026-09-14: transient failures
+  now leave no terminal processed-file marker, so a later poll can retry. This mock is
   wiring evidence, not real PostgreSQL transaction proof. Initial journal
   events are not final-round events: validation warnings and post-commit
   correlation/Lua/endstats changes remain distinct facts.

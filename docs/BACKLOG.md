@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-14) R01 retry and CI fixes: structured retryable failures
+  prevent terminal suppression after DB preflight/transaction errors; optional
+  SSH wrapper respects failure. Journal explicitly exempt from relinking.
+  106-case isolated PG run passed; extra preflight unit case added afterward.
+  Mutation reproduced terminal-mark regression then restored/cmp. Next: push,
+  reply to review 4000153306, inspect complete CI, then isolated R02 design.
+
 - (Astra, 2026-09-13) PR #1012: all three review replies confirmed saved;
   synchronized main, preserving both runtime and Supastats opt-outs and both
   agents' backlog entries. External Python CI execution remains unconfirmed.
