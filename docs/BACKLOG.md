@@ -12,7 +12,9 @@
   now reschedule through existing bounded attempts/delay. 53 focused tests
   passed; real asyncio task proof covers OFF/transient/permanent/cancellation.
   Mutation failed two guards, restored/cmp and rerun passed. No tasks left.
-  Next: review/publish; polling RAM cleanup and endstats event journal remain.
+  Published draft #1042, code 9c01c55b, parent #1041; CI 34934210971 running,
+  external review requested, post-push self-review complete. Next: polling
+  marker ownership/cleanup and event journal. Stack 24 files, no activation.
 
 - (Astra, 2026-09-15) R02c1 in `/tmp/slomix-astra-runtime-r02c`, branch
   `feat/db-runtime-endstats-retry-r02c`. ENDSTATS_RETRY_ENABLED defaults OFF;

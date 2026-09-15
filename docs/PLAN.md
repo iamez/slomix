@@ -43,6 +43,11 @@ Not a durable scheduler or a cure for ambiguous publication/NULL claims.
 Read-only helper review found no blocker. Budget is per retry chain: later
 external triggers may start a new chain. Cancellation preserves existing task-
 map cleanup behavior; test task creation wraps asyncio directly, not bot startup.
+Published draft PR #1042 against `feat/db-runtime-endstats-retry-r02c`, code
+9c01c55b. CI 34934210971 in progress; external Codex/CodeRabbit requested.
+Post-push self-review complete; no helper/task/server left running. Next:
+polling exception marker ownership (do not discard another task's claim),
+then transaction journal. Stack is 24 files against main; no guard bypass.
 
 ### R02c1 explicit failed-publication retry (2026-09-15; locally verified)
 
