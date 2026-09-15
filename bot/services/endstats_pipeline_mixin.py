@@ -1359,6 +1359,7 @@ class _EndstatsPipelineMixin:
         Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
         """
         source = "webhook"
+        marker_claim = None
         try:
             self._log_endstats_transition(
                 webhook_logger,
@@ -1405,7 +1406,8 @@ class _EndstatsPipelineMixin:
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with polling
-            if claim_endstats_marker(self, filename) is None:
+            marker_claim = claim_endstats_marker(self, filename)
+            if marker_claim is None:
                 try:
                     await trigger_message.delete()
                 except discord.DiscordException:
@@ -1428,6 +1430,7 @@ class _EndstatsPipelineMixin:
             )
 
             if not local_path:
+                release_endstats_marker(self, marker_claim)
                 webhook_logger.error(f"❌ Failed to download endstats: {filename}")
                 try:
                     await trigger_message.add_reaction('❌')
@@ -1445,6 +1448,7 @@ class _EndstatsPipelineMixin:
             endstats_data = parse_endstats_file(local_path)
 
             if not endstats_data:
+                release_endstats_marker(self, marker_claim)
                 webhook_logger.error(f"❌ Failed to parse endstats: {filename}")
                 try:
                     await trigger_message.add_reaction('⚠️')
@@ -1560,6 +1564,7 @@ class _EndstatsPipelineMixin:
 
         except Exception as e:
             webhook_logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
+            release_endstats_marker(self, marker_claim)
             try:
                 await trigger_message.add_reaction('🚨')
                 await trigger_message.reply(f"🚨 Error processing endstats `{filename}`. Check logs.")

@@ -43,6 +43,40 @@ def bot(monkeypatch):
     return SimpleNamespace(processed_endstats_files=set())
 
 
+@pytest.mark.parametrize("enabled", [False, True])
+@pytest.mark.parametrize("failure", ["download", "parse", "exception", "replacement"])
+async def test_webhook_unscheduled_failure_releases_only_own_claim(monkeypatch, enabled, failure):
+    from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
+
+    monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", str(enabled).lower())
+    bot = object.__new__(_EndstatsPipelineMixin)
+    bot.processed_endstats_files = set()
+    bot.db_adapter = SimpleNamespace(fetch_one=AsyncMock(return_value=None))
+    bot.config = SimpleNamespace(ssh_host="fixture", ssh_port=22, ssh_user="fixture",
+                                 ssh_key_path="unused", ssh_remote_path="unused",
+                                 stats_directory="unused")
+    bot.track_error = AsyncMock()
+    trigger = SimpleNamespace(add_reaction=AsyncMock(), reply=AsyncMock())
+
+    async def download(*args):
+        if failure == "replacement":
+            bot.processed_endstats_files.discard("original")
+            claim_endstats_marker(bot, "original")
+            raise RuntimeError("fixture replacement")
+        if failure == "exception":
+            raise RuntimeError("fixture download failure")
+        return None if failure == "download" else "unused"
+
+    monkeypatch.setattr("bot.automation.ssh_handler.SSHHandler.download_file", download)
+    monkeypatch.setattr("bot.services.endstats_pipeline_mixin.asyncio.sleep", AsyncMock())
+    monkeypatch.setattr("bot.endstats_parser.parse_endstats_file", lambda path: None)
+    await bot._process_webhook_triggered_endstats("original", trigger)  # noqa: SLF001
+    retained = not enabled or failure == "replacement"
+    assert ("original" in bot.processed_endstats_files) == retained
+    assert bot.track_error.await_count == int(failure in {"exception", "replacement"})
+    print(f"webhook failure runtime: enabled={enabled}, failure={failure}, retained={retained}")
+
+
 def test_claim_is_exclusive_and_own_alias_is_released(bot):
     claim = claim_endstats_marker(bot, "original")
     assert claim_endstats_marker(bot, "original") is None

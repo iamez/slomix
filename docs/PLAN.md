@@ -22,6 +22,17 @@
 
 ### R02c3 polling exception marker ownership (2026-09-15; locally verified)
 
+Review 4014910266 partially addressed: retain webhook claim and release its
+owned names after download/parse failure or caught exception. OFF remains
+unchanged; a replacement claim survives cleanup. 36 focused cases passed,
+including actual handler execution with synthetic SSH/parser/Discord failures.
+Removing download cleanup failed the enabled regression; restored with patch/cmp.
+Do NOT release immediately after scheduling a retry: that task bypasses the
+in-memory entry gate and premature release permits a competing polling attempt.
+Retry-chain alias cleanup/ownership transfer still needs a dedicated design and
+proof; keep this review thread open. Persisted NULL/terminal claims still block
+recovery even when RAM is released. No live runtime activation or PG rerun.
+
 Review follow-up 4014882361: a webhook losing its claim after DB preflight
 now deletes the trigger, matching the existing duplicate path. Discord deletion
 failure remains non-critical and the winning attempt retains its marker.

@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) #1043 finding 4014910266 partially fixed: webhook
+  download/parse/exception exits release owned markers only when enabled;
+  OFF and replacement ownership tested. 36 focused cases passed, cleanup
+  mutation failed and restored/cmp. Scheduled retry paths intentionally retain
+  markers to avoid parallel publication; retry-chain alias cleanup remains open.
+
 - (Astra, 2026-09-15) #1043 review 4014882361: lost post-preflight webhook
   claim now cleans its Discord trigger without releasing the winner's marker.
   Both deletion success/failure covered; 28 focused tests passed. Removal
