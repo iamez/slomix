@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) Owner explicitly approved #1012 only; cycle completed
+  merge to main 9cbd8810 (zero red checks/open threads/behind commits).
+  R02a retargeted to main and both dependent branches synchronized; code trees
+  unchanged by history reconciliation. R02b now 18 files against main.
+  New CI required on synchronized heads. Migration-owner review findings on
+  084/085 answered using existing release wrapper's explicit owner credentials.
+  No live changes. Next: R02c endstats retry/storage contract in PLAN; no
+  permission inferred to merge #1039 or #1040.
+
 - (Astra, 2026-09-14) R02b in `/tmp/slomix-astra-runtime-r02b`, branch
   `feat/db-runtime-status-r02b`, parent R02a 78aaf3a8 (CI 34859363030 passed).
   Default-OFF older-round status producer + migration085 implemented.

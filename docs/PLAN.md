@@ -64,7 +64,13 @@ then independent Linux capture/import. No active test server/helper remains.
 2026-09-15 follow-up: sanitized template now explicitly sets the status flag
 false. Fourteen status unit cases passed; changing that template value to true
 failed its contract guard, restored with patch and cmp. #1012 merge explicitly
-authorized by owner and cycle running; do not record merged until confirmed.
+authorized by owner and completed: squash 9cbd8810, cycle reported zero red
+checks, unresolved threads and behind commits, unchanged SHA. Verified merged
+through both cycle output and GitHub PR state. Dependent branches synchronized
+without runtime code changes; #1039 now targets main, #1040 still targets #1039.
+R02b stack is now 18 files against main, so the previous 25-file boundary no
+longer blocks a separate next slice. #1039/#1040 still need individual merge
+permission. No deploy or activation. Next development slice: R02c as below.
 
 **Next slice discovery (not implemented):** endstats storage already has an
 adapter transaction in `_store_endstats_and_publish`; bind its native connection
