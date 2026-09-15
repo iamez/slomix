@@ -22,7 +22,7 @@ from datetime import datetime
 import discord
 
 from bot.logging_config import get_logger
-from shared.endstats_retry import endstats_filename_gate_query
+from shared.endstats_retry import bound_endstats_publish_failures, endstats_filename_gate_query
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -1094,6 +1094,7 @@ class _EndstatsPipelineMixin:
                 """,
                 (filename, round_id, "publish_failed"),
             )
+            await bound_endstats_publish_failures(self, filename)
             self._log_endstats_transition(
                 log,
                 source,
