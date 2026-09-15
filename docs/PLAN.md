@@ -18,6 +18,76 @@
 
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
+## Track: runtime v2 R01 (Astra)
+
+Last updated: 2026-09-14. Owner priority: system runtime; frontend stays with
+Fable. Worktree `/tmp/slomix-astra-runtime-r01`, branch
+`feat/db-runtime-events-r01`. Code and isolated PostgreSQL proof complete;
+PR #1012 open. NOT merged, live-migrated, enabled or deployed.
+
+- 2026-09-14: CI actually ran: Python 3.13 had 6736 passed, 153 skipped,
+  two failures in round-ID coverage (journal exemption missing). Added the
+  explicit immutable-history exemption; no relinker may rewrite journal IDs.
+  Review 4000153306 exposed terminal failure marking after rollback. Added a
+  tuple-compatible retryable failure result; DB preflight/acquisition/write/
+  NOTIFY/COMMIT failures leave no terminal DB/RAM marker. Known parse rejects
+  remain terminal. Optional SSH monitor now propagates failed result rather
+  than reporting success. Existing poll/activity/lookback limits still apply;
+  this is retry eligibility, not a durable scheduler or exactly-once replay.
+  Real isolated PG run: 106 passed, including canonical failed-journal import
+  followed by successful round/event/marker commit (parser/stat writers stubbed),
+  plus full fresh-bootstrap parity. Additional preflight unit case added after
+  review. Retry flag mutation failed two guards, showing the terminal-mark log;
+  restored by patch and cmp. Test cluster stopped. All live services unchanged.
+
+- 2026-09-13: confirmed all three review replies persisted. Synchronized
+  main 75ee10b5, retaining Supastats and runtime default-OFF flags and both
+  backlog lanes. GitHub previously reported conflicts and only static checks;
+  do not describe Python CI as green until an actual run is observed.
+
+- Review follow-up (2026-09-10): fixed all three reported gaps: migration 083
+  now ships in the newest release config and canonical fresh-bootstrap dump;
+  CI explicitly opts into its loopback PostgreSQL service. Local runs retain
+  the private-socket gate; CI requires GITHUB_ACTIONS plus exact test host,
+  database and role. No application DB fallback. Added workflow/connection
+  guards and exact journal DDL mirror check.
+  Isolated rerun: 90 passed, zero skipped, including four real journal PG
+  tests and full dump/migrations/baseline parity (`Validation: CLEAN`).
+  The omitted-release-config test was seen failing before the fix. Mutation
+  of CI opt-in to false failed (`assert 'false' == 'true'`), restored with
+  patch and cmp. Temporary PG stopped; log and pg_ctl confirmed independently.
+  This is local evidence, not a claim that GitHub Actions has executed the
+  updated workflow; external CI status must be checked after push.
+
+- R01: migration 083 and neutral initial-import emitter on the existing
+  canonical importer transaction; `EVENT_STREAM_ENABLED=false`. R1/R2 only,
+  unique round/type, versioned source metadata, validation-warning flag,
+  transactional ID-only NOTIFY. No live migration, consumer or backfill.
+- Verify disabled/no-table behavior, retry deduplication, canonical wiring,
+  event failure rollback and notifications at commit using isolated PostgreSQL.
+  Owner approved temporary PostgreSQL. On 2026-09-09 all four PG tests passed
+  on a fresh PostgreSQL 14.24 cluster with a private Unix socket, no TCP
+  listener, 16 MB shared buffers and no live-DB fallback. Two connections
+  proved pre-commit invisibility, commit-only NOTIFY, rollback of round/event,
+  missing-table rollback when enabled, OFF without migration, no R0, and one
+  event for two concurrent attempts. COUNT and row fetch independently agree.
+  Cluster stopped immediately; shutdown log and `pg_ctl: no server running`
+  both confirmed it. Test data/logs remain local in the disposable /tmp cluster.
+- Local verification: 21 new unit cases plus 18 neighboring importer cases
+  pass (39 total); includes emitter and COMMIT failures. Disabled guard
+  mutation failed with `AttributeError: 'NoneType' object has no attribute
+  'is_in_transaction'`; restored by patch and `cmp` passed. New files lint
+  clean; importer has the same 20 pre-existing Ruff findings as base HEAD.
+  Minimal Python environment lacked `discord`; rerun used the existing full
+  venv read-only, without installing anything. Success counters/logs now run
+  after COMMIT. Combined rerun: 43 passed, zero skipped (39 unit + 4 PG).
+  PG proof exercises the real emitter/SQL; canonical importer wiring and
+  COMMIT failure are separately tested with mocks, not a full ingest replay.
+- R02: map and journal post-commit corrections before consumers.
+- R03: per-consumer receipts and durable catch-up, not maximum-ID cursors.
+- R04: independent Linux Python capture/import/retry plus watchdog; remove
+  Discord lifecycle/metadata dependencies before claiming independent ingest.
+
 ## Proga: nova stran (Fable)
 
 ### Kje smo

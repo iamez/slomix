@@ -40,6 +40,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 from bot.config import load_config
 from bot.stats import StatsCalculator
+from shared.import_result import RetryableImportFailure
+from shared.runtime_events import emit_round_stats_imported, event_stream_enabled
 
 # Import comprehensive logging system
 try:
@@ -84,6 +86,7 @@ class PostgreSQLDatabaseManager:
 
     def __init__(self, stats_dir: str = "local_stats"):
         self.config = load_config()
+        self.event_stream_enabled = event_stream_enabled()
 
         if self.config.database_type != 'postgresql':
             raise ValueError(
@@ -1588,6 +1591,7 @@ class PostgreSQLDatabaseManager:
         filename = file_path.name
         start_time = time.time()
         payload_hash = None
+        transaction_pending = False
 
         try:
             # Compute hash early so renamed duplicates are detectable.
@@ -1597,6 +1601,7 @@ class PostgreSQLDatabaseManager:
                 logger.warning(f"⚠️ Could not hash file {filename}: {hash_exc}")
 
             # Check if already processed
+            transaction_pending = True  # DB preflight failures are retryable too.
             if await self.is_file_processed(filename):
                 self.stats['files_skipped'] += 1
                 logger.debug(f"⏭️  Skipped (already processed): {filename}")
@@ -1618,6 +1623,7 @@ class PostgreSQLDatabaseManager:
                 return True, f"Duplicate payload of {duplicate_source}"
 
             # STEP 1: Parse file
+            transaction_pending = False
             logger.debug(f"📖 Parsing file: {filename}")
             parsed_data = self.parser.parse_stats_file(str(file_path))
 
@@ -1657,6 +1663,7 @@ class PostgreSQLDatabaseManager:
                 return False, "Invalid filename format"
 
             # STEP 3: Create round and insert stats
+            transaction_pending = True
             async with self.pool.acquire() as conn:
                 async with conn.transaction():
                     # Create round (round_number determined in _create_round_postgresql from filename)
@@ -1705,29 +1712,35 @@ class PostgreSQLDatabaseManager:
                         # Log warning but don't fail - data is still saved
                         logger.warning(f"⚠️  Data mismatch in {filename}: {validation_msg}")
 
-                    # Transaction successful - update stats
-                    self.stats['files_processed'] += 1
-                    self.stats['rounds_created'] += 1
-                    self.stats['players_inserted'] += player_count
-                    self.stats['weapons_inserted'] += weapon_count
-
-                    # Log successful import
-                    duration = time.time() - start_time
-                    logger.info(
-                        f"✓ Imported {filename}: {player_count} players, {weapon_count} weapons "
-                        f"[{duration:.2f}s]{' (WITH WARNINGS)' if not validation_passed else ''}"
-                    )
-                    log_stats_import(
-                        filename,
-                        round_count=1,
-                        player_count=player_count,
-                        weapon_count=weapon_count,
-                        duration=duration
+                    # Same transaction: journal/NOTIFY failures roll back the import.
+                    await emit_round_stats_imported(
+                        conn, enabled=self.event_stream_enabled, round_id=round_id,
+                        source_filename=filename, source_payload_sha256=payload_hash,
+                        validation_passed=validation_passed,
                     )
 
-                    # Warn if import was slow
-                    if duration > 3.0:
-                        log_performance_warning(f"Import {filename}", duration, threshold=3.0)
+            transaction_pending = False
+            # Count/log success only after COMMIT (NOTIFY can fail at commit).
+            self.stats['files_processed'] += 1
+            self.stats['rounds_created'] += 1
+            self.stats['players_inserted'] += player_count
+            self.stats['weapons_inserted'] += weapon_count
+
+            duration = time.time() - start_time
+            logger.info(
+                f"✓ Imported {filename}: {player_count} players, {weapon_count} weapons "
+                f"[{duration:.2f}s]{' (WITH WARNINGS)' if not validation_passed else ''}"
+            )
+            log_stats_import(
+                filename,
+                round_count=1,
+                player_count=player_count,
+                weapon_count=weapon_count,
+                duration=duration
+            )
+
+            if duration > 3.0:
+                log_performance_warning(f"Import {filename}", duration, threshold=3.0)
 
             # 🔒 CRITICAL: Mark file as processed ONLY after transaction commits successfully
             # This prevents files from being marked as processed when the transaction rolls back
@@ -1791,6 +1804,10 @@ class PostgreSQLDatabaseManager:
             duration = time.time() - start_time
             logger.error(f"❌ Error processing {filename} [{duration:.2f}s]: {error_msg}", exc_info=True)
             log_stats_import(filename, error=e, duration=duration)
+            if transaction_pending:
+                # Acquisition, writes, NOTIFY and COMMIT may fail transiently.
+                # No terminal DB marker: leave the file eligible for another poll.
+                return RetryableImportFailure(error_msg)
             await self.mark_file_processed(
                 filename,
                 success=False,

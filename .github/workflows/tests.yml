@@ -125,9 +125,11 @@ jobs:
 
       - name: Run tests
         env:
-          POSTGRES_TEST_HOST: localhost
+          POSTGRES_TEST_HOST: 127.0.0.1
           POSTGRES_TEST_PORT: 5432
           POSTGRES_TEST_DATABASE: etlegacy_test
+          # Explicit opt-in to the disposable service, never a local DB fallback.
+          RUNTIME_EVENTS_TEST_CI: "true"
           POSTGRES_TEST_USER: etlegacy_user
           POSTGRES_TEST_PASSWORD: etlegacy_test_password
           CACHE_BACKEND: memory

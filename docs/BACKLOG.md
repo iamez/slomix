@@ -7,6 +7,32 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-14) R01 retry and CI fixes: structured retryable failures
+  prevent terminal suppression after DB preflight/transaction errors; optional
+  SSH wrapper respects failure. Journal explicitly exempt from relinking.
+  106-case isolated PG run passed; extra preflight unit case added afterward.
+  Mutation reproduced terminal-mark regression then restored/cmp. Next: push,
+  reply to review 4000153306, inspect complete CI, then isolated R02 design.
+
+- (Astra, 2026-09-13) PR #1012: all three review replies confirmed saved;
+  synchronized main, preserving both runtime and Supastats opt-outs and both
+  agents' backlog entries. External Python CI execution remains unconfirmed.
+- (Astra, 2026-09-10) PR #1012 review fixes: release-config registration,
+  fresh-bootstrap journal mirror, and explicit CI test-service opt-in.
+  90 local tests pass with real disposable PostgreSQL, including complete
+  dump/migrations/baseline parity. CI opt-in mutation failed and was restored
+  byte-identically. Cluster stopped. Next: push/reply to the three review
+  threads and verify external checks; R02 remains a separate slice.
+
+- (Astra, 2026-09-08) Runtime v2 R01 code prepared on
+  `feat/db-runtime-events-r01` in `/tmp/slomix-astra-runtime-r01`: migration 083,
+  default-OFF canonical import journal, transactional wake-up, unit and opt-in
+  PostgreSQL tests. Updated 2026-09-09 after owner-approved isolated PG run:
+  43 passed, zero skipped, including 4 real PG commit/rollback/concurrency
+  cases. Temporary cluster stopped (log + pg_ctl independently confirmed).
+  No live DB/services changed. Next: review/PR; not R02 consumers yet.
+  Fable retains frontend ownership.
+
 - (Opus 5, 2026-09-10) **PREDAJA POSODOBLJENA**: `docs/HANDOFF-fable-2026-09-10.md` — merilnik 238 → 92 (→ 79 s #1028),
   P0 in P1 dolga nazaj zaprta razen filtrov v URL, tabele dobile ARIA vloge; ostane §3b (sirote proximity) in §3c (filtri, izvoz, kontakt).
 - (Fable 5.1, 2026-09-09, zvečer) **PREDAJA PRED DOPUSTOM**: `docs/HANDOFF-fable-2026-09-09.md`

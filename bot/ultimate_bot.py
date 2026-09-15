@@ -1122,7 +1122,8 @@ class UltimateETLegacyBot(
                     else:
                         db_manager.pool = self.db_adapter.pool
 
-                    success, message = await db_manager.process_file(Path(local_path))
+                    import_result = await db_manager.process_file(Path(local_path))
+                    success, message = import_result
                 finally:
                     # Only disconnect if we created our own pool — and always
                     # do it, even if connect()/migrate_schema()/process_file()
@@ -1132,6 +1133,12 @@ class UltimateETLegacyBot(
                         await db_manager.disconnect()
 
                 if not success:
+                    if getattr(import_result, "retryable", False):
+                        await self.track_error("file_processing", message, max_consecutive=5)
+                        return {
+                            "success": False, "round_id": None, "player_count": 0,
+                            "error": message, "stats_data": None, "retryable": True,
+                        }
                     # Mark parse failures as processed (with success=FALSE) to prevent
                     # infinite retry loops on legitimately unparseable files (e.g. header-only)
                     try:
