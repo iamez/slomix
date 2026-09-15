@@ -85,6 +85,54 @@ def test_claim_is_exclusive_and_own_alias_is_released(bot):
     assert bot.processed_endstats_files == set()
 
 
+@pytest.mark.parametrize("reason", ["unresolved", "not_ready", "publish_failed"])
+async def test_scheduled_webhook_retry_retains_claim_until_handoff(monkeypatch, reason):
+    import asyncio
+
+    from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
+
+    monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", "true")
+    bot = object.__new__(_EndstatsPipelineMixin)
+    bot.processed_endstats_files = set()
+    bot.db_adapter = SimpleNamespace(fetch_one=AsyncMock(return_value=None))
+    bot.config = SimpleNamespace(ssh_host="fixture", ssh_port=22, ssh_user="fixture",
+                                 ssh_key_path="unused", ssh_remote_path="unused",
+                                 stats_directory="unused")
+    bot.endstats_retry_tasks = {}
+    bot.endstats_retry_counts = {}
+    bot.endstats_retry_max_attempts = 3
+    bot.endstats_retry_base_delay = 3600
+    bot.endstats_retry_max_delay = 3600
+    bot._safe_create_task = asyncio.create_task  # noqa: SLF001
+    bot.track_error = AsyncMock()
+    bot._resolve_endstats_round_id = AsyncMock(return_value=(None if reason == "unresolved" else 1, "fixture"))  # noqa: SLF001
+    bot._is_endstats_round_already_processed = AsyncMock(return_value=False)  # noqa: SLF001
+    bot._is_endstats_round_ready = AsyncMock(return_value=reason != "not_ready")  # noqa: SLF001
+    bot._store_endstats_and_publish = AsyncMock(return_value=False)  # noqa: SLF001
+    data = {"metadata": {"date": "2026-09-15", "time": "120000", "map_name": "fixture", "round_number": 1},
+            "awards": [], "vs_stats": []}
+    bot._select_richest_endstats = lambda data, path, name, *args: (data, path, name)  # noqa: SLF001
+    monkeypatch.setattr("bot.automation.ssh_handler.SSHHandler.download_file", AsyncMock(return_value="unused"))
+    monkeypatch.setattr("bot.endstats_parser.parse_endstats_file", lambda path: data)
+    trigger = SimpleNamespace(add_reaction=AsyncMock(), reply=AsyncMock())
+    tasks = []
+    try:
+        await bot._process_webhook_triggered_endstats("original", trigger)  # noqa: SLF001
+        tasks = list(bot.endstats_retry_tasks.values())
+        assert len(tasks) == 1
+        assert not tasks[0].done()
+        assert bot.endstats_retry_counts == {"original": 1}
+        assert claim_endstats_marker(bot, "original") is None
+        bot.track_error.assert_not_awaited()
+    finally:
+        tasks = list(bot.endstats_retry_tasks.values())
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+    assert all(task.done() for task in tasks)
+    print(f"retry handoff runtime: reason={reason}, one queued task, competing claim blocked, tasks drained")
+
+
 def test_foreign_alias_survives_cleanup(bot):
     foreign = claim_endstats_marker(bot, "richer")
     own = claim_endstats_marker(bot, "original")

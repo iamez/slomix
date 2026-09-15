@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) #1043 scheduler handoff proof added: 39 focused tests
+  pass, including three real queued asyncio retry paths; competing claims stay
+  blocked and tasks are drained. Full-chain terminal alias cleanup remains open.
+
 - (Astra, 2026-09-15) #1043 finding 4014910266 partially fixed: webhook
   download/parse/exception exits release owned markers only when enabled;
   OFF and replacement ownership tested. 36 focused cases passed, cleanup

@@ -33,6 +33,12 @@ Retry-chain alias cleanup/ownership transfer still needs a dedicated design and
 proof; keep this review thread open. Persisted NULL/terminal claims still block
 recovery even when RAM is released. No live runtime activation or PG rerun.
 
+Follow-up proof: 39 focused tests passed. Three actual asyncio scheduler
+cases (unresolved round, not ready, publication False) each create exactly one
+pending retry, increment attempt count once and reject a competing RAM claim.
+Synthetic external adapters; all test-created tasks cancelled and awaited in
+finally. This proves handoff exclusion, not full-chain terminal alias cleanup.
+
 Review follow-up 4014882361: a webhook losing its claim after DB preflight
 now deletes the trigger, matching the existing duplicate path. Discord deletion
 failure remains non-critical and the winning attempt retains its marker.
