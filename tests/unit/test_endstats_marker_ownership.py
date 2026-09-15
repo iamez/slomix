@@ -57,7 +57,8 @@ def test_off_preserves_legacy_markers(bot, monkeypatch):
     assert bot.processed_endstats_files == {"original", "richer"}
 
 
-async def test_polling_not_ready_preserves_foreign_richer_marker(monkeypatch):
+@pytest.mark.parametrize("failure", ["not_ready", "unresolved", "publish_failed"])
+async def test_polling_soft_failure_preserves_foreign_richer_marker(monkeypatch, failure):
     from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
 
     monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", "true")
@@ -68,9 +69,12 @@ async def test_polling_not_ready_preserves_foreign_richer_marker(monkeypatch):
             "awards": [], "vs_stats": []}
     monkeypatch.setattr("bot.endstats_parser.parse_endstats_file", lambda path: data)
     bot.db_adapter = SimpleNamespace(fetch_one=AsyncMock(return_value=None))
-    bot._resolve_endstats_round_id = AsyncMock(return_value=(1, "fixture"))  # noqa: SLF001
+    bot.endstats_retry_counts = {}
+    bot.endstats_retry_max_attempts = 5
+    bot._resolve_endstats_round_id = AsyncMock(return_value=(None if failure == "unresolved" else 1, "fixture"))  # noqa: SLF001
     bot._is_endstats_round_already_processed = AsyncMock(return_value=False)  # noqa: SLF001
-    bot._is_endstats_round_ready = AsyncMock(return_value=False)  # noqa: SLF001
+    bot._is_endstats_round_ready = AsyncMock(return_value=failure != "not_ready")  # noqa: SLF001
+    bot._store_endstats_and_publish = AsyncMock(return_value=False)  # noqa: SLF001
     bot.track_error = AsyncMock()
 
     def select(data, path, original, *args):

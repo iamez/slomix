@@ -51,6 +51,11 @@ requested, post-push self-review complete; external CI pending. #1039 verified
 at 8f5f21af: all checks successful, both review threads resolved. Next authority
 gate is owner-specific permission for #1039 merge (not deploy/activation).
 Only #1012 was previously authorized and merged; do not infer the rest.
+Follow-up: expanded foreign-alias route regression across all three polling
+soft exits (not-ready, unresolved round, failed publication). Eight ownership
+tests passed; no runtime behavior changed in this follow-up. #1043 CI still
+running at check; development continues with review/test work, not an assumed
+permission to merge #1039.
 
 ### R02c2 bounded webhook retry after exceptions (2026-09-15; in progress)
 
