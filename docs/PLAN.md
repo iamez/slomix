@@ -50,8 +50,16 @@ Temporary private PG stopped, independently confirmed by pg_ctl and log.
 Reviewer status_contract_audit found no blocker; recommended enabled complete-
 match protection and real-create-catch tests, both now added. Separate roster/
 counterpart reads remain heuristic, not newly proven concurrency-safe.
-Next: commit/push as a draft stacked on #1039, self-review, exact-SHA CI and
-external review. R02a 78aaf3a8 passed CI 34859363030. No live changes.
+Published as draft PR #1040 against `feat/db-runtime-timing-r02`; code b6137a61.
+Verified 2026-09-15: exact-SHA CI 34860352518 SUCCESS; Codex external comment
+5666250588 reviewed b6137a61 and reported no major issues. CodeRabbit did not
+complete its review (rate limit), so no approval is inferred. Post-push diff
+self-review complete. R02a 78aaf3a8 passed CI 34859363030. No live changes.
+Next: finish external review and request owner-specific merge decisions in
+dependency order #1012 -> #1039 -> #1040. The stacked diff is now 25 files
+against main; do not bypass the push guard to grow the stack. Remaining R02
+writers are Lua metadata/DPM and endstats; then consumer receipts/catch-up,
+then independent Linux capture/import. No active test server/helper remains.
 
 ### R02a timing-fill slice (2026-09-14, Astra)
 

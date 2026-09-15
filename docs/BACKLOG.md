@@ -14,8 +14,11 @@
   create-catch test added (14 status unit cases passed). Guard mutation
   failed twice, restored/cmp; temporary PG stopped. Read-only helper review
   found no blocker; both suggested coverage additions implemented.
-  Next: draft PR against #1039 branch, exact-SHA CI/external review. PLAN
-  records transaction contract and boundaries; no live migration or deploy.
+  Published draft #1040, b6137a61. Verified 2026-09-15: CI 34860352518 passed;
+  external Codex reviewed this SHA, no major issues. CodeRabbit rate-limited,
+  not an approval. Next: remaining review and owner merge decisions in order
+  #1012 -> #1039 -> #1040; stack at 25 files, no guard bypass. PLAN records
+  transaction contract and boundaries; no live migration or deploy.
 
 - (Astra, 2026-09-14) R02a on `feat/db-runtime-timing-r02`, stacked on
   R01 b81221d6 (green CI/CodeQL/Hygiene; still unmerged). Migration084 and
