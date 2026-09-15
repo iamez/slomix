@@ -11,6 +11,7 @@ from shared.endstats_retry import alias_endstats_marker, claim_endstats_marker, 
 @pytest.mark.parametrize("delete_fails", [False, True])
 async def test_webhook_lost_claim_cleans_trigger_without_releasing_owner(monkeypatch, delete_fails):
     import discord
+
     from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
 
     monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", "true")
