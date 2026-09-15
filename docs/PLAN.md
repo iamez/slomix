@@ -46,7 +46,11 @@ Disabling the helper caused `assert 1 == 2`; reverting only monitor preflight
 caused `assert False` before the retry. Both mutations restored with patch/cmp;
 final preflight + storage retry test passed. Temporary PG stopped, independently
 confirmed by pg_ctl and log. No live services, data or flags changed.
-Next: publish/review this prerequisite, then separately handle exception/RAM
+Published as draft PR #1041 against `feat/db-runtime-status-r02b`, code
+d2efd904. Post-push self-review complete; exact-code CI 34933912726 queued at
+checkpoint. Codex and CodeRabbit review requested. Stack is 23 files against
+main; no helper/server active. No merge permission inferred for this PR.
+Next: review this prerequisite, then separately handle exception/RAM
 recovery and endstats event storage. Do not call this full endstats recovery.
 
 ### R02b restart-status contract (2026-09-14, Astra; locally verified)

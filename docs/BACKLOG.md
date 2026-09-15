@@ -14,7 +14,9 @@
   missing monitor preflight; fixed and proved through real PG storage plus
   fake publication fail/retry/success. 68 cases passed; both gate mutations
   failed, restored/cmp, final runtime case passed. Temporary PG stopped.
-  Next: draft PR/CI/review; exception/RAM recovery and events remain separate.
+  Published draft PR #1041, code d2efd904, parent #1040. CI 34933912726 queued;
+  Codex/CodeRabbit review requested, post-push self-review complete. Next:
+  CI/review; exception/RAM recovery and events remain separate. No activation.
 
 - (Astra, 2026-09-15) Owner explicitly approved #1012 only; cycle completed
   merge to main 9cbd8810 (zero red checks/open threads/behind commits).
