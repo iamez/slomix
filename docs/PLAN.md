@@ -82,8 +82,16 @@ separate R02c contract, not an excuse to activate incomplete consumers.
 
 Branch `feat/db-runtime-timing-r02`, worktree `/tmp/slomix-astra-runtime-r02`,
 stacked on R01 b81221d6 (PR #1012 CI/CodeQL/Hygiene confirmed success).
-R01 remains unmerged. R02a is development only; both event flags default OFF.
+R01 merged with explicit owner permission on 2026-09-15 as 9cbd8810.
+R02a is development only; both event flags default OFF.
 Published as draft PR #1039, base `feat/db-runtime-events-r01`, code 0eceda4c.
+Update 2026-09-15: retargeted #1039 to main after R01 merge. Synchronized
+main in 8b2b60ab; resolved squash-history conflicts with a byte-identical R02a
+tree (new main was exactly R01 b81221d6). Fresh checks required for this head.
+Source-lock review resolved after proof and CI; owner-role review answered:
+deploy_release.sh already exports root-env owner credentials to the runner.
+No migration, service restart or activation occurred. #1039 is not authorized
+for merge. Its diff against main is now 13 files.
 Push CI now narrowly includes `feat/db-runtime-*`; PR targets stay main/develop.
 Exact commit 2e2359db passed CI run 34858646087. The branch-pattern guard passed
 and failed when the runtime pattern was removed, then was restored with cmp.
