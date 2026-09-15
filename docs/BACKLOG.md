@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) #1043 terminal chain cleanup implemented: explicitly
+  carry original webhook identity into scheduler and retain it across retries;
+  exhaustion/missing metadata release owned aliases, preserve replacements.
+  78 focused tests passed; four mutation failures, restored/cmp. OFF covered.
+  Earlier terminal-alias TODO below is addressed for these paths; cancellation
+  and unknown persisted claims remain outside this slice. No live changes.
+
 - (Astra, 2026-09-15) #1043 scheduler handoff proof added: 39 focused tests
   pass, including three real queued asyncio retry paths; competing claims stay
   blocked and tasks are drained. Full-chain terminal alias cleanup remains open.

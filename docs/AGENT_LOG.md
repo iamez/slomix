@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-15 · Retry ownership must travel with the chain.** Capture the
+  original webhook claim explicitly when scheduling, retain it across attempts,
+  and release it only on retryable terminal exits. Looking up the current alias
+  owner at cleanup time can release a replacement. Immediate release while a
+  retry is pending instead permits competing polling publication. Prove both
+  pending exclusion and terminal alias cleanup with actual asyncio tasks.
+
 - **2026-09-15 · A post-await duplicate needs the same trigger cleanup.**
   Another endstats attempt can claim a filename during DB preflight. The
   losing webhook must delete its notification just like the initial duplicate

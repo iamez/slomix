@@ -22,6 +22,18 @@
 
 ### R02c3 polling exception marker ownership (2026-09-15; locally verified)
 
+Latest review continuation: webhook passes its original claim explicitly into
+the scheduler; a per-chain map retains that identity through rescheduling.
+Exhaustion and missing metadata release only its still-owned original/alias
+markers. Successful/DB-terminal processing retains handled RAM markers as before.
+OFF keeps legacy filename discard; enabled callers with no claim do not remove
+unowned markers. 78 focused cases passed (two existing websockets warnings),
+including real bounded asyncio chains with alias replacement during DB await.
+Four terminal-cleanup mutation cases failed (original/richer remained), restored
+with patch/cmp. No pending test tasks, live services or PG changes. This closes
+the exhaustion/missing-metadata alias gap below, not cancellation recovery,
+cross-process exclusion or unknown persisted DB claims. External review pending.
+
 Review 4014910266 partially addressed: retain webhook claim and release its
 owned names after download/parse failure or caught exception. OFF remains
 unchanged; a replacement claim survives cleanup. 36 focused cases passed,

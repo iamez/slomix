@@ -143,6 +143,61 @@ def test_foreign_alias_survives_cleanup(bot):
     assert bot.processed_endstats_files == set()
 
 
+@pytest.mark.parametrize("terminal", ["exhausted", "missing_metadata"])
+@pytest.mark.parametrize("replacement", [False, True])
+async def test_retry_chain_releases_aliases_without_releasing_replacement(monkeypatch, terminal, replacement):
+    import asyncio
+
+    from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
+
+    monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", "true")
+    bot = object.__new__(_EndstatsPipelineMixin)
+    bot.processed_endstats_files = set()
+    claim = claim_endstats_marker(bot, "original")
+    alias_endstats_marker(bot, "original", "richer")
+    bot.endstats_retry_tasks = {}
+    bot.endstats_retry_counts = {}
+    bot.endstats_retry_max_attempts = 2
+    bot.endstats_retry_base_delay = 0
+    bot.endstats_retry_max_delay = 0
+    tasks = []
+    reads = []
+
+    async def fetch(*args):
+        reads.append(args)
+        if replacement and len(reads) == 1:
+            bot.processed_endstats_files.discard("richer")
+            claim_endstats_marker(bot, "richer")
+        if terminal == "exhausted":
+            raise RuntimeError("fixture unavailable DB")
+        return None
+
+    def create_task(coro, *, name=None):
+        task = asyncio.create_task(coro, name=name)
+        tasks.append(task)
+        return task
+
+    bot.db_adapter = SimpleNamespace(fetch_one=fetch)
+    bot._safe_create_task = create_task  # noqa: SLF001
+    try:
+        await bot._schedule_endstats_retry("richer", "unused", {}, None, marker_claim=claim)  # noqa: SLF001
+        index = 0
+        while index < len(tasks):
+            assert len(tasks) <= 2
+            await asyncio.wait_for(tasks[index], 2)
+            index += 1
+        assert len(reads) == len(tasks) == (2 if terminal == "exhausted" else 1)
+        assert bot.processed_endstats_files == ({"richer"} if replacement else set())
+        assert bot.endstats_retry_tasks == bot.endstats_retry_counts == {}
+        assert bot._endstats_retry_claims == {}  # noqa: SLF001
+        print(f"terminal retry runtime: {terminal}, replacement={replacement}, reads={len(reads)}, tasks={len(tasks)}, aliases released safely")
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 def test_later_replacement_survives_old_attempt_cleanup(bot):
     old = claim_endstats_marker(bot, "original")
     bot.processed_endstats_files.discard("original")  # Existing retry scheduler releases set entries.

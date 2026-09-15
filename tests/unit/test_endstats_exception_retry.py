@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
+from shared.endstats_retry import claim_endstats_marker
 
 
 @pytest.mark.parametrize("enabled,permanent,expected", [(False, False, 1), (True, False, 2), (True, True, 3)])
@@ -18,7 +19,8 @@ async def test_real_scheduler_retries_and_stops(monkeypatch, enabled, permanent,
     bot.endstats_retry_max_attempts = 3
     bot.endstats_retry_base_delay = 0
     bot.endstats_retry_max_delay = 0
-    bot.processed_endstats_files = {"fixture.txt"}
+    bot.processed_endstats_files = set()
+    claim = claim_endstats_marker(bot, "fixture.txt")
     calls = []
     tasks = []
 
@@ -37,7 +39,7 @@ async def test_real_scheduler_retries_and_stops(monkeypatch, enabled, permanent,
     bot._safe_create_task = create_task  # noqa: SLF001
     trigger = SimpleNamespace(add_reaction=AsyncMock())
     try:
-        await bot._schedule_endstats_retry("fixture.txt", "fixture.txt", {}, trigger)  # noqa: SLF001
+        await bot._schedule_endstats_retry("fixture.txt", "fixture.txt", {}, trigger, marker_claim=claim)  # noqa: SLF001
         index = 0
         while index < len(tasks):
             assert len(tasks) <= bot.endstats_retry_max_attempts

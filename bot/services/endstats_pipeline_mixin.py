@@ -647,7 +647,14 @@ class _EndstatsPipelineMixin:
         delay = self.endstats_retry_base_delay * (2 ** (attempt - 1))
         return min(delay, self.endstats_retry_max_delay)
 
-    def _clear_endstats_retry_state(self, filename: str) -> None:
+    def _clear_endstats_retry_state(self, filename: str, *, release_claim: bool = False) -> None:
+        claims = getattr(self, "_endstats_retry_claims", {})
+        claim = claims.pop(filename, None)
+        if release_claim:
+            release_endstats_marker(
+                self, claim,
+                legacy_filename=filename if not endstats_retry_enabled() else None,
+            )
         self.endstats_retry_counts.pop(filename, None)
         task = self.endstats_retry_tasks.pop(filename, None)
         current_task = asyncio.current_task()
@@ -660,6 +667,8 @@ class _EndstatsPipelineMixin:
         local_path: str,
         endstats_data: dict,
         trigger_message,
+        *,
+        marker_claim=None,
     ) -> None:
         existing = self.endstats_retry_tasks.get(filename)
         if existing and not existing.done():
@@ -674,6 +683,12 @@ class _EndstatsPipelineMixin:
             # Clear stale/done task reference so it doesn't block future scheduling
             self.endstats_retry_tasks.pop(filename, None)
 
+        if endstats_retry_enabled():
+            if not hasattr(self, "_endstats_retry_claims"):
+                self._endstats_retry_claims = {}
+            # Keep the original attempt identity across retries and alias changes.
+            self._endstats_retry_claims.setdefault(filename, marker_claim)
+
         attempt = self.endstats_retry_counts.get(filename, 0) + 1
         self.endstats_retry_counts[filename] = attempt
 
@@ -681,8 +696,7 @@ class _EndstatsPipelineMixin:
             webhook_logger.error(
                 f"❌ Endstats retry limit reached ({self.endstats_retry_max_attempts}) for {filename}"
             )
-            self.processed_endstats_files.discard(filename)
-            self._clear_endstats_retry_state(filename)
+            self._clear_endstats_retry_state(filename, release_claim=True)
             try:
                 if trigger_message:
                     await trigger_message.add_reaction('⚠️')
@@ -745,8 +759,7 @@ class _EndstatsPipelineMixin:
 
             if not (round_date and map_name and round_number):
                 webhook_logger.error(f"❌ Missing metadata for endstats retry: {filename}")
-                self.processed_endstats_files.discard(filename)
-                self._clear_endstats_retry_state(filename)
+                self._clear_endstats_retry_state(filename, release_claim=True)
                 return
 
             round_meta = {
@@ -1501,7 +1514,8 @@ class _EndstatsPipelineMixin:
                 except discord.DiscordException:
                     logger.debug("Discord notification failed (non-critical)")
                 await self._schedule_endstats_retry(
-                    filename, local_path, endstats_data, trigger_message
+                    filename, local_path, endstats_data, trigger_message,
+                    marker_claim=marker_claim,
                 )
                 return
 
@@ -1531,7 +1545,8 @@ class _EndstatsPipelineMixin:
                 except discord.DiscordException:
                     logger.debug("Discord notification failed (non-critical)")
                 await self._schedule_endstats_retry(
-                    filename, local_path, endstats_data, trigger_message
+                    filename, local_path, endstats_data, trigger_message,
+                    marker_claim=marker_claim,
                 )
                 return
 
@@ -1551,7 +1566,8 @@ class _EndstatsPipelineMixin:
                 except discord.DiscordException:
                     logger.debug("Discord notification failed (non-critical)")
                 await self._schedule_endstats_retry(
-                    filename, local_path, endstats_data, trigger_message
+                    filename, local_path, endstats_data, trigger_message,
+                    marker_claim=marker_claim,
                 )
                 return
 
