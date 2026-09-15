@@ -61,6 +61,23 @@ against main; do not bypass the push guard to grow the stack. Remaining R02
 writers are Lua metadata/DPM and endstats; then consumer receipts/catch-up,
 then independent Linux capture/import. No active test server/helper remains.
 
+2026-09-15 follow-up: sanitized template now explicitly sets the status flag
+false. Fourteen status unit cases passed; changing that template value to true
+failed its contract guard, restored with patch and cmp. #1012 merge explicitly
+authorized by owner and cycle running; do not record merged until confirmed.
+
+**Next slice discovery (not implemented):** endstats storage already has an
+adapter transaction in `_store_endstats_and_publish`; bind its native connection
+for the event before transaction exit. Existing success/quality decisions and
+awards/VS replacement need per-round serialization and complete normalized row
+comparison, not counts, to distinguish a real change from a publish retry.
+The storage event cannot mean Discord delivery: correlation/publish/handled
+markers occur afterward, and richer replacements intentionally skip publishing.
+Polling and webhook retry check filename existence even for failed claims;
+polling's outer exception also retains its RAM marker. An enabled journal must
+repair and test these retry paths before claiming recovery. This remains a
+separate R02c contract, not an excuse to activate incomplete consumers.
+
 ### R02a timing-fill slice (2026-09-14, Astra)
 
 Branch `feat/db-runtime-timing-r02`, worktree `/tmp/slomix-astra-runtime-r02`,

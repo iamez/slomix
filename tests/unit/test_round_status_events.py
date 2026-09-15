@@ -57,6 +57,7 @@ def test_bootstrap_and_release_include_status_migration():
     name = "085_runtime_status_events.sql"
     assert (root / "migrations" / name).read_text().strip() in (root / "tools/schema_postgresql.sql").read_text()
     assert name in (root / "scripts/release_configs/v1.45.0.sh").read_text()
+    assert "ROUND_STATUS_EVENTS_ENABLED=false" in (root / ".env.example").read_text().splitlines()
 
 
 async def test_enabled_detector_preserves_complete_match(monkeypatch):
