@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-15 · Test the gate before the handler too.** Endstats had four
+  filename gates, including monitor preflight in webhook_handler_mixin.
+  A direct handler retry passed while real polling still rejected the failed
+  filename. Exercise preflight plus handler/storage; preserve terminal and
+  NULL/unknown states when narrowly allowing explicit publication failures.
+
 - **2026-09-14 · Best-effort catches are unsafe around opt-in journal writes.**
   Restart detection used to swallow errors. With the status producer enabled,
   failures must reach the canonical import rollback; actual status update,

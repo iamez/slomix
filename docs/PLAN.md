@@ -20,6 +20,35 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02c1 explicit failed-publication retry (2026-09-15; locally verified)
+
+Worktree `/tmp/slomix-astra-runtime-r02c`, branch
+`feat/db-runtime-endstats-retry-r02c`, based on R02b 9344a47b. Before adding
+endstats events, fix one verified entry gate: a persisted success=false,
+error_message=publish_failed row currently prevents another attempt at all
+four filename gates (including poller preflight). New ENDSTATS_RETRY_ENABLED defaults OFF; enabled gates
+exclude only that exact failure state. Keep successes, terminal duplicate/
+supersede/unresolved markers, NULL/in-flight and unknown states terminal.
+No historical backfill or automatic reset of RAM markers. Existing retry
+budget/activity/lookback policy remains; no exactly-once publication claim.
+Prove real polling/storage flow: failed publication persists marker, next poll
+reaches storage and successful publication, third poll skips. No real Discord
+or live database. Exception/RAM recovery and event emission remain later slices.
+
+Implemented: shared exact-state SQL gate at all four entry points. Helper
+review found the initially missed monitor preflight in webhook_handler_mixin;
+fixed it and extended PG proof through that real preflight and real storage.
+68 combined tests passed, zero skips (19 real-PG cases); two existing websocket
+deprecation warnings. Synthetic parser/resolver/readiness/publisher replace
+external inputs, not the filename queries or transactional awards storage.
+Two connections verify committed award/claim counts against fetched rows.
+Disabling the helper caused `assert 1 == 2`; reverting only monitor preflight
+caused `assert False` before the retry. Both mutations restored with patch/cmp;
+final preflight + storage retry test passed. Temporary PG stopped, independently
+confirmed by pg_ctl and log. No live services, data or flags changed.
+Next: publish/review this prerequisite, then separately handle exception/RAM
+recovery and endstats event storage. Do not call this full endstats recovery.
+
 ### R02b restart-status contract (2026-09-14, Astra; locally verified)
 
 Worktree `/tmp/slomix-astra-runtime-r02b`, branch `feat/db-runtime-status-r02b`,

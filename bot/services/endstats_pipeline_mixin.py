@@ -22,6 +22,7 @@ from datetime import datetime
 import discord
 
 from bot.logging_config import get_logger
+from shared.endstats_retry import endstats_filename_gate_query
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -717,7 +718,7 @@ class _EndstatsPipelineMixin:
                 f"🔄 Endstats retry attempt {attempt}/{self.endstats_retry_max_attempts} for {filename}"
             )
             # If already processed in DB, stop retrying
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = endstats_filename_gate_query()
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -1208,7 +1209,7 @@ class _EndstatsPipelineMixin:
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = endstats_filename_gate_query()
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -1372,7 +1373,7 @@ class _EndstatsPipelineMixin:
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = endstats_filename_gate_query()
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(

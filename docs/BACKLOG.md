@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) R02c1 in `/tmp/slomix-astra-runtime-r02c`, branch
+  `feat/db-runtime-endstats-retry-r02c`. ENDSTATS_RETRY_ENABLED defaults OFF;
+  only explicit publish_failed rows can bypass the four filename gates.
+  Success/terminal/unknown/in-flight markers remain blocking. Helper found
+  missing monitor preflight; fixed and proved through real PG storage plus
+  fake publication fail/retry/success. 68 cases passed; both gate mutations
+  failed, restored/cmp, final runtime case passed. Temporary PG stopped.
+  Next: draft PR/CI/review; exception/RAM recovery and events remain separate.
+
 - (Astra, 2026-09-15) Owner explicitly approved #1012 only; cycle completed
   merge to main 9cbd8810 (zero red checks/open threads/behind commits).
   R02a retargeted to main and both dependent branches synchronized; code trees
