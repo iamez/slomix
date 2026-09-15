@@ -22,7 +22,7 @@ from datetime import datetime
 import discord
 
 from bot.logging_config import get_logger
-from shared.endstats_retry import endstats_filename_gate_query
+from shared.endstats_retry import endstats_filename_gate_query, endstats_retry_enabled
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -820,6 +820,8 @@ class _EndstatsPipelineMixin:
             webhook_logger.error(f"❌ Error during endstats retry: {e}", exc_info=True)
             # Only clear task reference, preserve retry count so next attempt increments correctly
             self.endstats_retry_tasks.pop(filename, None)
+            if endstats_retry_enabled():
+                await self._schedule_endstats_retry(filename, local_path, endstats_data, trigger_message)
 
     async def _store_endstats_and_publish(
         self,

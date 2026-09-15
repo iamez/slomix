@@ -20,6 +20,30 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02c2 bounded webhook retry after exceptions (2026-09-15; in progress)
+
+Worktree `/tmp/slomix-astra-runtime-r02c2`, branch
+`feat/db-runtime-endstats-exceptions-r02c2`, based on R02c1 02c2113a.
+With ENDSTATS_RETRY_ENABLED only, the webhook retry task's exception handler
+reschedules through the existing delay/attempt budget instead of only removing
+its task reference. Keep OFF behavior and CancellationError propagation.
+No filename state reclassification: a committed unknown/NULL claim still blocks
+the next attempt, and publication ambiguity is not solved. Prove real asyncio
+tasks retry a preflight DB exception, exhaust a permanent failure finitely,
+and leave no child tasks running. Polling RAM recovery and journal remain next.
+
+Local proof: 53 focused tests passed, zero skips. Four new tests execute real
+asyncio scheduler tasks with injected DB failures: OFF one attempt, transient
+failure then terminal gate two attempts, permanent failure max three attempts;
+call counts and completed task counts agree. Cancellation propagates without
+rescheduling. Disabling exception rescheduling failed two guards (`1 == 2`,
+`1 == 3`), restored with patch/cmp; all four passed again with runtime output.
+No database/server/Discord was started; fixtures simulate DB and reaction only.
+Not a durable scheduler or a cure for ambiguous publication/NULL claims.
+Read-only helper review found no blocker. Budget is per retry chain: later
+external triggers may start a new chain. Cancellation preserves existing task-
+map cleanup behavior; test task creation wraps asyncio directly, not bot startup.
+
 ### R02c1 explicit failed-publication retry (2026-09-15; locally verified)
 
 Worktree `/tmp/slomix-astra-runtime-r02c`, branch

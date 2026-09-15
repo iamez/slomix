@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) R02c2 `/tmp/slomix-astra-runtime-r02c2`, branch
+  `feat/db-runtime-endstats-exceptions-r02c2`: enabled webhook retry exceptions
+  now reschedule through existing bounded attempts/delay. 53 focused tests
+  passed; real asyncio task proof covers OFF/transient/permanent/cancellation.
+  Mutation failed two guards, restored/cmp and rerun passed. No tasks left.
+  Next: review/publish; polling RAM cleanup and endstats event journal remain.
+
 - (Astra, 2026-09-15) R02c1 in `/tmp/slomix-astra-runtime-r02c`, branch
   `feat/db-runtime-endstats-retry-r02c`. ENDSTATS_RETRY_ENABLED defaults OFF;
   only explicit publish_failed rows can bypass the four filename gates.
