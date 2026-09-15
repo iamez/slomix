@@ -46,6 +46,11 @@ paths are not all owner-aware. Successful claims remain process-local for the
 existing processed-set lifetime. No cross-process lock or exactly-once claim.
 Temporary PG stopped, confirmed by pg_ctl and shutdown log. Next: PR/review/CI,
 then endstats journal design. Stack reaches 25 files; never bypass the guard.
+Published draft #1043, code 3d1dcd11, base #1042 branch. Codex/CodeRabbit review
+requested, post-push self-review complete; external CI pending. #1039 verified
+at 8f5f21af: all checks successful, both review threads resolved. Next authority
+gate is owner-specific permission for #1039 merge (not deploy/activation).
+Only #1012 was previously authorized and merged; do not infer the rest.
 
 ### R02c2 bounded webhook retry after exceptions (2026-09-15; in progress)
 
