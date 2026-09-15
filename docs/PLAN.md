@@ -26,7 +26,7 @@ Worktree `/tmp/slomix-astra-runtime-r02c2`, branch
 `feat/db-runtime-endstats-exceptions-r02c2`, based on R02c1 02c2113a.
 With ENDSTATS_RETRY_ENABLED only, the webhook retry task's exception handler
 reschedules through the existing delay/attempt budget instead of only removing
-its task reference. Keep OFF behavior and CancellationError propagation.
+its task reference. Keep OFF behavior and asyncio.CancelledError propagation.
 No filename state reclassification: a committed unknown/NULL claim still blocks
 the next attempt, and publication ambiguity is not solved. Prove real asyncio
 tasks retry a preflight DB exception, exhaust a permanent failure finitely,
