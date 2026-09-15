@@ -122,6 +122,7 @@ async def test_scheduled_webhook_retry_retains_claim_until_handoff(monkeypatch, 
         assert len(tasks) == 1
         assert not tasks[0].done()
         assert bot.endstats_retry_counts == {"original": 1}
+        assert bot._endstats_retry_claims["original"] is bot._endstats_marker_owners["original"]  # noqa: SLF001
         assert claim_endstats_marker(bot, "original") is None
         bot.track_error.assert_not_awaited()
     finally:

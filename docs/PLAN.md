@@ -22,6 +22,12 @@
 
 ### R02c3 polling exception marker ownership (2026-09-15; locally verified)
 
+Handoff regression now asserts scheduler claim identity equals the webhook's
+actual owner for all three scheduling exits. Passing None deliberately on the
+unresolved-round path failed the assertion; restored with patch/cmp. This
+guards the connection between handler and scheduler, beyond isolated helper
+tests. Review/CI still pending; no activation or merge.
+
 Latest review continuation: webhook passes its original claim explicitly into
 the scheduler; a per-chain map retains that identity through rescheduling.
 Exhaustion and missing metadata release only its still-owned original/alias
