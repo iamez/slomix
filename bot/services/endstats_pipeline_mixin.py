@@ -22,7 +22,14 @@ from datetime import datetime
 import discord
 
 from bot.logging_config import get_logger
-from shared.endstats_retry import bound_endstats_publish_failures, endstats_filename_gate_query, endstats_retry_enabled
+from shared.endstats_retry import (
+    alias_endstats_marker,
+    bound_endstats_publish_failures,
+    claim_endstats_marker,
+    endstats_filename_gate_query,
+    endstats_retry_enabled,
+    release_endstats_marker,
+)
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -345,7 +352,7 @@ class _EndstatsPipelineMixin:
                 f"Selecting richer endstats: {best_filename} "
                 f"({best_size}b, {best_quality[0]} awards)"
             )
-            self.processed_endstats_files.add(best_filename)
+            alias_endstats_marker(self, filename, best_filename)
 
         return best_data, best_path, best_filename
 
@@ -1187,6 +1194,7 @@ class _EndstatsPipelineMixin:
         Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
         """
         source = "polling"
+        marker_claim = None
         try:
             self._log_endstats_transition(
                 logger,
@@ -1226,7 +1234,9 @@ class _EndstatsPipelineMixin:
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with webhook
-            self.processed_endstats_files.add(filename)
+            marker_claim = claim_endstats_marker(self, filename)
+            if marker_claim is None:
+                return
 
             # Parse the endstats file
             endstats_data = parse_endstats_file(local_path)
@@ -1298,7 +1308,7 @@ class _EndstatsPipelineMixin:
                     level="warning",
                 )
                 # Remove from in-memory set to allow retry on next polling cycle
-                self.processed_endstats_files.discard(filename)
+                release_endstats_marker(self, marker_claim, legacy_filename=filename)
                 return
 
             self._log_endstats_transition(
@@ -1319,7 +1329,7 @@ class _EndstatsPipelineMixin:
                 round_id, filename, source, logger
             ):
                 # Not ready in polling path: release in-memory marker and retry next cycle.
-                self.processed_endstats_files.discard(filename)
+                release_endstats_marker(self, marker_claim, legacy_filename=filename)
                 return
 
             published = await self._store_endstats_and_publish(
@@ -1334,10 +1344,11 @@ class _EndstatsPipelineMixin:
             )
             if not published:
                 # Release in-memory marker so polling can retry later.
-                self.processed_endstats_files.discard(filename)
+                release_endstats_marker(self, marker_claim, legacy_filename=filename)
 
         except Exception as e:
             logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
+            release_endstats_marker(self, marker_claim)
             await self.track_error("endstats_processing", str(e), max_consecutive=3)
 
     async def _process_webhook_triggered_endstats(self, filename: str, trigger_message):
@@ -1394,7 +1405,8 @@ class _EndstatsPipelineMixin:
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with polling
-            self.processed_endstats_files.add(filename)
+            if claim_endstats_marker(self, filename) is None:
+                return
 
             # Build SSH config
             ssh_config = {

@@ -20,6 +20,33 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02c3 polling exception marker ownership (2026-09-15; locally verified)
+
+Branch `feat/db-runtime-endstats-markers-r02c3` in
+`/tmp/slomix-astra-runtime-r02c3`. Enabled polling/webhook entry claims are
+atomic after DB preflight; capture identity and propagate it to unowned richer
+aliases. Polling exception cleanup releases only matching ownership identities,
+not another attempt's existing alias or a later replacement claim. OFF retains
+legacy set behavior. Persisted unknown/terminal markers still govern retry;
+this adds no event, replay guarantee or cross-process lock. Test ownership
+replacement, foreign aliases, OFF behavior and actual storage rollback/retry.
+
+83 combined cases passed, zero skips, including 24 real PostgreSQL cases.
+Injected award constraint failure rolls storage/claim back; owned RAM marker
+is released and the next real preflight + handler call reaches storage again.
+Synthetic parser/resolver/readiness/publisher only; no SSH/Discord/live DB.
+Identity-guard mutation removed a replacement marker and failed with
+set() != {'original'}, restored with patch/cmp; ownership tests passed again.
+Helper's partial review identified remaining raw polling soft-failure discards;
+those now use the same identity-aware release, with a foreign richer-alias
+not-ready regression. Helper then hit usage limit; no complete final helper
+approval claimed. Parent self-review/lint/83-case final run completed.
+Cancellation retains existing behavior, and other scheduler/webhook cleanup
+paths are not all owner-aware. Successful claims remain process-local for the
+existing processed-set lifetime. No cross-process lock or exactly-once claim.
+Temporary PG stopped, confirmed by pg_ctl and shutdown log. Next: PR/review/CI,
+then endstats journal design. Stack reaches 25 files; never bypass the guard.
+
 ### R02c2 bounded webhook retry after exceptions (2026-09-15; in progress)
 
 Worktree `/tmp/slomix-astra-runtime-r02c2`, branch

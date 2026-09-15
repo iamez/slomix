@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) R02c3 `/tmp/slomix-astra-runtime-r02c3`, branch
+  `feat/db-runtime-endstats-markers-r02c3`: identity-based polling cleanup,
+  richer-alias ownership and atomic post-preflight claims. 83 tests passed
+  including 24 PG cases; real storage rollback releases owned marker and next
+  preflight retries. Mutation failed, restored/cmp. Partial helper review led
+  to fixing raw polling soft-failure discards; helper then usage-limited.
+  Temporary PG stopped. Next: draft PR/external review/CI; stack at 25 files.
+
 - (Astra, 2026-09-15) R02c2 `/tmp/slomix-astra-runtime-r02c2`, branch
   `feat/db-runtime-endstats-exceptions-r02c2`: enabled webhook retry exceptions
   now reschedule through existing bounded attempts/delay. 53 focused tests

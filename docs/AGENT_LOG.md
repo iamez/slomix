@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-15 · A filename is not an attempt identity.** Polling cleanup
+  must compare its claim object with the current owner before removing a RAM
+  marker. A later retry may own the same filename, and richer selection may
+  select an alias already owned elsewhere. Exception and soft-failure paths
+  both need the identity guard; a raw set.discard silently defeats it.
+
 - **2026-09-15 · Test the gate before the handler too.** Endstats had four
   filename gates, including monitor preflight in webhook_handler_mixin.
   A direct handler retry passed while real polling still rejected the failed
