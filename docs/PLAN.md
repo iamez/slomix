@@ -82,6 +82,18 @@ main; no helper/server active. No merge permission inferred for this PR.
 Next: review this prerequisite, then separately handle exception/RAM
 recovery and endstats event storage. Do not call this full endstats recovery.
 
+Review follow-up 4012369546: the earlier assertion that existing retry budgets
+covered polling publication failures was incorrect. Added shared counting after
+explicit False publication results, using endstats_retry_max_attempts across
+entry paths in this process. At exhaustion, guarded SQL persists
+publish_retry_exhausted; all gates block it, even after RAM markers are cleared.
+Counts before exhaustion are process-local (restart resets them); this is not
+a durable lifetime budget or cross-process exactly-once guarantee. Existing
+unknown/NULL claims remain blocking. 71 combined tests passed incl. 22 PG cases.
+Budget mutation failed with publish_failed != publish_retry_exhausted; restored
+with patch/cmp, both runtime paths passed again. Temporary PG stopped by pg_ctl,
+shutdown confirmed in log. No live data, services or configuration changed.
+
 ### R02b restart-status contract (2026-09-14, Astra; locally verified)
 
 Worktree `/tmp/slomix-astra-runtime-r02b`, branch `feat/db-runtime-status-r02b`,

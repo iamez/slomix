@@ -16,6 +16,13 @@
   external review requested, post-push self-review complete. Next: polling
   marker ownership/cleanup and event journal. Stack 24 files, no activation.
 
+- (Astra, 2026-09-15) #1041 review 4012369546 found unbounded polling after
+  publish_failed. Shared post-publication failure counter now persists guarded
+  publish_retry_exhausted at configured limit; pre-limit counts process-local.
+  71 tests passed including PG permanent-failure stop through real preflight;
+  mutation failed, restored/cmp, runtime rerun passed; temporary PG stopped.
+  Next: push/reply and synchronize #1042; polling exception ownership still open.
+
 - (Astra, 2026-09-15) R02c1 in `/tmp/slomix-astra-runtime-r02c`, branch
   `feat/db-runtime-endstats-retry-r02c`. ENDSTATS_RETRY_ENABLED defaults OFF;
   only explicit publish_failed rows can bypass the four filename gates.

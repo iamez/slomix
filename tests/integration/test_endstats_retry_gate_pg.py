@@ -43,6 +43,7 @@ async def endstats_db(journal_db):  # noqa: F811
     (False, "duplicate_round_skip_existing:other", False),
     (False, "superseded_by_richer_payload:other", False),
     (False, "round_id_unresolved_after_5_attempts", False),
+    (False, "publish_retry_exhausted", False),
 ])
 @pytest.mark.parametrize("enabled", [False, True])
 async def test_gate_preserves_terminal_and_unknown_states(endstats_db, monkeypatch, success, error, retryable, enabled):
@@ -54,7 +55,8 @@ async def test_gate_preserves_terminal_and_unknown_states(endstats_db, monkeypat
     assert await writer.fetchval(endstats_filename_gate_query(), "absent") is None
 
 
-async def test_polling_retries_committed_publication_failure(endstats_db, monkeypatch):
+@pytest.mark.parametrize("permanent", [False, True])
+async def test_polling_retries_committed_publication_failure(endstats_db, monkeypatch, permanent):
     writer, reader = endstats_db
     monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", "true")
     payload = {"metadata": {"date": "2026-09-15", "time": "120000", "map_name": "fixture", "round_number": 1},
@@ -79,7 +81,7 @@ async def test_polling_retries_committed_publication_failure(endstats_db, monkey
     bot.processed_endstats_files = set()
     bot.endstats_retry_counts = {}
     bot.endstats_retry_tasks = {}
-    bot.endstats_retry_max_attempts = 5
+    bot.endstats_retry_max_attempts = 3
     bot.track_error = AsyncMock()
     bot._resolve_endstats_round_id = AsyncMock(return_value=(1, "fixture"))  # noqa: SLF001
     bot._is_endstats_round_already_processed = AsyncMock(return_value=False)  # noqa: SLF001
@@ -92,7 +94,7 @@ async def test_polling_retries_committed_publication_failure(endstats_db, monkey
         assert await reader.fetchval("SELECT count(*) FROM round_awards") == 1
         assert len(await reader.fetch("SELECT * FROM round_awards")) == 1
         attempts.append(args[0])
-        return len(attempts) > 1
+        return not permanent and len(attempts) > 1
 
     bot.round_publisher = SimpleNamespace(publish_endstats=publish)
     filename = "2026-09-15-120000-fixture-round-1-endstats.txt"
@@ -100,14 +102,19 @@ async def test_polling_retries_committed_publication_failure(endstats_db, monkey
     await bot._process_endstats_file(filename, filename)  # noqa: SLF001
     assert await reader.fetchval("SELECT error_message FROM processed_endstats_files") == "publish_failed"
     assert filename not in bot.processed_endstats_files
-    assert await bot._should_process_endstats_file(filename)  # noqa: SLF001
-    await bot._process_endstats_file(filename, filename)  # noqa: SLF001
-    assert len(attempts) == 2
-    assert await reader.fetchval("SELECT success FROM processed_endstats_files") is True
+    expected = 3 if permanent else 2
+    for _ in range(expected - 1):
+        assert await bot._should_process_endstats_file(filename)  # noqa: SLF001
+        await bot._process_endstats_file(filename, filename)  # noqa: SLF001
+    assert len(attempts) == expected
+    assert await reader.fetchval("SELECT success FROM processed_endstats_files") is (not permanent)
+    if permanent:
+        assert await reader.fetchval("SELECT error_message FROM processed_endstats_files") == "publish_retry_exhausted"
+    bot.processed_endstats_files.clear()  # Persisted success/exhaustion, not RAM, blocks next poll.
     assert not await bot._should_process_endstats_file(filename)  # noqa: SLF001
     await bot._process_endstats_file(filename, filename)  # noqa: SLF001
-    assert len(attempts) == 2
+    assert len(attempts) == expected
     assert await reader.fetchval("SELECT count(*) FROM processed_endstats_files") == 1
     assert len(await reader.fetch("SELECT * FROM processed_endstats_files")) == 1
     bot.track_error.assert_not_awaited()
-    print("R02c1 runtime proof: storage committed, publication failed, next poll published, third poll skipped")
+    print(f"R02c1 runtime proof: {expected} publication attempts; persisted success/exhaustion blocks another poll")
