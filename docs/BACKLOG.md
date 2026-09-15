@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) #1043 review 4014882361: lost post-preflight webhook
+  claim now cleans its Discord trigger without releasing the winner's marker.
+  Both deletion success/failure covered; 28 focused tests passed. Removal
+  mutation failed twice, restored with patch/cmp. No live services touched.
+  Next: exact-head CI/review; #1039 still needs specific merge approval.
+
 - (Astra, 2026-09-15) R02c3 `/tmp/slomix-astra-runtime-r02c3`, branch
   `feat/db-runtime-endstats-markers-r02c3`: identity-based polling cleanup,
   richer-alias ownership and atomic post-preflight claims. 83 tests passed

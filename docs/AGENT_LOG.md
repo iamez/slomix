@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-15 · A post-await duplicate needs the same trigger cleanup.**
+  Another endstats attempt can claim a filename during DB preflight. The
+  losing webhook must delete its notification just like the initial duplicate
+  path, but must not release the winner's marker. Inject ownership during the
+  awaited DB call and exercise both successful and failed Discord deletion.
+
 - **2026-09-15 · A filename is not an attempt identity.** Polling cleanup
   must compare its claim object with the current owner before removing a RAM
   marker. A later retry may own the same filename, and richer selection may

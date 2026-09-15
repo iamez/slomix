@@ -22,6 +22,14 @@
 
 ### R02c3 polling exception marker ownership (2026-09-15; locally verified)
 
+Review follow-up 4014882361: a webhook losing its claim after DB preflight
+now deletes the trigger, matching the existing duplicate path. Discord deletion
+failure remains non-critical and the winning attempt retains its marker.
+28 focused tests passed; actual async handler with injected preflight ownership
+and mocked Discord deletion exercises both deletion outcomes (not live Discord).
+Cleanup-removal mutation failed both cases: "Awaited 0 times"; restored via
+patch/cmp and rerun. Full PostgreSQL suite was not rerun for this cleanup-only fix.
+
 Branch `feat/db-runtime-endstats-markers-r02c3` in
 `/tmp/slomix-astra-runtime-r02c3`. Enabled polling/webhook entry claims are
 atomic after DB preflight; capture identity and propagate it to unowned richer

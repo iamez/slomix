@@ -8,6 +8,34 @@ import pytest
 from shared.endstats_retry import alias_endstats_marker, claim_endstats_marker, release_endstats_marker
 
 
+@pytest.mark.parametrize("delete_fails", [False, True])
+async def test_webhook_lost_claim_cleans_trigger_without_releasing_owner(monkeypatch, delete_fails):
+    import discord
+    from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
+
+    monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", "true")
+    bot = object.__new__(_EndstatsPipelineMixin)
+    bot.processed_endstats_files = set()
+    claims = []
+
+    async def preflight(*args):
+        claims.append(claim_endstats_marker(bot, "original"))
+        return None
+
+    bot.db_adapter = SimpleNamespace(fetch_one=AsyncMock(side_effect=preflight))
+    bot.track_error = AsyncMock()
+    trigger = SimpleNamespace(delete=AsyncMock(
+        side_effect=discord.DiscordException("fixture deletion failure") if delete_fails else None
+    ))
+    await bot._process_webhook_triggered_endstats("original", trigger)  # noqa: SLF001
+    trigger.delete.assert_awaited_once_with()
+    assert len(trigger.delete.await_args_list) == 1
+    bot.track_error.assert_not_awaited()
+    assert bot.processed_endstats_files == {"original"}
+    assert bot._endstats_marker_owners["original"] is claims[0]  # noqa: SLF001
+    print(f"lost-claim runtime: delete awaits=1, owner retained, delete_fails={delete_fails}")
+
+
 @pytest.fixture
 def bot(monkeypatch):
     monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", "true")

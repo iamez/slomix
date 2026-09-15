@@ -1406,6 +1406,10 @@ class _EndstatsPipelineMixin:
 
             # IMMEDIATELY mark as being processed to prevent race with polling
             if claim_endstats_marker(self, filename) is None:
+                try:
+                    await trigger_message.delete()
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
                 return
 
             # Build SSH config
