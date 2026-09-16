@@ -41,7 +41,7 @@ async def emit_round_stats_imported(
             gaming_session_id, source_filename, source_payload_sha256,
             validation_passed
         ) VALUES ('round_stats_imported', 1, $1, $2, $3, $4, $5, $6)
-        ON CONFLICT (round_id, event_type) DO NOTHING
+        ON CONFLICT (round_id, event_type) WHERE event_type = 'round_stats_imported' DO NOTHING
         RETURNING id
         """,
         round_id, row["round_number"], row["gaming_session_id"],

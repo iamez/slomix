@@ -7,6 +7,20 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-14) R02a on `feat/db-runtime-timing-r02`, stacked on
+  R01 b81221d6 (green CI/CodeQL/Hygiene; still unmerged). Migration084 and
+  default-OFF transactional Lua timing fill implemented. 106-case PG run
+  passed incl. six new R02 PG cases and bootstrap parity; cluster stopped.
+  Additional wrapper cases + mutation pass after restore (104 focused unit
+  cases). Published code 0eceda4c as draft PR #1039 against R01, not main.
+  Helper exhausted usage before independent review; no helper/server running.
+  Narrow runtime push trigger added: CI 34858646087 passed for 2e2359db.
+  Codex review 4006494535: lock the selected Lua row as well as the round;
+  two real-PG concurrency guards pass and both fail when the lock is removed.
+  20 focused cases passed; source restored byte-identically after mutation.
+  Next: source-lock fix exact-SHA CI and remaining external review, then
+  older-round restart status events as separate R02b. Full resume in PLAN.
+
 - (Astra, 2026-09-14) R01 retry and CI fixes: structured retryable failures
   prevent terminal suppression after DB preflight/transaction errors; optional
   SSH wrapper respects failure. Journal explicitly exempt from relinking.

@@ -20,6 +20,75 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02a timing-fill slice (2026-09-14, Astra)
+
+Branch `feat/db-runtime-timing-r02`, worktree `/tmp/slomix-astra-runtime-r02`,
+stacked on R01 b81221d6 (PR #1012 CI/CodeQL/Hygiene confirmed success).
+R01 merged with explicit owner permission on 2026-09-15 as 9cbd8810.
+R02a is development only; both event flags default OFF.
+Published as draft PR #1039, base `feat/db-runtime-events-r01`, code 0eceda4c.
+Update 2026-09-15: retargeted #1039 to main after R01 merge. Synchronized
+main in 8b2b60ab; resolved squash-history conflicts with a byte-identical R02a
+tree (new main was exactly R01 b81221d6). Fresh checks required for this head.
+Source-lock review resolved after proof and CI; owner-role review answered:
+deploy_release.sh already exports root-env owner credentials to the runner.
+No migration, service restart or activation occurred. #1039 is not authorized
+for merge. Its diff against main is now 13 files.
+Push CI now narrowly includes `feat/db-runtime-*`; PR targets stay main/develop.
+Exact commit 2e2359db passed CI run 34858646087. The branch-pattern guard passed
+and failed when the runtime pattern was removed, then was restored with cmp.
+Later review fixes require their own exact-SHA CI; do not transfer this result.
+
+- New immutable migration 084 extends the journal for `round_timing_reconciled`;
+  initial import keeps its partial unique index, later transitions append.
+  Register in release config and mirror in canonical dump.
+- One producer: NULL duration -> timing from exactly one usable Lua row.
+  R1/R2 only, at most 100 rows/poll, row locks + SKIP LOCKED. Timing, scoped
+  canonical ID, event metadata and ID-only NOTIFY share an adapter transaction.
+  Event/commit failure rolls back; NULL remains eligible on the next poll.
+- Two flags required: EVENT_STREAM_ENABLED and ROUND_TIMING_EVENTS_ENABLED.
+  OFF preserves the existing path. ON excludes R0 and ambiguous Lua matches;
+  canonical-ID work is restricted to changed rows, not the historical corpus.
+- Not covered: corrections to already-present duration, restart status repair
+  of older rounds inside canonical import, Lua override/DPM writers, endstats,
+  proximity. No consumers/finalization claim, production migration or deploy.
+- Verification: 106-case isolated PostgreSQL run passed (zero skipped), including
+  six R02 PG cases for commit-only notification, no-op repeat, concurrency,
+  rollback/retry, exclusion of R0/ambiguous sources, initial-event compatibility,
+  repeated NULL-to-value transition and 100-row bound; bootstrap parity CLEAN.
+  Cluster stopped (shutdown log + pg_ctl). Later wrapper tests confirm no
+  fallback legacy writes after an enabled-path failure. Disabled-guard mutation
+  failed with AttributeError on transaction(), restored by patch and cmp.
+- Deployment caveat: keep EVENT_STREAM_ENABLED=false until R02 code AND 084
+  are installed. Original R01 SQL without the conflict-index predicate cannot
+  target 084's partial index. Persistent canonical-ID conflicts fail the whole
+  bounded batch and require investigation; no silent timing-only partial commit.
+- Independent helper review was not performed: helper hit its usage limit before
+  reviewing. External Codex review arrived afterward; finding and proof below.
+
+- External Codex review 4006494535 identified an unlocked selected Lua source.
+  Candidate selection now locks both round and source with SKIP LOCKED. Two
+  real-PG tests prove a concurrent source update is skipped then retried with
+  its committed value, and source relinking cannot pass the fill transaction.
+  20 focused cases passed (eight PG, twelve unit). Removing the source lock
+  failed both new guards (`assert 1 == 0` and missing LockNotAvailableError);
+  restored by patch and byte-identical cmp. This does not cover changes made
+  after the fill commits or concurrent insertion of another usable source.
+  Restored PG rerun: eight passed. Temporary cluster stopped, confirmed by
+  pg_ctl and shutdown log; no live services or data changed.
+
+**Resume checkpoint:** clean code is in PR #1039; R01 #1012 is b81221d6 with
+successful CI 34813122019, CodeQL 34813122027 and Hygiene 34813122066.
+First refresh both PRs/review comments and the source-lock fix CI. R02a local proof is recorded above;
+104 additional focused unit cases passed after wrapper tests were added.
+No helper or test server remains running. Next R02b candidate is
+`_detect_and_mark_restarts`: it changes an OLDER round's status on the current
+import connection, and its broad catch must not swallow journal failure.
+Then Lua overrides/DPM and endstats transaction producers; consumers and the
+independent Linux ingest remain later stages, not already implemented.
+
+### R01 position
+
 Last updated: 2026-09-14. Owner priority: system runtime; frontend stays with
 Fable. Worktree `/tmp/slomix-astra-runtime-r01`, branch
 `feat/db-runtime-events-r01`. Code and isolated PostgreSQL proof complete;

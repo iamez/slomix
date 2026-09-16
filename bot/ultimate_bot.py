@@ -2044,6 +2044,15 @@ class UltimateETLegacyBot(
     async def _reconcile_missing_round_timing(self):
         """Backfill rounds.actual_duration_seconds from lua_round_teams
         for rounds that were processed before gametime data arrived."""
+        from shared.round_timing_reconcile import reconcile_missing_round_timing, timing_events_enabled
+
+        if timing_events_enabled():
+            try:
+                count = await reconcile_missing_round_timing(self.db_adapter, enabled=True)
+                logger.info("[TIMING RECONCILE] Committed %s journaled fills (R1/R2, unambiguous Lua only)", count)
+            except Exception as exc:
+                logger.warning("[TIMING RECONCILE] Journaled fill failed; next poll rechecks missing timing: %s", exc)
+            return
         query = """
             UPDATE rounds r SET
               actual_duration_seconds = lrt.actual_duration_seconds,
