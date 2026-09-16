@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-16) Runtime direction audit completed with read-only helper.
+  R02c4 remains the next slice; lock before decisions, separate storage event
+  from Discord delivery, and explicitly exclude uninstrumented maintenance
+  writers from completeness claims. Snapshot CI 35067542754 succeeded.
+  Detailed research stays local in /tmp/slomix-runtime-direction-audit-2026-09-16.md.
+  No code/runtime changes in this audit; helper completed, no processes started.
+
 - (Astra, 2026-09-16) R02c4 started in /tmp/slomix-astra-runtime-r02c4.
   Persisted-row multiset snapshot helper + nine actual PG cases implemented;
   multiplicity mutation failed, restored/cmp. Not yet wired into storage or

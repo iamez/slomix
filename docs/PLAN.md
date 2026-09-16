@@ -22,6 +22,20 @@
 
 ### R02c4 endstats storage journal — in progress, 2026-09-16
 
+Direction audit (2026-09-16): original design 21 and R01-R04 remain aligned,
+but independent ingestion and consumer catch-up are still future work. Snapshot
+commit 364473ca passed exact-head CI 35067542754. Read-only independent review
+and parent inspection require the round lock BEFORE success/quality reads, not
+only before DELETE. Storage commit precedes Discord and final success marking;
+this event cannot establish exactly-once delivery. Test publication False and
+exceptions after commit separately from storage rollback.
+Confirmed additional writers include repair_endstats_round_assignments,
+reprocess_missing_endstats, backfill_vs_stats_subjects and manager round deletion.
+R02c4 covers only the canonical pipeline; audit remaining direct/dynamic/cascade
+writers before consumers assume complete correction coverage or activation.
+Do not expand this slice to all maintenance scripts. No new infrastructure or
+live activation is needed for this development step.
+
 Worktree /tmp/slomix-astra-runtime-r02c4, branch
 feat/db-runtime-endstats-journal-r02c4, based on R02c3 c4857ae7.
 First foundation implemented: capture all persisted logical awards/VS columns
