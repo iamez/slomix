@@ -20,6 +20,21 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### Current checkpoint — 2026-09-16
+
+Owner explicitly authorized #1039. Prescribed cycle completed with zero red
+checks, unresolved threads or behind commits and unchanged SHA. API confirms
+merge fc65585568280049459adab08f373af4662de11d; its tree exactly matches
+approved 8f5f21af. No deployment, live migration or activation occurred.
+R02b retargeted to main via REST (old gh edit failed on projectCards), then
+normal ancestry merges propagated through R02c1/c2/c3 without force. Each
+merge tree compared identical to its pre-merge tree. 12 timing and 14 status
+unit tests rerun successfully. New exact-head CI required after these pushes.
+#1040/#1041/#1042/#1043 have NOT been authorized for merge. Next development:
+separate endstats storage journal slice, using the local R02c4 design; the
+approved timing merge removes the previous 25-file stack barrier. Historical
+checkpoints below retain their original verification context.
+
 ### R02c3 polling exception marker ownership (2026-09-15; locally verified)
 
 Handoff regression now asserts scheduler claim identity equals the webhook's

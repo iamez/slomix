@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-16) #1039 merged with explicit owner approval via cycle,
+  squash fc655855. Verified identical tree to approved head. #1040 now bases
+  main; normal merges propagated through #1041/#1042/#1043 with unchanged
+  content trees. New CI pending. No other merge/deploy authorized. Continue
+  R02c4 storage-journal design; prior stack-limit blocker is removed.
+
 - (Astra, 2026-09-15) #1043 terminal chain cleanup implemented: explicitly
   carry original webhook identity into scheduler and retain it across retries;
   exhaustion/missing metadata release owned aliases, preserve replacements.
