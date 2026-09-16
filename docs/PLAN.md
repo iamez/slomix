@@ -22,6 +22,22 @@
 
 ### R02c4 endstats storage journal — in progress, 2026-09-16
 
+Implementation checkpoint: canonical storage now enters gated journal context
+inside the native adapter transaction, before success/quality reads. Lock the
+round, compare logical before/after multisets, insert round_endstats_changed
+and ID-only NOTIFY on that same connection only for changed R1/R2 data.
+Migration086, release registration and bootstrap SQL mirror added; new
+ENDSTATS_EVENTS_ENABLED defaults false and requires global EVENT_STREAM_ENABLED.
+124 focused cases passed, zero skips, two existing websockets warnings. Actual
+handler + isolated PG proves committed event visible before mocked Discord
+success/False/exception and no duplicate event on identical storage retry.
+Storage/event/NOTIFY failure rollback, R0/R2/missing-round, OFF and concurrent
+same-round waiting covered. Removing FOR UPDATE failed concurrency guard;
+restored via patch/cmp and rerun. Ruff clean. Temporary PG stopped.
+Remaining before slice completion: richer DB-only replacement proof, full
+bootstrap parity, commit-only notification visibility, fresh review and CI.
+No independent runtime/delivery guarantee or live activation claimed.
+
 Direction audit (2026-09-16): original design 21 and R01-R04 remain aligned,
 but independent ingestion and consumer catch-up are still future work. Snapshot
 commit 364473ca passed exact-head CI 35067542754. Read-only independent review

@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-16) R02c4 canonical journal integration implemented with
+  migration086/default-OFF flag/native round lock before decisions. 124 focused
+  cases passed; actual storage+PG checks post-commit Discord outcomes, rollback,
+  unchanged retries and lock contention. Lock mutation failed, restored/cmp.
+  Remaining: richer replacement, bootstrap, commit notification, review/CI.
+  Temporary PG stopped; no live application DB or services touched.
+
 - (Astra, 2026-09-16) Runtime direction audit completed with read-only helper.
   R02c4 remains the next slice; lock before decisions, separate storage event
   from Discord delivery, and explicitly exclude uninstrumented maintenance
