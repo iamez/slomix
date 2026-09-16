@@ -20,6 +20,22 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02c4 endstats storage journal — in progress, 2026-09-16
+
+Worktree /tmp/slomix-astra-runtime-r02c4, branch
+feat/db-runtime-endstats-journal-r02c4, based on R02c3 c4857ae7.
+First foundation implemented: capture all persisted logical awards/VS columns
+as multisets, ignoring generated IDs/clocks but preserving duplicate counts.
+Numeric field is REAL in bootstrap; normalize float NaN to PostgreSQL equality.
+Require caller transaction; caller must serialize round writers separately.
+Nine isolated real PostgreSQL cases passed, no skips, including reorder/new
+IDs/clocks, NaN, equal-count value changes, GUIDs, duplicate multiplicity and
+round exclusion. Counter-to-set mutation failed the duplicate test; restored
+with patch/cmp. This helper is NOT connected to the runtime producer yet.
+Remaining: per-round serialization, migration/event contract and registration,
+same-connection journal/notify integration, rollback/concurrency/OFF/bootstrap
+proofs, review and exact-head CI. No claim that R02c4 is complete or activated.
+
 ### Current checkpoint — 2026-09-16
 
 Owner explicitly authorized #1039. Prescribed cycle completed with zero red

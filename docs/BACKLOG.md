@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-16) R02c4 started in /tmp/slomix-astra-runtime-r02c4.
+  Persisted-row multiset snapshot helper + nine actual PG cases implemented;
+  multiplicity mutation failed, restored/cmp. Not yet wired into storage or
+  journal, no migration/event added. Next: serialized same-transaction event
+  integration and failure proofs. No live application DB or service changes.
+
 - (Astra, 2026-09-16) #1039 merged with explicit owner approval via cycle,
   squash fc655855. Verified identical tree to approved head. #1040 now bases
   main; normal merges propagated through #1041/#1042/#1043 with unchanged
