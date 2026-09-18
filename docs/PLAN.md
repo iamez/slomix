@@ -45,10 +45,14 @@ verified by pg_ctl and shutdown log. Next: external review and exact-head CI.
 Published draft #1051. #1046 merged as 64488de1 with approved tree verified;
 #1048 now ready/main, and ancestry sync through #1049/#1050/#1051 preserved
 all implementation content. Fresh CI required after these pushes. No activation.
+Review follow-up: corrected BACKLOG's stale #1046 status to merged 64488de1
+and labelled older checkpoints historical. Owner explicitly approved #1048;
+its prescribed merge cycle is running. Further PRs still require specific approval.
 
 ### R02d5 durable bounded Lua repair attempts — 2026-09-18
 
-Latest checkpoint: #1044 and #1045 merged through prescribed cycles with
+Historical R02d5 checkpoint (current position is in R03a above):
+#1044 and #1045 merged through prescribed cycles with
 review dispositions and verified squash trees. #1046 is ready/main at a58277f9;
 fresh CI pending. #1050 external Codex found no major issues at 51505e84 and
 all nine branch checks passed there. Subsequent ancestry sync changed no code.
