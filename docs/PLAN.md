@@ -22,6 +22,20 @@
 
 ### R02c4 endstats storage journal — in progress, 2026-09-16
 
+2026-09-18 checkpoint: collected completed full focused run, 128 passed,
+zero skips, two existing websockets deprecation warnings. Added richer DB-only
+replacement (new event, no second Discord call), commit-only notification and
+rollback silence, migration/release/default-flag checks and fresh-bootstrap
+parity. No-op guard mutation produced two events instead of one and failed;
+restored with patch/cmp before final run. Independent read-only review found
+no blocker, but does not replace external PR review or exact-head CI.
+Tests use a same-connection adapter stand-in; production ContextVar binding
+was inspected, not exercised by that stand-in. Direct retry after Discord
+exception does NOT prove recovery through the persisted NULL filename gate.
+Concurrent journal contexts are not a full two-process publication proof.
+Temporary PG was found still running on resumption and stopped immediately
+after collecting test output; no application services were touched.
+
 Implementation checkpoint: canonical storage now enters gated journal context
 inside the native adapter transaction, before success/quality reads. Lock the
 round, compare logical before/after multisets, insert round_endstats_changed

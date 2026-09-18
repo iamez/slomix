@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R02c4 remaining local proofs completed: 128 focused
+  tests passed, zero skips; richer replacement, notifications and bootstrap
+  parity covered. No-op mutation failed, restored/cmp. Independent review
+  found no blocker with explicit adapter/NULL-recovery/concurrency limits.
+  Resumed and collected completed test output; temporary PG was still running,
+  now stopped. Next: draft PR/external review/exact-head CI, no merge permission.
+
 - (Astra, 2026-09-16) R02c4 canonical journal integration implemented with
   migration086/default-OFF flag/native round lock before decisions. 124 focused
   cases passed; actual storage+PG checks post-commit Discord outcomes, rollback,

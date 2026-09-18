@@ -150,6 +150,18 @@ async def test_actual_storage_commits_event_before_discord(snapshot_db, monkeypa
     assert len(attempts) == (1 if publication == "success" else 2)
     assert await reader.fetchval("SELECT count(*) FROM runtime_events") == 1
     assert await reader.fetchval("SELECT event_type FROM runtime_events") == "round_endstats_changed"
+    if publication == "success":
+        payload["awards"].append({"name": "richer", "player": "fixture", "value": "2", "numeric": 2})
+        assert await bot._store_endstats_and_publish(  # noqa: SLF001
+            "richer-fixture", payload, 1, "2026-09-16", "fixture", 1, logging.getLogger(__name__)
+        )
+        assert len(attempts) == 1  # Richer storage deliberately does not republish.
+        assert await reader.fetchval("SELECT count(*) FROM runtime_events") == 2
+        assert len(await reader.fetch("SELECT * FROM runtime_events")) == 2
+        assert await reader.fetchval("SELECT count(*) FROM round_awards") == 2
+        assert await reader.fetchval(
+            "SELECT success FROM processed_endstats_files WHERE filename='richer-fixture'"
+        ) is True
     print(f"storage runtime: publication={publication}, committed event visible before Discord, repeat adds no event")
 
 
@@ -236,3 +248,52 @@ async def test_same_round_writer_waits_before_reading(snapshot_db, monkeypatch):
             if not task.done():
                 task.cancel()
             await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.parametrize("commit", [True, False])
+async def test_notification_is_commit_only(snapshot_db, monkeypatch, commit):
+    writer, reader = snapshot_db
+    await enable_journal(writer, monkeypatch)
+    received = []
+    arrived = asyncio.Event()
+
+    def on_event(connection, pid, channel, payload):
+        received.append(payload)
+        arrived.set()
+
+    await reader.add_listener("round_events", on_event)
+    tx = writer.transaction()
+    await tx.start()
+    ended = False
+    try:
+        async with journal_endstats_storage(writer, round_id=1):
+            await writer.execute("UPDATE round_vs_stats SET kills=99 WHERE round_id=1")
+        assert await writer.fetchval("SELECT count(*) FROM runtime_events") == 1
+        assert await reader.fetchval("SELECT count(*) FROM runtime_events") == 0
+        assert received == []
+        if commit:
+            await tx.commit()
+        else:
+            await tx.rollback()
+        ended = True
+        if commit:
+            await asyncio.wait_for(arrived.wait(), 2)
+            event_id = await reader.fetchval("SELECT id FROM runtime_events")
+            assert received == [str(event_id)]
+        else:
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(arrived.wait(), 0.1)
+            assert await reader.fetchval("SELECT count(*) FROM runtime_events") == 0
+            assert received == []
+    finally:
+        if not ended:
+            await tx.rollback()
+        await reader.remove_listener("round_events", on_event)
+
+
+def test_endstats_migration_bootstrap_and_release_registration():
+    root = Path(__file__).resolve().parents[2]
+    migration = (root / "migrations/086_runtime_endstats_events.sql").read_text().strip()
+    assert migration in (root / "tools/schema_postgresql.sql").read_text()
+    assert '"086_runtime_endstats_events.sql"' in (root / "scripts/release_configs/v1.45.0.sh").read_text()
+    assert "ENDSTATS_EVENTS_ENABLED=false" in (root / ".env.example").read_text().splitlines()
