@@ -20,6 +20,25 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R03b1 bounded memory cache prerequisite — 2026-09-18
+
+Branch feat/db-runtime-cache-memory-r03b1, parent #1051 at 112f2524.
+Before adding DB-generation namespaces, bound abandoned namespaces and late
+old-request writes. Memory backend now defaults to 256 retained entries and
+8 MiB of retained key/JSON string objects per worker; FIFO eviction on writes,
+expired-entry sweep on writes, and uncacheable replacements remove old values.
+These are conservative storage budgets, not measured optimal capacity or RSS
+limits; dictionary/tuple overhead and transient serialization are not included.
+No runtime-generation namespace integration yet, no activation or deployment.
+
+48 focused cache/middleware tests passed, including in-process HTTP MISS/HIT/
+eviction/recomputation, concurrent writes, Unicode byte budget, abandoned epochs,
+late writes and replacement at capacity. Removing eviction failed `assert 4 <= 3`;
+restored with apply_patch and verified cmp. Independent review found no blocker;
+its concurrent mutation-time run also observed byte/count failures (not a failure
+of restored code). Ruff clean. Next: publish for review, then generation reads
+with fail-closed cache bypass and multi-worker/in-flight proofs in R03b2.
+
 ### R03a transactional HTTP-cache generation receipts — 2026-09-18
 
 Branch feat/db-runtime-cache-receipts-r03a, parent #1050 at 0f0c8e73.
