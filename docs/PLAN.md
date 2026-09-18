@@ -42,6 +42,9 @@ Both restored via apply_patch/cmp. Initial focused run 62 passed, no skips;
 extra observed-lock regression passed. Full cross-stack regression: 280 passed,
 zero skips, two existing warnings; Ruff/whitespace clean. Disposable PG stopped,
 verified by pg_ctl and shutdown log. Next: external review and exact-head CI.
+Published draft #1051. #1046 merged as 64488de1 with approved tree verified;
+#1048 now ready/main, and ancestry sync through #1049/#1050/#1051 preserved
+all implementation content. Fresh CI required after these pushes. No activation.
 
 ### R02d5 durable bounded Lua repair attempts — 2026-09-18
 
