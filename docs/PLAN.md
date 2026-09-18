@@ -49,6 +49,14 @@ No automatic correction worker yet. New feature remains default OFF.
 
 ### R02d2a durable correction inbox foundation — started 2026-09-18
 
+2026-09-18 latest checkpoint: #1045 merged3099633d via required cycle,
+no unresolved threads/behind commits, unchanged head; squash tree equalsc4a8303d.
+Required checks passed; three Codacy advisory SQL alerts were independently
+reviewed as false positives with bound-input runtime proof, not suppressed.
+#1046 now ready/main; ancestry synchronization preserved the complete tree.
+All five prior findings are addressed/resolved. Fresh main-target CI required
+before the next conditional-authorized merge. No live activation or deployment.
+
 PR #1046 external review follow-up: preserve producer measurement presence in
 _correction_present_fields while leaving legacy zero defaults unchanged. Inbox
 omits missing/invalid measurement defaults, retains measured zero, omits missing
