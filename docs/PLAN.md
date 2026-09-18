@@ -20,6 +20,13 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+2026-09-18 current checkpoint: #1042 merged as9ffbcd5e after all22 checks
+passed and the prescribed pause; final gates zero red/open threads/behind,
+unchanged head, squash tree identical to6929d143. #1043 retargeted main;
+normal merge preserved all non-document content and both review findings remain
+resolved. Recheck exact-head CI before the next conditionally authorized merge.
+No deployment, service restart or live migration occurred.
+
 ### Current checkpoint — 2026-09-16
 
 Owner explicitly authorized #1039. Prescribed cycle completed with zero red
