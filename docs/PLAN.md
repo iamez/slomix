@@ -263,6 +263,13 @@ Remaining: per-round serialization, migration/event contract and registration,
 same-connection journal/notify integration, rollback/concurrency/OFF/bootstrap
 proofs, review and exact-head CI. No claim that R02c4 is complete or activated.
 
+2026-09-18 current checkpoint: #1042 merged as9ffbcd5e after all22 checks
+passed and the prescribed pause; final gates zero red/open threads/behind,
+unchanged head, squash tree identical to6929d143. #1043 retargeted main;
+normal merge preserved all non-document content and both review findings remain
+resolved. Recheck exact-head CI before the next conditionally authorized merge.
+No deployment, service restart or live migration occurred.
+
 ### Current checkpoint — 2026-09-16
 
 Owner explicitly authorized #1039. Prescribed cycle completed with zero red
@@ -357,6 +364,12 @@ soft exits (not-ready, unresolved round, failed publication). Eight ownership
 tests passed; no runtime behavior changed in this follow-up. #1043 CI still
 running at check; development continues with review/test work, not an assumed
 permission to merge #1039.
+
+2026-09-18 merge checkpoint: #1041 merged via required cycle as a2b72550;
+all final gates passed and squash tree equals approved8df7215b. #1042 now targets
+main; normal synchronization preserved all non-document content. Existing review
+finding fixed and reviewer-confirmed; zero unresolved threads. Refresh exact-head
+main-target checks before next conditional-authorized cycle. No deploy/activation.
 
 ### R02c2 bounded webhook retry after exceptions (2026-09-15; in progress)
 
