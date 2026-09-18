@@ -20,6 +20,60 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+2026-09-18 owner authorization update: owner explicitly permits subsequent
+merges when review has been performed, findings inspected/addressed (or justified
+as not applicable), and checks pass. This supersedes the earlier per-number
+approval workflow for this runtime work. Mandatory cycle.sh final checks/pause
+remain; no deployment or service action is authorized by this update.
+#1041 preflight: budget finding resolved with fix e7948055 and 36-case actual-PG
+revalidation; exact prior head2c43da1e checks green, no unresolved threads.
+Refresh main-target CI on this documentation checkpoint before merge cycle.
+
+### R02c1 explicit failed-publication retry (2026-09-15; locally verified)
+
+Worktree `/tmp/slomix-astra-runtime-r02c`, branch
+`feat/db-runtime-endstats-retry-r02c`, based on R02b 9344a47b. Before adding
+endstats events, fix one verified entry gate: a persisted success=false,
+error_message=publish_failed row currently prevents another attempt at all
+four filename gates (including poller preflight). New ENDSTATS_RETRY_ENABLED defaults OFF; enabled gates
+exclude only that exact failure state. Keep successes, terminal duplicate/
+supersede/unresolved markers, NULL/in-flight and unknown states terminal.
+No historical backfill or automatic reset of RAM markers. Existing retry
+budget/activity/lookback policy remains; no exactly-once publication claim.
+Prove real polling/storage flow: failed publication persists marker, next poll
+reaches storage and successful publication, third poll skips. No real Discord
+or live database. Exception/RAM recovery and event emission remain later slices.
+
+Implemented: shared exact-state SQL gate at all four entry points. Helper
+review found the initially missed monitor preflight in webhook_handler_mixin;
+fixed it and extended PG proof through that real preflight and real storage.
+68 combined tests passed, zero skips (19 real-PG cases); two existing websocket
+deprecation warnings. Synthetic parser/resolver/readiness/publisher replace
+external inputs, not the filename queries or transactional awards storage.
+Two connections verify committed award/claim counts against fetched rows.
+Disabling the helper caused `assert 1 == 2`; reverting only monitor preflight
+caused `assert False` before the retry. Both mutations restored with patch/cmp;
+final preflight + storage retry test passed. Temporary PG stopped, independently
+confirmed by pg_ctl and log. No live services, data or flags changed.
+Published as draft PR #1041 against `feat/db-runtime-status-r02b`, code
+d2efd904. Post-push self-review complete; exact-code CI 34933912726 queued at
+checkpoint. Codex and CodeRabbit review requested. Stack is 23 files against
+main; no helper/server active. No merge permission inferred for this PR.
+Next: review this prerequisite, then separately handle exception/RAM
+recovery and endstats event storage. Do not call this full endstats recovery.
+
+Review follow-up 4012369546: the earlier assertion that existing retry budgets
+covered polling publication failures was incorrect. Added shared counting after
+explicit False publication results, using endstats_retry_max_attempts across
+entry paths in this process. At exhaustion, guarded SQL persists
+publish_retry_exhausted; all gates block it, even after RAM markers are cleared.
+Counts before exhaustion are process-local (restart resets them); this is not
+a durable lifetime budget or cross-process exactly-once guarantee. Existing
+unknown/NULL claims remain blocking. 71 combined tests passed incl. 22 PG cases.
+Budget mutation failed with publish_failed != publish_retry_exhausted; restored
+with patch/cmp, both runtime paths passed again. Temporary PG stopped by pg_ctl,
+shutdown confirmed in log. No live data, services or configuration changed.
+
 ### R02b restart-status contract (2026-09-14, Astra; locally verified)
 
 Worktree `/tmp/slomix-astra-runtime-r02b`, branch `feat/db-runtime-status-r02b`,
