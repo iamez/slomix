@@ -354,6 +354,15 @@ Post-push self-review complete; no helper/task/server left running. Next:
 polling exception marker ownership (do not discard another task's claim),
 then transaction journal. Stack is 24 files against main; no guard bypass.
 
+2026-09-18 owner authorization update: owner explicitly permits subsequent
+merges when review has been performed, findings inspected/addressed (or justified
+as not applicable), and checks pass. This supersedes the earlier per-number
+approval workflow for this runtime work. Mandatory cycle.sh final checks/pause
+remain; no deployment or service action is authorized by this update.
+#1041 preflight: budget finding resolved with fix e7948055 and 36-case actual-PG
+revalidation; exact prior head2c43da1e checks green, no unresolved threads.
+Refresh main-target CI on this documentation checkpoint before merge cycle.
+
 ### R02c1 explicit failed-publication retry (2026-09-15; locally verified)
 
 Worktree `/tmp/slomix-astra-runtime-r02c`, branch
