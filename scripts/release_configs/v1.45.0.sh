@@ -93,6 +93,7 @@ MIGRATIONS=(
   "083_runtime_events.sql"
   "084_runtime_timing_events.sql"
   "085_runtime_status_events.sql"
+  "086_runtime_endstats_events.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"

@@ -30,6 +30,7 @@ from shared.endstats_retry import (
     endstats_retry_enabled,
     release_endstats_marker,
 )
+from shared.endstats_snapshot import journal_endstats_storage
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -859,7 +860,7 @@ class _EndstatsPipelineMixin:
         incoming_quality = self._summarize_endstats_quality(endstats_data)
         should_publish = True
 
-        async with self.db_adapter.transaction():
+        async with self.db_adapter.transaction() as conn, journal_endstats_storage(conn, round_id=round_id):
             # If this round already has a successful endstats post, skip.
             existing_success = await self.db_adapter.fetch_one(
                 """

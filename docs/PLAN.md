@@ -20,6 +20,87 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02c4 endstats storage journal — in progress, 2026-09-16
+
+2026-09-18 latest checkpoint: #1042 and #1043 merged through prescribed
+cycles with all checks green, zero unresolved threads, unchanged heads and no
+behind-main commits. #1043 squash d946772b exactly matches2c14ab59. #1044
+now targets main; normal ancestry merge preserved the complete content tree.
+Prior external review found no major issues and no open threads remain; new
+main-target exact-head CI is required before its conditionally authorized merge.
+No deployment/activation. A combined downstream regression passed238cases,
+zero skips, two existing warnings; temporary PG stopped. Manual repair scripts
+still bypass journaling and need explicit constraints before runtime activation.
+
+2026-09-18 external checkpoint: draft #1044 at d493e1e7; CI 35316821230
+and 35316784558 both SUCCESS at this exact SHA. External Codex comment
+5726371027 reports no major issues. No inline findings observed in this pass;
+this is not owner merge approval. Next R02 discovery target is
+_apply_round_metadata_override: round metadata, canonical ID, player duration/
+DPM and Lua linking currently have separate best-effort boundaries. Map callers
+and transaction contexts before designing one atomic correction event.
+R04 extraction must remove Discord readiness and voice-cadence dependencies
+from SSH monitoring and preserve receive-before-worker Lua metadata ordering.
+These are verified code dependencies, not completed independent ingestion.
+
+2026-09-18 checkpoint: collected completed full focused run, 128 passed,
+zero skips, two existing websockets deprecation warnings. Added richer DB-only
+replacement (new event, no second Discord call), commit-only notification and
+rollback silence, migration/release/default-flag checks and fresh-bootstrap
+parity. No-op guard mutation produced two events instead of one and failed;
+restored with patch/cmp before final run. Independent read-only review found
+no blocker, but does not replace external PR review or exact-head CI.
+Tests use a same-connection adapter stand-in; production ContextVar binding
+was inspected, not exercised by that stand-in. Direct retry after Discord
+exception does NOT prove recovery through the persisted NULL filename gate.
+Concurrent journal contexts are not a full two-process publication proof.
+Temporary PG was found still running on resumption and stopped immediately
+after collecting test output; no application services were touched.
+
+Implementation checkpoint: canonical storage now enters gated journal context
+inside the native adapter transaction, before success/quality reads. Lock the
+round, compare logical before/after multisets, insert round_endstats_changed
+and ID-only NOTIFY on that same connection only for changed R1/R2 data.
+Migration086, release registration and bootstrap SQL mirror added; new
+ENDSTATS_EVENTS_ENABLED defaults false and requires global EVENT_STREAM_ENABLED.
+124 focused cases passed, zero skips, two existing websockets warnings. Actual
+handler + isolated PG proves committed event visible before mocked Discord
+success/False/exception and no duplicate event on identical storage retry.
+Storage/event/NOTIFY failure rollback, R0/R2/missing-round, OFF and concurrent
+same-round waiting covered. Removing FOR UPDATE failed concurrency guard;
+restored via patch/cmp and rerun. Ruff clean. Temporary PG stopped.
+Remaining before slice completion: richer DB-only replacement proof, full
+bootstrap parity, commit-only notification visibility, fresh review and CI.
+No independent runtime/delivery guarantee or live activation claimed.
+
+Direction audit (2026-09-16): original design 21 and R01-R04 remain aligned,
+but independent ingestion and consumer catch-up are still future work. Snapshot
+commit 364473ca passed exact-head CI 35067542754. Read-only independent review
+and parent inspection require the round lock BEFORE success/quality reads, not
+only before DELETE. Storage commit precedes Discord and final success marking;
+this event cannot establish exactly-once delivery. Test publication False and
+exceptions after commit separately from storage rollback.
+Confirmed additional writers include repair_endstats_round_assignments,
+reprocess_missing_endstats, backfill_vs_stats_subjects and manager round deletion.
+R02c4 covers only the canonical pipeline; audit remaining direct/dynamic/cascade
+writers before consumers assume complete correction coverage or activation.
+Do not expand this slice to all maintenance scripts. No new infrastructure or
+live activation is needed for this development step.
+
+Worktree /tmp/slomix-astra-runtime-r02c4, branch
+feat/db-runtime-endstats-journal-r02c4, based on R02c3 c4857ae7.
+First foundation implemented: capture all persisted logical awards/VS columns
+as multisets, ignoring generated IDs/clocks but preserving duplicate counts.
+Numeric field is REAL in bootstrap; normalize float NaN to PostgreSQL equality.
+Require caller transaction; caller must serialize round writers separately.
+Nine isolated real PostgreSQL cases passed, no skips, including reorder/new
+IDs/clocks, NaN, equal-count value changes, GUIDs, duplicate multiplicity and
+round exclusion. Counter-to-set mutation failed the duplicate test; restored
+with patch/cmp. This helper is NOT connected to the runtime producer yet.
+Remaining: per-round serialization, migration/event contract and registration,
+same-connection journal/notify integration, rollback/concurrency/OFF/bootstrap
+proofs, review and exact-head CI. No claim that R02c4 is complete or activated.
+
 2026-09-18 current checkpoint: #1042 merged as9ffbcd5e after all22 checks
 passed and the prescribed pause; final gates zero red/open threads/behind,
 unchanged head, squash tree identical to6929d143. #1043 retargeted main;

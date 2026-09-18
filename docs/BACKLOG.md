@@ -7,6 +7,44 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) #1042 merged9ffbcd5e and #1043 mergedd946772b with
+  reviewed findings resolved and green exact-head checks. #1044 now ready/main;
+  ancestry sync preserved its full content tree. Refresh CI, then prescribed
+  cycle under owner's conditional authorization. No service/deploy changes.
+
+- (Astra, 2026-09-18) #1044 exact-head d493e1e7 CI runs both successful;
+  external Codex reports no major issues. Next safe work: R02 Lua override
+  writer/caller inventory; source survey recorded locally in
+  /tmp/slomix-r02d-and-r04-dependencies-2026-09-18.md. R04 readiness/voice
+  scheduling and Lua receive ordering dependencies confirmed. No activation.
+
+- (Astra, 2026-09-18) R02c4 remaining local proofs completed: 128 focused
+  tests passed, zero skips; richer replacement, notifications and bootstrap
+  parity covered. No-op mutation failed, restored/cmp. Independent review
+  found no blocker with explicit adapter/NULL-recovery/concurrency limits.
+  Resumed and collected completed test output; temporary PG was still running,
+  now stopped. Next: draft PR/external review/exact-head CI, no merge permission.
+
+- (Astra, 2026-09-16) R02c4 canonical journal integration implemented with
+  migration086/default-OFF flag/native round lock before decisions. 124 focused
+  cases passed; actual storage+PG checks post-commit Discord outcomes, rollback,
+  unchanged retries and lock contention. Lock mutation failed, restored/cmp.
+  Remaining: richer replacement, bootstrap, commit notification, review/CI.
+  Temporary PG stopped; no live application DB or services touched.
+
+- (Astra, 2026-09-16) Runtime direction audit completed with read-only helper.
+  R02c4 remains the next slice; lock before decisions, separate storage event
+  from Discord delivery, and explicitly exclude uninstrumented maintenance
+  writers from completeness claims. Snapshot CI 35067542754 succeeded.
+  Detailed research stays local in /tmp/slomix-runtime-direction-audit-2026-09-16.md.
+  No code/runtime changes in this audit; helper completed, no processes started.
+
+- (Astra, 2026-09-16) R02c4 started in /tmp/slomix-astra-runtime-r02c4.
+  Persisted-row multiset snapshot helper + nine actual PG cases implemented;
+  multiplicity mutation failed, restored/cmp. Not yet wired into storage or
+  journal, no migration/event added. Next: serialized same-transaction event
+  integration and failure proofs. No live application DB or service changes.
+
 - (Astra, 2026-09-16) #1039 merged with explicit owner approval via cycle,
   squash fc655855. Verified identical tree to approved head. #1040 now bases
   main; normal merges propagated through #1041/#1042/#1043 with unchanged
