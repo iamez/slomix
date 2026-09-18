@@ -134,6 +134,16 @@ Temporary PG stopped after proof; no live service or data changes.
 
 ### R02c4 endstats storage journal — in progress, 2026-09-16
 
+2026-09-18 latest checkpoint: #1042 and #1043 merged through prescribed
+cycles with all checks green, zero unresolved threads, unchanged heads and no
+behind-main commits. #1043 squash d946772b exactly matches2c14ab59. #1044
+now targets main; normal ancestry merge preserved the complete content tree.
+Prior external review found no major issues and no open threads remain; new
+main-target exact-head CI is required before its conditionally authorized merge.
+No deployment/activation. A combined downstream regression passed238cases,
+zero skips, two existing warnings; temporary PG stopped. Manual repair scripts
+still bypass journaling and need explicit constraints before runtime activation.
+
 2026-09-18 external checkpoint: draft #1044 at d493e1e7; CI 35316821230
 and 35316784558 both SUCCESS at this exact SHA. External Codex comment
 5726371027 reports no major issues. No inline findings observed in this pass;
