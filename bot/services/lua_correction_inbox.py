@@ -16,6 +16,28 @@ async def retain_lua_correction_if_enabled(adapter, metadata):
     return await retain_lua_correction(adapter, os.getenv("LUA_CORRECTION_SOURCE_KEY", ""), metadata)
 
 
+async def lock_correction_identity(adapter, source_key, payload):
+    """Serialize input revision arrival and repair; caller owns transaction."""
+    identity = json.dumps([source_key, payload["map_name"], payload["round_number"], payload["round_start_unix"]])
+    await adapter.fetch_val("SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", (identity,))
+
+
+def correction_payload_digest(payload):
+    serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    return hashlib.sha256(("1:" + serialized).encode("utf-8")).hexdigest()
+
+
+def validate_retained_correction(row):
+    raw = json.loads(row["payload"])
+    payload = normalize_correction_input(raw)
+    if (row["payload_version"] != 1 or raw != payload
+            or row["payload_digest"] != correction_payload_digest(payload)
+            or (payload["map_name"], payload["round_number"], payload["round_start_unix"]) != (
+                row["map_name"], row["round_number"], row["round_start_unix"])):
+        raise ValueError("Retained correction integrity mismatch")
+    return payload
+
+
 def _integer(value, field, minimum=0, maximum=2147483647):
     if (isinstance(value, bool) or not isinstance(value, (int, float))
             or (isinstance(value, float) and (not math.isfinite(value) or not value.is_integer()))
@@ -79,8 +101,9 @@ async def retain_lua_correction(adapter, source_key, metadata):
         raise ValueError("Invalid correction inbox source identity")
     payload = normalize_correction_input(metadata)
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
-    digest = hashlib.sha256(("1:" + serialized).encode("utf-8")).hexdigest()
+    digest = correction_payload_digest(payload)
     async with adapter.transaction():
+        await lock_correction_identity(adapter, source_key, payload)
         row_id = await adapter.fetch_val("""
             INSERT INTO lua_correction_inputs
                 (source_key, payload_version, payload_digest, map_name,

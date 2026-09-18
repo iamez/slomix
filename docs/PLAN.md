@@ -20,6 +20,25 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02d4 atomic retained-input repair — local implementation 2026-09-18
+
+Branch feat/db-runtime-lua-repair-r02d4, parent #1048 fa6ef789. DB-only attempt
+locks source identity then input then round/players; retain shares advisory lock.
+Checks payload version/digest/normalized identity before and after locking.
+Exact target only, missing/ambiguous/revision conflicts return explicit outcomes.
+Migration089 receipt commits with correction/event, including nested adapter
+transaction/savepoint. No scheduler, retries/backoff or revision arbitration yet.
+97 focused cases passed, zero skips, two existing warnings; Ruff clean. Actual
+PG proves receipt failure rolls correction/event back, concurrent duplicate
+applies once, revision arrival waits then conflicts, and missing target retries.
+Mutation replacing outer transaction with connection failed assert600==1800;
+restored with patch/cmp before final run. Temporary PG stopped. Read-only review
+found no blocker within participating-helper scope. Strict case-sensitive map
+lookup deliberately fails closed; not all round writers share the advisory lock,
+so target uniqueness is not protected against a nonparticipating concurrent insert.
+Receipt records completed attempt, not permanent equality of live round data.
+Local commit awaits approved #1041 stack reduction before publishing new paths.
+
 ### R02d3 intake wiring — started 2026-09-18
 
 Separate branch feat/db-runtime-lua-intake-r02d3, parent #1046 b5b34195.
