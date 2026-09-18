@@ -35,6 +35,11 @@
   slice, then separate durable metadata-repair input, not import replay.
   No fix implemented yet; temporary PG stopped, helper finished.
 
+- (Astra, 2026-09-18) #1042 merged9ffbcd5e and #1043 mergedd946772b with
+  reviewed findings resolved and green exact-head checks. #1044 now ready/main;
+  ancestry sync preserved its full content tree. Refresh CI, then prescribed
+  cycle under owner's conditional authorization. No service/deploy changes.
+
 - (Astra, 2026-09-18) #1044 exact-head d493e1e7 CI runs both successful;
   external Codex reports no major issues. Next safe work: R02 Lua override
   writer/caller inventory; source survey recorded locally in
