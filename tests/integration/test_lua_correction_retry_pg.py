@@ -170,6 +170,32 @@ async def test_direct_completion_after_seeding_is_idempotent(retry_db):
     assert await reader.fetchval("SELECT terminal FROM lua_correction_attempts")
 
 
+@pytest.mark.parametrize("conflict", ["ambiguous_round", "conflicting_revision"])
+async def test_conflicts_are_quarantined_without_correction(retry_db, conflict):
+    writer, reader = retry_db
+    input_id = await enqueue(writer)
+    if conflict == "ambiguous_round":
+        await writer.execute("INSERT INTO rounds(id,round_number,map_name,round_start_unix) VALUES(43,1,'fixture',1700000000)")
+    else:
+        await retain_lua_correction(adapter_for(writer), "one", metadata() | {"actual_duration_seconds": 300})
+    assert await run_next_lua_correction_attempt(adapter_for(writer)) == conflict
+    assert await reader.fetchval("SELECT terminal FROM lua_correction_attempts WHERE input_id=$1", input_id)
+    assert await reader.fetchval("SELECT count(*) FROM lua_correction_receipts") == 0
+
+
+async def test_seed_batch_is_bounded_without_losing_remainder(retry_db):
+    writer, reader = retry_db
+    for offset in range(107):
+        await retain_lua_correction(adapter_for(writer), "one", metadata() | {"round_start_unix": 1700000000 + offset})
+    first = await seed_lua_correction_attempts(adapter_for(writer))
+    second = await seed_lua_correction_attempts(adapter_for(reader))
+    assert len(first) == 100
+    assert len(second) == 7
+    assert set(first).isdisjoint(second)
+    assert await seed_lua_correction_attempts(adapter_for(writer)) == []
+    assert await reader.fetchval("SELECT count(*) FROM lua_correction_attempts") == len(await reader.fetch("SELECT * FROM lua_correction_attempts")) == 107
+
+
 async def test_unexpected_error_defers_then_surfaces_without_starvation(retry_db, monkeypatch):
     writer, reader = retry_db
     first = await enqueue(writer, map_name="missing")

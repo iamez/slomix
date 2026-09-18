@@ -43,6 +43,9 @@ Published draft #1050 with independent review findings fixed and external review
 requested. #1044 merged21eb638a, verified identical approved tree; normal sync
 through #1045/#1046/#1048/#1049/#1050 changed only documentation. #1045 now
 ready/main with fresh CI pending. No service or live-data changes.
+Follow-up: 21 retry-specific cases now pass, including explicit ambiguous/revision
+quarantine and107-input discovery in100+7batches. Code unchanged; temporary PG
+stopped after the expanded proof. CI/external review still pending.
 
 ### R02d4 atomic retained-input repair — local implementation 2026-09-18
 
