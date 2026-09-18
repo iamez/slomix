@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R02d1 atomic Lua correction implemented, default OFF;
+  migration087 and changed-only event share the round/player transaction.
+  81 focused tests pass, zero skips; real PG rollback mutation failed, restored
+  with patch/cmp. Independent review fixes applied; no remaining blocker found.
+  Temporary PG stopped. Next: commit/push, draft PR and external CI/review,
+  then R02d2 retained metadata repair input. No service/live DB changes.
+
 - (Astra, 2026-09-18) R02d worktree created; real PG legacy boundary reproduced:
   round commits while DPM update fails and is swallowed. Six focused tests pass;
   mutation failed then restored/cmp. Helper mapped ingress gates and confirmed

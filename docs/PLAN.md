@@ -20,7 +20,29 @@
 
 ## Track: runtime v2 R01 (Astra)
 
-### R02d Lua correction boundary — discovery proof, 2026-09-18
+### R02d Lua correction boundary — atomic implementation, 2026-09-18
+
+R02d1 implemented behind EVENT_STREAM_ENABLED + LUA_CORRECTION_EVENTS_ENABLED
+(default OFF). Native adapter transaction locks and revalidates round identity,
+updates metadata/canonical ID/player duration and DPM, and records changed-only
+round_lua_corrected plus ID notification atomically. Migration087, bootstrap and
+release registration agree. Lua linking remains best-effort AFTER commit, not
+part of the event receipt. No-op retries emit no event; canonical conflicts fail
+closed. Duration uses nonnegative integer seconds, matching the real DB column.
+
+Verification: 81 focused tests passed, zero skips, two existing websockets
+deprecation warnings; Ruff clean. Real isolated PostgreSQL with production
+adapter transaction/ContextVar (pool checkout stubbed) proves success, retries,
+lock contention and rollback on player/event/notification/canonical failures.
+Transaction-to-connection mutation failed three rollback cases with
+`assert (600, 1700000000) == (1800, None)`; restored with patch/cmp before rerun.
+Independent read-only review found no remaining blocker after INTEGER fixture
+and duration/source-round validation fixes. Temporary PG stopped after tests.
+Remaining: commit/push, draft PR, exact-head CI and external review. This is not
+automatic correction recovery: retained-input repair remains R02d2 below.
+Missing/nonpositive source starts retain weaker legacy identity semantics.
+
+Historical discovery evidence:
 
 Worktree /tmp/slomix-astra-runtime-r02d, branch feat/db-runtime-lua-overrides-r02d,
 parent R02c4 8fd71059. Isolated PG characterization now proves legacy partial
@@ -29,15 +51,15 @@ leaves player duration 1800s; error is suppressed and later linking is reached.
 Actual override SQL runs; canonical-ID and Lua-link side effects are stubbed.
 Six focused tests passed (one real PG plus five existing exact-identity guards).
 Mutation skipping round UPDATE failed the runtime assertion; restored/cmp,
-rerun green. No behavior fix or journal for this path implemented yet.
+rerun green. This discovery preceded the opt-in implementation above.
 
 Independent caller/gate audit: initial importer and bot already mark file
 success before override; RAM/DB/session gates prevent re-entry, STATS_READY's
 duplicate fetch returns True without applying correction, pending metadata is
 popped from RAM. Moving only bot mark_processed or rethrowing an error is not
 recovery. Do not label a committed import RetryableImportFailure.
-Next R02d1: opt-in atomic correction transaction (identity/lock, round metadata,
-canonical ID, player duration/DPM, journal) preserving OFF/exact-target guards.
+R02d1: opt-in atomic correction transaction implemented above, preserving
+OFF/exact-target guards; not deployed or activated.
 R02d2: separate metadata repair entry with retained payload/identity and its
 own completion/retry state, independent of file-import dedup. Define Lua linking
 coverage/lock ordering explicitly. Atomic correction is not automatic recovery.

@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-18 · Correction fixtures must preserve integer seconds.**
+  A REAL fixture accepted values the live INTEGER player-duration column
+  rejects. Use INTEGER in boundary proofs; validate finite, nonnegative,
+  integral durations before SQL. Canonical helpers that swallow collisions
+  cannot establish atomic correction success: enforce conflicts in the same
+  native transaction as metadata, DPM and its journal event.
+
 - **2026-09-18 · Post-import correction failure is not import failure.**
   The importer and bot mark the file successful before Lua overrides; ingress
   RAM/DB/session gates can skip any retry and pending metadata is popped.
