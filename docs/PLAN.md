@@ -20,6 +20,29 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02d Lua correction boundary — discovery proof, 2026-09-18
+
+Worktree /tmp/slomix-astra-runtime-r02d, branch feat/db-runtime-lua-overrides-r02d,
+parent R02c4 8fd71059. Isolated PG characterization now proves legacy partial
+commit: round duration/winner commit (600s/2), rejected player DPM correction
+leaves player duration 1800s; error is suppressed and later linking is reached.
+Actual override SQL runs; canonical-ID and Lua-link side effects are stubbed.
+Six focused tests passed (one real PG plus five existing exact-identity guards).
+Mutation skipping round UPDATE failed the runtime assertion; restored/cmp,
+rerun green. No behavior fix or journal for this path implemented yet.
+
+Independent caller/gate audit: initial importer and bot already mark file
+success before override; RAM/DB/session gates prevent re-entry, STATS_READY's
+duplicate fetch returns True without applying correction, pending metadata is
+popped from RAM. Moving only bot mark_processed or rethrowing an error is not
+recovery. Do not label a committed import RetryableImportFailure.
+Next R02d1: opt-in atomic correction transaction (identity/lock, round metadata,
+canonical ID, player duration/DPM, journal) preserving OFF/exact-target guards.
+R02d2: separate metadata repair entry with retained payload/identity and its
+own completion/retry state, independent of file-import dedup. Define Lua linking
+coverage/lock ordering explicitly. Atomic correction is not automatic recovery.
+Temporary PG stopped after proof; no live service or data changes.
+
 ### R02c4 endstats storage journal — in progress, 2026-09-16
 
 2026-09-18 external checkpoint: draft #1044 at d493e1e7; CI 35316821230

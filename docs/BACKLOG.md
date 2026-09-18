@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R02d worktree created; real PG legacy boundary reproduced:
+  round commits while DPM update fails and is swallowed. Six focused tests pass;
+  mutation failed then restored/cmp. Helper mapped ingress gates and confirmed
+  rethrow alone cannot replay an already-marked import. Next: atomic correction
+  slice, then separate durable metadata-repair input, not import replay.
+  No fix implemented yet; temporary PG stopped, helper finished.
+
 - (Astra, 2026-09-18) #1044 exact-head d493e1e7 CI runs both successful;
   external Codex reports no major issues. Next safe work: R02 Lua override
   writer/caller inventory; source survey recorded locally in
