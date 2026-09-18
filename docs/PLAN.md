@@ -62,6 +62,12 @@ restored with patch/cmp and reran successfully. No runtime implementation change
 
 ### R02d4 atomic retained-input repair — local implementation 2026-09-18
 
+Current checkpoint: #1048 merged with explicit owner approval as 422f056a;
+its tree exactly matches approved 9bcac196. #1049 retargeted to main and
+normal ancestry merge preserved the entire implementation tree. Fresh exact-head
+CI/review required; #1049 still needs its own merge approval. No activation.
+The following development checkpoints are historical, not current permissions.
+
 Branch feat/db-runtime-lua-repair-r02d4, parent #1048 fa6ef789. DB-only attempt
 locks source identity then input then round/players; retain shares advisory lock.
 Checks payload version/digest/normalized identity before and after locking.
