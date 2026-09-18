@@ -20,6 +20,70 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02b restart-status contract (2026-09-14, Astra; locally verified)
+
+Worktree `/tmp/slomix-astra-runtime-r02b`, branch `feat/db-runtime-status-r02b`,
+stacked on R02a 78aaf3a8. No merge, activation, live migration or deploy.
+Contract: require EVENT_STREAM_ENABLED and ROUND_STATUS_EVENTS_ENABLED (both
+default OFF). Keep existing restart heuristics; only journal actual completed
+to cancelled/substitution transitions for R1/R2, on the canonical import
+connection. Guard the update against stale selection; no event on a no-op.
+Record old/new status and causing round ID, no player data. Event + status +
+ID-only NOTIFY commit atomically; enabled-path errors must reach import rollback
+and retry eligibility rather than the detector's legacy best-effort catch.
+Migration 085 extends event checks; register release and mirror bootstrap.
+Prove commit visibility, rollback, concurrent no-op, R0 exclusion, both flags,
+and failure propagation. Existing OFF behavior and complete-match guards stay.
+This is not all status writers, historical replay, or independent ingestion.
+
+Implementation and local proof complete: 113 combined cases passed, zero
+skipped, including six real status-PG cases, R01/R02a regressions and full
+fresh-bootstrap parity. Later real-create-catch unit added: 14 status unit
+cases passed. Parser/current INSERT/stat writers are stubbed in canonical PG
+proof; real detector and outer import transaction run. Actual create method's
+catch returning None is separately pinned; process_file rejects None inside
+its transaction. Both statuses, R0/no-op, concurrency, commit-only notification,
+event/NOTIFY rollback and retry without terminal marker are exercised.
+Mutation removing completed-status predicate failed both no-op guards with
+`assert not True`; restored with patch and cmp before the combined run.
+Temporary private PG stopped, independently confirmed by pg_ctl and log.
+Reviewer status_contract_audit found no blocker; recommended enabled complete-
+match protection and real-create-catch tests, both now added. Separate roster/
+counterpart reads remain heuristic, not newly proven concurrency-safe.
+Published as draft PR #1040 against `feat/db-runtime-timing-r02`; code b6137a61.
+Verified 2026-09-15: exact-SHA CI 34860352518 SUCCESS; Codex external comment
+5666250588 reviewed b6137a61 and reported no major issues. CodeRabbit did not
+complete its review (rate limit), so no approval is inferred. Post-push diff
+self-review complete. R02a 78aaf3a8 passed CI 34859363030. No live changes.
+Next: finish external review and request owner-specific merge decisions in
+dependency order #1012 -> #1039 -> #1040. The stacked diff is now 25 files
+against main; do not bypass the push guard to grow the stack. Remaining R02
+writers are Lua metadata/DPM and endstats; then consumer receipts/catch-up,
+then independent Linux capture/import. No active test server/helper remains.
+
+2026-09-15 follow-up: sanitized template now explicitly sets the status flag
+false. Fourteen status unit cases passed; changing that template value to true
+failed its contract guard, restored with patch and cmp. #1012 merge explicitly
+authorized by owner and completed: squash 9cbd8810, cycle reported zero red
+checks, unresolved threads and behind commits, unchanged SHA. Verified merged
+through both cycle output and GitHub PR state. Dependent branches synchronized
+without runtime code changes; #1039 now targets main, #1040 still targets #1039.
+R02b stack is now 18 files against main, so the previous 25-file boundary no
+longer blocks a separate next slice. #1039/#1040 still need individual merge
+permission. No deploy or activation. Next development slice: R02c as below.
+
+**Next slice discovery (not implemented):** endstats storage already has an
+adapter transaction in `_store_endstats_and_publish`; bind its native connection
+for the event before transaction exit. Existing success/quality decisions and
+awards/VS replacement need per-round serialization and complete normalized row
+comparison, not counts, to distinguish a real change from a publish retry.
+The storage event cannot mean Discord delivery: correlation/publish/handled
+markers occur afterward, and richer replacements intentionally skip publishing.
+Polling and webhook retry check filename existence even for failed claims;
+polling's outer exception also retains its RAM marker. An enabled journal must
+repair and test these retry paths before claiming recovery. This remains a
+separate R02c contract, not an excuse to activate incomplete consumers.
+
 ### R02a timing-fill slice (2026-09-14, Astra)
 
 Branch `feat/db-runtime-timing-r02`, worktree `/tmp/slomix-astra-runtime-r02`,

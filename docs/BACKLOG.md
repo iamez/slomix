@@ -7,6 +7,28 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) Owner explicitly approved #1012 only; cycle completed
+  merge to main 9cbd8810 (zero red checks/open threads/behind commits).
+  R02a retargeted to main and both dependent branches synchronized; code trees
+  unchanged by history reconciliation. R02b now 18 files against main.
+  New CI required on synchronized heads. Migration-owner review findings on
+  084/085 answered using existing release wrapper's explicit owner credentials.
+  No live changes. Next: R02c endstats retry/storage contract in PLAN; no
+  permission inferred to merge #1039 or #1040.
+
+- (Astra, 2026-09-14) R02b in `/tmp/slomix-astra-runtime-r02b`, branch
+  `feat/db-runtime-status-r02b`, parent R02a 78aaf3a8 (CI 34859363030 passed).
+  Default-OFF older-round status producer + migration085 implemented.
+  113 combined tests passed incl. real PG/bootstrap, zero skipped; later
+  create-catch test added (14 status unit cases passed). Guard mutation
+  failed twice, restored/cmp; temporary PG stopped. Read-only helper review
+  found no blocker; both suggested coverage additions implemented.
+  Published draft #1040, b6137a61. Verified 2026-09-15: CI 34860352518 passed;
+  external Codex reviewed this SHA, no major issues. CodeRabbit rate-limited,
+  not an approval. Next: remaining review and owner merge decisions in order
+  #1012 -> #1039 -> #1040; stack at 25 files, no guard bypass. PLAN records
+  transaction contract and boundaries; no live migration or deploy.
+
 - (Astra, 2026-09-14) R02a on `feat/db-runtime-timing-r02`, stacked on
   R01 b81221d6 (green CI/CodeQL/Hygiene; still unmerged). Migration084 and
   default-OFF transactional Lua timing fill implemented. 106-case PG run

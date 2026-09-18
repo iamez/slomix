@@ -41,6 +41,7 @@ from bot.community_stats_parser import C0RNP0RN3StatsParser
 from bot.config import load_config
 from bot.stats import StatsCalculator
 from shared.import_result import RetryableImportFailure
+from shared.round_status_events import mark_round_restart, status_events_enabled
 from shared.runtime_events import emit_round_stats_imported, event_stream_enabled
 
 # Import comprehensive logging system
@@ -2467,6 +2468,7 @@ class PostgreSQLDatabaseManager:
         MAP_REPLAY_GAP_MINUTES = 15
         QUICK_RESTART_MINUTES = 5
         COUNTERPART_PAIR_WINDOW_MINUTES = 20
+        journal_restarts = status_events_enabled()
 
         try:
             # Find earlier rounds with same map/round in this gaming session
@@ -2610,7 +2612,16 @@ class PostgreSQLDatabaseManager:
                                     f"(players left/joined, restarted after {time_diff_minutes:.1f}min)"
                                 )
 
-                    # Mark earlier round
+                    # Enabled producer changes status and journals on this connection.
+                    if journal_restarts:
+                        changed = await mark_round_restart(
+                            conn, round_id=earlier_id, status=restart_status,
+                            caused_by_round_id=current_round_id,
+                        )
+                        if not changed:
+                            continue
+                        logger.debug("Restart transition staged for round %s; import commit pending", earlier_id)
+                        continue
                     await conn.execute(
                         """
                         UPDATE rounds
@@ -2633,6 +2644,8 @@ class PostgreSQLDatabaseManager:
 
         except Exception as e:
             logger.error(f"Error in restart detection: {e}")
+            if journal_restarts:
+                raise
             # Don't fail the import if restart detection fails
 
     async def _insert_player_stats(self, conn, round_id: int, round_date: str, parsed_data: dict) -> int:
