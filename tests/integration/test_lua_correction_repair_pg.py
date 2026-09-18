@@ -126,6 +126,24 @@ async def test_missing_round_remains_retryable(repair_db):
     assert await apply_retained_lua_correction(adapter_for(reader), "one", input_id) == "applied"
 
 
+@pytest.mark.parametrize("ambiguous", [False, True])
+async def test_normalized_map_target_and_ambiguity(repair_db, ambiguous):
+    writer, _ = repair_db
+    input_id = await retained(writer)
+    await writer.execute("UPDATE rounds SET map_name=' FIXTURE ' WHERE id=42")
+    if ambiguous:
+        await writer.execute("INSERT INTO rounds(id,map_name,round_number,round_start_unix) VALUES (43,'fixture',1,1700000000)")
+    assert await apply_retained_lua_correction(adapter_for(writer), "one", input_id) == (
+        "ambiguous_round" if ambiguous else "applied"
+    )
+
+
+@pytest.mark.parametrize("value", [True, False, 0, -1, "1", 1.5])
+async def test_invalid_input_id_before_database(value):
+    with pytest.raises(ValueError, match="input ID"):
+        await apply_retained_lua_correction(None, "one", value)
+
+
 def test_receipt_bootstrap_parity():
     root = Path(__file__).resolve().parents[2]
     sql = (root / "migrations/089_lua_correction_receipts.sql").read_text().strip()

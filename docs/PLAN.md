@@ -33,11 +33,16 @@ PG proves receipt failure rolls correction/event back, concurrent duplicate
 applies once, revision arrival waits then conflicts, and missing target retries.
 Mutation replacing outer transaction with connection failed assert600==1800;
 restored with patch/cmp before final run. Temporary PG stopped. Read-only review
-found no blocker within participating-helper scope. Strict case-sensitive map
-lookup deliberately fails closed; not all round writers share the advisory lock,
+identified case-sensitive target lookup inconsistent with parser-preserved map
+case; fixed with lower/btrim lookup and normalized ambiguity tests. Not all round
+writers share the advisory lock,
 so target uniqueness is not protected against a nonparticipating concurrent insert.
 Receipt records completed attempt, not permanent equality of live round data.
 Local commit awaits approved #1041 stack reduction before publishing new paths.
+Final local follow-up: 105 focused cases pass after normalized-map fix and input
+ID validation. Reverting normalized lookup failed both mixed-case target tests
+(missing_round instead of applied; applied instead of ambiguous_round); restored
+with patch/cmp and full rerun. Ruff clean, temporary PostgreSQL stopped again.
 
 ### R02d3 intake wiring — started 2026-09-18
 

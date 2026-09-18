@@ -22,6 +22,8 @@ async def apply_retained_lua_correction(adapter, source_key, input_id):
     round locks. Completion and correction/event commit together; linking is
     excluded. Only inputs for the configured server may resolve local rounds.
     """
+    if isinstance(input_id, bool) or not isinstance(input_id, int) or input_id <= 0:
+        raise ValueError("Invalid retained correction input ID")
     async with adapter.transaction():
         row = await adapter.fetch_one(
             "SELECT * FROM lua_correction_inputs WHERE id=? AND source_key=?", (input_id, source_key),
@@ -42,7 +44,7 @@ async def apply_retained_lua_correction(adapter, source_key, input_id):
         if revisions != 1:
             return "conflicting_revision"
         targets = await adapter.fetch_all("""
-            SELECT id FROM rounds WHERE map_name=? AND round_number=? AND round_start_unix=? LIMIT 2
+            SELECT id FROM rounds WHERE lower(btrim(map_name))=? AND round_number=? AND round_start_unix=? LIMIT 2
         """, (payload["map_name"], payload["round_number"], payload["round_start_unix"]))
         if not targets:
             return "missing_round"
