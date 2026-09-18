@@ -22,7 +22,9 @@
 
 ### R02d3 intake wiring — started 2026-09-18
 
-Separate branch feat/bot-lua-inbox-intake-r02d3, parent #1046 b5b34195.
+Separate branch feat/db-runtime-lua-intake-r02d3, parent #1046 b5b34195.
+Initial feat/bot-* name missed the existing runtime push CI filter; renamed
+to feat/db-runtime-* before treating any CI state as merge evidence.
 Default-OFF inbox gate + configured source identity. STATS_READY captures after
 identity/ghost gates but before RAM metadata queue/worker dedup; GAMETIME captures
 after identity fallback before team storage/correlation. Persistence errors must
