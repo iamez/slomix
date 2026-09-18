@@ -35,6 +35,13 @@ input runtime proof are posted. Fresh ancestry-head CI must be collected.
 
 ### R02d Lua correction boundary — atomic implementation, 2026-09-18
 
+2026-09-18 current checkpoint: #1044 merged21eb638a through prescribed cycle,
+all22checks successful and final gates clear; squash tree identical196d19f7.
+#1045 retargeted main; ancestry merge preserved its entire content tree. Prior
+Codex review found no major issues; Codacy SQL annotations were examined with
+bound-parameter/allowlist runtime proofs, not suppressed. Refresh exact-head CI
+and inspect current findings before a conditional-authorized merge. No deploy.
+
 R02d1 implemented behind EVENT_STREAM_ENABLED + LUA_CORRECTION_EVENTS_ENABLED
 (default OFF). Native adapter transaction locks and revalidates round identity,
 updates metadata/canonical ID/player duration and DPM, and records changed-only
