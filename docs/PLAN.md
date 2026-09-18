@@ -20,6 +20,19 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+2026-09-18 approved stack checkpoint: owner specifically approved #1040 after
+the numbered request. cycle.sh completed required pause and reported red=0,
+threads=0, behind=0, unchanged SHA; merged as 4a7e0738. Squash tree identical
+to approved f1bd3bf5. Normal main merge into R02c1 had four squash-history
+conflicts; retained existing child additions and verified zero content diff.
+Ancestry propagated through R02c2/c3/c4/d with zero content diff at every step.
+Stack now 20 files vs main (was 25), allowing separate R02d2 work. No deploy.
+#1041 existing polling-budget finding revalidated with 36 unit/PG cases and
+resolved with evidence; this is not merge approval for #1041. Test PG stopped.
+#1045 Codex review at aeaaf345 reports no major issues; f428d34a checks passed
+except Codacy action_required, whose parameter-binding disposition and hostile
+input runtime proof are posted. Fresh ancestry-head CI must be collected.
+
 ### R02d Lua correction boundary — atomic implementation, 2026-09-18
 
 R02d1 implemented behind EVENT_STREAM_ENABLED + LUA_CORRECTION_EVENTS_ENABLED

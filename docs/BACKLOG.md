@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) Authorized #1040 merged via cycle as 4a7e0738; tree
+  matches approved head. Synced main through R02c1/c2/c3/c4/d using normal
+  merges, verified no content changes. Stack reduced to 20 files. #1041
+  budget review resolved after 36 passing unit/PG cases; no permission to
+  merge further PRs inferred. No deployment; temporary PG stopped. Next:
+  fresh CI and R02d2 retained-input implementation on a separate branch.
+
 - (Astra, 2026-09-18) #1045 review follow-up: three Codacy SQL-injection
   annotations investigated, fixed identifiers/bound values confirmed by real
   PG hostile-input test. Mutation failed then restored/cmp; 82 cases pass.
