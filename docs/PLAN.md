@@ -39,6 +39,10 @@ Read-only review found starvation gap, now fixed and regression-tested; second
 review found no remaining concrete blocker. Combined regression256passed,
 zero skips, two existing warnings. Ruff/whitespace clean; disposable PG stopped,
 confirmed by pg_ctl and shutdown log. Next: draft PR/external review/exact-head CI.
+Published draft #1050 with independent review findings fixed and external review
+requested. #1044 merged21eb638a, verified identical approved tree; normal sync
+through #1045/#1046/#1048/#1049/#1050 changed only documentation. #1045 now
+ready/main with fresh CI pending. No service or live-data changes.
 
 ### R02d4 atomic retained-input repair — local implementation 2026-09-18
 
