@@ -115,6 +115,12 @@ tests passed; no runtime behavior changed in this follow-up. #1043 CI still
 running at check; development continues with review/test work, not an assumed
 permission to merge #1039.
 
+2026-09-18 merge checkpoint: #1041 merged via required cycle as a2b72550;
+all final gates passed and squash tree equals approved8df7215b. #1042 now targets
+main; normal synchronization preserved all non-document content. Existing review
+finding fixed and reviewer-confirmed; zero unresolved threads. Refresh exact-head
+main-target checks before next conditional-authorized cycle. No deploy/activation.
+
 ### R02c2 bounded webhook retry after exceptions (2026-09-15; in progress)
 
 Worktree `/tmp/slomix-astra-runtime-r02c2`, branch
