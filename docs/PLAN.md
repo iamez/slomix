@@ -44,6 +44,15 @@ ID validation. Reverting normalized lookup failed both mixed-case target tests
 (missing_round instead of applied; applied instead of ambiguous_round); restored
 with patch/cmp and full rerun. Ruff clean, temporary PostgreSQL stopped again.
 
+Published draft #1049 after #1041 merged. CI caught an omitted round_id
+coverage decision for lua_correction_receipts (two contract failures; 6981
+other cases passed on Python 3.11). Added the justified relinker exemption:
+receipt target is historical transaction provenance, not a repairable link.
+All seven coverage contracts pass; removing the exemption reproduced the
+failure, restored with patch/cmp. No migration or live-data change involved.
+The additional file waits for #1042 to merge before pushing within the
+25-file stack limit. #1042 has all 22 checks green and its merge cycle active.
+
 ### R02d3 intake wiring — started 2026-09-18
 
 Separate branch feat/db-runtime-lua-intake-r02d3, parent #1046 b5b34195.
