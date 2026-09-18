@@ -44,6 +44,18 @@ Missing/nonpositive source starts retain weaker legacy identity semantics.
 
 Historical discovery evidence:
 
+2026-09-18 review follow-up: draft #1045, code aeaaf345; CI still running.
+Codacy flags three possible SQL-injection sites. Inspected identifiers are
+fixed FIELDS entries and values/notification ID are bound parameters. Added
+real-PG hostile-key/value proof: SQL-looking end_reason stored verbatim,
+unknown assignment key/session/canonical overrides ignored, tables intact.
+Allowlist-removal mutation failed with `multiple assignments to same column
+"winner_team"`; restored/cmp. Expanded focused suite: 82 passed, zero skips;
+temporary PG stopped. Alerts need reviewer disposition, not silent suppression.
+Stack contains 25 files vs main; no new-file expansion before stack reduction.
+R02d2 must persist before RAM queue/dedup and must not reuse the stale-import
+gate: that gate rejects an existing exact round, precisely the repair target.
+
 Worktree /tmp/slomix-astra-runtime-r02d, branch feat/db-runtime-lua-overrides-r02d,
 parent R02c4 8fd71059. Isolated PG characterization now proves legacy partial
 commit: round duration/winner commit (600s/2), rejected player DPM correction

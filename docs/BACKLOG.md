@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) #1045 review follow-up: three Codacy SQL-injection
+  annotations investigated, fixed identifiers/bound values confirmed by real
+  PG hostile-input test. Mutation failed then restored/cmp; 82 cases pass.
+  CI/reviews pending, no alert suppression. R02d2 intake contract researched;
+  must bypass import stale gate for exact existing targets and persist before
+  RAM queue dedup. Stack at 25 files; no new-file expansion. Test PG stopped.
+
 - (Astra, 2026-09-18) R02d1 atomic Lua correction implemented, default OFF;
   migration087 and changed-only event share the round/player transaction.
   81 focused tests pass, zero skips; real PG rollback mutation failed, restored

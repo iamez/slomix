@@ -118,6 +118,25 @@ async def test_atomic_correction_and_identical_retry(correction_db):
     assert await apply_atomic_lua_correction(adapter, 42, metadata())
     assert await reader.fetchval("SELECT count(*) FROM runtime_events") == 1
     assert len(await reader.fetch("SELECT * FROM runtime_events")) == 1
+
+
+async def test_correction_sql_identifiers_are_allowlisted_and_values_bound(correction_db):
+    writer, reader = correction_db
+    payload = metadata()
+    hostile_value = "'; DROP TABLE rounds CASCADE; --"
+    payload["end_reason"] = hostile_value
+    payload["winner_team = 99 --"] = 99
+    payload["gaming_session_id"] = 999
+    payload["round_canonical_id"] = "untrusted-canonical-id"
+    assert await apply_atomic_lua_correction(
+        adapter_for(writer), 42, payload, initializing_exact_start=True,
+    )
+    row = await reader.fetchrow(
+        "SELECT end_reason,winner_team,gaming_session_id,round_canonical_id FROM rounds WHERE id=42"
+    )
+    assert tuple(row) == (hostile_value, 2, 7, compute_canonical_id(1700000000, "fixture", 1))
+    assert await reader.fetchval("SELECT count(*) FROM rounds") == 1
+    assert await reader.fetchval("SELECT count(*) FROM runtime_events") == 1
     print("atomic Lua runtime: round=600s, player=600s/DPM120, one event after repeat")
 
 
