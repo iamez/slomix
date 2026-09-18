@@ -20,6 +20,26 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02d5 durable bounded Lua repair attempts — 2026-09-18
+
+Separate branch feat/db-runtime-lua-retry-state-r02d5, parent #1049 e8011a81.
+Migration090 keeps scheduling state separate from retained payload/receipts.
+Explicit gated seeding (100 unseen inputs, no MAX-ID cursor) and one due attempt
+per call. Attempt-row SKIP LOCKED precedes identity/input/round locks; nested
+savepoint rolls correction back before persisting classified retry outcomes.
+Five semantic attempts maximum, durable exponential delay, terminal quarantine;
+lock contention defers without consuming budget. Unexpected errors are durably
+deferred then re-raised, not silently swallowed or allowed to starve later input.
+Global/correction/repair flags required, default OFF. No loop, lease, deployment,
+or source transport guarantee. Caller must not hold an outer transaction; lock
+timeout bounds repair lock waits only, not total call execution.
+47 focused actual-PG/bootstrap/coverage cases passed, zero skips, two existing
+warnings. Outer-transaction mutation failed600!=1800, restored by patch/cmp.
+Read-only review found starvation gap, now fixed and regression-tested; second
+review found no remaining concrete blocker. Combined regression256passed,
+zero skips, two existing warnings. Ruff/whitespace clean; disposable PG stopped,
+confirmed by pg_ctl and shutdown log. Next: draft PR/external review/exact-head CI.
+
 ### R02d4 atomic retained-input repair — local implementation 2026-09-18
 
 Branch feat/db-runtime-lua-repair-r02d4, parent #1048 fa6ef789. DB-only attempt
