@@ -137,6 +137,15 @@ def test_missing_producer_map_rejected():
         normalize_correction_input(payload)
 
 
+@pytest.mark.parametrize("raw_reason", [None, "", "unknown", "garbage"])
+def test_fallback_end_reason_is_not_a_measurement(raw_reason):
+    payload = WebhookRoundMetadataService().build_round_metadata_from_map({
+        "map": "fixture", "round": 1, "lua_roundstart": 1700000000, "lua_endreason": raw_reason,
+    })
+    assert payload["end_reason"] == "NORMAL"
+    assert "end_reason" not in normalize_correction_input(payload)
+
+
 @pytest.mark.parametrize("key,value", [
     ("round_start_unix", 0), ("round_start_unix", True), ("round_number", 0),
     ("round_number", 1.5), ("actual_duration_seconds", float("nan")),

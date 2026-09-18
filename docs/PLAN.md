@@ -29,6 +29,9 @@ zero round end, and rejects unknown map sentinel. Optional end_reason clarified.
 Use transaction-aware adapter fetch_val/fetch_one and ? parameters; dependency
 remains the adapter, not the Discord bot. Initial expanded run: 110 passed;
 presence-filter mutation failed both degraded producer cases, restored/cmp.
+Follow-up local review: unknown/empty/null end reason also falls back to NORMAL;
+only recognized explicit reason is now marked present. 76 focused inbox/producer
+tests pass after this addition. Legacy display defaults remain unchanged.
 
 Separate branch feat/db-runtime-lua-inbox-r02d2, parent f4dd404e (#1045).
 First bounded slice: normalized/versioned allowlisted payload, durable input

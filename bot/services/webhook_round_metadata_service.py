@@ -104,7 +104,13 @@ class WebhookRoundMetadataService:
         correction_fields = []
         if winner_team in (1, 2):
             correction_fields.append("winner_team")
-        if "lua_endreason" in metadata or "end reason" in metadata:
+        # NORMAL is also the legacy fallback for unknown input, so only its
+        # explicit source spellings are authoritative correction measurements.
+        reason_known = normalized_end_reason != "NORMAL" or (
+            isinstance(end_reason_raw, str)
+            and end_reason_raw.strip().lower() in {"normal", "time_expired", "timelimit", "time limit"}
+        )
+        if reason_known:
             correction_fields.append("end_reason")
         duration_str = metadata.get("lua_playtime", metadata.get("duration", "0 sec"))
         try:
