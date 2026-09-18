@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-18 · A closed asyncpg connection may raise InterfaceError.**
+  It is not a PostgresError. A polling worker that retries only database-server
+  errors can stop permanently on a closed connection. Retry InterfaceError only
+  when the acquired native connection confirms is_closed; propagate other
+  interface errors to avoid hiding misuse. Prove reacquisition with actual PG.
+
 - **2026-09-18 · Generation keys need a bounded memory backend.**
   Reading only the current namespace never touches expired older keys; lazy
   deletion of the requested key cannot reclaim them. Clear-on-generation-change

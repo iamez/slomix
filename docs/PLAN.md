@@ -20,6 +20,36 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R03c caller-owned durable cache polling — 2026-09-18
+
+Local branch feat/db-runtime-cache-poll-r03c, parent #1053 at 1e36a993.
+Reusable shared driver only: caller awaits run and owns cancellation/connection
+factory. No service/startup wiring or process activation. Three opt-in flags,
+including new RUNTIME_HTTP_CACHE_WORKER_ENABLED, default OFF with no acquisition.
+Initial/periodic receipt-based scan, bounded batches and connection release per
+batch; yield under full backlog, interruptible idle/error waits, attempt timeout.
+Explicit state separates last confirmed generation/success from current failure;
+unsupported events remain counted. No NOTIFY dependency or MAX-ID cursor.
+Known DB/I/O/timeout failures retry; programming failures propagate visibly.
+Closed native connections are retried only when InterfaceError and is_closed
+agree; other interface errors remain failures. Restart relies on DB receipts.
+
+Independent review found the closed-connection case; fixed with real PG proof.
+17 new lifecycle/PG cases passed; expanded cache/HTTP/bootstrap/release suite
+169 passed, zero skips, two existing warnings; Ruff clean. Real PG proves late
+lower-ID catch-up without notifications, restart idempotency, receipt-error
+rollback/recovery and closed-connection replacement. Unit timeout releases
+connection before retry, cancellation drains, idle stop interrupts long wait.
+Removing periodic timeout caused observed TimeoutError; restored apply_patch/cmp.
+PG stopped and confirmed by pg_ctl/log. No live DB, dev service or prod changes.
+
+Publication must wait for stack reduction: new-branch hook limits changed files
+to25; this dependent stack adds three new paths beyond parent25. No hook bypass.
+#1049 at964630e8 has22 successful checks and awaits its specific merge approval.
+Next: approved stack reduction, publish R03c/external review, then independent
+runtime entrypoint/ownership plus activation gates. R04 ingestion extraction
+is not completed by this driver; Discord/website-off ingestion is still future.
+
 ### R03b2 committed-generation HTTP namespace — 2026-09-18
 
 Owner scope clarification: all runtime work targets dev only. Production stays

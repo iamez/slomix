@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R03c shared caller-owned polling driver implemented locally.
+  169 combined cases pass; actual PG catch-up/restart/closed-connection proof;
+  periodic-wait mutation failed/restored/cmp. No startup wiring or activation.
+  Publish after approved stack reduction; do not bypass new-branch file limit.
+  #1049 awaits explicit approval; PG stopped, no background monitor remains.
+
 - (Astra, 2026-09-18) #1053 review P1 addressed: migration092 grants website_app
   SELECT only on runtime_cache_generations. Real restricted-role proof and
   observed missing-GRANT mutation restored/cmp; 152 cases pass, PG stopped.
