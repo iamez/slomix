@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-18 · Test retention against the actual normalized producer.**
+  Lua correction metadata uses END_REASON_ENUM (uppercase), not raw webhook
+  text. A lowercase-only inbox validator rejected valid producer output while
+  synthetic fixtures without end_reason passed. Reuse the canonical enum and
+  exercise WebhookRoundMetadataService before retaining input; raw timelimit
+  normalizes to NORMAL, not a new TIMELIMIT value.
+
 - **2026-09-18 · Correction fixtures must preserve integer seconds.**
   A REAL fixture accepted values the live INTEGER player-duration column
   rejects. Use INTEGER in boundary proofs; validate finite, nonnegative,

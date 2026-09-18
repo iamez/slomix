@@ -20,6 +20,56 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02d2a durable correction inbox foundation — started 2026-09-18
+
+2026-09-18 latest checkpoint: #1045 merged3099633d via required cycle,
+no unresolved threads/behind commits, unchanged head; squash tree equalsc4a8303d.
+Required checks passed; three Codacy advisory SQL alerts were independently
+reviewed as false positives with bound-input runtime proof, not suppressed.
+#1046 now ready/main; ancestry synchronization preserved the complete tree.
+All five prior findings are addressed/resolved. Fresh main-target CI required
+before the next conditional-authorized merge. No live activation or deployment.
+
+PR #1046 external review follow-up: preserve producer measurement presence in
+_correction_present_fields while leaving legacy zero defaults unchanged. Inbox
+omits missing/invalid measurement defaults, retains measured zero, omits missing
+zero round end, and rejects unknown map sentinel. Optional end_reason clarified.
+Use transaction-aware adapter fetch_val/fetch_one and ? parameters; dependency
+remains the adapter, not the Discord bot. Initial expanded run: 110 passed;
+presence-filter mutation failed both degraded producer cases, restored/cmp.
+Follow-up local review: unknown/empty/null end reason also falls back to NORMAL;
+only recognized explicit reason is now marked present. 76 focused inbox/producer
+tests pass after this addition. Legacy display defaults remain unchanged.
+
+Separate branch feat/db-runtime-lua-inbox-r02d2, parent f4dd404e (#1045).
+First bounded slice: normalized/versioned allowlisted payload, durable input
+row and duplicate receipt. API never updates existing inputs; direct SQL is
+not protected by an immutability trigger. Preserve distinct payload revisions; never
+choose a winning revision by arrival time. No ingress wiring, worker, automatic
+repair or outage recovery claimed in this foundation. Positive exact identity
+required; legacy incomplete metadata rejected, not assigned by time proximity.
+Next slices must wire capture BEFORE RAM dedup and atomically couple repair
+completion with correction/event. DB-down capture and source receipts remain
+explicit gaps. Prove committed visibility, duplicate/revision retention,
+concurrent intake and rollback on isolated PostgreSQL before publishing.
+
+Foundation implemented: migration088/bootstrap/release, normalized input helper,
+fixed parameterized INSERT and digest-checked duplicate receipt. Source identity
+is configured, not a webhook URL. Unknown payload keys excluded; strict positive
+round identity required; optional end_reason must belong to END_REASON_ENUM.
+Different revisions stay
+separate, with no automatic precedence. Real producer compatibility added after
+review caught initial lowercase-only reason validation. Test initially expected
+TIMELIMIT; actual existing normalization is NORMAL, corrected explicitly.
+66 focused tests pass, zero skips, two existing websockets warnings; Ruff clean.
+Real PG proves committed visibility, new-adapter replay, concurrent duplicate
+waiting, distinct revisions/sources, outer rollback and conflict refusal.
+Digest-comparison mutation failed with DID NOT RAISE ValueError; restored using
+patch/cmp before rerun. Temporary PG stopped; no live writes or activation.
+Remaining: external review/CI, ingress wiring, bounded durable repair scheduling,
+revision arbitration and correction-completion receipts. No restart/DB-outage
+or fully independent ingestion proof claimed by this foundation.
+
 2026-09-18 approved stack checkpoint: owner specifically approved #1040 after
 the numbered request. cycle.sh completed required pause and reported red=0,
 threads=0, behind=0, unchanged SHA; merged as 4a7e0738. Squash tree identical
