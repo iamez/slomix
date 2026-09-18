@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R02d2a foundation in /tmp/slomix-astra-runtime-r02d2:
+  migration088 + versioned allowlisted durable inputs and stable duplicate IDs.
+  No ingress/worker yet. 66 focused tests pass, mutation failed/restored/cmp;
+  read-only review caught producer end-reason compatibility, fixed and tested
+  through actual producer. PG stopped. Next: publish slice, external review/CI,
+  then capture before RAM dedup and transactional repair-completion receipts.
+
 - (Astra, 2026-09-18) Authorized #1040 merged via cycle as 4a7e0738; tree
   matches approved head. Synced main through R02c1/c2/c3/c4/d using normal
   merges, verified no content changes. Stack reduced to 20 files. #1041
