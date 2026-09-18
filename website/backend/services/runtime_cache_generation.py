@@ -1,4 +1,4 @@
-"""Read the committed HTTP cache generation; never initialize or write the DB."""
+"""Read the committed HTTP cache generation; no schema creation or DB writes."""
 
 import asyncio
 import os

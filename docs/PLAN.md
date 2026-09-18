@@ -49,6 +49,9 @@ caches are unchanged. Benchmark cold/hot lookup cost and load, check website
 role grants, and define cache purge on administrative generation reset/restore.
 New middleware log omits DB error text; existing adapter logging is unchanged.
 Next: publish/review R03b2, then lifecycle/polling and explicit health semantics.
+Published draft #1053. Final independent review found no blocker after adding
+the PG proof. Post-push review clarified the reader docstring: it never creates
+schema or writes rows, but the shared adapter owns connection-pool behavior.
 
 ### R03b1 bounded memory cache prerequisite — 2026-09-18
 
