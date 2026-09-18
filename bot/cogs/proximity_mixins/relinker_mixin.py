@@ -104,7 +104,7 @@ _SPECIAL_CASE_TABLES: tuple[str, ...] = ("lua_round_teams", "lua_spawn_stats")
 _DETECTION_EXEMPT_TABLES: dict[str, str] = {
     "lua_correction_receipts": (
         "committed correction receipt: non-null round_id records the target "
-        "changed in the receipt transaction, not a link to repair; no full "
+        "accepted in the receipt transaction, not a link to repair; no full "
         "source identity for generic relinking, which must not rewrite history"
     ),
     "runtime_events": (
