@@ -6,6 +6,20 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-18 · Correction fixtures must preserve integer seconds.**
+  A REAL fixture accepted values the live INTEGER player-duration column
+  rejects. Use INTEGER in boundary proofs; validate finite, nonnegative,
+  integral durations before SQL. Canonical helpers that swallow collisions
+  cannot establish atomic correction success: enforce conflicts in the same
+  native transaction as metadata, DPM and its journal event.
+
+- **2026-09-18 · Post-import correction failure is not import failure.**
+  The importer and bot mark the file successful before Lua overrides; ingress
+  RAM/DB/session gates can skip any retry and pending metadata is popped.
+  Rethrowing or moving only the bot marker cannot guarantee recovery. Give
+  corrections their own atomic boundary and retained-input retry contract;
+  do not misclassify an already committed import as RetryableImportFailure.
+
 - **2026-09-15 · Retry ownership must travel with the chain.** Capture the
   original webhook claim explicitly when scheduling, retain it across attempts,
   and release it only on retryable terminal exits. Looking up the current alias

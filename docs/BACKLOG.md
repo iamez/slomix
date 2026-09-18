@@ -7,6 +7,34 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) Authorized #1040 merged via cycle as 4a7e0738; tree
+  matches approved head. Synced main through R02c1/c2/c3/c4/d using normal
+  merges, verified no content changes. Stack reduced to 20 files. #1041
+  budget review resolved after 36 passing unit/PG cases; no permission to
+  merge further PRs inferred. No deployment; temporary PG stopped. Next:
+  fresh CI and R02d2 retained-input implementation on a separate branch.
+
+- (Astra, 2026-09-18) #1045 review follow-up: three Codacy SQL-injection
+  annotations investigated, fixed identifiers/bound values confirmed by real
+  PG hostile-input test. Mutation failed then restored/cmp; 82 cases pass.
+  CI/reviews pending, no alert suppression. R02d2 intake contract researched;
+  must bypass import stale gate for exact existing targets and persist before
+  RAM queue dedup. Stack at 25 files; no new-file expansion. Test PG stopped.
+
+- (Astra, 2026-09-18) R02d1 atomic Lua correction implemented, default OFF;
+  migration087 and changed-only event share the round/player transaction.
+  81 focused tests pass, zero skips; real PG rollback mutation failed, restored
+  with patch/cmp. Independent review fixes applied; no remaining blocker found.
+  Temporary PG stopped. Next: commit/push, draft PR and external CI/review,
+  then R02d2 retained metadata repair input. No service/live DB changes.
+
+- (Astra, 2026-09-18) R02d worktree created; real PG legacy boundary reproduced:
+  round commits while DPM update fails and is swallowed. Six focused tests pass;
+  mutation failed then restored/cmp. Helper mapped ingress gates and confirmed
+  rethrow alone cannot replay an already-marked import. Next: atomic correction
+  slice, then separate durable metadata-repair input, not import replay.
+  No fix implemented yet; temporary PG stopped, helper finished.
+
 - (Astra, 2026-09-18) #1042 merged9ffbcd5e and #1043 mergedd946772b with
   reviewed findings resolved and green exact-head checks. #1044 now ready/main;
   ancestry sync preserved its full content tree. Refresh CI, then prescribed

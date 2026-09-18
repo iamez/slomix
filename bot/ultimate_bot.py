@@ -31,6 +31,7 @@ from bot.repositories import FileRepository
 from bot.services.admin_alert_mixin import _AdminAlertMixin
 from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
 from bot.services.error_streak_store import ErrorStreakStore
+from bot.services.lua_correction_service import apply_atomic_lua_correction, lua_correction_events_enabled
 from bot.services.lua_round_storage_mixin import _LuaRoundStorageMixin
 from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
 from bot.services.round_publisher_service import RoundPublisherService
@@ -1571,6 +1572,20 @@ class UltimateETLegacyBot(
                 logger.warning(f"Could not resolve round_id for metadata override: {filename}")
                 return
 
+            if lua_correction_events_enabled():
+                accepted = await apply_atomic_lua_correction(
+                    self.db_adapter, round_id, metadata,
+                    initializing_exact_start=initializing_exact_start,
+                )
+                if accepted:
+                    logger.info("Committed atomic Lua correction for round %s", round_id)
+                    # Linking has its own locks/best-effort semantics, outside this event.
+                    try:
+                        await self._link_lua_round_teams(round_id, metadata)
+                    except Exception as link_error:
+                        logger.warning("Lua correction committed; linking deferred: %s", link_error)
+                return
+
             # DEBUG LOGGING: Compare Lua timing vs stats file timing
             # This helps verify the surrender fix is working correctly
             # Query current values from DB (from stats file)
@@ -1732,6 +1747,8 @@ class UltimateETLegacyBot(
 
         except Exception as e:
             logger.warning(f"Failed to apply round metadata override: {e}")
+            if lua_correction_events_enabled():
+                raise
             # Non-fatal - stats were still imported correctly
 
 

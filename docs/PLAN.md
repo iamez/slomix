@@ -20,6 +20,83 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+2026-09-18 approved stack checkpoint: owner specifically approved #1040 after
+the numbered request. cycle.sh completed required pause and reported red=0,
+threads=0, behind=0, unchanged SHA; merged as 4a7e0738. Squash tree identical
+to approved f1bd3bf5. Normal main merge into R02c1 had four squash-history
+conflicts; retained existing child additions and verified zero content diff.
+Ancestry propagated through R02c2/c3/c4/d with zero content diff at every step.
+Stack now 20 files vs main (was 25), allowing separate R02d2 work. No deploy.
+#1041 existing polling-budget finding revalidated with 36 unit/PG cases and
+resolved with evidence; this is not merge approval for #1041. Test PG stopped.
+#1045 Codex review at aeaaf345 reports no major issues; f428d34a checks passed
+except Codacy action_required, whose parameter-binding disposition and hostile
+input runtime proof are posted. Fresh ancestry-head CI must be collected.
+
+### R02d Lua correction boundary — atomic implementation, 2026-09-18
+
+2026-09-18 current checkpoint: #1044 merged21eb638a through prescribed cycle,
+all22checks successful and final gates clear; squash tree identical196d19f7.
+#1045 retargeted main; ancestry merge preserved its entire content tree. Prior
+Codex review found no major issues; Codacy SQL annotations were examined with
+bound-parameter/allowlist runtime proofs, not suppressed. Refresh exact-head CI
+and inspect current findings before a conditional-authorized merge. No deploy.
+
+R02d1 implemented behind EVENT_STREAM_ENABLED + LUA_CORRECTION_EVENTS_ENABLED
+(default OFF). Native adapter transaction locks and revalidates round identity,
+updates metadata/canonical ID/player duration and DPM, and records changed-only
+round_lua_corrected plus ID notification atomically. Migration087, bootstrap and
+release registration agree. Lua linking remains best-effort AFTER commit, not
+part of the event receipt. No-op retries emit no event; canonical conflicts fail
+closed. Duration uses nonnegative integer seconds, matching the real DB column.
+
+Verification: 81 focused tests passed, zero skips, two existing websockets
+deprecation warnings; Ruff clean. Real isolated PostgreSQL with production
+adapter transaction/ContextVar (pool checkout stubbed) proves success, retries,
+lock contention and rollback on player/event/notification/canonical failures.
+Transaction-to-connection mutation failed three rollback cases with
+`assert (600, 1700000000) == (1800, None)`; restored with patch/cmp before rerun.
+Independent read-only review found no remaining blocker after INTEGER fixture
+and duration/source-round validation fixes. Temporary PG stopped after tests.
+Remaining: commit/push, draft PR, exact-head CI and external review. This is not
+automatic correction recovery: retained-input repair remains R02d2 below.
+Missing/nonpositive source starts retain weaker legacy identity semantics.
+
+Historical discovery evidence:
+
+2026-09-18 review follow-up: draft #1045, code aeaaf345; CI still running.
+Codacy flags three possible SQL-injection sites. Inspected identifiers are
+fixed FIELDS entries and values/notification ID are bound parameters. Added
+real-PG hostile-key/value proof: SQL-looking end_reason stored verbatim,
+unknown assignment key/session/canonical overrides ignored, tables intact.
+Allowlist-removal mutation failed with `multiple assignments to same column
+"winner_team"`; restored/cmp. Expanded focused suite: 82 passed, zero skips;
+temporary PG stopped. Alerts need reviewer disposition, not silent suppression.
+Stack contains 25 files vs main; no new-file expansion before stack reduction.
+R02d2 must persist before RAM queue/dedup and must not reuse the stale-import
+gate: that gate rejects an existing exact round, precisely the repair target.
+
+Worktree /tmp/slomix-astra-runtime-r02d, branch feat/db-runtime-lua-overrides-r02d,
+parent R02c4 8fd71059. Isolated PG characterization now proves legacy partial
+commit: round duration/winner commit (600s/2), rejected player DPM correction
+leaves player duration 1800s; error is suppressed and later linking is reached.
+Actual override SQL runs; canonical-ID and Lua-link side effects are stubbed.
+Six focused tests passed (one real PG plus five existing exact-identity guards).
+Mutation skipping round UPDATE failed the runtime assertion; restored/cmp,
+rerun green. This discovery preceded the opt-in implementation above.
+
+Independent caller/gate audit: initial importer and bot already mark file
+success before override; RAM/DB/session gates prevent re-entry, STATS_READY's
+duplicate fetch returns True without applying correction, pending metadata is
+popped from RAM. Moving only bot mark_processed or rethrowing an error is not
+recovery. Do not label a committed import RetryableImportFailure.
+R02d1: opt-in atomic correction transaction implemented above, preserving
+OFF/exact-target guards; not deployed or activated.
+R02d2: separate metadata repair entry with retained payload/identity and its
+own completion/retry state, independent of file-import dedup. Define Lua linking
+coverage/lock ordering explicitly. Atomic correction is not automatic recovery.
+Temporary PG stopped after proof; no live service or data changes.
+
 ### R02c4 endstats storage journal — in progress, 2026-09-16
 
 2026-09-18 latest checkpoint: #1042 and #1043 merged through prescribed
