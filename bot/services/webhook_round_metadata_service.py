@@ -99,10 +99,19 @@ class WebhookRoundMetadataService:
             },
         }
 
+        # Preserve source presence for durable corrections without changing legacy
+        # zero defaults used by display/import callers.
+        correction_fields = []
+        if winner_team in (1, 2):
+            correction_fields.append("winner_team")
+        if "lua_endreason" in metadata or "end reason" in metadata:
+            correction_fields.append("end_reason")
         duration_str = metadata.get("lua_playtime", metadata.get("duration", "0 sec"))
         try:
             round_metadata["lua_playtime_seconds"] = int(str(duration_str).split()[0])
             round_metadata["actual_duration_seconds"] = round_metadata["lua_playtime_seconds"]
+            if "lua_playtime" in metadata or "duration" in metadata:
+                correction_fields.append("actual_duration_seconds")
         except (ValueError, IndexError):
             round_metadata["lua_playtime_seconds"] = 0
             round_metadata["actual_duration_seconds"] = 0
@@ -125,6 +134,10 @@ class WebhookRoundMetadataService:
             else:
                 round_metadata["lua_pause_seconds"] = 0
             round_metadata["total_pause_seconds"] = round_metadata["lua_pause_seconds"]
+            if "lua_pauses" in metadata or "pauses" in metadata:
+                correction_fields.append("pause_count")
+                if len(parts) > 1:
+                    correction_fields.append("total_pause_seconds")
         except (ValueError, IndexError):
             round_metadata["lua_pause_count"] = 0
             round_metadata["lua_pause_seconds"] = 0
@@ -201,4 +214,7 @@ class WebhookRoundMetadataService:
             fallback_used=False,
         )
 
+        if round_metadata["round_end_unix"] > 0:
+            correction_fields.append("round_end_unix")
+        round_metadata["_correction_present_fields"] = correction_fields
         return round_metadata

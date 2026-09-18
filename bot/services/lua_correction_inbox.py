@@ -28,8 +28,14 @@ def normalize_correction_input(metadata):
     if not isinstance(map_name, str):
         raise ValueError("Invalid correction inbox map")
     map_name = map_name.strip().lower()
-    if not re.fullmatch(r"[a-z0-9_-]{1,128}", map_name):
+    if map_name == "unknown" or not re.fullmatch(r"[a-z0-9_-]{1,128}", map_name):
         raise ValueError("Invalid correction inbox map")
+    present = metadata.get("_correction_present_fields")
+    if present is not None:
+        if not isinstance(present, list) or not all(isinstance(field, str) for field in present):
+            raise ValueError("Invalid correction presence metadata")
+        identity = {"map_name", "round_number", "round_start_unix"}
+        metadata = {key: value for key, value in metadata.items() if key in identity or key in present}
     payload = {
         "map_name": map_name,
         "round_number": _integer(metadata.get("round_number"), "round_number", 1, 2),
@@ -40,7 +46,9 @@ def normalize_correction_input(metadata):
             payload[field] = _integer(metadata[field], field)
     if "winner_team" in metadata:
         payload["winner_team"] = _integer(metadata["winner_team"], "winner_team", 0, 2)
-    if "round_end_unix" in metadata:
+    if "round_end_unix" in metadata and (
+        isinstance(metadata["round_end_unix"], bool) or metadata["round_end_unix"] != 0
+    ):
         payload["round_end_unix"] = _integer(metadata["round_end_unix"], "round_end_unix", 1, 9223372036854775807)
         if payload["round_end_unix"] < payload["round_start_unix"]:
             raise ValueError("Correction end precedes start")
@@ -64,21 +72,21 @@ async def retain_lua_correction(adapter, source_key, metadata):
     payload = normalize_correction_input(metadata)
     serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False)
     digest = hashlib.sha256(("1:" + serialized).encode("utf-8")).hexdigest()
-    async with adapter.transaction() as conn:
-        row_id = await conn.fetchval("""
+    async with adapter.transaction():
+        row_id = await adapter.fetch_val("""
             INSERT INTO lua_correction_inputs
                 (source_key, payload_version, payload_digest, map_name,
                  round_number, round_start_unix, payload)
-            VALUES ($1, 1, $2, $3, $4, $5, $6::jsonb)
+            VALUES (?, 1, ?, ?, ?, ?, ?::jsonb)
             ON CONFLICT (source_key, payload_version, payload_digest) DO NOTHING
             RETURNING id
-        """, source_key, digest, payload["map_name"], payload["round_number"],
-            payload["round_start_unix"], serialized)
+        """, (source_key, digest, payload["map_name"], payload["round_number"],
+            payload["round_start_unix"], serialized))
         if row_id is None:
-            existing = await conn.fetchrow("""
+            existing = await adapter.fetch_one("""
                 SELECT id, payload FROM lua_correction_inputs
-                WHERE source_key=$1 AND payload_version=1 AND payload_digest=$2
-            """, source_key, digest)
+                WHERE source_key=? AND payload_version=1 AND payload_digest=?
+            """, (source_key, digest))
             if existing is None or json.loads(existing["payload"]) != payload:
                 raise ValueError("Correction inbox digest conflict; no receipt issued")
             row_id = existing["id"]

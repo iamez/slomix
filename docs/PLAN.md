@@ -22,6 +22,14 @@
 
 ### R02d2a durable correction inbox foundation — started 2026-09-18
 
+PR #1046 external review follow-up: preserve producer measurement presence in
+_correction_present_fields while leaving legacy zero defaults unchanged. Inbox
+omits missing/invalid measurement defaults, retains measured zero, omits missing
+zero round end, and rejects unknown map sentinel. Optional end_reason clarified.
+Use transaction-aware adapter fetch_val/fetch_one and ? parameters; dependency
+remains the adapter, not the Discord bot. Initial expanded run: 110 passed;
+presence-filter mutation failed both degraded producer cases, restored/cmp.
+
 Separate branch feat/db-runtime-lua-inbox-r02d2, parent f4dd404e (#1045).
 First bounded slice: normalized/versioned allowlisted payload, durable input
 row and duplicate receipt. API never updates existing inputs; direct SQL is
@@ -37,7 +45,8 @@ concurrent intake and rollback on isolated PostgreSQL before publishing.
 Foundation implemented: migration088/bootstrap/release, normalized input helper,
 fixed parameterized INSERT and digest-checked duplicate receipt. Source identity
 is configured, not a webhook URL. Unknown payload keys excluded; strict positive
-round identity and canonical END_REASON_ENUM required. Different revisions stay
+round identity required; optional end_reason must belong to END_REASON_ENUM.
+Different revisions stay
 separate, with no automatic precedence. Real producer compatibility added after
 review caught initial lowercase-only reason validation. Test initially expected
 TIMELIMIT; actual existing normalization is NORMAL, corrected explicitly.

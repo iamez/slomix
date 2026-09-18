@@ -104,13 +104,47 @@ async def test_real_producer_normalized_payload_is_retained(inbox_db, raw_reason
     assert "end_reason_raw" not in stored
 
 
+@pytest.mark.parametrize("raw", [{}, {"lua_playtime": "bad", "lua_pauses": "bad"}])
+async def test_producer_missing_or_invalid_measurements_do_not_become_zero_corrections(inbox_db, raw):
+    writer, reader = inbox_db
+    payload = WebhookRoundMetadataService().build_round_metadata_from_map({
+        "map": "fixture", "round": 1, "lua_roundstart": 1700000000, "winner": 2, **raw,
+    })
+    assert payload["actual_duration_seconds"] == 0  # Legacy presentation unchanged.
+    row_id = await retain_lua_correction(adapter_for(writer), "one", payload)
+    stored = json.loads(await reader.fetchval("SELECT payload FROM lua_correction_inputs WHERE id=$1", row_id))
+    assert stored == {"map_name": "fixture", "round_number": 1, "round_start_unix": 1700000000, "winner_team": 2}
+
+
+def test_explicit_zero_measurements_are_retained_but_zero_end_is_not():
+    payload = WebhookRoundMetadataService().build_round_metadata_from_map({
+        "map": "fixture", "round": 1, "lua_roundstart": 1700000000,
+        "lua_playtime": "0 sec", "lua_pauses": "0 (0 sec)",
+    })
+    stored = normalize_correction_input(payload)
+    assert stored["actual_duration_seconds"] == 0
+    assert stored["total_pause_seconds"] == 0
+    assert stored["pause_count"] == 0
+    assert "round_end_unix" not in stored
+    assert "round_end_unix" not in normalize_correction_input(metadata() | {"round_end_unix": 0})
+
+
+def test_missing_producer_map_rejected():
+    payload = WebhookRoundMetadataService().build_round_metadata_from_map({
+        "round": 1, "lua_roundstart": 1700000000,
+    })
+    with pytest.raises(ValueError, match="map"):
+        normalize_correction_input(payload)
+
+
 @pytest.mark.parametrize("key,value", [
     ("round_start_unix", 0), ("round_start_unix", True), ("round_number", 0),
     ("round_number", 1.5), ("actual_duration_seconds", float("nan")),
     ("actual_duration_seconds", -1), ("actual_duration_seconds", 2**31),
     ("actual_duration_seconds", "600"), ("pause_count", None),
     ("winner_team", 3), ("round_end_unix", 1), ("map_name", "../fixture"),
-    ("end_reason", "private text with spaces"),
+    ("end_reason", "private text with spaces"), ("round_end_unix", False),
+    ("map_name", " UNKNOWN "),
 ])
 async def test_invalid_input_fails_before_database(key, value):
     with pytest.raises(ValueError):

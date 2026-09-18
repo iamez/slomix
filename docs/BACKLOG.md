@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) #1046 reviews identified producer fallback zeros,
+  zero optional end and unknown map sentinel. Added presence provenance,
+  conservative inbox filtering and actual producer PG regressions. Legacy
+  defaults unchanged; explicit zero retained. Adapter wrappers now used.
+  110-case expanded run passed; presence mutation failed/restored/cmp.
+
 - (Astra, 2026-09-18) R02d2a foundation in /tmp/slomix-astra-runtime-r02d2:
   migration088 + versioned allowlisted durable inputs and stable duplicate IDs.
   No ingress/worker yet. 66 focused tests pass, mutation failed/restored/cmp;
