@@ -7,6 +7,46 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-16) #1039 merged with explicit owner approval via cycle,
+  squash fc655855. Verified identical tree to approved head. #1040 now bases
+  main; normal merges propagated through #1041/#1042/#1043 with unchanged
+  content trees. New CI pending. No other merge/deploy authorized. Continue
+  R02c4 storage-journal design; prior stack-limit blocker is removed.
+
+- (Astra, 2026-09-15) #1043 terminal chain cleanup implemented: explicitly
+  carry original webhook identity into scheduler and retain it across retries;
+  exhaustion/missing metadata release owned aliases, preserve replacements.
+  78 focused tests passed; four mutation failures, restored/cmp. OFF covered.
+  Earlier terminal-alias TODO below is addressed for these paths; cancellation
+  and unknown persisted claims remain outside this slice. No live changes.
+
+- (Astra, 2026-09-15) #1043 scheduler handoff proof added: 39 focused tests
+  pass, including three real queued asyncio retry paths; competing claims stay
+  blocked and tasks are drained. Full-chain terminal alias cleanup remains open.
+
+- (Astra, 2026-09-15) #1043 finding 4014910266 partially fixed: webhook
+  download/parse/exception exits release owned markers only when enabled;
+  OFF and replacement ownership tested. 36 focused cases passed, cleanup
+  mutation failed and restored/cmp. Scheduled retry paths intentionally retain
+  markers to avoid parallel publication; retry-chain alias cleanup remains open.
+
+- (Astra, 2026-09-15) #1043 review 4014882361: lost post-preflight webhook
+  claim now cleans its Discord trigger without releasing the winner's marker.
+  Both deletion success/failure covered; 28 focused tests passed. Removal
+  mutation failed twice, restored with patch/cmp. No live services touched.
+  Next: exact-head CI/review; #1039 still needs specific merge approval.
+
+- (Astra, 2026-09-15) R02c3 `/tmp/slomix-astra-runtime-r02c3`, branch
+  `feat/db-runtime-endstats-markers-r02c3`: identity-based polling cleanup,
+  richer-alias ownership and atomic post-preflight claims. 83 tests passed
+  including 24 PG cases; real storage rollback releases owned marker and next
+  preflight retries. Mutation failed, restored/cmp. Partial helper review led
+  to fixing raw polling soft-failure discards; helper then usage-limited.
+  Temporary PG stopped. Published draft #1043 at 3d1dcd11, review requested,
+  external CI pending; stack at 25 files. #1039 all checks successful and
+  review threads resolved at 8f5f21af; request owner-specific merge permission
+  before growing the dependent stack with the next migration.
+
 - (Astra, 2026-09-15) R02c2 `/tmp/slomix-astra-runtime-r02c2`, branch
   `feat/db-runtime-endstats-exceptions-r02c2`: enabled webhook retry exceptions
   now reschedule through existing bounded attempts/delay. 53 focused tests

@@ -56,7 +56,8 @@ async def test_gate_preserves_terminal_and_unknown_states(endstats_db, monkeypat
 
 
 @pytest.mark.parametrize("permanent", [False, True])
-async def test_polling_retries_committed_publication_failure(endstats_db, monkeypatch, permanent):
+@pytest.mark.parametrize("storage_failure", [False, True])
+async def test_polling_retries_committed_publication_failure(endstats_db, monkeypatch, permanent, storage_failure):
     writer, reader = endstats_db
     monkeypatch.setenv("ENDSTATS_RETRY_ENABLED", "true")
     payload = {"metadata": {"date": "2026-09-15", "time": "120000", "map_name": "fixture", "round_number": 1},
@@ -98,6 +99,17 @@ async def test_polling_retries_committed_publication_failure(endstats_db, monkey
 
     bot.round_publisher = SimpleNamespace(publish_endstats=publish)
     filename = "2026-09-15-120000-fixture-round-1-endstats.txt"
+    if storage_failure:
+        await writer.execute("ALTER TABLE round_awards ADD CONSTRAINT reject_fixture CHECK (award_name <> 'Fixture award')")
+        assert await bot._should_process_endstats_file(filename)  # noqa: SLF001
+        await bot._process_endstats_file(filename, filename)  # noqa: SLF001
+        assert attempts == []
+        assert filename not in bot.processed_endstats_files
+        assert await reader.fetchval("SELECT count(*) FROM processed_endstats_files") == 0
+        assert await reader.fetch("SELECT * FROM round_awards") == []
+        bot.track_error.assert_awaited_once()
+        bot.track_error.reset_mock()
+        await writer.execute("ALTER TABLE round_awards DROP CONSTRAINT reject_fixture")
     assert await bot._should_process_endstats_file(filename)  # noqa: SLF001
     await bot._process_endstats_file(filename, filename)  # noqa: SLF001
     assert await reader.fetchval("SELECT error_message FROM processed_endstats_files") == "publish_failed"

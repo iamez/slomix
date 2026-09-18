@@ -20,6 +20,108 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+2026-09-18 current checkpoint: #1042 merged as9ffbcd5e after all22 checks
+passed and the prescribed pause; final gates zero red/open threads/behind,
+unchanged head, squash tree identical to6929d143. #1043 retargeted main;
+normal merge preserved all non-document content and both review findings remain
+resolved. Recheck exact-head CI before the next conditionally authorized merge.
+No deployment, service restart or live migration occurred.
+
+### Current checkpoint — 2026-09-16
+
+Owner explicitly authorized #1039. Prescribed cycle completed with zero red
+checks, unresolved threads or behind commits and unchanged SHA. API confirms
+merge fc65585568280049459adab08f373af4662de11d; its tree exactly matches
+approved 8f5f21af. No deployment, live migration or activation occurred.
+R02b retargeted to main via REST (old gh edit failed on projectCards), then
+normal ancestry merges propagated through R02c1/c2/c3 without force. Each
+merge tree compared identical to its pre-merge tree. 12 timing and 14 status
+unit tests rerun successfully. New exact-head CI required after these pushes.
+#1040/#1041/#1042/#1043 have NOT been authorized for merge. Next development:
+separate endstats storage journal slice, using the local R02c4 design; the
+approved timing merge removes the previous 25-file stack barrier. Historical
+checkpoints below retain their original verification context.
+
+### R02c3 polling exception marker ownership (2026-09-15; locally verified)
+
+Handoff regression now asserts scheduler claim identity equals the webhook's
+actual owner for all three scheduling exits. Passing None deliberately on the
+unresolved-round path failed the assertion; restored with patch/cmp. This
+guards the connection between handler and scheduler, beyond isolated helper
+tests. Review/CI still pending; no activation or merge.
+
+Latest review continuation: webhook passes its original claim explicitly into
+the scheduler; a per-chain map retains that identity through rescheduling.
+Exhaustion and missing metadata release only its still-owned original/alias
+markers. Successful/DB-terminal processing retains handled RAM markers as before.
+OFF keeps legacy filename discard; enabled callers with no claim do not remove
+unowned markers. 78 focused cases passed (two existing websockets warnings),
+including real bounded asyncio chains with alias replacement during DB await.
+Four terminal-cleanup mutation cases failed (original/richer remained), restored
+with patch/cmp. No pending test tasks, live services or PG changes. This closes
+the exhaustion/missing-metadata alias gap below, not cancellation recovery,
+cross-process exclusion or unknown persisted DB claims. External review pending.
+
+Review 4014910266 partially addressed: retain webhook claim and release its
+owned names after download/parse failure or caught exception. OFF remains
+unchanged; a replacement claim survives cleanup. 36 focused cases passed,
+including actual handler execution with synthetic SSH/parser/Discord failures.
+Removing download cleanup failed the enabled regression; restored with patch/cmp.
+Do NOT release immediately after scheduling a retry: that task bypasses the
+in-memory entry gate and premature release permits a competing polling attempt.
+Retry-chain alias cleanup/ownership transfer still needs a dedicated design and
+proof; keep this review thread open. Persisted NULL/terminal claims still block
+recovery even when RAM is released. No live runtime activation or PG rerun.
+
+Follow-up proof: 39 focused tests passed. Three actual asyncio scheduler
+cases (unresolved round, not ready, publication False) each create exactly one
+pending retry, increment attempt count once and reject a competing RAM claim.
+Synthetic external adapters; all test-created tasks cancelled and awaited in
+finally. This proves handoff exclusion, not full-chain terminal alias cleanup.
+
+Review follow-up 4014882361: a webhook losing its claim after DB preflight
+now deletes the trigger, matching the existing duplicate path. Discord deletion
+failure remains non-critical and the winning attempt retains its marker.
+28 focused tests passed; actual async handler with injected preflight ownership
+and mocked Discord deletion exercises both deletion outcomes (not live Discord).
+Cleanup-removal mutation failed both cases: "Awaited 0 times"; restored via
+patch/cmp and rerun. Full PostgreSQL suite was not rerun for this cleanup-only fix.
+
+Branch `feat/db-runtime-endstats-markers-r02c3` in
+`/tmp/slomix-astra-runtime-r02c3`. Enabled polling/webhook entry claims are
+atomic after DB preflight; capture identity and propagate it to unowned richer
+aliases. Polling exception cleanup releases only matching ownership identities,
+not another attempt's existing alias or a later replacement claim. OFF retains
+legacy set behavior. Persisted unknown/terminal markers still govern retry;
+this adds no event, replay guarantee or cross-process lock. Test ownership
+replacement, foreign aliases, OFF behavior and actual storage rollback/retry.
+
+83 combined cases passed, zero skips, including 24 real PostgreSQL cases.
+Injected award constraint failure rolls storage/claim back; owned RAM marker
+is released and the next real preflight + handler call reaches storage again.
+Synthetic parser/resolver/readiness/publisher only; no SSH/Discord/live DB.
+Identity-guard mutation removed a replacement marker and failed with
+set() != {'original'}, restored with patch/cmp; ownership tests passed again.
+Helper's partial review identified remaining raw polling soft-failure discards;
+those now use the same identity-aware release, with a foreign richer-alias
+not-ready regression. Helper then hit usage limit; no complete final helper
+approval claimed. Parent self-review/lint/83-case final run completed.
+Cancellation retains existing behavior, and other scheduler/webhook cleanup
+paths are not all owner-aware. Successful claims remain process-local for the
+existing processed-set lifetime. No cross-process lock or exactly-once claim.
+Temporary PG stopped, confirmed by pg_ctl and shutdown log. Next: PR/review/CI,
+then endstats journal design. Stack reaches 25 files; never bypass the guard.
+Published draft #1043, code 3d1dcd11, base #1042 branch. Codex/CodeRabbit review
+requested, post-push self-review complete; external CI pending. #1039 verified
+at 8f5f21af: all checks successful, both review threads resolved. Next authority
+gate is owner-specific permission for #1039 merge (not deploy/activation).
+Only #1012 was previously authorized and merged; do not infer the rest.
+Follow-up: expanded foreign-alias route regression across all three polling
+soft exits (not-ready, unresolved round, failed publication). Eight ownership
+tests passed; no runtime behavior changed in this follow-up. #1043 CI still
+running at check; development continues with review/test work, not an assumed
+permission to merge #1039.
+
 2026-09-18 merge checkpoint: #1041 merged via required cycle as a2b72550;
 all final gates passed and squash tree equals approved8df7215b. #1042 now targets
 main; normal synchronization preserved all non-document content. Existing review
