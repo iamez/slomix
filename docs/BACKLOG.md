@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R02d3 default-OFF live intake implemented on separate
+  branch: STATS_READY before round-worker queue; GAMETIME before team writes.
+  70 focused cases pass, capture mutation failed/restored/cmp; invalid first
+  GAMETIME no longer starves valid next file. PG stopped. Outer message-ID
+  dedup and processed/lookback gates remain before capture; no DB-outage replay
+  guarantee. Next: external review/CI, then durable repair/completion worker.
+
 - (Astra, 2026-09-18) #1046 reviews identified producer fallback zeros,
   zero optional end and unknown map sentinel. Added presence provenance,
   conservative inbox filtering and actual producer PG regressions. Legacy

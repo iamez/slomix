@@ -31,6 +31,7 @@ from bot.repositories import FileRepository
 from bot.services.admin_alert_mixin import _AdminAlertMixin
 from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
 from bot.services.error_streak_store import ErrorStreakStore
+from bot.services.lua_correction_inbox import retain_lua_correction_if_enabled
 from bot.services.lua_correction_service import apply_atomic_lua_correction, lua_correction_events_enabled
 from bot.services.lua_round_storage_mixin import _LuaRoundStorageMixin
 from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
@@ -1890,6 +1891,7 @@ class UltimateETLegacyBot(
             )
         if round_metadata.get("round_end_unix", 0) == 0 and meta.get("round_end_unix"):
             round_metadata["round_end_unix"] = int(meta.get("round_end_unix"))
+            round_metadata.setdefault("_correction_present_fields", []).append("round_end_unix")
         spawn_stats_meta = meta.get("spawn_stats")
         if isinstance(spawn_stats_meta, str):
             try:
@@ -1902,6 +1904,12 @@ class UltimateETLegacyBot(
         if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) <= 0:
             webhook_logger.warning(f"⚠️ Gametime file missing map/round metadata: {filename}")
             return False
+
+        try:
+            await retain_lua_correction_if_enabled(getattr(self, "db_adapter", None), round_metadata)
+        except ValueError as exc:
+            webhook_logger.warning("Gametime correction input rejected: %s", exc)
+            return False  # Do not mark processed; allow later files in this poll.
 
         axis_players = round_metadata.get("axis_players", [])
         allies_players = round_metadata.get("allies_players", [])

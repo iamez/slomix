@@ -3,9 +3,17 @@
 import hashlib
 import json
 import math
+import os
 import re
 
 from bot.core.round_contract import END_REASON_ENUM
+
+
+async def retain_lua_correction_if_enabled(adapter, metadata):
+    """Commit input before volatile intake; OFF does not inspect payload or DB."""
+    if os.getenv("LUA_CORRECTION_INBOX_ENABLED", "false").strip().lower() != "true":
+        return None
+    return await retain_lua_correction(adapter, os.getenv("LUA_CORRECTION_SOURCE_KEY", ""), metadata)
 
 
 def _integer(value, field, minimum=0, maximum=2147483647):

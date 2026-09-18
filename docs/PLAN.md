@@ -20,6 +20,40 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02d3 intake wiring — started 2026-09-18
+
+2026-09-18 latest checkpoint: #1046 merged as 64488de1 through required cycle,
+all 22 checks successful, no open threads/behind commits and unchanged head.
+Squash tree equals a58277f9. #1048 retargeted main; normal ancestry sync preserved
+the complete content tree. Prior Codex review found no major issues; recheck
+fresh main-target CI and threads before the next conditionally authorized merge.
+No live deployment or activation.
+
+Separate branch feat/db-runtime-lua-intake-r02d3, parent #1046 b5b34195.
+Initial feat/bot-* name missed the existing runtime push CI filter; renamed
+to feat/db-runtime-* before treating any CI state as merge evidence.
+Default-OFF inbox gate + configured source identity. STATS_READY captures after
+identity/ghost gates but before RAM metadata queue/worker dedup; GAMETIME captures
+after identity fallback before team storage/correlation. Persistence errors must
+prevent volatile dispatch, not issue success. No worker/repair/DB-outage recovery
+claim. Preserve OFF callers with no adapter. Prove real PG storage despite later
+dispatch failure and zero downstream work on storage failure.
+
+Implemented and locally verified: 70 focused tests passed, zero skips in final
+selected run, two existing websockets warnings; Ruff clean. Earlier broader
+selection also reported existing test_stats_ready_file_selection module skipped
+because _extract_stats_filename_timestamp is unavailable; not claimed covered.
+Actual PostgreSQL proves retained input after queue refusal/exception and later
+team-storage failure; input storage failure prevents RAM/worker dispatch.
+Removing the STATS_READY capture failed with assert 0 == 1; restored/byte cmp.
+Read-only review caught invalid GAMETIME starving later files; validation now
+returns False per file and actual polling-loop test proves invalid then valid
+input, marking only the valid file handled. Temporary PG stopped after proofs.
+Capture remains AFTER outer Discord message-ID dedup/rate limits/task scheduling
+and GAMETIME processed-index/lookback gates. No all-ingress/backfill guarantee;
+DB failure redelivery of the same Discord message remains an explicit gap.
+No automatic correction worker yet. New feature remains default OFF.
+
 ### R02d2a durable correction inbox foundation — started 2026-09-18
 
 2026-09-18 latest checkpoint: #1045 merged3099633d via required cycle,

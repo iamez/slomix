@@ -1,13 +1,22 @@
 """Synthetic input retention proofs; no live intake or repair worker."""
+# ruff: noqa: SLF001 -- exercise real private intake boundaries with fixture-only state
 
 import asyncio
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, mock_open
 
 import pytest
 
-from bot.services.lua_correction_inbox import normalize_correction_input, retain_lua_correction
+from bot.services.lua_correction_inbox import (
+    normalize_correction_input,
+    retain_lua_correction,
+    retain_lua_correction_if_enabled,
+)
+from bot.services.stats_ready_mixin import _StatsReadyMixin
 from bot.services.webhook_round_metadata_service import WebhookRoundMetadataService
+from bot.ultimate_bot import UltimateETLegacyBot
 from tests.integration.test_lua_override_boundary_pg import adapter_for, metadata
 from tests.integration.test_runtime_events_pg import journal_db  # noqa: F401
 
@@ -187,3 +196,116 @@ def test_bootstrap_and_release_registration():
     sql = (root / "migrations/088_lua_correction_inputs.sql").read_text().strip()
     assert sql in (root / "tools/schema_postgresql.sql").read_text()
     assert '"088_lua_correction_inputs.sql"' in (root / "scripts/release_configs/v1.45.0.sh").read_text()
+
+
+def intake_bot(adapter):
+    service = WebhookRoundMetadataService()
+    raw = {"map": "fixture", "round": 1, "lua_roundstart": 1700000000, "lua_playtime": "600 sec"}
+    return SimpleNamespace(
+        db_adapter=adapter,
+        _fields_to_metadata_map=lambda fields: raw,
+        _build_round_metadata_from_map=service.build_round_metadata_from_map,
+        _parse_spawn_stats_from_metadata=lambda fields: [],
+        _resolve_team_display_names=lambda primary, players: "fixture",
+        _queue_pending_metadata=Mock(),
+        webhook_event_queue=SimpleNamespace(enqueue=Mock(return_value=(False, "queue_full"))),
+        track_error=AsyncMock(),
+        _store_lua_round_teams=AsyncMock(side_effect=RuntimeError("fixture later failure")),
+    )
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_stats_ready_retains_before_queue_refusal(inbox_db, monkeypatch, enabled):
+    writer, reader = inbox_db
+    monkeypatch.setenv("LUA_CORRECTION_INBOX_ENABLED", str(enabled).lower())
+    monkeypatch.setenv("LUA_CORRECTION_SOURCE_KEY", "fixture-server")
+    bot = intake_bot(adapter_for(writer))
+    message = SimpleNamespace(embeds=[SimpleNamespace(fields=[], footer=None)])
+    await _StatsReadyMixin._process_stats_ready_webhook(bot, message)
+    bot._queue_pending_metadata.assert_called_once()
+    bot.webhook_event_queue.enqueue.assert_called_once()
+    bot.track_error.assert_not_awaited()
+    assert await reader.fetchval("SELECT count(*) FROM lua_correction_inputs") == int(enabled)
+
+
+async def test_stats_ready_storage_failure_prevents_volatile_dispatch(inbox_db, monkeypatch):
+    writer, _ = inbox_db
+    monkeypatch.setenv("LUA_CORRECTION_INBOX_ENABLED", "true")
+    monkeypatch.setenv("LUA_CORRECTION_SOURCE_KEY", "fixture-server")
+    await writer.execute("ALTER TABLE lua_correction_inputs ADD CONSTRAINT fixture_no_input CHECK(false)")
+    bot = intake_bot(adapter_for(writer))
+    await _StatsReadyMixin._process_stats_ready_webhook(
+        bot, SimpleNamespace(embeds=[SimpleNamespace(fields=[], footer=None)]),
+    )
+    bot._queue_pending_metadata.assert_not_called()
+    bot.webhook_event_queue.enqueue.assert_not_called()
+    bot.track_error.assert_awaited_once()
+
+
+async def test_stats_ready_receipt_survives_queue_exception(inbox_db, monkeypatch):
+    writer, reader = inbox_db
+    monkeypatch.setenv("LUA_CORRECTION_INBOX_ENABLED", "true")
+    monkeypatch.setenv("LUA_CORRECTION_SOURCE_KEY", "fixture-server")
+    bot = intake_bot(adapter_for(writer))
+    bot.webhook_event_queue.enqueue.side_effect = RuntimeError("fixture queue exception")
+    await _StatsReadyMixin._process_stats_ready_webhook(
+        bot, SimpleNamespace(embeds=[SimpleNamespace(fields=[], footer=None)]),
+    )
+    bot.track_error.assert_awaited_once()
+    assert await reader.fetchval("SELECT count(*) FROM lua_correction_inputs") == 1
+
+
+async def test_gametime_retained_before_team_storage_failure(inbox_db, monkeypatch):
+    writer, reader = inbox_db
+    monkeypatch.setenv("LUA_CORRECTION_INBOX_ENABLED", "true")
+    monkeypatch.setenv("LUA_CORRECTION_SOURCE_KEY", "fixture-server")
+    bot = intake_bot(adapter_for(writer))
+    file_data = json.dumps({"payload": {"embeds": [{"fields": []}]}})
+    monkeypatch.setattr("builtins.open", mock_open(read_data=file_data))
+    with pytest.raises(RuntimeError, match="fixture later failure"):
+        await UltimateETLegacyBot._process_gametimes_file(bot, "fixture.json", "fixture.json")
+    assert await reader.fetchval("SELECT count(*) FROM lua_correction_inputs") == 1
+    bot._store_lua_round_teams.assert_awaited_once()
+    bot._queue_pending_metadata.assert_not_called()
+
+
+async def test_disabled_intake_needs_no_adapter_or_metadata(monkeypatch):
+    monkeypatch.delenv("LUA_CORRECTION_INBOX_ENABLED", raising=False)
+    assert await retain_lua_correction_if_enabled(None, None) is None
+
+
+async def test_enabled_intake_requires_configured_source(monkeypatch):
+    monkeypatch.setenv("LUA_CORRECTION_INBOX_ENABLED", "true")
+    monkeypatch.delenv("LUA_CORRECTION_SOURCE_KEY", raising=False)
+    with pytest.raises(ValueError, match="source identity"):
+        await retain_lua_correction_if_enabled(None, metadata())
+
+
+async def test_invalid_gametime_does_not_starve_later_valid_file(inbox_db, monkeypatch):
+    writer, reader = inbox_db
+    monkeypatch.setenv("LUA_CORRECTION_INBOX_ENABLED", "true")
+    monkeypatch.setenv("LUA_CORRECTION_SOURCE_KEY", "fixture-server")
+    bot = intake_bot(adapter_for(writer))
+    bot.config = SimpleNamespace(
+        gametimes_enabled=True, ssh_host="fixture", ssh_port=22, ssh_user="fixture",
+        ssh_key_path="fixture", gametimes_remote_path="fixture", gametimes_local_path="fixture",
+        gametimes_startup_lookback_hours=0,
+    )
+    bot.ssh_enabled = True
+    bot.processed_gametimes_files = set()
+    bot._extract_gametime_timestamp = lambda name: 0
+    bot._mark_gametime_processed = Mock()
+    bot._fields_to_metadata_map = lambda fields: fields
+    bot._store_lua_round_teams = AsyncMock(return_value=42)
+    bot._fetch_latest_stats_file = AsyncMock()
+    bot._process_gametimes_file = lambda path, name: UltimateETLegacyBot._process_gametimes_file(bot, path, name)
+    names = ["gametime-1.json", "gametime-2.json"]
+    monkeypatch.setattr("bot.ultimate_bot.SSHHandler.list_remote_files", AsyncMock(return_value=names))
+    monkeypatch.setattr("bot.ultimate_bot.SSHHandler.download_file", AsyncMock(side_effect=names))
+    documents = {name: json.dumps({"payload": {"embeds": [{"fields": {
+        "map": "fixture", "round": 1, "lua_roundstart": start, "lua_playtime": "600 sec",
+    }}]}}) for name, start in zip(names, [0, 1700000000])}
+    monkeypatch.setattr("builtins.open", lambda path, **kwargs: mock_open(read_data=documents[path])())
+    await UltimateETLegacyBot._process_remote_gametimes_files(bot)
+    bot._mark_gametime_processed.assert_called_once_with(names[1])
+    assert await reader.fetchval("SELECT count(*) FROM lua_correction_inputs") == 1
