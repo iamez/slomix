@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R03b2 HTTP generation integration implemented, default OFF;
+  92 unit/PG/HTTP proofs pass, namespace mutation observed failing/restored/cmp.
+  Dev-only work; production remains untouched per owner's explicit clarification.
+  #1049 all22 checks green but awaits individual approval; no merge loop running.
+  #1052 new exact-head nine checks pass. Earlier React failure is recorded, not
+  diagnosed or waived; new run passed unchanged frontend. No app services touched.
+
 - (Astra, 2026-09-18) R03b1 bounded memory-cache prerequisite implemented in
   /tmp/slomix-astra-runtime-r03b1. 48 tests pass, HTTP eviction proof and observed
   failed capacity mutation restored/cmp; independent review no blocker.
