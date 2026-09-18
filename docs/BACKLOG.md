@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) #1053 review P1 addressed: migration092 grants website_app
+  SELECT only on runtime_cache_generations. Real restricted-role proof and
+  observed missing-GRANT mutation restored/cmp; 152 cases pass, PG stopped.
+  Bootstrap/release registration updated; no live schema/role changes.
+
 - (Astra, 2026-09-18) R03b2 HTTP generation integration implemented, default OFF;
   92 unit/PG/HTTP proofs pass, namespace mutation observed failing/restored/cmp.
   Dev-only work; production remains untouched per owner's explicit clarification.

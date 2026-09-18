@@ -1,6 +1,10 @@
 """Real PostgreSQL consumer commit/rollback through the HTTP namespace reader."""
 
+import subprocess
+from pathlib import Path
+
 import asyncpg
+import pytest
 
 from shared.runtime_cache_consumer import consume_http_cache_events
 from tests.integration.test_lua_override_boundary_pg import adapter_for
@@ -68,3 +72,57 @@ async def test_committed_consumer_generation_controls_two_http_workers(cache_db,
         assert response.headers["X-Cache"] == "BYPASS-GENERATION"
         assert response.headers["Cache-Control"] == "no-store"
     print("PG/HTTP proof: rollback keeps generation0; committed receipt advances1; both workers MISS session8; missing schema bypasses")
+
+
+async def test_website_role_reads_generation_but_cannot_write(cache_db, monkeypatch):  # noqa: F811
+    writer, _ = cache_db
+    migration = (Path(__file__).resolve().parents[2] / "migrations/092_runtime_cache_generation_read_grant.sql").read_text()
+    # Only the explicitly configured disposable cluster/CI service is reachable.
+    # Roll back role creation as well as grants; never modify an existing role.
+    assert not await writer.fetchval("SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='website_app')")
+    await writer.execute(migration)  # Role absent is a valid bootstrap state.
+    await consume_http_cache_events(writer)
+    monkeypatch.setattr(service, "get_db_pool", lambda: adapter_for(writer))
+    transaction = writer.transaction()
+    await transaction.start()
+    try:
+        await writer.execute("CREATE ROLE website_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT")
+        schema = await writer.fetchval("SELECT current_schema()")
+        await writer.execute(f'GRANT USAGE ON SCHEMA "{schema}" TO website_app')
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            async with writer.transaction():
+                await writer.execute("SET LOCAL ROLE website_app")
+                await service.read_http_cache_generation()
+        await writer.execute(migration)
+        await writer.execute(migration)  # Idempotent grants.
+        async with writer.transaction():
+            await writer.execute("SET LOCAL ROLE website_app")
+            assert await service.read_http_cache_generation() == 0
+            assert await writer.fetchval("SELECT current_user") == "website_app"
+            for privilege in ("INSERT", "UPDATE", "DELETE", "TRUNCATE"):
+                assert not await writer.fetchval(
+                    "SELECT has_table_privilege(current_user, 'runtime_cache_generations', $1)", privilege,
+                )
+            assert not await writer.fetchval(
+                "SELECT has_table_privilege(current_user, 'runtime_consumer_receipts', 'SELECT')",
+            )
+            await writer.execute("RESET ROLE")
+        with pytest.raises(asyncpg.InsufficientPrivilegeError):
+            async with writer.transaction():
+                await writer.execute("SET LOCAL ROLE website_app")
+                await writer.execute("UPDATE runtime_cache_generations SET generation=generation+1")
+    finally:
+        await transaction.rollback()
+    assert not await writer.fetchval("SELECT EXISTS(SELECT 1 FROM pg_roles WHERE rolname='website_app')")
+
+
+def test_generation_grant_registration_and_bootstrap():
+    root = Path(__file__).resolve().parents[2]
+    name = "092_runtime_cache_generation_read_grant.sql"
+    result = subprocess.run(
+        ["bash", "-c", 'source "$1"; printf "%s\\n" "${MIGRATIONS[@]}"',
+         "release-config", str(root / "scripts/release_configs/v1.45.0.sh")],
+        check=True, capture_output=True, text=True, timeout=5,
+    )
+    assert name in result.stdout.splitlines()
+    assert (root / "migrations" / name).read_text().strip() in (root / "tools/schema_postgresql.sql").read_text()

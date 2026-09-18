@@ -52,6 +52,13 @@ Next: publish/review R03b2, then lifecycle/polling and explicit health semantics
 Published draft #1053. Final independent review found no blocker after adding
 the PG proof. Post-push review clarified the reader docstring: it never creates
 schema or writes rows, but the shared adapter owns connection-pool behavior.
+External review found missing website_app SELECT privileges. Added migration092
+(091 unchanged), conditional SELECT-only grant, bootstrap mirror and release
+registration. Actual restricted-role reader succeeds after migration, cannot
+UPDATE generation or read receipts; role creation/grants rolled back in isolated
+PG. Role-absent/idempotent paths covered. Removing GRANT failed with permission
+denied, restored/cmp. Expanded 152-case suite passed, no skips, two existing
+warnings; Ruff clean, PG stopped. No live role or migration changes.
 
 ### R03b1 bounded memory cache prerequisite — 2026-09-18
 
