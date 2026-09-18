@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) #1044 exact-head d493e1e7 CI runs both successful;
+  external Codex reports no major issues. Next safe work: R02 Lua override
+  writer/caller inventory; source survey recorded locally in
+  /tmp/slomix-r02d-and-r04-dependencies-2026-09-18.md. R04 readiness/voice
+  scheduling and Lua receive ordering dependencies confirmed. No activation.
+
 - (Astra, 2026-09-18) R02c4 remaining local proofs completed: 128 focused
   tests passed, zero skips; richer replacement, notifications and bootstrap
   parity covered. No-op mutation failed, restored/cmp. Independent review

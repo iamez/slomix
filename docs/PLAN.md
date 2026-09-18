@@ -22,6 +22,17 @@
 
 ### R02c4 endstats storage journal — in progress, 2026-09-16
 
+2026-09-18 external checkpoint: draft #1044 at d493e1e7; CI 35316821230
+and 35316784558 both SUCCESS at this exact SHA. External Codex comment
+5726371027 reports no major issues. No inline findings observed in this pass;
+this is not owner merge approval. Next R02 discovery target is
+_apply_round_metadata_override: round metadata, canonical ID, player duration/
+DPM and Lua linking currently have separate best-effort boundaries. Map callers
+and transaction contexts before designing one atomic correction event.
+R04 extraction must remove Discord readiness and voice-cadence dependencies
+from SSH monitoring and preserve receive-before-worker Lua metadata ordering.
+These are verified code dependencies, not completed independent ingestion.
+
 2026-09-18 checkpoint: collected completed full focused run, 128 passed,
 zero skips, two existing websockets deprecation warnings. Added richer DB-only
 replacement (new event, no second Discord call), commit-only notification and
