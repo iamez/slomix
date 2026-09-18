@@ -22,6 +22,15 @@
 
 ### R02d5 durable bounded Lua repair attempts — 2026-09-18
 
+Latest checkpoint: #1044 and #1045 merged through prescribed cycles with
+review dispositions and verified squash trees. #1046 is ready/main at a58277f9;
+fresh CI pending. #1050 external Codex found no major issues at 51505e84 and
+all nine branch checks passed there. Subsequent ancestry sync changed no code.
+CodeRabbit's two findings were fixed in 46e9be8e (readable counts and evaluated
+release-array guard), replied to with mutation evidence and resolved. Fresh CI
+is required for the new head. No local merge monitor remains running; test PG
+is stopped and helpers completed. Next: inspect checks/reviews, then #1046 cycle.
+
 Separate branch feat/db-runtime-lua-retry-state-r02d5, parent #1049 e8011a81.
 Migration090 keeps scheduling state separate from retained payload/receipts.
 Explicit gated seeding (100 unseen inputs, no MAX-ID cursor) and one due attempt

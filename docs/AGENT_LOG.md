@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-18 · Verify release registration from the evaluated array.**
+  A migration filename appearing somewhere in a shell config does not prove
+  membership in MIGRATIONS: even a comment passes a substring assertion.
+  Inspect the evaluated Bash array and compare exact entries. Commenting out
+  migration 090 reproduced the missing-registration failure; restore with cmp.
+
 - **2026-09-18 · Every new round_id table needs a linkage decision.**
   The schema-driven coverage contract also applies to runtime receipt tables.
   lua_correction_receipts records the target of a committed correction, so
