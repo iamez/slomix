@@ -20,6 +20,41 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+2026-09-18 merge checkpoint: #1041 merged via required cycle as a2b72550;
+all final gates passed and squash tree equals approved8df7215b. #1042 now targets
+main; normal synchronization preserved all non-document content. Existing review
+finding fixed and reviewer-confirmed; zero unresolved threads. Refresh exact-head
+main-target checks before next conditional-authorized cycle. No deploy/activation.
+
+### R02c2 bounded webhook retry after exceptions (2026-09-15; in progress)
+
+Worktree `/tmp/slomix-astra-runtime-r02c2`, branch
+`feat/db-runtime-endstats-exceptions-r02c2`, based on R02c1 02c2113a.
+With ENDSTATS_RETRY_ENABLED only, the webhook retry task's exception handler
+reschedules through the existing delay/attempt budget instead of only removing
+its task reference. Keep OFF behavior and asyncio.CancelledError propagation.
+No filename state reclassification: a committed unknown/NULL claim still blocks
+the next attempt, and publication ambiguity is not solved. Prove real asyncio
+tasks retry a preflight DB exception, exhaust a permanent failure finitely,
+and leave no child tasks running. Polling RAM recovery and journal remain next.
+
+Local proof: 53 focused tests passed, zero skips. Four new tests execute real
+asyncio scheduler tasks with injected DB failures: OFF one attempt, transient
+failure then terminal gate two attempts, permanent failure max three attempts;
+call counts and completed task counts agree. Cancellation propagates without
+rescheduling. Disabling exception rescheduling failed two guards (`1 == 2`,
+`1 == 3`), restored with patch/cmp; all four passed again with runtime output.
+No database/server/Discord was started; fixtures simulate DB and reaction only.
+Not a durable scheduler or a cure for ambiguous publication/NULL claims.
+Read-only helper review found no blocker. Budget is per retry chain: later
+external triggers may start a new chain. Cancellation preserves existing task-
+map cleanup behavior; test task creation wraps asyncio directly, not bot startup.
+Published draft PR #1042 against `feat/db-runtime-endstats-retry-r02c`, code
+9c01c55b. CI 34934210971 in progress; external Codex/CodeRabbit requested.
+Post-push self-review complete; no helper/task/server left running. Next:
+polling exception marker ownership (do not discard another task's claim),
+then transaction journal. Stack is 24 files against main; no guard bypass.
+
 2026-09-18 owner authorization update: owner explicitly permits subsequent
 merges when review has been performed, findings inspected/addressed (or justified
 as not applicable), and checks pass. This supersedes the earlier per-number

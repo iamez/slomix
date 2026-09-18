@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-15) R02c2 `/tmp/slomix-astra-runtime-r02c2`, branch
+  `feat/db-runtime-endstats-exceptions-r02c2`: enabled webhook retry exceptions
+  now reschedule through existing bounded attempts/delay. 53 focused tests
+  passed; real asyncio task proof covers OFF/transient/permanent/cancellation.
+  Mutation failed two guards, restored/cmp and rerun passed. No tasks left.
+  Published draft #1042, code 9c01c55b, parent #1041; CI 34934210971 running,
+  external review requested, post-push self-review complete. Next: polling
+  marker ownership/cleanup and event journal. Stack 24 files, no activation.
+
 - (Astra, 2026-09-15) #1041 review 4012369546 found unbounded polling after
   publish_failed. Shared post-publication failure counter now persists guarded
   publish_retry_exhausted at configured limit; pre-limit counts process-local.
