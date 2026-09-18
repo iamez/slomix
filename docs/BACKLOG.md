@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R03a DB cache-generation/receipt primitive implemented
+  in separate worktree /tmp/slomix-astra-runtime-r03a. No website integration
+  yet. Actual PG rollback/late-commit/concurrency proofs and two observed failing
+  mutations restored; independent review found no blocker. Combined regression
+  280 passed, PG stopped. #1046 merge cycle running; no application services changed.
+
 - (Astra, 2026-09-18) R02d5 explicit durable Lua retry steps implemented in
   separate worktree /tmp/slomix-astra-runtime-r02d5. Five-attempt bound,
   persistent due state, quarantine, contention deferral and error visibility;

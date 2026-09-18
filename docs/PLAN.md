@@ -20,6 +20,29 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R03a transactional HTTP-cache generation receipts — 2026-09-18
+
+Branch feat/db-runtime-cache-receipts-r03a, parent #1050 at 0f0c8e73.
+Migration 091 adds consumer/event receipts and shared DB cache generation.
+Explicit default-OFF primitive serializes on the generation row, consumes bounded
+known event/schema batches without a MAX-ID cursor, and commits generation plus
+receipts atomically. Caller-held transactions are rejected. Unsupported pairs
+remain unacknowledged and explicitly counted; they cannot occupy the valid batch.
+No HTTP namespace integration, listener, background task, activation or deploy.
+Receipt means DB generation advanced, not every worker/browser cache invalidated.
+Batch bound limits processed events, not SQL scan cost; benchmark before rollout.
+Website role permissions and independent inner caches remain integration gates.
+
+Read-only review found no concrete blocker. Real PG proofs include concurrent
+consumers, late lower-ID commit, rollback at receipt/generation/COMMIT failure,
+idempotent empty retry, source consumer isolation, unknown schema visibility,
+bounded remainder and OFF behavior. Transaction mutation failed 1 != 0; removing
+the early row lock failed the observed pg_stat_activity lock-location assertion.
+Both restored via apply_patch/cmp. Initial focused run 62 passed, no skips;
+extra observed-lock regression passed. Full cross-stack regression: 280 passed,
+zero skips, two existing warnings; Ruff/whitespace clean. Disposable PG stopped,
+verified by pg_ctl and shutdown log. Next: external review and exact-head CI.
+
 ### R02d5 durable bounded Lua repair attempts — 2026-09-18
 
 Latest checkpoint: #1044 and #1045 merged through prescribed cycles with
