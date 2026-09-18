@@ -1,5 +1,6 @@
 """Durable bounded repair state on disposable PostgreSQL, no live worker."""
 
+import subprocess
 from pathlib import Path
 
 import asyncpg
@@ -216,5 +217,10 @@ async def test_unexpected_error_defers_then_surfaces_without_starvation(retry_db
 def test_migration_registered_and_bootstrap_mirrored():
     root = Path(__file__).resolve().parents[2]
     name = "090_lua_correction_attempts.sql"
-    assert name in (root / "scripts/release_configs/v1.45.0.sh").read_text()
+    result = subprocess.run(
+        ["bash", "-c", 'source "$1"; printf "%s\\n" "${MIGRATIONS[@]}"',
+         "release-config", str(root / "scripts/release_configs/v1.45.0.sh")],
+        check=True, capture_output=True, text=True, timeout=5,
+    )
+    assert name in result.stdout.splitlines()
     assert (root / "migrations" / name).read_text().strip() in (root / "tools/schema_postgresql.sql").read_text()
