@@ -13,6 +13,12 @@ data here.
   exemption and run test_round_id_coverage_contract.py alongside PG proofs;
   focused transaction tests alone did not catch this CI failure.
 
+- **2026-09-18 · Measure the pre-push hook's actual comparison range.**
+  New branches compare with the main merge-base; existing branches compare
+  with their previous remote tip, intersected with paths changed vs main.
+  A three-file update can correctly pass while its dependent stack has26files.
+  Do not mistake total stack size for the hook's update size or bypass the hook.
+
 - **2026-09-18 · Test retention against the actual normalized producer.**
   Lua correction metadata uses END_REASON_ENUM (uppercase), not raw webhook
   text. A lowercase-only inbox validator rejected valid producer output while

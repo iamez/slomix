@@ -50,8 +50,13 @@ other cases passed on Python 3.11). Added the justified relinker exemption:
 receipt target is historical transaction provenance, not a repairable link.
 All seven coverage contracts pass; removing the exemption reproduced the
 failure, restored with patch/cmp. No migration or live-data change involved.
-The additional file waits for #1042 to merge before pushing within the
-25-file stack limit. #1042 has all 22 checks green and its merge cycle active.
+#1042 merged as9ffbcd5e after all22 checks and the required pause. Fix pushed
+at93096648 after normal stack synchronization. Seven contract cases pass and
+runtime-loaded detection/fanout/inventory exclude receipts. Independent review
+found no blocker; wording now includes accepted no-op corrections. New CI pending.
+Size correction: existing-branch pre-push checks the update from the old remote
+tip (three files here), intersected with paths changed vs main; the total stack
+is26files. The hook ran unchanged and was not bypassed. #1043 merge cycle active.
 
 ### R02d3 intake wiring — started 2026-09-18
 
