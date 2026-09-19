@@ -51,6 +51,13 @@ its prescribed merge cycle is running. Further PRs still require specific approv
 
 ### R02d5 durable bounded Lua repair attempts — 2026-09-18
 
+2026-09-19 checkpoint: owner-approved #1049 merged90eae0f8 through prescribed
+cycle, all22checks successful and final0red/0threads/0behind/unchangedSHA.
+Squash tree matches964630e8. Fresh112 actual-PG/repair/inbox/override/coverage/
+bootstrap cases passed before merge. #1050 retargeted main; normal ancestry sync
+preserved the full tree. Fresh checks required; no approval for #1050 inferred.
+No service/deployment changes. Older progress notes below are historical.
+
 Historical R02d5 checkpoint (current position is in R03a above):
 #1044 and #1045 merged through prescribed cycles with
 review dispositions and verified squash trees. #1046 is ready/main at a58277f9;
