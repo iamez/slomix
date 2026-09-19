@@ -48,6 +48,11 @@
   failed capacity mutation restored/cmp; independent review no blocker.
   No DB-generation integration or activation yet. #1048 approved cycle running.
 
+- (Astra, 2026-09-19) #1050 merged as2518735f with explicit approval and
+  prescribed cycle; approved tree verified equal. #1051 retargeted main and
+  synced without content loss. Propagate ancestry/checkpoint through #1055;
+  fresh CI needed after pushes. No further merge approval or activation.
+
 - (Astra, 2026-09-18) R03a DB cache-generation/receipt primitive implemented
   in separate worktree /tmp/slomix-astra-runtime-r03a. No website integration
   yet. Actual PG rollback/late-commit/concurrency proofs and two observed failing
