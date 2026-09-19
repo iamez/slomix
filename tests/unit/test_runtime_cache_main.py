@@ -151,9 +151,15 @@ async def test_owned_task_and_pool_cleanup(config_env, mode):
     factory = AsyncMock(return_value=pool)
     stop = asyncio.Event()
     states = []
+
+    def observe(state):
+        if state.status == "shutting_down":
+            assert not worker.cleaned, "Shutdown must be visible before draining finishes"
+        states.append(state)
+
     task = asyncio.create_task(entry.serve(
         entry.DatabaseConfig.from_environment(), stop, worker=worker,
-        pool_factory=factory, reporter=states.append, drain_seconds=0.01,
+        pool_factory=factory, reporter=observe, drain_seconds=0.01,
     ))
     try:
         await asyncio.wait_for(worker.entered.wait(), 1)
@@ -173,6 +179,8 @@ async def test_owned_task_and_pool_cleanup(config_env, mode):
         pool.terminate.assert_not_called()
         assert states
         assert states[0].status == "starting"
+        if mode == "hang":
+            assert "shutting_down" in [state.status for state in states]
         assert not any(t.get_name().startswith("runtime-cache-") for t in asyncio.all_tasks())
     finally:
         task.cancel()

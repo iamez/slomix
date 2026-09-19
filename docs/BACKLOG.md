@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) #1055 review follow-up: pre-drain shutting_down health,
+  explicit localhost override documentation; real PG signal proof and failed/
+  restored mutation, expanded200 passed. Return to R04 configuration discovery.
+
 - (Astra, 2026-09-19) R03d adds independent dev-only cache consumer entrypoint,
   not ingestion. Default OFF; one owned pool/task, signal shutdown, safe JSON
   health. Actual isolated PG subprocess catch-up/blocked shutdown pass; observed

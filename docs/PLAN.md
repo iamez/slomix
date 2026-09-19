@@ -22,6 +22,14 @@
 
 ### R03d independent cache-consumer process — 2026-09-19
 
+Review follow-up: #1055 reports shutting_down before an active worker drains;
+the worker's confirmed generation/error fields are preserved. Unit observation
+asserts the report precedes cleanup; actual PG blocked-process signal output
+includes shutting_down then stopped. Missing-report mutation failed, restored
+apply_patch/cmp; expanded200 passed, zero skips, two existing warnings. Example
+now explicitly requires overriding POSTGRES_HOST=localhost. PG stopped; no live
+activation. Both review findings addressed; fresh exact-head checks required.
+
 Branch feat/db-runtime-cache-entry-r03d, stacked on #1054 at78be6156.
 Module entrypoint `python -m shared.runtime_cache_main` has no Discord/BotConfig
 or website dependency. This hosts only the cache consumer, NOT source ingestion.
