@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R03b1 bounded memory-cache prerequisite implemented in
+  /tmp/slomix-astra-runtime-r03b1. 48 tests pass, HTTP eviction proof and observed
+  failed capacity mutation restored/cmp; independent review no blocker.
+  No DB-generation integration or activation yet. #1048 approved cycle running.
+
 - (Astra, 2026-09-19) #1050 merged as2518735f with explicit approval and
   prescribed cycle; approved tree verified equal. #1051 retargeted main and
   synced without content loss. Propagate ancestry/checkpoint through #1055;
