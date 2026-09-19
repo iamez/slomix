@@ -66,6 +66,8 @@ async def test_independent_process_catches_up_and_handles_signal(cache_db, block
         records.extend(json.loads(line) for line in stdout.splitlines())
         assert process.returncode == 0, stderr.decode()
         assert records[-1]["status"] == "stopped"
+        if blocked_shutdown:
+            assert "shutting_down" in [record["status"] for record in records]
         count = await reader.fetchval("SELECT count(*) FROM runtime_consumer_receipts")
         rows = await reader.fetch("SELECT event_id FROM runtime_consumer_receipts")
         assert count == len(rows) == (0 if blocked_shutdown else 1)
@@ -73,7 +75,8 @@ async def test_independent_process_catches_up_and_handles_signal(cache_db, block
             SELECT count(*) FROM pg_stat_activity
             WHERE application_name='slomix-runtime-cache-dev'
         """)
-        print(f"Process PG proof: blocked={blocked_shutdown}, exit=0, receipts={count}, no connections remain")
+        print(f"Process PG proof: blocked={blocked_shutdown}, exit=0, receipts={count}, "
+              f"states={[record['status'] for record in records]}, no connections remain")
     finally:
         if process is not None and process.returncode is None:
             process.terminate()

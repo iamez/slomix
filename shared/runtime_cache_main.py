@@ -102,6 +102,7 @@ async def serve(config, stop, *, worker=None, pool_factory=None, reporter=report
                                return_when=asyncio.FIRST_COMPLETED)
             reporter(worker.state)
         if stop.is_set() and not task.done():
+            reporter(replace(worker.state, status="shutting_down"))
             done, _ = await asyncio.wait((task,), timeout=drain_seconds)
             if not done:
                 task.cancel()
