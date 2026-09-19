@@ -6,11 +6,27 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
   Include every changed Python path in local lint. Module-attribute aliases
   retain the legacy function identities without unused-import ambiguity;
   mutation-test the export identity rather than assuming an alias is correct.
+
+- **2026-09-19 · Parser parity needs nonempty players and a controlled clock.**
+  The committed legacy sample_stats_files parse headers but zero player rows.
+  Header parity alone cannot certify R2 player calculations. Supply valid player
+  lines with a known differential and freeze the parser's generated timestamp
+  when comparing subprocess outputs. A blocked-import subprocess proves absence
+  of Discord/config dependencies more strongly than checking imports in pytest.
+
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
 
 - **2026-09-19 · Logging emission is separate from process setup.**
   Importing bot.logging_config creates its log directory. Runtime-only callers

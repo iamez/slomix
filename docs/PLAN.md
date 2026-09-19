@@ -20,12 +20,39 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+
 2026-09-20 checkpoint: owner-approved #1058 merged as b5e20c9d after prescribed
 cycle (0 red/threads/behind, unchanged SHA). Squash tree equals da1a5136.
 Fresh14 logging/retry cases passed before merge. R04b synced main normally;
 both progress sections retained in documentation conflicts, no constructor
 changes. Older approval/CI notes below are historical. #1057 not approved.
 Next startup contract: /tmp/slomix-r04d-startup-contract-2026-09-20.md (local).
+
+### R04a parser presentation boundary — 2026-09-19
+
+Branch feat/db-runtime-parser-boundary-r04a, parent #1055 at5b0d305f.
+Move Discord import into create_stylish_round_embed only; parsing and R2 logic
+unchanged. Separate subprocesses compare full parser/differential output with
+Discord preloaded versus forbidden (also forbid bot.config/dotenv/website).
+Clock frozen in proof to avoid comparing two generation timestamps. Existing
+committed sample files produce zero parsed players; explicitly recorded, not
+treated as player coverage. Valid synthetic player lines separately prove one
+player and differential kills8-3=5; real Discord Embed rendering remains covered.
+
+151 parser/helper/R2/import-journal/retry/replay cases passed, zero skips, two
+existing warnings. Ruff clean. Restoring eager import as a mutation caused
+ModuleNotFoundError: Presentation/config dependency forbidden: discord; restored
+apply_patch/cmp, then full151 passed. No network, database or service activation.
+
+Discovery correction: manager load_config constructs BotConfig but does NOT
+call its token validator. Importing bot.config still loads dotenv, and the
+manager initializes logging at module import. Neutral config extraction must
+preserve explicit legacy logging/config behavior; deferred to its own slice.
+This prerequisite does not make the canonical importer or ingestion independent.
+Original R04 capture/cadence/metadata/single-writer acceptance gates remain open.
+
+### R03d independent cache-consumer process — 2026-09-19
+
 
 ### R04b explicit importer constructor configuration — 2026-09-19
 

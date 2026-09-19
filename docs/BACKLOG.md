@@ -7,11 +7,25 @@
 
 ## Trenutna pozicija
 
+
 - (Astra, 2026-09-19) Independent R04b constructor-config prerequisite over
   main2518735f;154 cases pass, actual subprocess and falsey-config mutation proof.
   Separate open stack #1051–#1056 remains intact. #1055 review findings fixed in
   847c1b7d and synced to #1056 at74408882; both threads answered/resolved, fresh CI
   required. Resume config/logging startup boundary after review, no activation.
+
+- (Astra, 2026-09-19) R04a isolates parser's Discord presentation dependency;
+  actual subprocess parity and real embed proof, observed eager-import mutation
+  restored/cmp;151 tests pass. Neutral manager config/logging boundary remains
+  next. No claim of independent ingestion, no service or live database changes.
+
+- (Astra, 2026-09-19) R03d adds independent dev-only cache consumer entrypoint,
+  not ingestion. Default OFF; one owned pool/task, signal shutdown, safe JSON
+  health. Actual isolated PG subprocess catch-up/blocked shutdown pass; observed
+  dev-guard mutation restored/cmp. Expanded200 passed; publish/review next.
+  #1054 nine exact-head checks green and both external reviews no findings.
+  No merge approval for #1050 or later; no service/production activation.
+
 
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
