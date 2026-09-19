@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) #1049 merged90eae0f8 after approved review/cycle;
+  squash tree matches964630e8. Descendant stack synced with code unchanged.
+  R03c expanded combined proof172passed; stack23files now within publication
+  limit25. Next publish R03c and inspect exact-head external CI/reviews.
+
 - (Astra, 2026-09-19) Original runtime plan reviewed against actual lifecycle.
   Direction preserved, R04 independence still open; source retention is not
   independent ingestion. Added three worker fault-state tests (17 unit cases

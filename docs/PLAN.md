@@ -35,9 +35,11 @@ not all journal rows. Coarse HTTP generation and periodic polling are deliberate
 first steps; per-session invalidation/NOTIFY latency optimization remain later.
 Added three worker edge proofs: acquisition cancellation cleanup, nonclosed
 InterfaceError propagates, unsupported events visible while valid work succeeds.
-17 worker unit cases pass; combined rerun pending. Owner approved #1049 after
-review; fresh112 repair/inbox/override/coverage/bootstrap cases pass and cycle
-is running. No activation. Local full audit kept outside tracked research.
+17 worker unit cases pass; expanded combined rerun172 passed, zero skips, two
+existing warnings. Owner-approved #1049 merged90eae0f8 with full tree equal to
+964630e8, after fresh112 repair/inbox/override/coverage/bootstrap cases passed.
+Normal sync through #1050/#1051/#1052/#1053/R03c changed only seven PLAN lines.
+No activation. Local full audit kept outside tracked research.
 
 Local branch feat/db-runtime-cache-poll-r03c, parent #1053 at 1e36a993.
 Reusable shared driver only: caller awaits run and owns cancellation/connection
@@ -60,10 +62,10 @@ connection before retry, cancellation drains, idle stop interrupts long wait.
 Removing periodic timeout caused observed TimeoutError; restored apply_patch/cmp.
 PG stopped and confirmed by pg_ctl/log. No live DB, dev service or prod changes.
 
-Publication must wait for stack reduction: new-branch hook limits changed files
-to25; this dependent stack adds three new paths beyond parent25. No hook bypass.
-#1049 at964630e8 has22 successful checks and awaits its specific merge approval.
-Next: approved stack reduction, publish R03c/external review, then independent
+Publication originally waited for stack reduction (28files against hook limit25).
+After approved #1049 merge the measured diff is23files; no hook bypass required.
+#1050 is retargeted main with fresh CI required and no merge approval inferred.
+Next: publish R03c/external review, then independent
 runtime entrypoint/ownership plus activation gates. R04 ingestion extraction
 is not completed by this driver; Discord/website-off ingestion is still future.
 
