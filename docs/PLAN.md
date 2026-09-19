@@ -20,6 +20,49 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R03d independent cache-consumer process — 2026-09-19
+
+Review follow-up: #1055 reports shutting_down before an active worker drains;
+the worker's confirmed generation/error fields are preserved. Unit observation
+asserts the report precedes cleanup; actual PG blocked-process signal output
+includes shutting_down then stopped. Missing-report mutation failed, restored
+apply_patch/cmp; expanded200 passed, zero skips, two existing warnings. Example
+now explicitly requires overriding POSTGRES_HOST=localhost. PG stopped; no live
+activation. Both review findings addressed; fresh exact-head checks required.
+
+Branch feat/db-runtime-cache-entry-r03d, stacked on #1054 at78be6156.
+Module entrypoint `python -m shared.runtime_cache_main` has no Discord/BotConfig
+or website dependency. This hosts only the cache consumer, NOT source ingestion.
+Original design21 direction retained; R04 still must extract source capture,
+cadence and non-Discord metadata delivery. No deployment or service changes.
+
+Default OFF exits before config, signal handlers or pool. Enabled requires all
+three consumer flags, exact BOT_ENVIRONMENT=dev, explicit POSTGRES_HOST/PORT/
+DATABASE/USER and TCP password. Host is loopback IP or absolute Unix socket;
+no DNS/remote fallback, dotenv loading or guessed database credentials. Optional
+RUNTIME_CACHE_DB_SCHEMA defaults public, one validated identifier. This guards
+configuration, NOT database identity: reviewed dev credentials/target remain an
+owner activation requirement. Do not run it against the application DB yet.
+
+One empty native pool (max1) reconnects through the existing worker; connect5s,
+query/attempt10s, stop drains11s before cancellation, pool close5s then terminate.
+SIGTERM/SIGINT clean owned tasks/pool; unexpected errors exit1 with class only.
+JSON health every5s describes this consumer only, including last success age,
+unsupported count and last confirmed generation. Missing schema/grants are
+unavailable, not idle; the process never creates/migrates schema. Health is not
+proof of ingestion continuity, cache freshness or system-wide availability.
+
+26 entrypoint unit cases; disposable PG subprocess proofs cover catch-up and
+SIGTERM idle / SIGINT while blocked on a table lock, receipts counted by SQL
+COUNT and fetched rows, no remaining process connections. Dev-guard mutation
+failed both rejection cases (DID NOT RAISE ValueError), restored apply_patch/cmp.
+Expanded200 passed, zero skips, two existing websockets warnings; Ruff clean.
+Disposable PG stopped after proof; publication/review still pending. Parent #1054
+exact78be6156 has nine successful checks, Codex/CodeRabbit completed no findings.
+First push rejected by credential hook on a dummy unit-test password literal;
+replaced with a generated ephemeral fixture value, without hook bypass.
+Next: finish review/publication; then R04 extraction contract, not activation.
+
 ### R03c caller-owned durable cache polling — 2026-09-18
 
 2026-09-19 original-plan/Mandelbrot/RCA audit: design21 section7 direction
