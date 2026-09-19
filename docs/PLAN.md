@@ -22,6 +22,12 @@
 
 ### R04c neutral database logging helpers — 2026-09-19
 
+239775fc received all22successful checks, Codex no-major-issues review and
+CodeRabbit no actionable findings. Addressed its remaining docstring-coverage
+warning by documenting all four test functions; no production code changes.
+Fresh checks required after this documentation-only follow-up. Await #1058
+individual merge permission; do not infer permission from continuation requests.
+
 Review follow-up: #1058 initial CI failed I001 in the modified legacy module;
 the initial local lint scope covered only new files and missed it. Explicit
 module-attribute aliases now preserve exports without the CodeQL unused-import

@@ -12,6 +12,7 @@ from shared import database_logging as subject
 
 
 def test_legacy_exports_are_identical():
+    """Legacy callers must receive the original shared function objects."""
     from bot import logging_config
 
     for name in ("_exc_info_for", "log_database_operation", "log_stats_import",
@@ -20,6 +21,7 @@ def test_legacy_exports_are_identical():
 
 
 def test_success_records_and_threshold(caplog):
+    """Preserve logger names, formatting and the strict slow-operation threshold."""
     caplog.set_level(logging.DEBUG)
     subject.log_database_operation("SELECT", "rows", duration=1.2345)
     subject.log_database_operation("SELECT", "rows", duration=0)
@@ -37,6 +39,7 @@ def test_success_records_and_threshold(caplog):
 @pytest.mark.parametrize("error", [ValueError("bad input"), "bad input"])
 @pytest.mark.parametrize("kind", ["operation", "import"])
 def test_error_records(caplog, error, kind):
+    """Exceptions retain their identity; text errors do not invent tracebacks."""
     if kind == "operation":
         subject.log_database_operation("INSERT", "rows", duration=2, error=error)
         expected = "❌ DB INSERT FAILED [2.000s]: rows | Error: bad input"
@@ -54,6 +57,7 @@ def test_error_records(caplog, error, kind):
 
 
 def test_independent_process_emits_without_setup(tmp_path):
+    """A fresh process emits records without bot imports or implicit setup."""
     script = '''
 import importlib.abc
 import logging
