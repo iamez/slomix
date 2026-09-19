@@ -7,7 +7,20 @@
 
 ## Trenutna pozicija
 
-- (Astra, 2026-09-18) R02d5 explicit durable Lua retry steps implemented in
+- (Astra, 2026-09-19) #1050 merged as2518735f with explicit approval and
+  prescribed cycle; approved tree verified equal. #1051 retargeted main and
+  synced without content loss. Propagate ancestry/checkpoint through #1055;
+  fresh CI needed after pushes. No further merge approval or activation.
+
+- (Astra, 2026-09-18) R03a DB cache-generation/receipt primitive implemented
+  in separate worktree /tmp/slomix-astra-runtime-r03a. No website integration
+  yet. Actual PG rollback/late-commit/concurrency proofs and two observed failing
+  mutations restored; independent review found no blocker. Combined regression
+  280 passed, PG stopped. #1046 merged as 64488de1; no application services changed.
+  #1051 review found the stale merge status above, now corrected against PLAN.
+  Owner explicitly approved #1048; its prescribed merge cycle is running.
+
+- (Historical checkpoint, Astra, 2026-09-18) R02d5 explicit durable Lua retry steps implemented in
   separate worktree /tmp/slomix-astra-runtime-r02d5. Five-attempt bound,
   persistent due state, quarantine, contention deferral and error visibility;
   no background process or activation. 47 focused cases pass, mutation observed
@@ -15,12 +28,13 @@
   #1050 CodeRabbit findings fixed/resolved; fresh CI pending. #1046 ready/main
   awaits exact-head checks then prescribed cycle. No live activation.
 
-- (Astra, 2026-09-18) R02d4 DB-only repair+receipt implemented locally:
+- (Historical checkpoint, Astra, 2026-09-18) R02d4 DB-only repair+receipt implemented locally:
   shared identity advisory lock, integrity validation, exact target, atomic
   correction/event/receipt, explicit missing/conflict outcomes. 97 cases pass;
   rollback mutation failed/restored/cmp; PG stopped. No scheduler/activation.
   #1041 owner-approved conditional merge cycle running; wait for stack reduction
-  before push. Owner now permits reviewed/fixed/green merges without per-PR ask.
+  before push. Earlier blanket merge permission has since been superseded by
+  the owner's newer per-PR approval rule; #1048 now has explicit approval.
 
 - (Astra, 2026-09-18) R02d3 default-OFF live intake implemented on separate
   branch: STATS_READY before round-worker queue; GAMETIME before team writes.

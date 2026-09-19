@@ -20,6 +20,43 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R03a transactional HTTP-cache generation receipts — 2026-09-18
+
+2026-09-19 checkpoint: owner-approved #1050 merged as 2518735f after all22
+checks, resolved reviews and fresh79 isolated-PG/retry/bootstrap/release cases.
+Prescribed cycle ended with zero red checks/threads/behind and unchanged head;
+squash tree equals approved00e061ec. #1051 retargeted main; normal merge77f8ed47
+resolved squash-history conflicts and preserved its entire pre-sync44914a22 tree.
+Descendant sync follows; fresh exact-head CI required. #1051+ not merge-approved.
+No deployment, service operation or live database change. Temporary PG stopped.
+
+Branch feat/db-runtime-cache-receipts-r03a, parent #1050 at 0f0c8e73.
+Migration 091 adds consumer/event receipts and shared DB cache generation.
+Explicit default-OFF primitive serializes on the generation row, consumes bounded
+known event/schema batches without a MAX-ID cursor, and commits generation plus
+receipts atomically. Caller-held transactions are rejected. Unsupported pairs
+remain unacknowledged and explicitly counted; they cannot occupy the valid batch.
+No HTTP namespace integration, listener, background task, activation or deploy.
+Receipt means DB generation advanced, not every worker/browser cache invalidated.
+Batch bound limits processed events, not SQL scan cost; benchmark before rollout.
+Website role permissions and independent inner caches remain integration gates.
+
+Read-only review found no concrete blocker. Real PG proofs include concurrent
+consumers, late lower-ID commit, rollback at receipt/generation/COMMIT failure,
+idempotent empty retry, source consumer isolation, unknown schema visibility,
+bounded remainder and OFF behavior. Transaction mutation failed 1 != 0; removing
+the early row lock failed the observed pg_stat_activity lock-location assertion.
+Both restored via apply_patch/cmp. Initial focused run 62 passed, no skips;
+extra observed-lock regression passed. Full cross-stack regression: 280 passed,
+zero skips, two existing warnings; Ruff/whitespace clean. Disposable PG stopped,
+verified by pg_ctl and shutdown log. Next: external review and exact-head CI.
+Published draft #1051. #1046 merged as 64488de1 with approved tree verified;
+#1048 now ready/main, and ancestry sync through #1049/#1050/#1051 preserved
+all implementation content. Fresh CI required after these pushes. No activation.
+Review follow-up: corrected BACKLOG's stale #1046 status to merged 64488de1
+and labelled older checkpoints historical. Owner explicitly approved #1048;
+its prescribed merge cycle is running. Further PRs still require specific approval.
+
 ### R02d5 durable bounded Lua repair attempts — 2026-09-18
 
 2026-09-19 checkpoint: owner-approved #1049 merged90eae0f8 through prescribed
@@ -29,7 +66,8 @@ bootstrap cases passed before merge. #1050 retargeted main; normal ancestry sync
 preserved the full tree. Fresh checks required; no approval for #1050 inferred.
 No service/deployment changes. Older progress notes below are historical.
 
-Latest checkpoint: #1044 and #1045 merged through prescribed cycles with
+Historical R02d5 checkpoint (current position is in R03a above):
+#1044 and #1045 merged through prescribed cycles with
 review dispositions and verified squash trees. #1046 is ready/main at a58277f9;
 fresh CI pending. #1050 external Codex found no major issues at 51505e84 and
 all nine branch checks passed there. Subsequent ancestry sync changed no code.
