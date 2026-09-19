@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R02d4 DB-only repair+receipt implemented locally:
+  shared identity advisory lock, integrity validation, exact target, atomic
+  correction/event/receipt, explicit missing/conflict outcomes. 97 cases pass;
+  rollback mutation failed/restored/cmp; PG stopped. No scheduler/activation.
+  #1041 owner-approved conditional merge cycle running; wait for stack reduction
+  before push. Owner now permits reviewed/fixed/green merges without per-PR ask.
+
 - (Astra, 2026-09-18) R02d3 default-OFF live intake implemented on separate
   branch: STATS_READY before round-worker queue; GAMETIME before team writes.
   70 focused cases pass, capture mutation failed/restored/cmp; invalid first

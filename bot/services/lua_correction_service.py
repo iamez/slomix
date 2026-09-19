@@ -6,12 +6,57 @@ import os
 from collections import Counter
 
 from bot.core.round_canonical import compute_canonical_id
+from bot.services.lua_correction_inbox import lock_correction_identity, validate_retained_correction
 from shared.runtime_events import event_stream_enabled
 
 FIELDS = (
     "winner_team", "actual_duration_seconds", "total_pause_seconds", "pause_count",
     "end_reason", "round_start_unix", "round_end_unix", "round_canonical_id",
 )
+
+
+async def apply_retained_lua_correction(adapter, source_key, input_id):
+    """One DB-only repair attempt, not a scheduler or revision-selection policy.
+
+    Lock order: source identity, input, round, players. Call without pre-held
+    round locks. Completion and correction/event commit together; linking is
+    excluded. Only inputs for the configured server may resolve local rounds.
+    """
+    if isinstance(input_id, bool) or not isinstance(input_id, int) or input_id <= 0:
+        raise ValueError("Invalid retained correction input ID")
+    async with adapter.transaction():
+        row = await adapter.fetch_one(
+            "SELECT * FROM lua_correction_inputs WHERE id=? AND source_key=?", (input_id, source_key),
+        )
+        if row is None:
+            return "missing_input"
+        payload = validate_retained_correction(row)
+        await lock_correction_identity(adapter, source_key, payload)
+        locked = await adapter.fetch_one("SELECT * FROM lua_correction_inputs WHERE id=? FOR UPDATE", (input_id,))
+        if locked is None or locked["source_key"] != source_key or validate_retained_correction(locked) != payload:
+            raise ValueError("Retained correction changed while locking")
+        if await adapter.fetch_val("SELECT 1 FROM lua_correction_receipts WHERE input_id=?", (input_id,)):
+            return "already_applied"
+        revisions = await adapter.fetch_val("""
+            SELECT count(*) FROM lua_correction_inputs
+            WHERE source_key=? AND map_name=? AND round_number=? AND round_start_unix=?
+        """, (source_key, payload["map_name"], payload["round_number"], payload["round_start_unix"]))
+        if revisions != 1:
+            return "conflicting_revision"
+        targets = await adapter.fetch_all("""
+            SELECT id FROM rounds WHERE lower(btrim(map_name))=? AND round_number=? AND round_start_unix=? LIMIT 2
+        """, (payload["map_name"], payload["round_number"], payload["round_start_unix"]))
+        if not targets:
+            return "missing_round"
+        if len(targets) != 1:
+            return "ambiguous_round"
+        round_id = targets[0][0]
+        if not await apply_atomic_lua_correction(adapter, round_id, payload):
+            return "target_changed"
+        await adapter.execute(
+            "INSERT INTO lua_correction_receipts (input_id, round_id) VALUES (?, ?)", (input_id, round_id),
+        )
+    return "applied"
 
 
 def lua_correction_events_enabled() -> bool:

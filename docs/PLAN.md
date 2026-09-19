@@ -20,6 +20,50 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02d4 atomic retained-input repair — local implementation 2026-09-18
+
+Current checkpoint: #1048 merged with explicit owner approval as 422f056a;
+its tree exactly matches approved 9bcac196. #1049 retargeted to main and
+normal ancestry merge preserved the entire implementation tree. Fresh exact-head
+CI/review required; #1049 still needs its own merge approval. No activation.
+The following development checkpoints are historical, not current permissions.
+
+Branch feat/db-runtime-lua-repair-r02d4, parent #1048 fa6ef789. DB-only attempt
+locks source identity then input then round/players; retain shares advisory lock.
+Checks payload version/digest/normalized identity before and after locking.
+Exact target only, missing/ambiguous/revision conflicts return explicit outcomes.
+Migration089 receipt commits with correction/event, including nested adapter
+transaction/savepoint. No scheduler, retries/backoff or revision arbitration yet.
+97 focused cases passed, zero skips, two existing warnings; Ruff clean. Actual
+PG proves receipt failure rolls correction/event back, concurrent duplicate
+applies once, revision arrival waits then conflicts, and missing target retries.
+Mutation replacing outer transaction with connection failed assert600==1800;
+restored with patch/cmp before final run. Temporary PG stopped. Read-only review
+identified case-sensitive target lookup inconsistent with parser-preserved map
+case; fixed with lower/btrim lookup and normalized ambiguity tests. Not all round
+writers share the advisory lock,
+so target uniqueness is not protected against a nonparticipating concurrent insert.
+Receipt records completed attempt, not permanent equality of live round data.
+Local commit awaits approved #1041 stack reduction before publishing new paths.
+Final local follow-up: 105 focused cases pass after normalized-map fix and input
+ID validation. Reverting normalized lookup failed both mixed-case target tests
+(missing_round instead of applied; applied instead of ambiguous_round); restored
+with patch/cmp and full rerun. Ruff clean, temporary PostgreSQL stopped again.
+
+Published draft #1049 after #1041 merged. CI caught an omitted round_id
+coverage decision for lua_correction_receipts (two contract failures; 6981
+other cases passed on Python 3.11). Added the justified relinker exemption:
+receipt target is historical transaction provenance, not a repairable link.
+All seven coverage contracts pass; removing the exemption reproduced the
+failure, restored with patch/cmp. No migration or live-data change involved.
+#1042 merged as9ffbcd5e after all22 checks and the required pause. Fix pushed
+at93096648 after normal stack synchronization. Seven contract cases pass and
+runtime-loaded detection/fanout/inventory exclude receipts. Independent review
+found no blocker; wording now includes accepted no-op corrections. New CI pending.
+Size correction: existing-branch pre-push checks the update from the old remote
+tip (three files here), intersected with paths changed vs main; the total stack
+is26files. The hook ran unchanged and was not bypassed. #1043 merge cycle active.
+
 ### R02d3 intake wiring — started 2026-09-18
 
 2026-09-18 latest checkpoint: #1046 merged as 64488de1 through required cycle,
