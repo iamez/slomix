@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) R04a isolates parser's Discord presentation dependency;
+  actual subprocess parity and real embed proof, observed eager-import mutation
+  restored/cmp;151 tests pass. Neutral manager config/logging boundary remains
+  next. No claim of independent ingestion, no service or live database changes.
+
 - (Astra, 2026-09-19) #1055 review follow-up: pre-drain shutting_down health,
   explicit localhost override documentation; real PG signal proof and failed/
   restored mutation, expanded200 passed. Return to R04 configuration discovery.
