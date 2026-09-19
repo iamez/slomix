@@ -81,6 +81,14 @@ with fail-closed cache bypass and multi-worker/in-flight proofs in R03b2.
 
 ### R03a transactional HTTP-cache generation receipts — 2026-09-18
 
+2026-09-19 checkpoint: owner-approved #1050 merged as 2518735f after all22
+checks, resolved reviews and fresh79 isolated-PG/retry/bootstrap/release cases.
+Prescribed cycle ended with zero red checks/threads/behind and unchanged head;
+squash tree equals approved00e061ec. #1051 retargeted main; normal merge77f8ed47
+resolved squash-history conflicts and preserved its entire pre-sync44914a22 tree.
+Descendant sync follows; fresh exact-head CI required. #1051+ not merge-approved.
+No deployment, service operation or live database change. Temporary PG stopped.
+
 Branch feat/db-runtime-cache-receipts-r03a, parent #1050 at 0f0c8e73.
 Migration 091 adds consumer/event receipts and shared DB cache generation.
 Explicit default-OFF primitive serializes on the generation row, consumes bounded
