@@ -6,6 +6,14 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-19 · Logging emission is separate from process setup.**
+  Importing bot.logging_config creates its log directory. Runtime-only callers
+  can use shared.database_logging without that side effect; legacy exports stay
+  compatible. Prove the boundary in a fresh subprocess with forbidden-import
+  hooks, then mutate an import after definitions so a circular-import collection
+  error does not masquerade as an executed boundary guard. Manager startup still
+  needs its own extraction; moving dotenv imports can change log-directory order.
+
 - **2026-09-18 · Verify release registration from the evaluated array.**
   A migration filename appearing somewhere in a shell config does not prove
   membership in MIGRATIONS: even a comment passes a substring assertion.

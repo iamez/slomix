@@ -20,6 +20,24 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04c neutral database logging helpers — 2026-09-19
+
+Independent main-based slice extracts unchanged database/import/performance
+record emitters into shared.database_logging; legacy bot imports re-export
+the same functions. No logging setup, directory creation or bot dependencies
+in the new module. Legacy setup and dotenv ordering remain unchanged.
+25 focused regression cases pass (two existing websockets warnings). An actual
+subprocess emits three records with bot/Discord/dotenv/website imports blocked;
+no root-handler/environment changes or log directory creation. Adding an eager
+bot import at module end fails with `Forbidden dependency: bot`; restored/cmp.
+The first mutation at module start failed collection on circular import instead,
+so it was replaced by the executable guard mutation above. New files lint clean.
+This is a foundation, NOT independent ingestion: manager startup, transport,
+single-writer handoff and failure-matrix proofs still need separate slices.
+#1050 is merged; #1051–#1057 remain unmerged and need individual permission.
+Next: review/CI, then compose neutral manager startup without changing legacy
+dotenv/log-directory ordering. No deployment, service or live DB changes.
+
 ### R02d5 durable bounded Lua repair attempts — 2026-09-18
 
 2026-09-19 checkpoint: owner-approved #1049 merged90eae0f8 through prescribed
