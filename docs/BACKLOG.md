@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) R04a isolates parser's Discord presentation dependency;
+  actual subprocess parity and real embed proof, observed eager-import mutation
+  restored/cmp;151 tests pass. Neutral manager config/logging boundary remains
+  next. No claim of independent ingestion, no service or live database changes.
+
 - (Astra, 2026-09-19) R03d adds independent dev-only cache consumer entrypoint,
   not ingestion. Default OFF; one owned pool/task, signal shutdown, safe JSON
   health. Actual isolated PG subprocess catch-up/blocked shutdown pass; observed

@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-19 · Parser parity needs nonempty players and a controlled clock.**
+  The committed legacy sample_stats_files parse headers but zero player rows.
+  Header parity alone cannot certify R2 player calculations. Supply valid player
+  lines with a known differential and freeze the parser's generated timestamp
+  when comparing subprocess outputs. A blocked-import subprocess proves absence
+  of Discord/config dependencies more strongly than checking imports in pytest.
+
 - **2026-09-19 · A neutral process needs neutral configuration.**
   shared.config reexports BotConfig and its validation requires Discord. The
   cache entrypoint reads explicit environment without dotenv or that validator,
