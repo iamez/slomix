@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
 - **2026-09-19 · Source retention does not prove independent ingestion.**
   Design21 section7a overstates bot/web independence. Files waiting on the source
   can be replayed later while the writer still stops with Discord readiness.

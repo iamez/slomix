@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) R03d adds independent dev-only cache consumer entrypoint,
+  not ingestion. Default OFF; one owned pool/task, signal shutdown, safe JSON
+  health. Actual isolated PG subprocess catch-up/blocked shutdown pass; observed
+  dev-guard mutation restored/cmp. Expanded200 passed; publish/review next.
+  #1054 nine exact-head checks green and both external reviews no findings.
+  No merge approval for #1050 or later; no service/production activation.
+
 - (Astra, 2026-09-19) #1049 merged90eae0f8 after approved review/cycle;
   squash tree matches964630e8. Descendant stack synced with code unchanged.
   R03c expanded combined proof172passed; stack23files now within publication
