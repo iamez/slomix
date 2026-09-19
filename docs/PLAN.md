@@ -51,6 +51,8 @@ failed both rejection cases (DID NOT RAISE ValueError), restored apply_patch/cmp
 Expanded200 passed, zero skips, two existing websockets warnings; Ruff clean.
 Disposable PG stopped after proof; publication/review still pending. Parent #1054
 exact78be6156 has nine successful checks, Codex/CodeRabbit completed no findings.
+First push rejected by credential hook on a dummy unit-test password literal;
+replaced with a generated ephemeral fixture value, without hook bypass.
 Next: finish review/publication; then R04 extraction contract, not activation.
 
 ### R03c caller-owned durable cache polling — 2026-09-18

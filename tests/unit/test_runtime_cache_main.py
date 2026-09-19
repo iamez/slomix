@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import secrets
 import subprocess
 import sys
 from contextlib import asynccontextmanager
@@ -23,7 +24,7 @@ def config_env(monkeypatch):
         monkeypatch.setenv(flag, "true")
     for key, value in dict(BOT_ENVIRONMENT="dev", POSTGRES_HOST="127.0.0.1",
                            POSTGRES_PORT="5432", POSTGRES_DATABASE="test_only",
-                           POSTGRES_USER="test_only", POSTGRES_PASSWORD="test-only").items():
+                           POSTGRES_USER="test_only", POSTGRES_PASSWORD=secrets.token_urlsafe()).items():
         monkeypatch.setenv(key, value)
     monkeypatch.delenv("RUNTIME_CACHE_DB_SCHEMA", raising=False)
 
