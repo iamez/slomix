@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) Original runtime plan reviewed against actual lifecycle.
+  Direction preserved, R04 independence still open; source retention is not
+  independent ingestion. Added three worker fault-state tests (17 unit cases
+  pass). #1049 specifically approved, fresh112 cases pass, prescribed cycle runs.
+  No service/production changes; full audit local-only, canonical summary in PLAN.
+
 - (Astra, 2026-09-18) R03c shared caller-owned polling driver implemented locally.
   169 combined cases pass; actual PG catch-up/restart/closed-connection proof;
   periodic-wait mutation failed/restored/cmp. No startup wiring or activation.

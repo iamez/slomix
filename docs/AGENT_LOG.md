@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-19 · Source retention does not prove independent ingestion.**
+  Design21 section7a overstates bot/web independence. Files waiting on the source
+  can be replayed later while the writer still stops with Discord readiness.
+  Trace startup, cadence and metadata transport before claiming bot/web-off DB
+  continuity; keep that R04 acceptance proof separate from durable cache receipts.
+
 - **2026-09-18 · A closed asyncpg connection may raise InterfaceError.**
   It is not a PostgresError. A polling worker that retries only database-server
   errors can stop permanently on a closed connection. Retry InterfaceError only

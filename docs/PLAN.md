@@ -22,6 +22,23 @@
 
 ### R03c caller-owned durable cache polling — 2026-09-18
 
+2026-09-19 original-plan/Mandelbrot/RCA audit: design21 section7 direction
+preserved (shared domain, separate processes, PostgreSQL, cache first). Its
+section7a claim that readers are already independent is historical overstatement:
+source retention enables replay, but endstats/proximity still await Discord
+readiness and STATS_READY still enters through Discord. R04 must remove those
+writer/transport dependencies. Endstats voice/dead-hour cadence is not the same
+gate as proximity. Shared config is a bot-config reexport whose validate requires
+a Discord token: neutral entrypoint validation is an explicit extraction gate.
+Initial-import events are not final round completion; count by event semantics,
+not all journal rows. Coarse HTTP generation and periodic polling are deliberate
+first steps; per-session invalidation/NOTIFY latency optimization remain later.
+Added three worker edge proofs: acquisition cancellation cleanup, nonclosed
+InterfaceError propagates, unsupported events visible while valid work succeeds.
+17 worker unit cases pass; combined rerun pending. Owner approved #1049 after
+review; fresh112 repair/inbox/override/coverage/bootstrap cases pass and cycle
+is running. No activation. Local full audit kept outside tracked research.
+
 Local branch feat/db-runtime-cache-poll-r03c, parent #1053 at 1e36a993.
 Reusable shared driver only: caller awaits run and owns cancellation/connection
 factory. No service/startup wiring or process activation. Three opt-in flags,

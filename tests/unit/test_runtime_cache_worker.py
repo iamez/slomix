@@ -2,8 +2,10 @@
 
 import asyncio
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import asyncpg
 import pytest
 
 from shared import runtime_cache_worker as module
@@ -174,3 +176,63 @@ async def test_attempt_timeout_releases_then_retries(monkeypatch):
     await asyncio.wait_for(worker.run(acquire, stop), timeout=1)
     assert calls == {"entered": 2, "released": 2}
     assert worker.state.generation == 3
+
+
+async def test_interface_misuse_on_open_connection_is_not_retried(monkeypatch):
+    consume = AsyncMock(side_effect=asyncpg.InterfaceError("operation already in progress"))
+    monkeypatch.setattr(module, "consume_http_cache_events", consume)
+
+    @asynccontextmanager
+    async def acquire():
+        yield SimpleNamespace(is_closed=lambda: False)
+
+    worker = module.RuntimeCacheWorker(poll_seconds=0.001)
+    with pytest.raises(asyncpg.InterfaceError, match="already in progress"):
+        await asyncio.wait_for(worker.run(acquire, asyncio.Event()), timeout=1)
+    consume.assert_awaited_once()
+    assert worker.state.status == "failed"
+
+
+async def test_cancel_during_acquisition_cleans_up_without_consuming(monkeypatch):
+    entered, cleaned = asyncio.Event(), asyncio.Event()
+    consume = AsyncMock()
+    monkeypatch.setattr(module, "consume_http_cache_events", consume)
+
+    @asynccontextmanager
+    async def acquire():
+        try:
+            entered.set()
+            await asyncio.Event().wait()
+            yield object()
+        finally:
+            cleaned.set()
+
+    worker = module.RuntimeCacheWorker()
+    task = asyncio.create_task(worker.run(acquire, asyncio.Event()))
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=1)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert cleaned.is_set()
+    consume.assert_not_awaited()
+    assert worker.state.last_success_monotonic is None
+
+
+async def test_unsupported_pending_stays_visible_after_successful_batch(monkeypatch):
+    consume = AsyncMock(return_value=CacheConsumption("advanced", 1, 9, 2))
+    monkeypatch.setattr(module, "consume_http_cache_events", consume)
+    worker = module.RuntimeCacheWorker(poll_seconds=60)
+    stop = asyncio.Event()
+    task = asyncio.create_task(worker.run(connection, stop))
+    try:
+        async with asyncio.timeout(1):
+            while worker.state.last_success_monotonic is None:
+                await asyncio.sleep(0)
+        assert worker.state.status == "unsupported"
+        assert worker.state.unsupported_pending == 2
+        assert worker.state.generation == 9
+    finally:
+        stop.set()
+        await asyncio.wait_for(task, timeout=1)
