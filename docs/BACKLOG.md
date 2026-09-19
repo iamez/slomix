@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-18) R02d5 explicit durable Lua retry steps implemented in
+  separate worktree /tmp/slomix-astra-runtime-r02d5. Five-attempt bound,
+  persistent due state, quarantine, contention deferral and error visibility;
+  no background process or activation. 47 focused cases pass, mutation observed
+  and restored. Combined regression 256 passed; PG stopped. #1044/#1045 merged.
+  #1050 CodeRabbit findings fixed/resolved; fresh CI pending. #1046 ready/main
+  awaits exact-head checks then prescribed cycle. No live activation.
+
 - (Astra, 2026-09-18) R02d4 DB-only repair+receipt implemented locally:
   shared identity advisory lock, integrity validation, exact target, atomic
   correction/event/receipt, explicit missing/conflict outcomes. 97 cases pass;

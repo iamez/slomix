@@ -20,6 +20,53 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R02d5 durable bounded Lua repair attempts — 2026-09-18
+
+2026-09-19 checkpoint: owner-approved #1049 merged90eae0f8 through prescribed
+cycle, all22checks successful and final0red/0threads/0behind/unchangedSHA.
+Squash tree matches964630e8. Fresh112 actual-PG/repair/inbox/override/coverage/
+bootstrap cases passed before merge. #1050 retargeted main; normal ancestry sync
+preserved the full tree. Fresh checks required; no approval for #1050 inferred.
+No service/deployment changes. Older progress notes below are historical.
+
+Latest checkpoint: #1044 and #1045 merged through prescribed cycles with
+review dispositions and verified squash trees. #1046 is ready/main at a58277f9;
+fresh CI pending. #1050 external Codex found no major issues at 51505e84 and
+all nine branch checks passed there. Subsequent ancestry sync changed no code.
+CodeRabbit's two findings were fixed in 46e9be8e (readable counts and evaluated
+release-array guard), replied to with mutation evidence and resolved. Fresh CI
+is required for the new head. No local merge monitor remains running; test PG
+is stopped and helpers completed. Next: inspect checks/reviews, then #1046 cycle.
+
+Separate branch feat/db-runtime-lua-retry-state-r02d5, parent #1049 e8011a81.
+Migration090 keeps scheduling state separate from retained payload/receipts.
+Explicit gated seeding (100 unseen inputs, no MAX-ID cursor) and one due attempt
+per call. Attempt-row SKIP LOCKED precedes identity/input/round locks; nested
+savepoint rolls correction back before persisting classified retry outcomes.
+Five semantic attempts maximum, durable exponential delay, terminal quarantine;
+lock contention defers without consuming budget. Unexpected errors are durably
+deferred then re-raised, not silently swallowed or allowed to starve later input.
+Global/correction/repair flags required, default OFF. No loop, lease, deployment,
+or source transport guarantee. Caller must not hold an outer transaction; lock
+timeout bounds repair lock waits only, not total call execution.
+47 focused actual-PG/bootstrap/coverage cases passed, zero skips, two existing
+warnings. Outer-transaction mutation failed600!=1800, restored by patch/cmp.
+Read-only review found starvation gap, now fixed and regression-tested; second
+review found no remaining concrete blocker. Combined regression 256 passed,
+zero skips, two existing warnings. Ruff/whitespace clean; disposable PG stopped,
+confirmed by pg_ctl and shutdown log. Next: draft PR/external review/exact-head CI.
+Published draft #1050 with independent review findings fixed and external review
+requested. #1044 merged21eb638a, verified identical approved tree; normal sync
+through #1045/#1046/#1048/#1049/#1050 changed only documentation. #1045 now
+ready/main with fresh CI pending. No service or live-data changes.
+Follow-up: 21 retry-specific cases now pass, including explicit ambiguous/revision
+quarantine and 107-input discovery in 100+7 batches. Code unchanged; temporary PG
+stopped after the expanded proof. CI/external review still pending.
+External review follow-up: fixed result-spacing typos and replaced migration
+substring detection with inspection of the evaluated Bash MIGRATIONS array.
+Commenting out migration 090 while retaining its filename made the guard fail;
+restored with patch/cmp and reran successfully. No runtime implementation change.
+
 ### R02d4 atomic retained-input repair — local implementation 2026-09-18
 
 Current checkpoint: #1048 merged with explicit owner approval as 422f056a;
