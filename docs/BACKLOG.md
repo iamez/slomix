@@ -7,6 +7,23 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) #1049 merged90eae0f8 after approved review/cycle;
+  squash tree matches964630e8. Descendant stack synced with code unchanged.
+  R03c expanded combined proof172passed; stack23files now within publication
+  limit25. Next publish R03c and inspect exact-head external CI/reviews.
+
+- (Astra, 2026-09-19) Original runtime plan reviewed against actual lifecycle.
+  Direction preserved, R04 independence still open; source retention is not
+  independent ingestion. Added three worker fault-state tests (17 unit cases
+  pass). #1049 specifically approved, fresh112 cases pass, prescribed cycle runs.
+  No service/production changes; full audit local-only, canonical summary in PLAN.
+
+- (Astra, 2026-09-18) R03c shared caller-owned polling driver implemented locally.
+  169 combined cases pass; actual PG catch-up/restart/closed-connection proof;
+  periodic-wait mutation failed/restored/cmp. No startup wiring or activation.
+  Publish after approved stack reduction; do not bypass new-branch file limit.
+  #1049 awaits explicit approval; PG stopped, no background monitor remains.
+
 - (Astra, 2026-09-18) #1053 review P1 addressed: migration092 grants website_app
   SELECT only on runtime_cache_generations. Real restricted-role proof and
   observed missing-GRANT mutation restored/cmp; 152 cases pass, PG stopped.
