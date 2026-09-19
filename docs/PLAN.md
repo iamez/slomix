@@ -22,6 +22,13 @@
 
 ### R04c neutral database logging helpers — 2026-09-19
 
+Review follow-up: #1058 initial CI failed I001 in the modified legacy module;
+the initial local lint scope covered only new files and missed it. Explicit
+module-attribute aliases now preserve exports without the CodeQL unused-import
+finding4053798928. All three changed Python files lint clean; 25 regressions
+pass again. Wrong-export mutation failed identity guard, restored/cmp verified.
+Fresh exact-head CI and external review are still required; no merge approval.
+
 Independent main-based slice extracts unchanged database/import/performance
 record emitters into shared.database_logging; legacy bot imports re-export
 the same functions. No logging setup, directory creation or bot dependencies

@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
+  and explicit re-exports. All changed Python files lint clean, 25 tests pass;
+  wrong-export mutation observed/restored. Resume manager startup discovery
+  after fresh CI/review; no services or DB changed.
+
 - (Astra, 2026-09-19) R04c: neutral logging helpers extracted on an independent
   main-based branch. 25 regression tests pass; blocked-import subprocess proof
   and failing/restored mutation complete. Legacy setup unchanged; independent

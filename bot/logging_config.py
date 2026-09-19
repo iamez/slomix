@@ -10,12 +10,13 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from shared.database_logging import (
-    _exc_info_for,
-    log_database_operation as log_database_operation,
-    log_performance_warning as log_performance_warning,
-    log_stats_import as log_stats_import,
-)
+from shared import database_logging
+from shared.database_logging import _exc_info_for
+
+# Preserve the legacy public API without configuring logging in shared helpers.
+log_database_operation = database_logging.log_database_operation
+log_performance_warning = database_logging.log_performance_warning
+log_stats_import = database_logging.log_stats_import
 
 # Create logs directory if it doesn't exist.
 #
