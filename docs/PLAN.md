@@ -20,6 +20,46 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R03b2 committed-generation HTTP namespace — 2026-09-18
+
+Owner scope clarification: all runtime work targets dev only. Production stays
+untouched on its existing release; deployment/restarts are separate approvals.
+Branch feat/db-runtime-http-generation-r03b2, parent #1052 at 30a1cd7f.
+Default OFF behind EVENT_STREAM_ENABLED, RUNTIME_HTTP_CACHE_EVENTS_ENABLED and
+new RUNTIME_HTTP_CACHE_NAMESPACE_ENABLED. Cacheable anonymous GETs verify the
+committed DB generation through the current shared adapter with a one-second
+read timeout. Missing/invalid/unavailable generation bypasses cache get/set and
+returns no-store plus BYPASS-GENERATION. Cancellation propagates. Namespace
+combines generation and existing backend namespace, captured for the request.
+No consumer loop, no live flag changes, no deployment. The dev-only restriction
+is operational scope, not an environment-name guard in the helper.
+
+92 focused unit/actual-PG/HTTP cases passed, zero skips, two existing warnings.
+Real PG rollback/uncommitted generation stays invisible; receipt failure rolls
+generation back; committed consumer effect invalidates two HTTP worker caches.
+Missing schema bypasses a warm cache. Redis startup fallback, old in-flight
+response, absent flags, bad values, cancellation and timeout are covered.
+Pinning namespace to generation0 failed both worker and actual-PG tests with
+HIT != MISS; restored apply_patch/cmp, full 92-case rerun passed. Ruff clean.
+Disposable PG stopped. Review initially requested the PG proof, now included.
+
+Limitations before activation: consumer lag still serves the prior namespace;
+R03c must schedule durable catch-up. HTTP/browser TTL and independent inner
+caches are unchanged. Benchmark cold/hot lookup cost and load, check website
+role grants, and define cache purge on administrative generation reset/restore.
+New middleware log omits DB error text; existing adapter logging is unchanged.
+Next: publish/review R03b2, then lifecycle/polling and explicit health semantics.
+Published draft #1053. Final independent review found no blocker after adding
+the PG proof. Post-push review clarified the reader docstring: it never creates
+schema or writes rows, but the shared adapter owns connection-pool behavior.
+External review found missing website_app SELECT privileges. Added migration092
+(091 unchanged), conditional SELECT-only grant, bootstrap mirror and release
+registration. Actual restricted-role reader succeeds after migration, cannot
+UPDATE generation or read receipts; role creation/grants rolled back in isolated
+PG. Role-absent/idempotent paths covered. Removing GRANT failed with permission
+denied, restored/cmp. Expanded 152-case suite passed, no skips, two existing
+warnings; Ruff clean, PG stopped. No live role or migration changes.
+
 ### R03b1 bounded memory cache prerequisite — 2026-09-18
 
 Branch feat/db-runtime-cache-memory-r03b1, parent #1051 at 112f2524.

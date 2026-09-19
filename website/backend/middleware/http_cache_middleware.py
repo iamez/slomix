@@ -19,12 +19,17 @@ from website.backend.env_utils import getenv_int
 from website.backend.metrics import API_CACHE_HITS, API_CACHE_INVALIDATIONS, API_CACHE_MISSES
 from website.backend.security_utils import routed_path
 from website.backend.services.http_cache_backend import CacheBackend
+from website.backend.services.runtime_cache_generation import (
+    read_http_cache_generation,
+    runtime_http_cache_enabled,
+)
 
 
 class HTTPCacheMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, cache_backend: CacheBackend):
+    def __init__(self, app, cache_backend: CacheBackend, generation_reader=read_http_cache_generation):
         super().__init__(app)
         self.cache_backend = cache_backend
+        self.generation_reader = generation_reader
         self.default_ttl = getenv_int("CACHE_DEFAULT_TTL_SECONDS", 120)
         self.live_ttl = getenv_int("CACHE_LIVE_TTL_SECONDS", 15)
         self.leaderboard_ttl = getenv_int("CACHE_LEADERBOARD_TTL_SECONDS", 300)
@@ -95,7 +100,23 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         cache_key = self._build_cache_key(request)
+        generation = None
+        if runtime_http_cache_enabled():
+            try:
+                generation = await self.generation_reader()
+                if type(generation) is not int or generation < 0:
+                    raise ValueError("Invalid runtime cache generation")
+            except Exception as error:
+                # Do not log database error text: it may include credentials.
+                logger.warning("Runtime cache generation unavailable (%s); bypassing cache", type(error).__name__)
+                response = await call_next(request)
+                response.headers["Cache-Control"] = "no-store"
+                response.headers["X-Cache"] = "BYPASS-GENERATION"
+                return response
         namespace = await self.cache_backend.get_namespace()
+        if generation is not None:
+            # Capture once: late responses must never populate a newer epoch.
+            namespace = f"runtime-v1:{generation}:{namespace}"
         cached = await self.cache_backend.get(namespace, cache_key)
 
         if cached is not None:
