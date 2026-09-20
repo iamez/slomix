@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) Runtime PRs marked ready per owner. Copilot on #1061
+  unable to review due to requester quota. Fixed supported map alphabet finding
+  with24 passing filesystem tests and failed/restored old-regex mutation.
+
 - (Astra, 2026-09-20) While #1059/#1060 await CI/review, independent R04f
   implements atomic no-clobber completed-file publication. No SSH integration
   or services. #1060 plan-staleness finding4056273674 fixed in1f636253 and replied.

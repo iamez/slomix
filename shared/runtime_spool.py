@@ -7,7 +7,7 @@ import uuid
 from collections.abc import Iterable
 from pathlib import Path
 
-_NAME = re.compile(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_-]+-round-[12]\.txt', re.ASCII)
+_NAME = re.compile(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-[12]\.txt', re.ASCII)
 
 
 def publish_stats_file(
@@ -24,7 +24,7 @@ def publish_stats_file(
     retry must inspect it, never delete/overwrite it. Crash leftovers ending in
     .part are not import candidates. No retention or orphan cleanup is done here.
     """
-    if not _NAME.fullmatch(filename):
+    if not _NAME.fullmatch(filename) or '..' in filename:
         raise ValueError('Invalid stats filename')
     if (type(expected_size) is not int or type(max_bytes) is not int
             or not 0 < expected_size <= max_bytes):

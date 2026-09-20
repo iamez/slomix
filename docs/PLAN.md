@@ -22,6 +22,14 @@
 
 ### R04f immutable spool publication — 2026-09-20
 
+Review4056287646: aligned map alphabet with existing transport (dots/pluses),
+retaining explicit rejection of '..'.24 filesystem tests pass; old regex
+mutation fails both supported-name cases, restored/cmp. No service/DB changes.
+Owner requested non-draft review workflow: runtime #1052–#1057/#1059–#1061
+marked ready; research NEVER MERGE drafts untouched. Explicit Copilot request
+on #1061 returned quota-limit message, not a substantive review. Do not count
+COMMENTED status alone as review completion. Continue Codex/CodeRabbit triage.
+
 Independent main-based primitive publishes only completed stats streams into an
 existing private0700 owner directory. Strict basename allowlist; positive bounded
 expected size; temporary0600 .part file; file fsync then same-directory atomic

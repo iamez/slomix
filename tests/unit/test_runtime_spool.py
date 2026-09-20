@@ -58,11 +58,22 @@ def test_existing_destination_is_never_overwritten(tmp_path, symlink):
     assert not list(tmp_path.glob('*.part'))
 
 
-@pytest.mark.parametrize('name', ['../escape.txt', '/absolute.txt', 'file.part', 'x\nround-1.txt'])
+@pytest.mark.parametrize('name', [
+    '../escape.txt', '/absolute.txt', 'file.part', 'x\nround-1.txt',
+    '2026-09-20-120000-map..name-round-1.txt',
+])
 def test_untrusted_names_rejected(tmp_path, name):
     """Only regular stats basenames may become import candidates."""
     with pytest.raises(ValueError, match='filename'):
         publish_stats_file(tmp_path, name, [b'x'], expected_size=1)
+
+
+@pytest.mark.parametrize('map_name', ['map.with.dots', 'map+plus', 'map-with_dash'])
+def test_transport_compatible_map_names(tmp_path, map_name):
+    """Preserve the supported transport map alphabet without accepting traversal."""
+    name = f'2026-09-20-120000-{map_name}-round-1.txt'
+    path = publish_stats_file(tmp_path, name, [b'x'], expected_size=1)
+    assert path.read_bytes() == b'x'
 
 
 def test_directory_permissions_and_symlink_rejected(tmp_path):
