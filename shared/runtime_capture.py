@@ -43,9 +43,9 @@ def capture_stats_stream(
         raise ValueError('Capture chunk size must be between 1 and 65536')
     if expected_sha256 is None:
         raise ValueError('Capture requires an expected SHA-256')
-    deadline = time.monotonic() + total_timeout
 
     def chunks():
+        deadline = time.monotonic() + total_timeout
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:

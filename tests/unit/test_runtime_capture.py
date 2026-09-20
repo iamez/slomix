@@ -1,5 +1,6 @@
 """Real local socket and filesystem proofs for bounded stream publication."""
 
+import os
 import socket
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -66,6 +67,23 @@ def test_expired_deadline_does_not_read(tmp_path, monkeypatch):
         capture(reader, tmp_path, total_timeout=1)
     reader.read.assert_not_called()
     assert list(tmp_path.iterdir()) == []
+
+
+def test_slow_spool_setup_does_not_consume_read_budget(tmp_path, monkeypatch):
+    """Advance the clock during real file opens, before any stream consumption."""
+    clock = [0.0]
+    original_open = os.open
+    def slow_open(*args, **kwargs):
+        fd = original_open(*args, **kwargs)
+        clock[0] = 10.0
+        return fd
+    monkeypatch.setattr(os, 'open', slow_open)
+    monkeypatch.setattr(runtime_capture.time, 'monotonic', lambda: clock[0])
+    reader = SimpleNamespace(read=Mock(side_effect=[b'abc', b'']), settimeout=Mock())
+    path = capture(reader, tmp_path, total_timeout=1)
+    assert path.read_bytes() == b'abc'
+    assert path.stat().st_size == 3
+    assert [call.args[0] for call in reader.settimeout.call_args_list] == [1.0, 1.0]
 
 
 def test_capture_requires_source_digest(tmp_path):

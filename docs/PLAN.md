@@ -22,6 +22,11 @@
 
 ### R04h bounded stream capture — 2026-09-20
 
+Review4056389676/4056392696: start the read deadline inside the generator,
+after spool setup.54 combined tests pass; advancing the clock during real file
+opens preserves the full read budget. Old placement fails Capture deadline
+exceeded, restored/cmp. Ruff clean; no service/DB changes. Fresh CI required.
+
 Contract: caller-owned synchronous reader honours bounded read and settimeout;
 capture sets per-read timeout capped by remaining monotonic deadline, verifies
 size and required source SHA-256, requires EOF, then publishes via R04f/g.
