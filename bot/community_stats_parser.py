@@ -12,8 +12,6 @@ import re
 from datetime import datetime
 from typing import Any
 
-import discord
-
 from bot.core.guid_utils import short_guid
 from bot.core.round_contract import (
     TRUSTED_SCORE_CONFIDENCE,
@@ -281,6 +279,8 @@ class C0RNP0RN3StatsParser:
 
     def create_stylish_round_embed(self, stats_data: dict[str, Any]):
         """Create a compact icon-based Discord embed for round results (matches !last_session style)"""
+        # Parsing is also used by standalone ingestion; only presentation needs Discord.
+        import discord
 
         map_name = stats_data.get('map_name', 'Unknown')
         round_num = stats_data.get('round_num', 1)
