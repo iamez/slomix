@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) Real PG R1/R2 ordering characterized;63 tests pass.
+  Activation gap confirmed: late R1 does not repair already-marked orphan R2.
+  Next priority dependency-aware capture scheduling, not more unrelated refactors.
+
 - (Astra, 2026-09-20) #1059 now includes real-PG neutral R1 import proof:
   canonical parser/writes/event/marker, observer connection, duplicate retry,
   caller pool still usable.60 combined tests pass; missing-event mutation caught.
