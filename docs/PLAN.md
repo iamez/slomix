@@ -41,6 +41,214 @@ branch. Next explicit producer handoff and trusted completion delivery, keeping
 reservation/data/receipt identities aligned. Runtime first, then new-site full
 audit, then owner-approved reversible dev transition; production unchanged.
 
+### R04q offline producer completion prototype — 2026-09-20
+
+Owner continuation accepted offline producer-protocol development, NOT deployment.
+New standalone Lua helper (not wired into SaveStats/game modules) validates a
+bounded chunk payload/name, checks each engine write count, attempts close even
+on write error and notifies only after all writes and close return. Callback
+failure propagates with completed bytes retained. Receipt binds filename/size
+and writer_closed state, not digest/fsync durability or import acknowledgement.
+FS_WRITE is not exclusive creation: caller-reserved fresh immutable name and
+single writer are explicit preconditions. Collision prevention, durable receipt,
+trusted digest and integration in both SaveStats paths remain activation gates.
+ET write-count/void-close semantics checked in local engine source and upstream
+g_lua.c; deployed engine remains unverified. No game/SSH/service/DB changes.
+139 combined tests pass0skips: real Lua interpreter and temp filesystem include
+short/missing-count writes, open/write/close/notify failures and invalid payloads.
+Bytes/stat/hash agree for completed files. Weakening write-count equality emits
+a false receipt and fails short-write proof; restored/cmp. Lua parse/Ruff clean.
+Next durable receipt and collision-safe snapshot design before producer wiring;
+original runtime/new-site audit/reversible dev order remains unchanged.
+
+### R04p remote metadata stability guard — 2026-09-20
+
+Completion investigation: STATS_READY is emitted on intermission (default send
+delay zero), whereas checked-in stats writer delays SaveStats by3000ms and also
+has a ShutdownGame path. Generic Stats saved log has no filename/digest; deprecated
+on_created notifier merely sleeps3s. None establishes durable exact-file closure.
+Executed synthetic local proof: path stat/open-handle fstat and two hashes agree
+while writer remains open, then append changes7bytes to18. No live-server claims.
+Before source-side expansion, ask owner whether to develop an offline producer
+completion protocol (recommended, no deploy) or keep source frozen and continue
+other runtime work with this activation gate unresolved. Do not substitute a
+delay heuristic. Detailed research/proof stay local, no game/Lua/service changes.
+
+Discovery: checked-in c0rnp0rn8.lua SaveStats writes directly to the final stats
+name (FS_WRITE, header/player writes, close); legacy SSHHandler uses sftp.get.
+This is code evidence, not verification of deployed Lua or remote corpus. Neither
+path supplies an immutable snapshot manifest. Keep trusted source identity and
+producer completion as activation gates; equal metadata does not prove closure.
+SSHCaptureTask now requires regular-file mode/size/mtime from lstat before open,
+expected size agreement, and matching handle/path metadata before reading and
+again at EOF BEFORE local publication. Missing metadata fails closed. Paramiko
+stat/lstat semantics checked against official SFTP API documentation.
+127 combined tests pass. Real spawned task/filesystem with offline SFTP seam
+rejects growth, handle mtime drift and named-path drift without publishing final;
+rejects symlink/directory/missing fields/wrong size before opening remote file.
+Mutation disabling EOF verification publishes invalid final and fails all three
+drift cases; restored/cmp. Ruff/whitespace clean. No actual SSH or service changes.
+Limitations: no inode identity, writer lock, same-size/same-mtime detection or
+parent-path symlink protection. Digest and immutable-source preconditions remain.
+#1070 reported checks green, no inline findings at refresh, no merge permission.
+Next: source completion/manifest contract and verified importer composition;
+original runtime-first/new-site audit/reversible dev sequence remains unchanged.
+
+### R04o supervised capture reconciliation — 2026-09-20
+
+Normal ancestry merge combines #1069 with #1064; documentation conflicts retain
+both tracks. capture_ssh_once inspects first, skips match/conflict without spawn,
+otherwise supervises one SSH task and inspects again only after the child is
+reaped. Result preserves observed content and child outcome independently:
+timed_out+match is possible and is not converted into worker success. No source
+ack, deletion, retry loop, import or service activation. Inspection remains a
+byte-bounded local filesystem operation outside the child deadline; no overall
+wall-clock bound is claimed. Caller must keep private spool/snapshot immutable.
+117 combined tests pass. Real child/filesystem with offline SSH seam proves
+retry after corruption/interrupted read succeeds without touching orphan parts;
+retry after close timeout reuses verified final without a new child. Existing
+conflict remains unchanged. Disabling preinspection short-circuit fails two
+tests with Existing content must not spawn capture; restored/cmp, Ruff clean.
+#1069 all reported checks green; no individual merge permission inferred.
+Next trusted source metadata/discovery and integration with verified importer;
+single-writer handoff/dev failure matrix remain gates. New-site audit follows
+runtime completion as originally planned; production remains untouched.
+
+### R04n concrete SSH capture task — 2026-09-20
+
+On #1068: picklable SSHCaptureTask carries only explicit configuration into the
+spawned worker. Opens SFTP/file there, streams through existing size/SHA/EOF
+publication, closes file before session, never deletes/acknowledges the source.
+Absolute canonical remote path and absolute local spool required. Caller still
+supplies trusted immutable source metadata; no remote discovery/hash guarantee.
+97 combined tests pass, including real spawned-task/filesystem proofs with an
+offline connection seam: successful bytes independently checked by sha256sum,
+corruption rejected, blocked read terminated leaving only a .part, blocked close
+terminated with a complete final retained. Both terminated children confirmed
+absent by procfs and active_children. No actual SSH/network proof is claimed.
+Removing the absolute remote path guard fails DID NOT RAISE; restored/cmp.
+Next compose retry reconciliation with supervised capture and verified import;
+trusted source identity, bounded discovery/retention, single-writer handoff and
+owner-approved dev failure matrix remain activation gates. Original sequence:
+runtime first, then new-site/design/security audit, then reversible dev cutover.
+No merge permission inferred, no service/live database/production changes.
+
+### R04m disposable capture worker supervision — 2026-09-20
+
+Contract: explicitly spawned capture-only child, monotonic operation deadline,
+terminate/join then kill/join escalation, result only after reaping. Completed,
+failed and timed_out remain separate; parent cancellation also enters cleanup.
+No DB pool/shared queues/locks/descendant processes in tasks. No task return
+payload or exception text crosses process boundary. Forced stop can skip finally
+and leave partial/complete spool state, so retain source and reconcile on retry.
+Startup counts against deadline but OS startup/uninterruptible kernel waits
+cannot be hard-bounded; cleanup has two bounded grace windows and raises if it
+cannot reap. This is an internal primitive, not SSH activation or service control.
+Prove real child success/failure, blocked task and SIGTERM refusal with procfs
+and active-child checks before integrating a transport-specific task.
+Verified 86 combined worker/SSH/capture/spool tests pass. Actual spawned children
+complete/fail, time out under SIGTERM and escalate after SIGTERM refusal; exit
+codes -15/-9 agree with absence from procfs and active_children. Parent join
+interruption also reaps, unpicklable startup leaves no task child. Two runs of
+timeout proofs measured about 2.00s/2.20s with 2s budget and 0.2s grace (cold
+spawn included). Mutation reporting timeout as completed fails both cases;
+restored/cmp. Ruff/whitespace clean. No remote connection or service/DB changes.
+Python termination semantics verified against official multiprocessing docs;
+do not use this boundary for transactions/shared locks or claim hard OS bounds.
+
+### R04l explicit SSH session ownership — 2026-09-20
+
+On #1063: neutral RuntimeSSHConfig and caller-driven open_runtime_sftp context.
+Explicit host/user/port/absolute key and known-host paths; strict RejectPolicy,
+no agent/key discovery/password or ambient bot config. Close SFTP before SSH,
+including failure during setup/body/cleanup. Caller closes its file handles.
+Phase budgets are NOT an overall deadline: DNS, subsystem negotiation and close
+can block. Hard-bound worker/process design remains an activation gate; do not
+use an executor cancellation as proof of stopping transfer. Paramiko API checked
+against installed signature and https://docs.paramiko.org/en/stable/api/client.html.
+73 combined tests pass: recorded phase failures/cleanup and real offline Paramiko
+unknown-host rejection, no hosts mutation. Initial offline fixture lacked logger
+transport; fixed the fixture only. Cleanup mutation fails, restored/cmp; Ruff
+clean. No real SSH connection/server, credentials, service or DB changes.
+Not an activated source transport or end-to-end network proof.
+
+### R04h bounded stream capture — 2026-09-20
+
+Review4056389676/4056392696: start the read deadline inside the generator,
+after spool setup.54 combined tests pass; advancing the clock during real file
+opens preserves the full read budget. Old placement fails Capture deadline
+exceeded, restored/cmp. Ruff clean; no service/DB changes. Fresh CI required.
+
+Contract: caller-owned synchronous reader honours bounded read and settimeout;
+capture sets per-read timeout capped by remaining monotonic deadline, verifies
+size and required source SHA-256, requires EOF, then publishes via R04f/g.
+No connection/authentication, executor, scheduling or source close ownership.
+Deadline covers stream consumption, not filesystem durability or SSH handshake;
+blocking readers which ignore timeouts cannot be forcibly cancelled here.
+Verified53 combined capture/spool/integrity cases pass. Real local sockets prove
+success and stalled-EOF cleanup. Disabling post-read deadline fails DID NOT RAISE;
+restored/cmp. Ruff clean. No remote SSH, database or service changes. Next integrate
+connection lifecycle and explicit source identity/reconciliation before activation.
+
+### R04i read-only spool reconciliation — 2026-09-20
+
+Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
+name stability checks before conflict. All 49 filesystem tests pass. Restoring
+the early return fails replacement-after-open regression; restored/cmp. Ruff
+clean. Review 4056550740 case-count spacing corrected. Fresh CI required.
+
+Contract: inspect a caller-retained immutable private spool entry against required
+size and SHA-256, returning missing/match/conflict. Missing is only final-entry
+ENOENT; directory/access/I/O failures propagate. Never delete/replace files or
+write DB markers. Open no-follow/nonblocking, require owned regular0600 file,
+bound reads and compare descriptor/name identity before certifying content.
+Match does not certify durability after failed fsync or import completion.
+This is a primitive, not automatic retry policy, full source identity or transport
+activation. Verify actual post-link-fsync failure, conflicts and replacement race.
+Verified 48 combined filesystem cases pass: actual directory-fsync failure still
+permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
+entries rejected and I/O errors propagate. Removing digest and identity guards
+fails 2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
+retry scheduling or make ambiguous durability safe for source deletion.
+
+### R04g capture integrity contract — 2026-09-20
+
+Stacked on #1061: add an optional expected SHA-256 to completed-file publication.
+Validate canonical lowercase 64-hex metadata before consuming the stream; hash
+incrementally and reject mismatch before fsync/link, cleaning only our temporary
+file. Existing destinations remain untouched. Omission preserves the size-only
+API, not integrity assurance. The future transport must supply a trusted digest
+of its immutable source snapshot; hashing received bytes alone proves nothing
+about source identity. No SSH/service/DB activation. All 35 filesystem cases pass,
+including independent sha256sum against the abc known-answer vector. Disabling
+the digest mismatch guard caused DID NOT RAISE on equal-length corruption;
+restored with apply_patch and cmp. Changed Python files pass Ruff. #1061 has all
+reported CI checks green at 28009e87; individual merge permission still required.
+Next: bounded transport, trusted source metadata and explicit retry reconciliation.
+
+### R04f immutable spool publication — 2026-09-20
+
+Review4056287646: aligned map alphabet with existing transport (dots/pluses),
+retaining explicit rejection of '..'.24 filesystem tests pass; old regex
+mutation fails both supported-name cases, restored/cmp. No service/DB changes.
+Owner requested non-draft review workflow: runtime #1052–#1057/#1059–#1061
+marked ready; research NEVER MERGE drafts untouched. Explicit Copilot request
+on #1061 returned quota-limit message, not a substantive review. Do not count
+COMMENTED status alone as review completion. Continue Codex/CodeRabbit triage.
+
+Independent main-based primitive publishes only completed stats streams into an
+existing private0700 owner directory. Strict basename allowlist; positive bounded
+expected size; temporary0600 .part file; file fsync then same-directory atomic
+no-clobber hard link and directory fsync. Existing files/symlinks never replaced.
+Transfer/type/size failures clean temporary file; post-link sync failure can leave
+complete final file visible and must be reconciled, not overwritten. No startup,
+SSH calls, retention cleanup or importer wiring. Caller must bound source chunks
+and timeouts and guarantee immutable remote snapshot: length is not integrity.
+Runtime filesystem proof and size-guard mutation included; next integrate with
+bounded capture and explicit retry/reconciliation, preserving original plan.
+New-site/design/functionality/security audit remains after runtime completion,
+then owner-approved reversible dev transition; production unchanged.
+
 ### R04c neutral database logging helpers — 2026-09-19
 
 239775fc received all22successful checks, Codex no-major-issues review and

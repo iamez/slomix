@@ -13,6 +13,77 @@
   capture/manifest work stays in #1075 chain (24paths), not discarded. Next
   producer handoff/identity delivery, no service or source activation.
 
+- (Astra, 2026-09-20) R04q offline producer helper/proof, not game integration.
+  139 combined tests pass; short-write mutation emits false completion and fails,
+  restored/cmp. Fresh name/single writer required; durable receipt, digest and
+  collisions remain next. Owner allowed local development, no deployment.
+
+- (Astra, 2026-09-20) Source-completion investigation: round notification can
+  precede file write; generic saved log and delayed file-created notifier are not
+  exact durable receipts. Local runtime counterexample confirms equal metadata
+  and hashes while writer remains open (7bytes then18). Next owner decision on
+  offline source-producer protocol vs retaining source freeze; no deployment.
+
+- (Astra, 2026-09-20) R04p adds fail-closed source metadata checks before read
+  and before local publication. 127 combined cases pass; disabling EOF guard
+  fails three real-child/offline-transport proofs, restored/cmp. Checked-in Lua
+  writes final name directly, so stable metadata is NOT proof of producer close.
+  Trusted completion/manifest remains a gate; no remote/service changes.
+
+- (Astra, 2026-09-20) R04o combines #1069/#1064 and keeps observed spool content
+  separate from supervised child outcome. 117 cases pass; actual spawned offline
+  retries recover missing content and skip already-complete/conflicting content.
+  Mutation fails/restores. No orphan deletion or source acknowledgement. Next
+  source metadata/discovery and verified importer integration; no services changed.
+
+- (Astra, 2026-09-20) R04n composes SSH session/file ownership and verified stream
+  publication inside a picklable capture-only task on #1068. 97 combined cases
+  pass; offline transport with actual child/filesystem demonstrates timeout can
+  leave either partial or final content. Guard mutation fails/restores. Next
+  reconciliation composition/source identity; no activation or network claim.
+
+- (Astra, 2026-09-20) R04m adds isolated capture-task deadline supervision on
+  #1067. 86 combined tests pass, real owned children reaped even after SIGTERM
+  refusal/parent interruption; timeout-status mutation fails/restores. #1066
+  latest exact-head CI all green. Next transport-specific task and source identity;
+  no services activated and no DB transactions allowed in force-stopped workers.
+
+- (Astra, 2026-09-20) R04l neutral SSH session ownership on #1063; 73 combined
+  cases pass, strict-policy offline proof and cleanup mutation/restoration done.
+  No real network. End-to-end handshake bound and source identity still block
+  activation. #1066 capture/import integration CI/review remains in parallel.
+
+- (Astra, 2026-09-20) #1063 review: read deadline starts after spool setup;
+  54 cases pass, old-placement mutation fails/restored. Investigating #1060
+  cross-half payload identity before resuming transport/reconciliation.
+
+- (Astra, 2026-09-20) R04h adds caller-owned timed stream capture on #1062.
+  53 combined cases pass; real socket success/timeout cleanup and failing/restored
+  deadline mutation verified. No SSH connections or live activation. Separately
+  #1060 calendar review fixed in742504ee with23 unit/PG cases passing.
+
+- (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
+  49 cases pass, early-return mutation fails/restored. Next compose a single
+  caller-driven retry step; no scheduling, source deletion or service activation.
+
+- (Astra, 2026-09-20) R04i on #1062: read-only spool reconciliation implemented,
+  48 filesystem cases pass with failed/restored digest and identity mutations.
+  No automatic cleanup, overwrite, retry loop, DB or service changes. Next wire
+  explicit reconciliation policy with connection ownership and immutable source.
+
+- (Astra, 2026-09-20) R04g extends #1061 with opt-in source SHA-256 validation
+  before publication. 35 filesystem cases pass; independent sha256sum agrees;
+  disabled mismatch guard fails, restored/cmp. No transport/services activated.
+  Continue bounded capture and reconciliation; new-site audit follows runtime.
+
+- (Astra, 2026-09-20) Runtime PRs marked ready per owner. Copilot on #1061
+  unable to review due to requester quota. Fixed supported map alphabet finding
+  with24 passing filesystem tests and failed/restored old-regex mutation.
+
+- (Astra, 2026-09-20) While #1059/#1060 await CI/review, independent R04f
+  implements atomic no-clobber completed-file publication. No SSH integration
+  or services. #1060 plan-staleness finding4056273674 fixed in1f636253 and replied.
+
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
   wrong-export mutation observed/restored. Resume manager startup discovery

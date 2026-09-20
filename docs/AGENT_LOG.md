@@ -12,6 +12,67 @@ data here.
   when empty. Never infer an empty directory is free. Keep source reservation,
   immutable payload completion and durable receipt delivery as separate states.
 
+- **2026-09-20 · Check ET write counts before signalling writer completion.**
+  Local and upstream g_lua.c return FS_Write byte count, but FCloseFile returns
+  no durability status. Offline prototype rejects short/missing counts and signals
+  only after close returns. This does not establish fsync, exclusive filenames or
+  durable receipts; those need separate protocols before enabling source capture.
+
+- **2026-09-20 · STATS_READY is round timing, not exact-file completion.**
+  Repository webhook defaults to immediate intermission emission; stats writer
+  schedules SaveStats3000ms later and also writes on shutdown. Generic saved log
+  lacks exact file identity. A synthetic open-writer proof retained equal stats
+  and hashes before a later append. Do not promote these hints into completion
+  receipts; require a producer protocol and identify deployed code separately.
+
+- **2026-09-20 · Stable SFTP metadata does not prove producer completion.**
+  Checked-in c0rnp0rn8.lua SaveStats writes final filenames directly. Compare
+  required regular-file mode/size/mtime on handle and path before read and EOF
+  to reject observed drift before publication, but do not infer writer closure
+  or inode identity. Same-size/same-mtime changes can escape metadata checks;
+  trusted digest and immutable-source completion contract are still required.
+
+- **2026-09-20 · Retry result must preserve worker and content separately.**
+  A timed-out SSH close can leave verified final bytes; reconciliation must return
+  both timed_out and match, not report worker success or assume missing content.
+  Inspect before spawning the next attempt, skip match/conflict, leave orphan
+  partials untouched. Local inspection is not covered by the child's deadline.
+
+- **2026-09-20 · Transport close timeout can follow successful publication.**
+  A real disposable child with an offline SSH seam published verified bytes then
+  blocked in file close. Supervisor reaped it as timed_out while final bytes and
+  independent sha256sum remained correct. Treat worker status and spool state as
+  separate facts; retain source and reconcile, never delete/overwrite on failure.
+
+- **2026-09-20 · Forced child termination skips application cleanup.**
+  A disposable spawned capture task can be terminated and reaped after a deadline,
+  including SIGTERM refusal. This boundary is not appropriate for shared locks,
+  queues or DB transactions. Reconcile any partial/final spool state and retain
+  source; child exit is not a durability or import acknowledgement. Supervise
+  only the exact child Process object created by this caller, never services.
+
+- **2026-09-20 · A timeout around a worker is not a stopped transfer.**
+  Legacy SSH listing awaits an executor future under wait_for; cancelling that
+  wait does not forcibly stop its synchronous work. Runtime capture instead
+  requires a timeout-aware reader, caps each read by remaining monotonic budget,
+  and checks again after read before publication. This still does not bound
+  SSH setup or filesystem fsync, or interrupt a reader which ignores timeouts.
+  Preserve these distinctions when integrating the connection owner.
+
+- **2026-09-20 · Content reconciliation is not durability or import completion.**
+  A link can succeed before directory fsync fails. Inspecting size and SHA-256
+  can recognize the existing complete file without overwrite, but cannot prove
+  the directory entry will survive a crash or that PostgreSQL imported it.
+  Keep those acknowledgements separate; never delete the retained source merely
+  because inspection returned match. Operational read errors are not absence.
+
+- **2026-09-20 · A complete-length transfer is not an integrity proof.**
+  Runtime spool publication can now validate an expected SHA-256 before linking
+  the final name. Obtain that expectation from a trusted immutable source
+  snapshot, not from the just-received bytes. Without it the API remains
+  size-only; the optional parameter is not evidence of transport integration.
+  Test equal-length corruption and compare successful output by another tool.
+
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
   Include every changed Python path in local lint. Module-attribute aliases
