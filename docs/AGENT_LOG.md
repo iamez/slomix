@@ -12,6 +12,8 @@ data here.
   cleanup budget, close the reaped process, then propagate the original error.
   Inject interruptions into each join; use fixture cleanup so a failed regression
   does not itself leave a live worker. OS cleanup failure must remain explicit.
+  Capture the supervisor's own exception explicitly: sys.exc_info in finally
+  may instead describe an unrelated exception being handled by its caller.
 
 - **2026-09-20 · Observation time is not child exit time.**
   After a bounded join, a late parent clock read cannot prove an already exited

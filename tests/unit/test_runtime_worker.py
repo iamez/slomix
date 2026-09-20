@@ -142,9 +142,12 @@ def test_cleanup_interruption_still_reaps_child(tmp_path, monkeypatch, interrupt
     monkeypatch.setattr(process_type, 'join', interrupted_join)
     marker = tmp_path / 'child'
     try:
-        with pytest.raises(KeyboardInterrupt) as raised:
-            run_bounded_capture_task(partial(_block, marker, True),
-                                     timeout_seconds=2, shutdown_grace=0.2)
+        try:
+            raise LookupError('caller is already handling an unrelated error')
+        except LookupError:
+            with pytest.raises(KeyboardInterrupt) as raised:
+                run_bounded_capture_task(partial(_block, marker, True),
+                                         timeout_seconds=2, shutdown_grace=0.2)
         assert raised.value is errors[interrupt_calls[0]]
         assert len(calls) >= max(interrupt_calls)
         pid = int(marker.read_text())

@@ -38,6 +38,10 @@ CI outage. Both guards have observed failing mutations followed by restoration.
 Final combined suite: 167 passed, zero skips; 19 focused worker cases include
 runtime cleanup logs. Ruff and whitespace clean; no live-network proof claimed.
 Next remains trusted completion delivery and snapshot sealing; no activation.
+Post-push self-review found sys.exc_info could inherit an unrelated caller-side
+except context and suppress cleanup cancellation. Capture only exceptions raised
+inside this supervisor explicitly. Real-child tests now run inside an unrelated
+except block: old context lookup fails twice with DID NOT RAISE KeyboardInterrupt.
 
 ### R04v review follow-up: child outcome versus observation time — 2026-09-20
 

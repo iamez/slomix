@@ -2,7 +2,6 @@
 
 import math
 import multiprocessing
-import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -79,13 +78,16 @@ def run_bounded_capture_task(
             raise ValueError('Worker deadlines must be finite positive numbers within limits')
     process = multiprocessing.get_context('spawn').Process(target=_execute, args=(task,), daemon=True)
     deadline = time.monotonic() + timeout_seconds
+    original_error = None
     try:
         process.start()
         pid = process.pid
         process.join(max(0.0, deadline - time.monotonic()))
         timed_out = process.is_alive()
+    except BaseException as exc:
+        original_error = exc
+        raise
     finally:
-        original_error = sys.exc_info()[1]
         cleanup_error = None
         if process.pid is not None:
             cleanup_error = _reap(process, shutdown_grace)

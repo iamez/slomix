@@ -10,6 +10,8 @@
 - (Astra, 2026-09-20) #1077 review4057883492/4057883502: defer interruptions
   through bounded child reaping and preserve the original exception; broaden
   serialization-failure test to PicklingError with actual serializer proof.
+  Self-review additionally fixed inherited caller exception context suppressing
+  cancellation; tests reproduce calls from an unrelated except block.
   Runtime delivery/sealing remains next. No merge or service activation.
 
 - (Astra, 2026-09-20) #1077 review4057826087: fix inherited worker false timeout
