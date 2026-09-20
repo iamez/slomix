@@ -20,6 +20,27 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04u exclusive source-generation reservation — 2026-09-20
+
+Independent main-based primitive, not a reset of the runtime plan. Existing
+capture/producer/manifest chain remains in #1059–#1075; latest #1075 checks green
+at966f829d. Its branch touches24paths vs main, so this independently testable
+reservation slice avoids exceeding25path hook without bypass or premature merge.
+reserve_source_generation creates a caller-chosen32lowerhex directory with atomic
+mkdir beneath an existing private0700owner root; child then parent fsync before
+success. Any existing entry refuses reuse, including empty directories/symlinks.
+Post-mkdir failure preserves reservation; no cleanup or automatic new token.
+Caller retains stable root, hands reservation to one producer and prevents later
+rewrites. This is namespace reservation, not a lease, snapshot completion or
+producer wiring. Returned Path is not a capability; no source/DB/service action.
+16 focused actual-filesystem tests pass0skips: sync order/mode, two concurrent
+attempts have one winner, all existing types preserved, failed sync blocks reuse.
+Swallowing FileExistsError fails two existing-directory proofs DID NOT RAISE;
+restored/cmp, Ruff clean. No broader capture tests claimed on this independent
+branch. Next explicit producer handoff and trusted completion delivery, keeping
+reservation/data/receipt identities aligned. Runtime first, then new-site full
+audit, then owner-approved reversible dev transition; production unchanged.
+
 ### R04c neutral database logging helpers — 2026-09-19
 
 239775fc received all22successful checks, Codex no-major-issues review and
