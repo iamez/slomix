@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04v combines reservation and offline Lua prototype; durable
+  exclusive claim precedes one producer dispatch, generation scopes path/callback.
+  Concurrency/error/repeat proofs and two failed/restored mutations complete.
+  Next trusted receipt delivery and snapshot sealing; no game/service activation.
+
 - (Astra, 2026-09-20) R04u independent main-based source generation reservation:
   16 focused cases pass, same-token concurrency has one winner, existing entries
   never reused, sync-error reservations retained. Mutation fails/restores. Prior

@@ -20,6 +20,29 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04v one-shot producer handoff — 2026-09-20
+
+Combine #1076 and #1072 by normal ancestry merge (documentation retained from
+both),21paths vs main. claim_source_generation creates exclusive0600 persistent
+.writer-claimed marker in private reservation; file then directory fsync before
+dispatch. Existing/partial marker refuses reuse. Failures strand generation
+intentionally; no automatic rollback/retry. Trusted dispatcher invokes producer
+once with matching generation. Lua offline helper now requires32lowerhex
+generation, writes gamestats/runtime-snapshots/<generation>/<filename>, returns
+generation alongside unchanged v1 writer_closed receipt. Caller must preserve
+that scope when delivering/storing receipt. No real dispatcher/ET integration.
+Actual Linux filesystem + Lua harness reserve/claim/write/close/notify prove
+generation propagation and later claim refusal across all success/error cases.
+Concurrent claims have one winner; short writes and both sync failures leave
+consumed marker. Removing O_EXCL permits two winners and fails; dropping callback
+generation fails Lua happy path; both restored/cmp. Lua parse/Ruff clean.
+161 combined cases pass0skips on this prerequisite subset; later manifest chain
+#1073–#1075 is not included or claimed tested by this branch.
+This does not authenticate caller, freeze owner writes or deliver durable receipts.
+Next trusted completion delivery and immutable snapshot sealing before activation.
+Original runtime/new-site audit/reversible dev order retained; no services/DB/
+SSH/game/Lua deployment changes. #1076 all reported checks green at refresh.
+
 ### R04u exclusive source-generation reservation — 2026-09-20
 
 Independent main-based primitive, not a reset of the runtime plan. Existing

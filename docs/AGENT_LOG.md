@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Reserve and consume producer dispatch separately.**
+  An existing generation directory is not permission to rerun its writer.
+  Persist an exclusive claim before dispatch and retain it even after failures;
+  interrupted handoff may strand a generation but must not overwrite its data.
+  Keep generation identity on both producer path and completion callback.
+
 - **2026-09-20 · A failed reservation may still own its namespace.**
   Atomic mkdir prevents two same-token writers from reserving one generation.
   A later fsync failure can leave that directory; retry must refuse reuse even
