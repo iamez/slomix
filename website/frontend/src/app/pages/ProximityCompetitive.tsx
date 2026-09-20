@@ -40,8 +40,10 @@ export function ProximityCompetitive({ sessionDate }: { sessionDate: string | nu
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.players.slice(0, 5).map((p) => (
-                  <ProxRow key={p.guid} name={stripEtColors(p.name)} mid={`${figure(p.stagger_kills)} of ${figure(p.kills)} kills · ${figure(Math.round(p.denied_s))} s denied`} val={`${p.stagger_rate.toFixed(1)}%`} />
+                  <ProxRow key={p.guid} name={stripEtColors(p.name)} mid={`${figure(p.stagger_kills)} of ${figure(p.kills)} kills · ${figure(Math.round(p.denied_s))} s denied · avg score ${p.avg_score.toFixed(3)}`} val={`${p.stagger_rate.toFixed(1)}%`} />
                 ))}
+                {/* The bar a kill has to clear to count as a stagger. */}
+                <Meta>a kill counts as a stagger above a score of {d.threshold}</Meta>
                 <Formula text={d.description} />
               </Stack>
             )}
@@ -134,10 +136,13 @@ export function ProximityCompetitive({ sessionDate }: { sessionDate: string | nu
                   <ProxRow
                     key={`${c.guid}:${c.metric}`}
                     name={stripEtColors(c.name)}
-                    mid={`${c.label}${c.prev_best != null ? ` · prev ${c.prev_best} (${c.prev_best_date ?? 'unknown date'})` : ' · first record'}`}
+                    mid={`${c.label}${c.prev_best != null ? ` · prev ${c.prev_best} (${c.prev_best_date ?? 'unknown date'})` : ' · first record'} · ${figure(c.sessions_played)} sessions behind it`}
                     val={String(c.value)}
                   />
                 ))}
+                {d.scope_applied && Object.keys(d.scope_applied).length > 0 && (
+                  <Meta>scope: {Object.entries(d.scope_applied).filter(([, v]) => v != null).map(([k, v]) => `${k.replace(/_/g, ' ')} ${String(v)}`).join(' · ')}</Meta>
+                )}
                 <Formula text={d.scope_note} />
               </Stack>
             )}
@@ -149,12 +154,12 @@ export function ProximityCompetitive({ sessionDate }: { sessionDate: string | nu
         <ProxPanel label="capture roadmap" q={v7} empty="the capability manifest is empty — nothing is reported as captured or planned" isEmpty={(d) => d.capabilities.length === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
-              <Meta>lua draft {d.lua_version_draft} · {d.deployed ? 'deployed' : 'not deployed'}</Meta>
+              <Meta>lua draft {d.lua_version_draft} · {d.deployed ? 'deployed' : 'not deployed'}{d.doc ? ` · ${d.doc}` : ''}</Meta>
               {d.capabilities.map((c) => (
                 <ProxRow
                   key={c.key}
                   name={c.title.toLowerCase()}
-                  mid={c.what}
+                  mid={`${c.what}${c.api ? ` — ${c.api}` : ''}`}
                   val={c.live ? `${figure(c.rows)} rows · ${figure(c.rounds)} rd` : 'not live'}
                 />
               ))}

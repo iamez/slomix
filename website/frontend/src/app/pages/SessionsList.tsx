@@ -191,6 +191,8 @@ export function SessionsList() {
                   <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
                     <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <span className="m">{row.date}</span>{weekday(row) && <> · {weekday(row)}</>} · <span className="m">#{row.session_id}</span>
+                      {/* the sides' tally the list already carried (ledger 2026-09-09) */}
+                      {(row.allies_wins != null || row.axis_wins != null) && <Meta> · allies {figure(row.allies_wins ?? 0)} · axis {figure(row.axis_wins ?? 0)}{(row.draws ?? 0) > 0 ? ` · ${figure(row.draws ?? 0)} drawn` : ''}{row.winning_team != null ? ` · ${row.winning_team === 1 ? 'axis' : row.winning_team === 2 ? 'allies' : 'nobody'} took the night` : ''}</Meta>}
                     </span>
                     <Meta>
                       {row.maps_played.length > 0 ? row.maps_played.map(mapLabel).join(' · ') : 'no maps recorded'}

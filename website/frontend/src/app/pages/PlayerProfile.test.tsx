@@ -5,9 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { PlayerProfilePage } from './PlayerProfile';
 import profile from './__fixtures__/api_players_identifier_profile.json';
+import skillPlayer from './__fixtures__/api_skill_player_identifier.json';
+import matchRounds from './__fixtures__/api_player_player_name_matches.json';
 import skillForm from './__fixtures__/api_skill_player_identifier_form.json';
 import skillHistory from './__fixtures__/api_skill_player_identifier_history.json';
 import memoryCard from './__fixtures__/api_players_identifier_memory_card.json';
+import playerCard from './__fixtures__/api_players_identifier_card.json';
 
 /** The player page against the RECORDED profile (vid, sections=all). */
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
@@ -24,6 +27,13 @@ function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   }
   if (/^\/api\/players\/[^/]+\/memory-card$/.test(path)) {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(memoryCard) } as Response);
+  }
+  // The round-level table's own endpoint (the legacy path), recorded.
+  if (/^\/api\/player\/[^/]+\/matches$/.test(path)) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(matchRounds) } as Response);
+  }
+  if (/^\/api\/players\/[^/]+\/card$/.test(path)) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(playerCard) } as Response);
   }
   return Promise.reject(new Error(`unexpected endpoint: ${path}`));
 }
@@ -321,6 +331,28 @@ describe('PlayerProfilePage', () => {
       vi.restoreAllMocks();
     }
   });
+  it('the player card survives a null rating value and withheld percentiles, and calls a 404 an absence', async () => {
+    const thin = { ...(playerCard as object), small_sample: true, rating: { value: null, tier: null, games_rated: null, trend: null }, percentiles: { dpm: null, kd: null } };
+    const withThin = (input: RequestInfo | URL): Promise<Response> => {
+      if (/^\/api\/players\/[^/]+\/card$/.test(String(input).split('?')[0])) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(thin) } as Response);
+      return fixtureFetch(input);
+    };
+    renderProfile('vid', withThin);
+    await waitFor(() => expect(screen.getByText('not rated yet')).toBeInTheDocument());
+    expect(screen.getByText(/percentiles withheld under 10 rounds/)).toBeInTheDocument();
+    expect(screen.getAllByText('withheld').length).toBe(2);
+  });
+
+  it('the player card reads a 404 as no card, not as a failed request', async () => {
+    const gone = (input: RequestInfo | URL): Promise<Response> => {
+      if (/^\/api\/players\/[^/]+\/card$/.test(String(input).split('?')[0])) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'No recent rounds for player' }) } as Response);
+      return fixtureFetch(input);
+    };
+    renderProfile('vid', gone);
+    await waitFor(() => expect(screen.getByText(/no card — no counted round in the last 90 days/)).toBeInTheDocument());
+    expect(screen.queryByText(/player card: unavailable/)).toBeNull();
+  });
+
 });
 
 // ---------------------------------------------------------------------------
@@ -468,5 +500,140 @@ describe('PlayerProfile — memory card', () => {
       return fixtureFetch(input);
     });
     await waitFor(() => expect(screen.getByText(/memory card: unavailable/i)).toBeInTheDocument());
+  });
+});
+
+/** The three cheap sections the legacy profile drew and the new page never
+ *  requested (ledger 2026-09-08): name history, gathers, combat timing.
+ *  Asserted against the recording, not a paraphrase of it. */
+it('shows the recorded name history, gather record and combat timing', async () => {
+  renderProfile('D8423F90');
+  const rec = profile as unknown as {
+    nick_history: { names: { name: string; uses: number }[] };
+    gather_summary: { wins: number; losses: number; gathers: number };
+    combat_timing: { time_to_kill: { median_ms: number; kills: number }; return_fire: { median_ms: number; coverage_pct: number } };
+  };
+  await waitFor(() => expect(screen.getByText(/known as/)).toBeInTheDocument());
+  const top = rec.nick_history.names[0];
+  expect(screen.getByText(`${top.name} · ${top.uses.toLocaleString('en-US')} rounds`)).toBeInTheDocument();
+  expect(screen.getByText(`${rec.gather_summary.gathers} played`)).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`^${rec.gather_summary.wins}–${rec.gather_summary.losses}`))).toBeInTheDocument();
+  expect(screen.getByText(`${(rec.combat_timing.time_to_kill.median_ms / 1000).toFixed(2)} s`)).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`over ${rec.combat_timing.time_to_kill.kills.toLocaleString('en-US')} kills`))).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`covers ${rec.combat_timing.return_fire.coverage_pct} % of deaths`))).toBeInTheDocument();
+});
+
+/** The lifetime long tail, the duel lists, the weapons' deaths column and the
+ *  post-spawn distance — fields the recording carried and the page dropped
+ *  (ledger 2026-09-08). Asserted against the recorded numbers. */
+it('shows the recorded long tail: objectives, dynamite, sprees, duels, weapon deaths', async () => {
+  renderProfile('D8423F90');
+  const rec = profile as unknown as {
+    lifetime: { objectives_stolen: number; objectives_returned: number; dynamites_planted: number; dynamites_defused: number; best_killing_spree: number; useful_kills: number };
+    relationships: { hardest_opponents: { name: string; win_rate: number }[] };
+    weapons: { weapons: { weapon: string; deaths: number }[]; total_shots: number };
+    movement: { avg_post_spawn_distance: number };
+  };
+  await waitFor(() => expect(screen.getByText('vid')).toBeInTheDocument());
+  const f = (n: number) => n.toLocaleString('en-US');
+  const l = rec.lifetime;
+  expect(screen.getByText(`${f(l.objectives_stolen)} stolen · ${f(l.objectives_returned)} returned`)).toBeInTheDocument();
+  expect(screen.getByText(`${f(l.dynamites_planted)} planted · ${f(l.dynamites_defused)} defused`)).toBeInTheDocument();
+  expect(screen.getByText('best spree')).toBeInTheDocument();
+  expect(screen.getByText(f(l.useful_kills))).toBeInTheDocument();
+  expect(screen.getByText('hardest duels')).toBeInTheDocument();
+  expect(screen.getByText(`${Math.round(rec.relationships.hardest_opponents[0].win_rate * 100)} %`)).toBeInTheDocument();
+  const top = [...rec.weapons.weapons].sort((a, b) => 0)[0];
+  expect(screen.getByText('deaths')).toBeInTheDocument();
+  expect(screen.getAllByText(f(top.deaths)).length).toBeGreaterThan(0);
+  expect(screen.getByText(new RegExp(`of ${f(rec.weapons.total_shots)} shots hit`))).toBeInTheDocument();
+  expect(screen.getByText('after spawn')).toBeInTheDocument();
+});
+
+/** Long tail (ledger 2026-09-09): the identity extras, the sprint clock,
+ *  the weapons' overall accuracy, the per-weapon hit split and the dpm
+ *  baseline behind synergy — every one from the recorded profile, except
+ *  the identity extras, which the recording has as null and an override
+ *  supplies. */
+describe('PlayerProfilePage long tail', () => {
+  it('names the country, the twitch handle and a linked discord when the server has them', async () => {
+    const withExtras = {
+      ...(profile as object),
+      identity: {
+        ...(profile as { identity: object }).identity,
+        country: { flag: '🇸🇮', country: 'Slovenia', locale: 'sl' },
+        twitch: { login: 'vid', url: 'https://twitch.tv/vid' },
+        discord_linked: true,
+      },
+    };
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withExtras) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/🇸🇮 Slovenia/)).toBeInTheDocument());
+    expect(screen.getByText(/discord linked/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'twitch/vid' })).toHaveAttribute('href', 'https://twitch.tv/vid');
+  });
+
+  it('the recording keeps the extras absent, so none of the three prints', async () => {
+    renderProfile('D8423F90');
+    await waitFor(() => expect(screen.getByText('Mp40')).toBeInTheDocument());
+    expect(screen.queryByText(/discord linked/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /twitch/ })).toBeNull();
+  });
+
+  it('reads the sprint clock, the overall accuracy, the per-weapon split and the dpm baseline from the recording', async () => {
+    renderProfile('D8423F90');
+    await waitFor(() => expect(screen.getByText('Mp40')).toBeInTheDocument());
+    const f = profile as {
+      movement: { sprint_sec: number };
+      weapons: { overall_accuracy: number; overall_hs_accuracy: number };
+      hit_regions: { per_weapon: { weapon: string; arms: number; total: number; head_pct: number }[] };
+      relationships: { baseline_dpm: number };
+    };
+    // 41 805 s → 11.6 h, computed from the fixture, not typed in.
+    expect(screen.getByText(`${(f.movement.sprint_sec / 3600).toFixed(1)} h`)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${f.weapons.overall_accuracy.toFixed(1)}% overall, ${f.weapons.overall_hs_accuracy.toFixed(1)}% to the head`))).toBeInTheDocument();
+    const w = f.hit_regions.per_weapon[0];
+    const arms = ((w.arms / w.total) * 100).toFixed(1);
+    expect(screen.getByText(new RegExp(`head ${w.head_pct.toFixed(1)}% · arms ${arms}%`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`against a ${f.relationships.baseline_dpm.toFixed(1)} dpm baseline`))).toBeInTheDocument();
+  });
+});
+
+describe('PlayerProfile — the recent rounds table', () => {
+  it('names the side played and the time on the clock behind every rate', async () => {
+    renderProfile('D8423F90');
+    // The recording's newest round: team 2 on this wire is Allies, 696 s played.
+    await waitFor(() => expect(screen.getAllByText('allies').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('11:36').length).toBeGreaterThan(0);
+    // "played" appears elsewhere on the profile too, so the header is
+    // asserted inside the table it belongs to.
+    const table = screen.getByText('side').closest('table');
+    expect(table).not.toBeNull();
+    expect([...table!.querySelectorAll('th')].map((th) => th.textContent))
+      .toEqual(['date', 'map', 'r', 'side', 'played', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc']);
+  });
+});
+
+describe('PlayerProfile — the rated identity', () => {
+  it('names who the rating was made for and when it was last made', async () => {
+    // The profile fixture's own guid is not the one the skill endpoint was
+    // recorded for, so the rated NAME is the thing worth printing: it is
+    // how a reader sees the rating belongs to this player at all.
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/skill\/player\/[^/]+$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(skillPlayer) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    const sp = skillPlayer as { player: { display_name: string } };
+    await waitFor(() => expect(
+      screen.getByText(new RegExp(`rated as ${sp.player.display_name}, last 2026-08-30 \\d\\d:\\d\\d UTC`)),
+    ).toBeInTheDocument());
   });
 });

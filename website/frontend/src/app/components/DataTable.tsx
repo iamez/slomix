@@ -17,6 +17,7 @@
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { Lbl, lblStyle } from './ui';
+import { csvFileName, downloadCsv, toCsv } from '../lib/csv';
 
 export interface DataColumn<Row> {
   key: string;
@@ -52,6 +53,10 @@ export interface DataTableProps<Row> {
   /** The row's name for the expander's aria-label — needed when the first
    *  cell renders a node (a Link), which the label cannot read. */
   expandName?: (row: Row) => string;
+  /** Offer the rows as a CSV. Off by default: a table of two figures is not
+   *  worth a download, and the caller knows which its readers would take
+   *  away. The file holds what is ON SCREEN, in the order on screen. */
+  exportable?: boolean;
 }
 
 const DASH = '—';
@@ -66,7 +71,7 @@ function compare(a: number | string | null, b: number | string | null): number {
 }
 
 export function DataTable<Row>({
-  columns, rows, rowKey, defaultSort, renderExpanded, expandLabel = 'more', minWidth, parity, label, expandName,
+  columns, rows, rowKey, defaultSort, renderExpanded, expandLabel = 'more', minWidth, parity, label, expandName, exportable,
 }: DataTableProps<Row>) {
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(defaultSort ?? null);
   const [open, setOpen] = useState<string | null>(null);
@@ -95,13 +100,54 @@ export function DataTable<Row>({
   };
 
   const template = columns.map((c) => (c.width != null ? `${c.width}px` : 'minmax(0, 1fr)')).join(' ');
+  // A table wider than its panel scrolls sideways; the first column (the
+  // name) stays put so a phone reading the 22-column players table still
+  // knows whose row it is at column 18 (visitor review 2026-09-07, mobile).
+  const stickyFirst = minWidth != null
+    ? ({ position: 'sticky', left: 0, zIndex: 1, background: 'var(--color-ink-950)', paddingRight: 'var(--space-2)' } as const)
+    : undefined;
   const gridStyle = { display: 'grid', gridTemplateColumns: template, columnGap: 'var(--space-3)', alignItems: 'center' } as const;
+
+  // The export reads the SORTED rows and the same accessors the cells use,
+  // so the file and the screen cannot disagree. A column whose format
+  // returns a node (a Link, a chip) exports its sort value instead — the
+  // number behind the ornament — and nothing at all when it has neither.
+  const exportRows = () => {
+    const header = columns.map((c) => (typeof c.label === 'string' ? c.label : c.key));
+    const body = sorted.map((row) => columns.map((c) => {
+      if (c.sortValue) return c.sortValue(row);
+      const shown = c.format?.(row);
+      return typeof shown === 'string' || typeof shown === 'number' ? shown : null;
+    }));
+    downloadCsv(csvFileName(label ?? parity ?? 'table'), toCsv(header, body));
+  };
 
   return (
     <div data-parity={parity} role="region" aria-label={label} style={{ overflowX: 'auto' }}>
-      <div style={{ minWidth: minWidth ?? undefined }}>
-        <div className="row" style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
-          {columns.map((col) => {
+      {exportable && sorted.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={exportRows}
+            className="m"
+            style={{
+              background: 'none', border: '1px solid var(--color-rule-700)', cursor: 'pointer',
+              color: 'var(--color-text-400)', fontSize: 'var(--fs-caption)', letterSpacing: '0.1em',
+              textTransform: 'uppercase', padding: 'var(--space-1) var(--space-2)',
+            }}
+          >
+            csv ↓
+          </button>
+        </div>
+      )}
+      {/* The layout is a CSS grid, so the table semantics are declared rather
+        * than inherited from <table>: without them a screen reader reads 22
+        * columns of loose text with no header to tie a number to (visitor
+        * review 2026-09-07, a11y). aria-sort belongs on the columnheader,
+        * not on the button inside it — a button has no sort state. */}
+      <div role="table" aria-label={label} aria-rowcount={sorted.length + 1} aria-colcount={columns.length} style={{ minWidth: minWidth ?? undefined }}>
+        <div className="row" role="row" aria-rowindex={1} style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
+          {columns.map((col, i) => {
             const activeDir = sort != null && sort.key === col.key ? sort.dir : null;
             const active = activeDir != null;
             const sortable = col.sortValue != null;
@@ -110,38 +156,55 @@ export function DataTable<Row>({
               textAlign: col.align ?? 'right',
               background: 'none', border: 'none', padding: 0, cursor: sortable ? 'pointer' : 'default',
               color: active ? 'var(--color-accent)' : lblStyle.color,
+              ...(i === 0 ? stickyFirst : undefined),
             } as const;
-            return sortable ? (
-              <button
+            // The columnheader WRAPS the control; putting the role on the
+            // button itself would take its button role away, and the header
+            // would stop being clickable to anything that reads roles.
+            return (
+              <span
                 key={col.key}
-                type="button"
-                title={col.title}
-                aria-sort={activeDir == null ? 'none' : activeDir === 'asc' ? 'ascending' : 'descending'}
-                onClick={() => { toggleSort(col); }}
-                style={style}
+                role="columnheader"
+                aria-colindex={i + 1}
+                aria-sort={sortable ? (activeDir == null ? 'none' : activeDir === 'asc' ? 'ascending' : 'descending') : undefined}
+                style={{ ...style, display: 'block', minWidth: 0 }}
               >
-                {col.label}{activeDir == null ? '' : activeDir === 'asc' ? ' ▴' : ' ▾'}
-              </button>
-            ) : (
-              <span key={col.key} title={col.title} style={style}>{col.label}</span>
+                {sortable ? (
+                  <button
+                    type="button"
+                    title={col.title}
+                    onClick={() => { toggleSort(col); }}
+                    style={{ ...style, display: 'inline', width: '100%' }}
+                  >
+                    {col.label}{activeDir == null ? '' : activeDir === 'asc' ? ' ▴' : ' ▾'}
+                  </button>
+                ) : (
+                  <span title={col.title}>{col.label}</span>
+                )}
+              </span>
             );
           })}
         </div>
-        <div className="rows">
-          {sorted.map((row) => {
+        {/* rowgroup, and the per-row wrapper is presentational: an element
+          * with no role between the table and its rows breaks the tree, so
+          * the wrapper that pairs a row with its expanded block is skipped. */}
+        <div className="rows" role="rowgroup">
+          {sorted.map((row, rowIndex) => {
             const key = rowKey(row);
             const isOpen = open === key;
             return (
-              <div key={key}>
-                <div className="row" style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
+              <div key={key} role="none">
+                <div className="row" role="row" aria-rowindex={rowIndex + 2} style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
                   {columns.map((col, i) => {
                     const content = col.format ? col.format(row) : col.sortValue ? col.sortValue(row) : null;
                     const shown = content == null || content === '' ? DASH : content;
                     return (
                       <span
                         key={col.key}
+                        role="cell"
+                        aria-colindex={i + 1}
                         className={col.align === 'left' ? undefined : 'm'}
-                        style={{ textAlign: col.align ?? 'right', fontSize: 'var(--fs-small)', color: col.color?.(row), minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        style={{ textAlign: col.align ?? 'right', fontSize: 'var(--fs-small)', color: col.color?.(row), minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(i === 0 ? stickyFirst : undefined) }}
                       >
                         {shown}
                         {i === 0 && renderExpanded && (

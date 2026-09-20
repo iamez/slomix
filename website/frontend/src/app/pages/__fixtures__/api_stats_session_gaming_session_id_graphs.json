@@ -1,0 +1,848 @@
+{
+ "gaming_session_id": 152,
+ "date": "2026-08-23",
+ "gate": "counts_toward_totals",
+ "rounds_counted": 10,
+ "rounds": [
+  {
+   "round_id": 11308,
+   "label": "adlernes R1",
+   "map_name": "etl_adlernest",
+   "round_number": 1
+  },
+  {
+   "round_id": 11309,
+   "label": "adlernes R2",
+   "map_name": "etl_adlernest",
+   "round_number": 2
+  },
+  {
+   "round_id": 11311,
+   "label": "supply R1",
+   "map_name": "supply",
+   "round_number": 1
+  },
+  {
+   "round_id": 11312,
+   "label": "supply R2",
+   "map_name": "supply",
+   "round_number": 2
+  },
+  {
+   "round_id": 11314,
+   "label": "delivery R1",
+   "map_name": "etl_sp_delivery",
+   "round_number": 1
+  },
+  {
+   "round_id": 11315,
+   "label": "delivery R2",
+   "map_name": "etl_sp_delivery",
+   "round_number": 2
+  },
+  {
+   "round_id": 11317,
+   "label": "escape2 R1",
+   "map_name": "te_escape2",
+   "round_number": 1
+  },
+  {
+   "round_id": 11318,
+   "label": "escape2 R2",
+   "map_name": "te_escape2",
+   "round_number": 2
+  },
+  {
+   "round_id": 11320,
+   "label": "escape2 R1",
+   "map_name": "te_escape2",
+   "round_number": 1
+  },
+  {
+   "round_id": 11321,
+   "label": "escape2 R2",
+   "map_name": "te_escape2",
+   "round_number": 2
+  }
+ ],
+ "player_count": 7,
+ "players": [
+  {
+   "name": "SuperBoyy",
+   "guid": "EDBB5DA9",
+   "combat_offense": {
+    "kills": 55,
+    "deaths": 28,
+    "damage_given": 10599,
+    "kd": 1.96,
+    "dpm": 451.3
+   },
+   "combat_defense": {
+    "revives": 8,
+    "kill_assists": 8,
+    "gibs": 21,
+    "headshots": 39,
+    "useful_kills": 25,
+    "full_selfkills": 2,
+    "times_revived": 5,
+    "team_kills": 0,
+    "self_kills": 17
+   },
+   "advanced_metrics": {
+    "frag_potential": 564.3,
+    "damage_efficiency": 1.6,
+    "survival_rate": 80.4,
+    "time_denied": 17.8,
+    "time_denied_raw_seconds": 419,
+    "time_dead_raw_seconds": 281,
+    "useful_kills_per_round": 6.25,
+    "deaths_per_round": 7.0,
+    "rounds_played": 4,
+    "aggression_score": 86.7,
+    "pressure_score": 95.8,
+    "risk_load": 50.0,
+    "empty_death_burden": 0.0,
+    "discipline_score": 100.0,
+    "dead_time_share": 19.6
+   },
+   "playstyle": {
+    "aggression": 86.7,
+    "precision": 97.92287254333496,
+    "survivability": 80.4,
+    "support": 27.25,
+    "lethality": 58.92857142857142,
+    "brutality": 56.69551282051282,
+    "consistency": 52.69175347325953,
+    "efficiency": 39.548507462686565
+   },
+   "dpm_timeline": [
+    {
+     "label": "escape2 R1",
+     "dpm": 440.3,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 497.5,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 448.6,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 380.7,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    }
+   ]
+  },
+  {
+   "name": "vid",
+   "guid": "D8423F90",
+   "combat_offense": {
+    "kills": 92,
+    "deaths": 66,
+    "damage_given": 17032,
+    "kd": 1.39,
+    "dpm": 367.9
+   },
+   "combat_defense": {
+    "revives": 15,
+    "kill_assists": 18,
+    "gibs": 27,
+    "headshots": 111,
+    "useful_kills": 40,
+    "full_selfkills": 1,
+    "times_revived": 7,
+    "team_kills": 1,
+    "self_kills": 28
+   },
+   "advanced_metrics": {
+    "frag_potential": 459.1,
+    "damage_efficiency": 1.1,
+    "survival_rate": 79.9,
+    "time_denied": 17.1,
+    "time_denied_raw_seconds": 793,
+    "time_dead_raw_seconds": 552,
+    "useful_kills_per_round": 6.67,
+    "deaths_per_round": 11.0,
+    "rounds_played": 6,
+    "aggression_score": 84.6,
+    "pressure_score": 87.5,
+    "risk_load": 73.3,
+    "empty_death_burden": 0.0,
+    "discipline_score": 73.4,
+    "dead_time_share": 20.1
+   },
+   "playstyle": {
+    "aggression": 84.6,
+    "precision": 91.27439244588216,
+    "survivability": 79.9,
+    "support": 35.0,
+    "lethality": 41.81818181818182,
+    "brutality": 53.00913908717283,
+    "consistency": 53.777276825246126,
+    "efficiency": 28.70819848975189
+   },
+   "dpm_timeline": [
+    {
+     "label": "adlernes R1",
+     "dpm": 413.0,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "adlernes R2",
+     "dpm": 547.5,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "supply R1",
+     "dpm": 382.5,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
+    },
+    {
+     "label": "supply R2",
+     "dpm": 371.2,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
+    },
+    {
+     "label": "delivery R1",
+     "dpm": 333.7,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "delivery R2",
+     "dpm": 327.8,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
+    }
+   ]
+  },
+  {
+   "name": "#smetarski.proner",
+   "guid": "1C747DF1",
+   "combat_offense": {
+    "kills": 126,
+    "deaths": 95,
+    "damage_given": 22413,
+    "kd": 1.33,
+    "dpm": 320.6
+   },
+   "combat_defense": {
+    "revives": 29,
+    "kill_assists": 29,
+    "gibs": 25,
+    "headshots": 133,
+    "useful_kills": 50,
+    "full_selfkills": 0,
+    "times_revived": 23,
+    "team_kills": 3,
+    "self_kills": 35
+   },
+   "advanced_metrics": {
+    "frag_potential": 398.8,
+    "damage_efficiency": 1.2,
+    "survival_rate": 80.3,
+    "time_denied": 15.2,
+    "time_denied_raw_seconds": 1064,
+    "time_dead_raw_seconds": 821,
+    "useful_kills_per_round": 5.0,
+    "deaths_per_round": 9.5,
+    "rounds_played": 10,
+    "aggression_score": 56.7,
+    "pressure_score": 66.7,
+    "risk_load": 16.7,
+    "empty_death_burden": 0.0,
+    "discipline_score": 86.6,
+    "dead_time_share": 19.7
+   },
+   "playstyle": {
+    "aggression": 56.7,
+    "precision": 81.10530471801758,
+    "survivability": 80.3,
+    "support": 42.55,
+    "lethality": 39.78947368421052,
+    "brutality": 51.86575687185444,
+    "consistency": 60.63778696562354,
+    "efficiency": 30.320616883116884
+   },
+   "dpm_timeline": [
+    {
+     "label": "adlernes R1",
+     "dpm": 256.5,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "adlernes R2",
+     "dpm": 401.0,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "supply R1",
+     "dpm": 260.0,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
+    },
+    {
+     "label": "supply R2",
+     "dpm": 404.2,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
+    },
+    {
+     "label": "delivery R1",
+     "dpm": 320.2,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "delivery R2",
+     "dpm": 336.5,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 219.3,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 316.4,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 319.4,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 419.4,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    }
+   ]
+  },
+  {
+   "name": "carniee",
+   "guid": "EF561EAA",
+   "combat_offense": {
+    "kills": 90,
+    "deaths": 107,
+    "damage_given": 18720,
+    "kd": 0.84,
+    "dpm": 268.3
+   },
+   "combat_defense": {
+    "revives": 12,
+    "kill_assists": 27,
+    "gibs": 27,
+    "headshots": 140,
+    "useful_kills": 40,
+    "full_selfkills": 1,
+    "times_revived": 21,
+    "team_kills": 0,
+    "self_kills": 25
+   },
+   "advanced_metrics": {
+    "frag_potential": 367.2,
+    "damage_efficiency": 0.9,
+    "survival_rate": 73.4,
+    "time_denied": 10.7,
+    "time_denied_raw_seconds": 746,
+    "time_dead_raw_seconds": 1128,
+    "useful_kills_per_round": 4.0,
+    "deaths_per_round": 10.7,
+    "rounds_played": 10,
+    "aggression_score": 25.7,
+    "pressure_score": 41.7,
+    "risk_load": 90.0,
+    "empty_death_burden": 51.3,
+    "discipline_score": 43.9,
+    "dead_time_share": 26.6
+   },
+   "playstyle": {
+    "aggression": 25.7,
+    "precision": 64.52106399536133,
+    "survivability": 73.4,
+    "support": 21.75,
+    "lethality": 25.233644859813083,
+    "brutality": 53.52991452991453,
+    "consistency": 57.92986475161319,
+    "efficiency": 23.209680618924818
+   },
+   "dpm_timeline": [
+    {
+     "label": "adlernes R1",
+     "dpm": 111.5,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "adlernes R2",
+     "dpm": 223.5,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "supply R1",
+     "dpm": 263.9,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
+    },
+    {
+     "label": "supply R2",
+     "dpm": 318.8,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
+    },
+    {
+     "label": "delivery R1",
+     "dpm": 292.1,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "delivery R2",
+     "dpm": 210.3,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 241.4,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 283.8,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 268.6,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 284.6,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    }
+   ]
+  },
+  {
+   "name": "wiseBoy",
+   "guid": "FDA127DF",
+   "combat_offense": {
+    "kills": 82,
+    "deaths": 103,
+    "damage_given": 18222,
+    "kd": 0.8,
+    "dpm": 261.1
+   },
+   "combat_defense": {
+    "revives": 24,
+    "kill_assists": 32,
+    "gibs": 31,
+    "headshots": 118,
+    "useful_kills": 33,
+    "full_selfkills": 0,
+    "times_revived": 21,
+    "team_kills": 2,
+    "self_kills": 34
+   },
+   "advanced_metrics": {
+    "frag_potential": 335.1,
+    "damage_efficiency": 0.9,
+    "survival_rate": 78.1,
+    "time_denied": 10.1,
+    "time_denied_raw_seconds": 708,
+    "time_dead_raw_seconds": 924,
+    "useful_kills_per_round": 3.3,
+    "deaths_per_round": 10.3,
+    "rounds_played": 10,
+    "aggression_score": 19.0,
+    "pressure_score": 25.0,
+    "risk_load": 50.0,
+    "empty_death_burden": 22.1,
+    "discipline_score": 49.7,
+    "dead_time_share": 21.9
+   },
+   "playstyle": {
+    "aggression": 19.0,
+    "precision": 66.11066284179688,
+    "survivability": 78.1,
+    "support": 40.8,
+    "lethality": 23.883495145631066,
+    "brutality": 53.531749369217835,
+    "consistency": 59.27774778175492,
+    "efficiency": 23.71050850986311
+   },
+   "dpm_timeline": [
+    {
+     "label": "adlernes R1",
+     "dpm": 162.0,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "adlernes R2",
+     "dpm": 292.0,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "supply R1",
+     "dpm": 268.8,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
+    },
+    {
+     "label": "supply R2",
+     "dpm": 232.9,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
+    },
+    {
+     "label": "delivery R1",
+     "dpm": 253.9,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "delivery R2",
+     "dpm": 255.9,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 256.5,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 355.1,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 297.4,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 150.8,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    }
+   ]
+  },
+  {
+   "name": "JaKaZc",
+   "guid": "9F2B3930",
+   "combat_offense": {
+    "kills": 92,
+    "deaths": 103,
+    "damage_given": 16214,
+    "kd": 0.89,
+    "dpm": 232.3
+   },
+   "combat_defense": {
+    "revives": 11,
+    "kill_assists": 23,
+    "gibs": 32,
+    "headshots": 92,
+    "useful_kills": 40,
+    "full_selfkills": 1,
+    "times_revived": 19,
+    "team_kills": 0,
+    "self_kills": 34
+   },
+   "advanced_metrics": {
+    "frag_potential": 298.1,
+    "damage_efficiency": 0.8,
+    "survival_rate": 77.8,
+    "time_denied": 13.5,
+    "time_denied_raw_seconds": 940,
+    "time_dead_raw_seconds": 924,
+    "useful_kills_per_round": 4.0,
+    "deaths_per_round": 10.3,
+    "rounds_played": 10,
+    "aggression_score": 24.6,
+    "pressure_score": 29.2,
+    "risk_load": 56.7,
+    "empty_death_burden": 20.2,
+    "discipline_score": 48.4,
+    "dead_time_share": 22.2
+   },
+   "playstyle": {
+    "aggression": 24.6,
+    "precision": 66.61933517456055,
+    "survivability": 77.8,
+    "support": 20.95,
+    "lethality": 26.79611650485437,
+    "brutality": 54.951168072680076,
+    "consistency": 53.88926125747884,
+    "efficiency": 19.72314130011678
+   },
+   "dpm_timeline": [
+    {
+     "label": "adlernes R1",
+     "dpm": 349.5,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "adlernes R2",
+     "dpm": 133.0,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "supply R1",
+     "dpm": 290.8,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
+    },
+    {
+     "label": "supply R2",
+     "dpm": 205.6,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
+    },
+    {
+     "label": "delivery R1",
+     "dpm": 223.9,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "delivery R2",
+     "dpm": 244.8,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 225.1,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 153.6,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 264.9,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 225.2,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    }
+   ]
+  },
+  {
+   "name": "kanii",
+   "guid": "1EDBF300",
+   "combat_offense": {
+    "kills": 66,
+    "deaths": 101,
+    "damage_given": 14012,
+    "kd": 0.65,
+    "dpm": 200.8
+   },
+   "combat_defense": {
+    "revives": 13,
+    "kill_assists": 24,
+    "gibs": 24,
+    "headshots": 79,
+    "useful_kills": 29,
+    "full_selfkills": 0,
+    "times_revived": 16,
+    "team_kills": 1,
+    "self_kills": 27
+   },
+   "advanced_metrics": {
+    "frag_potential": 273.2,
+    "damage_efficiency": 0.8,
+    "survival_rate": 73.6,
+    "time_denied": 7.6,
+    "time_denied_raw_seconds": 529,
+    "time_dead_raw_seconds": 1110,
+    "useful_kills_per_round": 2.9,
+    "deaths_per_round": 10.1,
+    "rounds_played": 10,
+    "aggression_score": 49.0,
+    "pressure_score": 50.0,
+    "risk_load": 53.3,
+    "empty_death_burden": 3.3,
+    "discipline_score": 44.4,
+    "dead_time_share": 26.4
+   },
+   "playstyle": {
+    "aggression": 49.0,
+    "precision": 63.919202423095705,
+    "survivability": 73.6,
+    "support": 32.0,
+    "lethality": 19.603960396039604,
+    "brutality": 55.0,
+    "consistency": 57.608246424863204,
+    "efficiency": 20.282554571246596
+   },
+   "dpm_timeline": [
+    {
+     "label": "adlernes R1",
+     "dpm": 100.5,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "adlernes R2",
+     "dpm": 314.0,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
+    },
+    {
+     "label": "supply R1",
+     "dpm": 167.1,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
+    },
+    {
+     "label": "supply R2",
+     "dpm": 205.6,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
+    },
+    {
+     "label": "delivery R1",
+     "dpm": 183.0,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "delivery R2",
+     "dpm": 208.3,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 193.2,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 215.1,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R1",
+     "dpm": 296.6,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
+    },
+    {
+     "label": "escape2 R2",
+     "dpm": 139.2,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
+    }
+   ]
+  }
+ ]
+}

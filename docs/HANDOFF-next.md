@@ -1,6 +1,12 @@
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
-> **Current handoff override — 2026-09-07, Astra.** Start with the "Astra
+> **Consolidation checkpoint — 2026-09-20.** Current authority is docs/PLAN.md;
+> retain both historical handoff tracks below, not their old queue as current.
+> #1076 merged; #1057/#962 are conditionally approved. Runtime resumes at #1077
+> completion delivery/sealing after consolidation, then new-site audit and an
+> owner-approved reversible DEV transition. No deployment follows from merge.
+>
+> **Historical handoff override — 2026-09-07, Astra.** Start with the "Astra
 > execution ledger" in `docs/PLAN.md`; the sections below are a historical
 > snapshot, not the current queue. #955 and #912 are merged at `4f653c01`;
 > #961 merged as `28662f04`; its Claude handoff evidence is now included.
@@ -14,6 +20,12 @@
 > Runtime starts with `round_stats_imported` in the canonical PG transaction,
 > NOT `round_ended` in the Discord mixin. Stability before development;
 > 1–2 week observation before activation, not before development.
+
+> **10. 9. 2026: novejša predaja je `docs/HANDOFF-fable-2026-09-10.md`** (9. 9. je posnetek tistega večera)
+>
+> **9. 9. 2026: `docs/HANDOFF-fable-2026-09-09.md`** (owner odsoten ~3 mesece; spider web
+> zaključen, merilnik podatkovnih točk 583 → 238, bot brez reakcij na Supove slike). Začni tam; ta datoteka ostaja
+> kot posnetek stanja 6. 9. in pravil.
 
 Vstopna točka za avtonomnega agenta. Vir resnice za načrt je `docs/PLAN.md`,
 pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
