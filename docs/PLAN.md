@@ -18,6 +18,41 @@
 
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
+## Proga: Astra watchdog delivery acknowledgement
+
+Consolidation update 2026-09-20: refreshed current main with a normal merge,
+retaining both documentation tracks.42 focused watchdog/delivery/plan tests pass;
+Ruff clean. #962 remains a separate disk-formula change; combine and rerun after
+its approved merge. Only #1076/#1057/#962 currently have explicit merge permission;
+#965 preparation is authorized, its merge is not. Original runtime resumes at
+#1077 c015270b completion delivery/snapshot sealing, then new-site audit and
+owner-approved reversible DEV cutover. No services or real webhooks activated.
+
+Zadnja posodobitev: 2026-09-08 (Astra). Implemented, locally verified; not deployed.
+Contract: observations and failure streaks persist before delivery; notification
+dedup and heartbeat acknowledgements advance only after successful delivery.
+Failed delivery retries next cycle; dry-run writes neither state nor report.
+Proof: 40 targeted tests pass; targeted Ruff and diff whitespace checks pass.
+Real run/send_webhook with an in-process HTTP transport stub: failed alert,
+successful retry, failed recovery, successful retry, then a silent healthy cycle
+(four POST attempts, no network). Mutation acknowledging a failed POST was seen
+failing (`last_alert_at` unexpectedly nonzero), restored and checked with `cmp`.
+Dry-run tests cover existing/missing output paths and reject save attempts.
+Discord batches are capped at ten and acknowledged separately; partial failure
+retries only the undelivered remainder. Pending notifications follow the latest
+measurement: resolved undelivered failures are superseded, not replayed as history.
+Next: root review, then branch/PR flow. Real Discord delivery requires owner-approved
+test; existing legacy timestamps cannot retroactively prove past delivery. A crash
+after POST success but before state save can duplicate a notification.
+No service changes, real webhook, disk formula or cadence changes.
+PR #965 review 3951724563: pending daily heartbeat now survives midnight until
+acknowledged, or is replaced by the newly due day's heartbeat (at most one).
+Actual run with local stub: failed 23:58 -> successful retry 00:03 -> silent
+00:08 -> next day's normal 09:05 heartbeat; on-disk dates/pending count checked.
+Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
+`2`); restored file matches snapshot by `cmp`. Main was merged normally and
+both existing plan additions preserved. Next: root push and review reply.
+
 ## Track: runtime v2 R01 (Astra)
 
 ### R04c neutral database logging helpers — 2026-09-19

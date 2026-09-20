@@ -6,6 +6,16 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-07 · Measurement is not delivery acknowledgement.** Watchdog
+  observations/failure streaks must persist even when the notification fails,
+  but alert timestamps, recovery reset and daily heartbeat dedup advance only
+  after successful POST. Otherwise failed recovery/heartbeat delivery disappears
+  until another transition/day. Apply: persist pending latest-condition alerts,
+  acknowledge each successful batch of at most ten embeds, and test retries
+  across reloaded state. A crash between POST and acknowledgement can duplicate
+  delivery; do not claim exactly-once. Dry-run must skip both state and report
+  writes, including when output directories do not yet exist.
+
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
   Include every changed Python path in local lint. Module-attribute aliases

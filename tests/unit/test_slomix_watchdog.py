@@ -171,31 +171,37 @@ def _f(key, level, reason="r"):
     return wd.Finding(key, level, reason=reason)
 
 
+def _delivered_decision(findings, state, now):
+    alerts, state = wd.decide(findings, state, now)
+    wd.acknowledge(state, alerts, now)
+    return alerts, state
+
+
 def test_fail_alerts_once_then_is_silent_for_an_hour_then_recovers_once():
     state = {"version": 1, "keys": {}}
-    a1, state = wd.decide([_f("db", "fail")], state, NOW)
+    a1, state = _delivered_decision([_f("db", "fail")], state, NOW)
     assert [a["kind"] for a in a1] == ["fail"]
-    a2, state = wd.decide([_f("db", "fail")], state, NOW + 600)
+    a2, state = _delivered_decision([_f("db", "fail")], state, NOW + 600)
     assert a2 == []  # dedup
-    a3, state = wd.decide([_f("db", "fail")], state, NOW + 3700)
+    a3, state = _delivered_decision([_f("db", "fail")], state, NOW + 3700)
     assert [a["kind"] for a in a3] == ["fail"]  # an hour later, once more
-    a4, state = wd.decide([_f("db", "ok")], state, NOW + 4000)
+    a4, state = _delivered_decision([_f("db", "ok")], state, NOW + 4000)
     assert [a["kind"] for a in a4] == ["recovered"]
-    a5, state = wd.decide([_f("db", "ok")], state, NOW + 4300)
+    a5, state = _delivered_decision([_f("db", "ok")], state, NOW + 4300)
     assert a5 == []  # recovery is announced exactly once
 
 
 def test_web_and_lua_webhook_need_two_consecutive_failures():
     state = {"version": 1, "keys": {}}
-    a1, state = wd.decide([_f("web", "fail")], state, NOW)
+    a1, state = _delivered_decision([_f("web", "fail")], state, NOW)
     assert a1 == []
-    a2, state = wd.decide([_f("web", "fail")], state, NOW + 300)
+    a2, state = _delivered_decision([_f("web", "fail")], state, NOW + 300)
     assert [a["kind"] for a in a2] == ["fail"]
     # an ok in between resets the count
     state = {"version": 1, "keys": {}}
-    wd.decide([_f("web", "fail")], state, NOW)
-    wd.decide([_f("web", "ok")], state, NOW + 300)
-    a3, _ = wd.decide([_f("web", "fail")], state, NOW + 600)
+    _delivered_decision([_f("web", "fail")], state, NOW)
+    _delivered_decision([_f("web", "ok")], state, NOW + 300)
+    a3, _ = _delivered_decision([_f("web", "fail")], state, NOW + 600)
     assert a3 == []
 
 
@@ -204,34 +210,34 @@ def test_control_without_dedup_the_second_run_alerts_again(monkeypatch):
     failure alerts on every run — the noise the window exists to stop."""
     monkeypatch.setattr(wd, "ALERT_DEDUP_S", 0)
     state = {"version": 1, "keys": {}}
-    wd.decide([_f("db", "fail")], state, NOW)
-    a2, _ = wd.decide([_f("db", "fail")], state, NOW + 60)
+    _delivered_decision([_f("db", "fail")], state, NOW)
+    a2, _ = _delivered_decision([_f("db", "fail")], state, NOW + 60)
     assert [a["kind"] for a in a2] == ["fail"]
 
 
 def test_warn_alerts_on_the_transition_only():
     state = {"version": 1, "keys": {}}
-    a1, state = wd.decide([_f("disk", "warn")], state, NOW)
+    a1, state = _delivered_decision([_f("disk", "warn")], state, NOW)
     assert [a["kind"] for a in a1] == ["warn"]
-    a2, state = wd.decide([_f("disk", "warn")], state, NOW + 600)
+    a2, state = _delivered_decision([_f("disk", "warn")], state, NOW + 600)
     assert a2 == []
 
 
 def test_heartbeat_once_a_day_after_the_hour():
     state = {"version": 1, "keys": {}}
     morning = wd.dt.datetime(2026, 9, 7, 9, 5).timestamp()
-    a1, state = wd.decide([_f("db", "ok")], state, morning)
+    a1, state = _delivered_decision([_f("db", "ok")], state, morning)
     assert [a["kind"] for a in a1] == ["heartbeat"]
-    a2, state = wd.decide([_f("db", "ok")], state, morning + 3600)
+    a2, state = _delivered_decision([_f("db", "ok")], state, morning + 3600)
     assert a2 == []
     early = wd.dt.datetime(2026, 9, 8, 7, 0).timestamp()
-    a3, state = wd.decide([_f("db", "ok")], state, early)
+    a3, state = _delivered_decision([_f("db", "ok")], state, early)
     assert a3 == []
 
 
 def test_stale_keys_leave_the_state():
     state = {"version": 1, "keys": {"unit:gone": {"level": "fail", "consecutive_fail": 5, "last_alert_at": NOW}}}
-    _, state = wd.decide([_f("db", "ok")], state, NOW)
+    _, state = _delivered_decision([_f("db", "ok")], state, NOW)
     assert "unit:gone" not in state["keys"]
 
 
