@@ -1,5 +1,11 @@
 # Predaja: Opus 5, seja 2026-09-06 → 2026-09-07
 
+> Historical snapshot, not current operating instructions. Reviewed 2026-09-20:
+> measurements below belong to 2026-09-07 unless explicitly stated otherwise.
+> Current work and approval gates live in `docs/PLAN.md`. #912 has since merged
+> (2026-09-07); that does not establish deployment or the outstanding live duel.
+> #962 is in the owner's approved consolidation queue, not yet merged here.
+
 Komplementarna k `docs/HANDOFF-astra.md` (sestrina seja). Ta datoteka nosi
 **moje** delo, moje odprte postavke in — najbolj uporabno za naslednjega —
 pasti, ki so me danes ujele, vsako z meritvijo.
@@ -20,7 +26,9 @@ pasti, ki so me danes ujele, vsako z meritvijo.
 | **#955** | nagrade rund v SPA + botovski filter + `DISTINCT` | gap 13 → 12 |
 | **#958** | `--anon-only` ne rabi ownerjeve skrivnosti | prelet steče; prej se ni zagnal |
 
-Vse v **v1.45.0**.
+#952, #955 and #958 landed after v1.45.0, not in that release. The release
+commit is `6ca942bf`; their commits `b5442e28`, `07d332ca` and `0934e258` are
+later descendants. Main inclusion and a published release are separate facts.
 
 ### Odprto ob predaji
 
@@ -120,10 +128,10 @@ Vsi rabijo ownerjeve roke (sudo) ali njegovo odločitev.
 
 | kaj | ukaz | zakaj |
 |---|---|---|
-| **journald raste brez meje** | `sudo journalctl --vacuum-size=200M` + `SystemMaxUse=200M` v `/etc/systemd/journald.conf` | drži **442 MB** na 32 GB SSD; brez trajne meje spet zraste |
-| **`/tmp` se ne čisti sam** | `sudo systemctl enable --now systemd-tmpfiles-clean.timer` | timer je `static`; zato so tam sedele **avgustovske** datoteke |
+| **Historical journal capacity concern** | First inspect `journalctl --disk-usage` and effective journald configuration; owner decides retention | The **442 MB** figure is historical, not a current measurement. Vacuum only removes archived journals; owner-approved cleanup may combine `--rotate --vacuum-size=200M`. Applying `SystemMaxUse=200M` also requires the owner's configuration change and explicit journald restart, not merely editing a file. No cleanup/restart was performed. |
+| **Historical `/tmp` cleanup concern** | Inspect `systemctl status systemd-tmpfiles-clean.timer`, `systemctl list-timers --all`, unit contents and tmpfiles age rules | `static` is not proof the timer cannot run or that cleanup failed. Do not prescribe enabling a static unit; determine its activation and retention rules first. No timer change or deletion authorized. |
 | **#962: watchdog disk mera** | merge | watchdog je kazal 84,9 %, `df` 90 % — prag 85 % se sproži šele pri `df` ~89,6 % |
-| **restart dev bota** | ownerjeva domena | vsakič, ko gre nova koda na main |
+| **dev activation** | owner selects and authorizes an exact deployment | A merge to main is not permission or a requirement to restart services. |
 | 🔑 **geslo v `ps`** | rotacija + `PGPASSWORD`/`.pgpass` | MCP DSN je v argv, `ps -eo args` ga pokaže vsem |
 
 ### Kaj sem 2026-09-07 sprostil na SSD (nič izbrisano)

@@ -9,7 +9,7 @@
 - (Opus 5, 2026-09-07, 12:10) **SEJA SE ZAKLJUČUJE — predaja je
   `docs/HANDOFF-opus5-2026-09-07.md`** (komplementarna k `HANDOFF-astra.md`).
   Mergano danes: #923, #948, #950, #952, #955, #958 → **endpoint gap 13 → 12**,
-  vse v v1.45.0. Odprto: **#912** (arena, CI zelen, ⛔ `arena_acc_log`
+  #952/#955/#958 so prišli po v1.45.0. Takrat odprto: **#912** (arena, CI zelen, ⛔ `arena_acc_log`
   NEIZMERJEN v živo — manjka en dvoboj na prižganem strežniku; razsodnik je
   `lua_status` podpis, ne datoteka na disku) in **#962** (watchdog je kazal
   84,9 % diska, `df` 90 % — prag 85 % se je sprožil šele pri `df` ~89,6 %).
@@ -18,9 +18,11 @@
   (restart = ownerjev DA). Prelet faze 7 delen (manifest 32 rut + 20 rut, vse
   200, 0 konzolnih napak); celoten čaka RAM. SSD sproščen 90 % → 80 % (nič
   izbrisano, vse v `share/_from_ssd_tmp_2026-09-07/` in
-  `share/slomix-archive/cleanup-2026-08-26/`). Ownerju ostajata dva ukaza:
-  `journalctl --vacuum-size=200M` (442 MB) in `enable --now
-  systemd-tmpfiles-clean.timer` (`/tmp` se ne čisti sam).
+  `share/slomix-archive/cleanup-2026-08-26/`). Historical note corrected 2026-09-20:
+  inspect timer state/activation and tmpfiles age rules before proposing changes;
+  static alone does not diagnose failed cleanup. Journal vacuum affects archived
+  files; any owner-approved cleanup needs retention review and rotation, and
+  changed journald limits need explicit owner activation. No cleanup was performed.
 
 - (Astra, 2026-09-20) R04u independent main-based source generation reservation:
   16 focused cases pass, same-token concurrency has one winner, existing entries

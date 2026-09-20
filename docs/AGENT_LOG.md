@@ -6,20 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
-- **2026-09-07 · An artefact is not a commit, and four other ways a
-  measurement lied today.** (Opus 5; full write-up with numbers in
-  `docs/HANDOFF-opus5-2026-09-07.md` §3.) The tree can sit on the right commit
-  while `static/app` is 13 hours older than `src/app`, and `/api/build` reads
-  the commit, so it looks right — `scripts/dev_deploy.sh` now refuses that.
-  A cold cache changes not just latency but **how many calls the probe sees at
-  all** (same page, same window: 2 cold, 40 warm). `ls -la <dir>` gives the
-  directory's mtime, not its contents' — I filed a "stale bundle" finding on
-  that and had to retract it. `git merge-base --is-ancestor` reports "not
-  merged" for every squash-merged branch (7 branches, all their PRs MERGED).
-  And `git stash pop` without `git stash list` pulls somebody else's stash
-  into a clean tree. Apply: name the artefact and the source separately;
-  label every number cold or warm; test the file, not the folder; ask the PR,
-  not the ancestry.
+- **2026-09-20 · Squash merge status is not an ancestry predicate.**
+  The historical handoff in docs/HANDOFF-opus5-2026-09-07.md reported seven
+  false negatives from ancestry-only checks. Verify the PR's merged state and
+  main's actual content before declaring old work missing. Artifact identity,
+  cold-cache sampling, directory mtime and shared stash ownership each retain
+  their separate dated entries below; do not combine them into one lesson.
 
 - **2026-09-20 · A failed reservation may still own its namespace.**
   Atomic mkdir prevents two same-token writers from reserving one generation.
