@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04n composes SSH session/file ownership and verified stream
+  publication inside a picklable capture-only task on #1068. 97 combined cases
+  pass; offline transport with actual child/filesystem demonstrates timeout can
+  leave either partial or final content. Guard mutation fails/restores. Next
+  reconciliation composition/source identity; no activation or network claim.
+
 - (Astra, 2026-09-20) R04m adds isolated capture-task deadline supervision on
   #1067. 86 combined tests pass, real owned children reaped even after SIGTERM
   refusal/parent interruption; timeout-status mutation fails/restores. #1066
