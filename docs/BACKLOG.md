@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #1077 review4057883492/4057883502: defer interruptions
+  through bounded child reaping and preserve the original exception; broaden
+  serialization-failure test to PicklingError with actual serializer proof.
+  Runtime delivery/sealing remains next. No merge or service activation.
+
 - (Astra, 2026-09-20) #1077 review4057826087: fix inherited worker false timeout
   after child exit and late parent observation. Real-child success/failure
   regressions and failed/restored mutation added; no source/service activation.

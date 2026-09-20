@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Cleanup waits can be interrupted too.**
+  Catching cancellation only around the first worker join leaves the termination
+  joins vulnerable. Defer their exceptions, finish escalation within a fixed
+  cleanup budget, close the reaped process, then propagate the original error.
+  Inject interruptions into each join; use fixture cleanup so a failed regression
+  does not itself leave a live worker. OS cleanup failure must remain explicit.
+
 - **2026-09-20 · Observation time is not child exit time.**
   After a bounded join, a late parent clock read cannot prove an already exited
   child exceeded its budget. Use observed liveness for timeout intervention and

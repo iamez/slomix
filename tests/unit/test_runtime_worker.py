@@ -2,6 +2,7 @@
 
 import multiprocessing
 import os
+import pickle
 import signal
 import time
 from functools import partial
@@ -100,12 +101,69 @@ def test_parent_interruption_still_reaps_child(tmp_path, monkeypatch):
     assert pids[0] not in [p.pid for p in multiprocessing.active_children()]
 
 
-def test_unpicklable_task_fails_without_child():
+class _UnpicklableTask:
+    def __reduce__(self):
+        raise pickle.PicklingError('fixture serialization failure')
+
+    def __call__(self):
+        raise AssertionError('Unpicklable task must not execute')
+
+
+@pytest.mark.parametrize('explicit_pickling_error', [False, True])
+def test_unpicklable_task_fails_without_child(explicit_pickling_error):
     """Spawn preparation failure does not leak a task process."""
     before = {p.pid for p in multiprocessing.active_children()}
-    with pytest.raises((AttributeError, TypeError)):
-        run_bounded_capture_task(lambda: None, timeout_seconds=1)
+    task = _UnpicklableTask() if explicit_pickling_error else lambda: None
+    with pytest.raises((AttributeError, TypeError, pickle.PicklingError)):
+        run_bounded_capture_task(task, timeout_seconds=1)
     assert {p.pid for p in multiprocessing.active_children()} == before
+
+
+@pytest.mark.parametrize('interrupt_calls', [(2,), (3,), (1, 2, 3)])
+def test_cleanup_interruption_still_reaps_child(tmp_path, monkeypatch, interrupt_calls):
+    """Delay cancellation until the SIGTERM-resistant real child is reaped."""
+    process_type = multiprocessing.get_context('spawn').Process
+    original_join = process_type.join
+    processes = []
+    calls = []
+    errors = {n: KeyboardInterrupt(f'join {n}') for n in interrupt_calls}
+
+    def interrupted_join(process, timeout=None):
+        if not processes:
+            processes.append(process)
+        calls.append(timeout)
+        number = len(calls)
+        # First real wait lets the child install its SIGTERM handler.
+        if number == 1 or number not in errors:
+            original_join(process, timeout)
+        if number in errors:
+            raise errors[number]
+
+    monkeypatch.setattr(process_type, 'join', interrupted_join)
+    marker = tmp_path / 'child'
+    try:
+        with pytest.raises(KeyboardInterrupt) as raised:
+            run_bounded_capture_task(partial(_block, marker, True),
+                                     timeout_seconds=2, shutdown_grace=0.2)
+        assert raised.value is errors[interrupt_calls[0]]
+        assert len(calls) >= max(interrupt_calls)
+        pid = int(marker.read_text())
+        assert not Path(f'/proc/{pid}').exists()
+        assert pid not in [p.pid for p in multiprocessing.active_children()]
+        with pytest.raises(ValueError, match='process object is closed'):
+            processes[0].is_alive()
+        print(f'Interrupted cleanup proof: joins={interrupt_calls}, child={pid}, reaped and closed')
+    finally:
+        # Keep the deliberately broken implementation from leaking a fixture child.
+        for process in processes:
+            try:
+                alive = process.is_alive()
+            except ValueError:
+                continue  # Already closed by the supervisor.
+            if alive:
+                process.kill()
+            original_join(process, 2)
+            process.close()
 
 
 @pytest.mark.parametrize('ignore_term', [False, True])

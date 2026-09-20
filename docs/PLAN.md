@@ -20,6 +20,25 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04v review follow-up: interrupted cleanup — 2026-09-20
+
+PR #1077 review4057883492 reproduced live child leakage on interrupted cleanup
+join and loss of the original exception on repeated interruption. Defer cleanup
+exceptions, escalate SIGTERM-resistant child to SIGKILL, retry interrupted final
+joins within one grace budget, close the reaped process, then propagate the
+original exception. Failure to reap remains an explicit error, not success.
+Real-child regressions interrupt joins 2, 3 and 1/2/3; verify procfs, active_children,
+closed process object and exact original exception. Fixture teardown also reaps
+children when testing broken implementations. No claim of arbitrary signal safety
+between Python instructions or recovery from OS kill/wait failure.
+Review4057883502: accept pickle.PicklingError alongside existing serializer
+exceptions, tested with a real spawn serializer invoking a failing __reduce__.
+Local lambda previously passed and prior CI was green: do not claim a reproduced
+CI outage. Both guards have observed failing mutations followed by restoration.
+Final combined suite: 167 passed, zero skips; 19 focused worker cases include
+runtime cleanup logs. Ruff and whitespace clean; no live-network proof claimed.
+Next remains trusted completion delivery and snapshot sealing; no activation.
+
 ### R04v review follow-up: child outcome versus observation time — 2026-09-20
 
 PR #1077 review4057826087 found inherited supervisor logic classifying an
