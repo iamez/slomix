@@ -22,6 +22,15 @@ from datetime import datetime
 import discord
 
 from bot.logging_config import get_logger
+from shared.endstats_retry import (
+    alias_endstats_marker,
+    bound_endstats_publish_failures,
+    claim_endstats_marker,
+    endstats_filename_gate_query,
+    endstats_retry_enabled,
+    release_endstats_marker,
+)
+from shared.endstats_snapshot import journal_endstats_storage
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -344,7 +353,7 @@ class _EndstatsPipelineMixin:
                 f"Selecting richer endstats: {best_filename} "
                 f"({best_size}b, {best_quality[0]} awards)"
             )
-            self.processed_endstats_files.add(best_filename)
+            alias_endstats_marker(self, filename, best_filename)
 
         return best_data, best_path, best_filename
 
@@ -639,7 +648,14 @@ class _EndstatsPipelineMixin:
         delay = self.endstats_retry_base_delay * (2 ** (attempt - 1))
         return min(delay, self.endstats_retry_max_delay)
 
-    def _clear_endstats_retry_state(self, filename: str) -> None:
+    def _clear_endstats_retry_state(self, filename: str, *, release_claim: bool = False) -> None:
+        claims = getattr(self, "_endstats_retry_claims", {})
+        claim = claims.pop(filename, None)
+        if release_claim:
+            release_endstats_marker(
+                self, claim,
+                legacy_filename=filename if not endstats_retry_enabled() else None,
+            )
         self.endstats_retry_counts.pop(filename, None)
         task = self.endstats_retry_tasks.pop(filename, None)
         current_task = asyncio.current_task()
@@ -652,6 +668,8 @@ class _EndstatsPipelineMixin:
         local_path: str,
         endstats_data: dict,
         trigger_message,
+        *,
+        marker_claim=None,
     ) -> None:
         existing = self.endstats_retry_tasks.get(filename)
         if existing and not existing.done():
@@ -666,6 +684,12 @@ class _EndstatsPipelineMixin:
             # Clear stale/done task reference so it doesn't block future scheduling
             self.endstats_retry_tasks.pop(filename, None)
 
+        if endstats_retry_enabled():
+            if not hasattr(self, "_endstats_retry_claims"):
+                self._endstats_retry_claims = {}
+            # Keep the original attempt identity across retries and alias changes.
+            self._endstats_retry_claims.setdefault(filename, marker_claim)
+
         attempt = self.endstats_retry_counts.get(filename, 0) + 1
         self.endstats_retry_counts[filename] = attempt
 
@@ -673,8 +697,7 @@ class _EndstatsPipelineMixin:
             webhook_logger.error(
                 f"❌ Endstats retry limit reached ({self.endstats_retry_max_attempts}) for {filename}"
             )
-            self.processed_endstats_files.discard(filename)
-            self._clear_endstats_retry_state(filename)
+            self._clear_endstats_retry_state(filename, release_claim=True)
             try:
                 if trigger_message:
                     await trigger_message.add_reaction('⚠️')
@@ -717,7 +740,7 @@ class _EndstatsPipelineMixin:
                 f"🔄 Endstats retry attempt {attempt}/{self.endstats_retry_max_attempts} for {filename}"
             )
             # If already processed in DB, stop retrying
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = endstats_filename_gate_query()
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -737,8 +760,7 @@ class _EndstatsPipelineMixin:
 
             if not (round_date and map_name and round_number):
                 webhook_logger.error(f"❌ Missing metadata for endstats retry: {filename}")
-                self.processed_endstats_files.discard(filename)
-                self._clear_endstats_retry_state(filename)
+                self._clear_endstats_retry_state(filename, release_claim=True)
                 return
 
             round_meta = {
@@ -819,6 +841,8 @@ class _EndstatsPipelineMixin:
             webhook_logger.error(f"❌ Error during endstats retry: {e}", exc_info=True)
             # Only clear task reference, preserve retry count so next attempt increments correctly
             self.endstats_retry_tasks.pop(filename, None)
+            if endstats_retry_enabled():
+                await self._schedule_endstats_retry(filename, local_path, endstats_data, trigger_message)
 
     async def _store_endstats_and_publish(
         self,
@@ -836,7 +860,7 @@ class _EndstatsPipelineMixin:
         incoming_quality = self._summarize_endstats_quality(endstats_data)
         should_publish = True
 
-        async with self.db_adapter.transaction():
+        async with self.db_adapter.transaction() as conn, journal_endstats_storage(conn, round_id=round_id):
             # If this round already has a successful endstats post, skip.
             existing_success = await self.db_adapter.fetch_one(
                 """
@@ -1093,6 +1117,7 @@ class _EndstatsPipelineMixin:
                 """,
                 (filename, round_id, "publish_failed"),
             )
+            await bound_endstats_publish_failures(self, filename)
             self._log_endstats_transition(
                 log,
                 source,
@@ -1183,6 +1208,7 @@ class _EndstatsPipelineMixin:
         Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
         """
         source = "polling"
+        marker_claim = None
         try:
             self._log_endstats_transition(
                 logger,
@@ -1208,7 +1234,7 @@ class _EndstatsPipelineMixin:
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = endstats_filename_gate_query()
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -1222,7 +1248,9 @@ class _EndstatsPipelineMixin:
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with webhook
-            self.processed_endstats_files.add(filename)
+            marker_claim = claim_endstats_marker(self, filename)
+            if marker_claim is None:
+                return
 
             # Parse the endstats file
             endstats_data = parse_endstats_file(local_path)
@@ -1294,7 +1322,7 @@ class _EndstatsPipelineMixin:
                     level="warning",
                 )
                 # Remove from in-memory set to allow retry on next polling cycle
-                self.processed_endstats_files.discard(filename)
+                release_endstats_marker(self, marker_claim, legacy_filename=filename)
                 return
 
             self._log_endstats_transition(
@@ -1315,7 +1343,7 @@ class _EndstatsPipelineMixin:
                 round_id, filename, source, logger
             ):
                 # Not ready in polling path: release in-memory marker and retry next cycle.
-                self.processed_endstats_files.discard(filename)
+                release_endstats_marker(self, marker_claim, legacy_filename=filename)
                 return
 
             published = await self._store_endstats_and_publish(
@@ -1330,10 +1358,11 @@ class _EndstatsPipelineMixin:
             )
             if not published:
                 # Release in-memory marker so polling can retry later.
-                self.processed_endstats_files.discard(filename)
+                release_endstats_marker(self, marker_claim, legacy_filename=filename)
 
         except Exception as e:
             logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
+            release_endstats_marker(self, marker_claim)
             await self.track_error("endstats_processing", str(e), max_consecutive=3)
 
     async def _process_webhook_triggered_endstats(self, filename: str, trigger_message):
@@ -1344,6 +1373,7 @@ class _EndstatsPipelineMixin:
         Endstats file: YYYY-MM-DD-HHMMSS-mapname-round-N-endstats.txt
         """
         source = "webhook"
+        marker_claim = None
         try:
             self._log_endstats_transition(
                 webhook_logger,
@@ -1372,7 +1402,7 @@ class _EndstatsPipelineMixin:
                 return
 
             # Then check database table
-            check_query = "SELECT 1 FROM processed_endstats_files WHERE filename = $1"
+            check_query = endstats_filename_gate_query()
             result = await self.db_adapter.fetch_one(check_query, (filename,))
             if result:
                 self._log_endstats_transition(
@@ -1390,7 +1420,13 @@ class _EndstatsPipelineMixin:
                 return
 
             # IMMEDIATELY mark as being processed to prevent race with polling
-            self.processed_endstats_files.add(filename)
+            marker_claim = claim_endstats_marker(self, filename)
+            if marker_claim is None:
+                try:
+                    await trigger_message.delete()
+                except discord.DiscordException:
+                    logger.debug("Discord notification failed (non-critical)")
+                return
 
             # Build SSH config
             ssh_config = {
@@ -1408,6 +1444,7 @@ class _EndstatsPipelineMixin:
             )
 
             if not local_path:
+                release_endstats_marker(self, marker_claim)
                 webhook_logger.error(f"❌ Failed to download endstats: {filename}")
                 try:
                     await trigger_message.add_reaction('❌')
@@ -1425,6 +1462,7 @@ class _EndstatsPipelineMixin:
             endstats_data = parse_endstats_file(local_path)
 
             if not endstats_data:
+                release_endstats_marker(self, marker_claim)
                 webhook_logger.error(f"❌ Failed to parse endstats: {filename}")
                 try:
                     await trigger_message.add_reaction('⚠️')
@@ -1477,7 +1515,8 @@ class _EndstatsPipelineMixin:
                 except discord.DiscordException:
                     logger.debug("Discord notification failed (non-critical)")
                 await self._schedule_endstats_retry(
-                    filename, local_path, endstats_data, trigger_message
+                    filename, local_path, endstats_data, trigger_message,
+                    marker_claim=marker_claim,
                 )
                 return
 
@@ -1507,7 +1546,8 @@ class _EndstatsPipelineMixin:
                 except discord.DiscordException:
                     logger.debug("Discord notification failed (non-critical)")
                 await self._schedule_endstats_retry(
-                    filename, local_path, endstats_data, trigger_message
+                    filename, local_path, endstats_data, trigger_message,
+                    marker_claim=marker_claim,
                 )
                 return
 
@@ -1527,7 +1567,8 @@ class _EndstatsPipelineMixin:
                 except discord.DiscordException:
                     logger.debug("Discord notification failed (non-critical)")
                 await self._schedule_endstats_retry(
-                    filename, local_path, endstats_data, trigger_message
+                    filename, local_path, endstats_data, trigger_message,
+                    marker_claim=marker_claim,
                 )
                 return
 
@@ -1540,6 +1581,7 @@ class _EndstatsPipelineMixin:
 
         except Exception as e:
             webhook_logger.error(f"❌ Error processing endstats file: {e}", exc_info=True)
+            release_endstats_marker(self, marker_claim)
             try:
                 await trigger_message.add_reaction('🚨')
                 await trigger_message.reply(f"🚨 Error processing endstats `{filename}`. Check logs.")

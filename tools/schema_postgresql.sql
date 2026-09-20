@@ -9181,3 +9181,127 @@ CREATE TABLE IF NOT EXISTS player_aim_summary (
 -- migration file does not apply here.
 CREATE INDEX IF NOT EXISTS idx_combat_engagement_attackers_gin
     ON combat_engagement USING gin (attackers jsonb_path_ops);
+
+-- Migration 083: mirrored for deploy_clean.sh before migration baseline.
+-- Runtime v2 R01: initial canonical imports only; no backfill or consumers.
+-- Apply before explicitly enabling EVENT_STREAM_ENABLED (default false).
+-- Identity metadata is a historical snapshot, deliberately not a foreign key:
+-- deleting a source round must neither erase its journal nor block repairs.
+-- Sequence allocation is NOT commit order. Future consumers need receipts,
+-- not just id > last_seen; NOTIFY is only a best-effort wake-up.
+CREATE TABLE IF NOT EXISTS runtime_events (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    event_type TEXT NOT NULL CHECK (event_type = 'round_stats_imported'),
+    schema_version INTEGER NOT NULL CHECK (schema_version = 1),
+    round_id INTEGER NOT NULL,
+    round_number INTEGER NOT NULL CHECK (round_number IN (1, 2)),
+    gaming_session_id INTEGER,
+    source_filename TEXT NOT NULL,
+    source_payload_sha256 TEXT CHECK (
+        source_payload_sha256 IS NULL OR source_payload_sha256 ~ '^[0-9a-f]{64}$'
+    ),
+    validation_passed BOOLEAN NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (round_id, event_type)
+);
+
+COMMENT ON TABLE runtime_events IS
+    'Initial import journal, not final round state. NULL session/hash means unavailable at import. No pruning in R01.';
+
+-- R02a: append-only timing-fill events; initial-import uniqueness stays intact.
+-- No backfill/consumers. Runtime activation requires BOTH event flags.
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_event_type_check;
+ALTER TABLE runtime_events ADD CONSTRAINT runtime_events_event_type_check
+    CHECK (event_type IN ('round_stats_imported', 'round_timing_reconciled'));
+ALTER TABLE runtime_events ALTER COLUMN source_filename DROP NOT NULL;
+ALTER TABLE runtime_events ALTER COLUMN validation_passed DROP NOT NULL;
+ALTER TABLE runtime_events ADD COLUMN IF NOT EXISTS event_details JSONB;
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_details_check;
+ALTER TABLE runtime_events ADD CONSTRAINT runtime_events_details_check CHECK (
+    (event_type = 'round_stats_imported' AND source_filename IS NOT NULL
+        AND validation_passed IS NOT NULL AND event_details IS NULL)
+    OR (event_type = 'round_timing_reconciled' AND event_details IS NOT NULL
+        AND jsonb_typeof(event_details) = 'object')
+);
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_round_id_event_type_key;
+CREATE UNIQUE INDEX IF NOT EXISTS runtime_events_initial_import_unique
+    ON runtime_events (round_id, event_type) WHERE event_type = 'round_stats_imported';
+
+COMMENT ON COLUMN runtime_events.event_details IS
+    'Versioned event-specific metadata, not raw player stats. Timing seconds and Unix timestamps retain source units.';
+
+-- R02b: journal actual restart-status transitions; no backfill or activation.
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_event_type_check;
+ALTER TABLE runtime_events ADD CONSTRAINT runtime_events_event_type_check
+    CHECK (event_type IN ('round_stats_imported', 'round_timing_reconciled', 'round_status_changed'));
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_details_check;
+ALTER TABLE runtime_events ADD CONSTRAINT runtime_events_details_check CHECK (
+    (event_type = 'round_stats_imported' AND source_filename IS NOT NULL
+        AND validation_passed IS NOT NULL AND event_details IS NULL)
+    OR (event_type IN ('round_timing_reconciled', 'round_status_changed')
+        AND event_details IS NOT NULL AND jsonb_typeof(event_details) = 'object')
+);
+
+-- R02c4: canonical endstats storage changes, not Discord delivery receipts.
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_event_type_check;
+ALTER TABLE runtime_events ADD CONSTRAINT runtime_events_event_type_check
+    CHECK (event_type IN ('round_stats_imported', 'round_timing_reconciled', 'round_status_changed', 'round_endstats_changed'));
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_details_check;
+ALTER TABLE runtime_events ADD CONSTRAINT runtime_events_details_check CHECK (
+    (event_type = 'round_stats_imported' AND source_filename IS NOT NULL
+        AND validation_passed IS NOT NULL AND event_details IS NULL)
+    OR (event_type IN ('round_timing_reconciled', 'round_status_changed', 'round_endstats_changed')
+        AND event_details IS NOT NULL AND jsonb_typeof(event_details) = 'object')
+);
+
+-- R02d1: atomic post-import Lua correction, not import or delivery completion.
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_event_type_check;
+ALTER TABLE runtime_events ADD CONSTRAINT runtime_events_event_type_check
+    CHECK (event_type IN ('round_stats_imported', 'round_timing_reconciled', 'round_status_changed', 'round_endstats_changed', 'round_lua_corrected'));
+ALTER TABLE runtime_events DROP CONSTRAINT IF EXISTS runtime_events_details_check;
+ALTER TABLE runtime_events ADD CONSTRAINT runtime_events_details_check CHECK (
+    (event_type = 'round_stats_imported' AND source_filename IS NOT NULL
+        AND validation_passed IS NOT NULL AND event_details IS NULL)
+    OR (event_type IN ('round_timing_reconciled', 'round_status_changed', 'round_endstats_changed', 'round_lua_corrected')
+        AND event_details IS NOT NULL AND jsonb_typeof(event_details) = 'object')
+);
+
+-- Durable input only: not a correction-completion or transport-delivery receipt.
+CREATE TABLE IF NOT EXISTS lua_correction_inputs (
+    id BIGSERIAL PRIMARY KEY,
+    source_key TEXT NOT NULL CHECK (source_key ~ '^[a-z0-9_.:-]{1,64}$'),
+    payload_version INTEGER NOT NULL CHECK (payload_version = 1),
+    payload_digest TEXT NOT NULL CHECK (payload_digest ~ '^[a-f0-9]{64}$'),
+    map_name TEXT NOT NULL CHECK (map_name ~ '^[a-z0-9_-]{1,128}$'),
+    round_number INTEGER NOT NULL CHECK (round_number IN (1, 2)),
+    round_start_unix BIGINT NOT NULL CHECK (round_start_unix > 0),
+    payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
+    received_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (source_key, payload_version, payload_digest)
+);
+CREATE INDEX IF NOT EXISTS idx_lua_correction_inputs_identity
+    ON lua_correction_inputs (source_key, map_name, round_number, round_start_unix);
+
+-- Successful atomic correction receipt; not a Discord/linking receipt.
+CREATE TABLE IF NOT EXISTS lua_correction_receipts (
+    input_id BIGINT PRIMARY KEY REFERENCES lua_correction_inputs(id) ON DELETE RESTRICT,
+    round_id INTEGER NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Scheduling state is separate from retained payload and completion receipts.
+CREATE TABLE IF NOT EXISTS lua_correction_attempts (
+    input_id BIGINT PRIMARY KEY REFERENCES lua_correction_inputs(id) ON DELETE RESTRICT,
+    attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts BETWEEN 0 AND 5),
+    next_due_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    outcome TEXT NOT NULL DEFAULT 'pending' CHECK (outcome IN (
+        'pending', 'applied', 'already_applied', 'missing_input', 'missing_round',
+        'target_changed', 'ambiguous_round', 'conflicting_revision',
+        'rejected', 'database_error', 'unexpected_error', 'contended'
+    )),
+    terminal BOOLEAN NOT NULL DEFAULT FALSE,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CHECK (attempts < 5 OR terminal)
+);
+CREATE INDEX IF NOT EXISTS idx_lua_correction_attempts_due
+    ON lua_correction_attempts (next_due_at, input_id) WHERE NOT terminal;

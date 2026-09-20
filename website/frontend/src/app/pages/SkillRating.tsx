@@ -1,10 +1,11 @@
+import { utcStamp } from '../lib/utcStamp';
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Chip, figure, Lbl, Meta, Pending, SectionHead, Unavailable } from '../components/ui';
 import { Panel } from '../components/Panel';
 import { useAdjustedLifetime, useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
-import type { AdjustedLifetimePlayer, RatedPlayer, SsrPlayer } from '../lib/types';
+import type { AdjustedLifetimePlayer, RatedPlayer, SsrPlayer, SkillFormula } from '../lib/types';
 
 /**
  * ET Rating (docs/design/12 row 24).
@@ -112,6 +113,33 @@ function Components({ player, constant, shrinkageK, poolMean }: {
   );
 }
 
+/** The weights table the endpoint always carried: every metric with its
+ *  signed weight, what it measures, and which source feeds it (pcs = the
+ *  stats files, proximity = the tracker). Sorted by how much each one
+ *  moves the rating. */
+function FormulaWeights({ f }: { f: SkillFormula }) {
+  const source = new Map<string, string>();
+  for (const [src, list] of Object.entries(f.metric_sources ?? {})) for (const m of list) source.set(m, src);
+  const rows = Object.entries(f.weights ?? {}).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
+  if (rows.length === 0) return null;
+  return (
+    <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)' }}>
+      {rows.map(([metric, w]) => (
+        <Cluster key={metric} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0', flexWrap: 'wrap' }}>
+          <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
+            <span className="m" style={{ fontSize: 'var(--fs-small)' }}>{metric}</span>
+            <Meta>{f.metrics?.[metric] ?? ''}{source.has(metric) ? ` · ${source.get(metric)}` : ''}</Meta>
+          </Cluster>
+          {/* One text node with the word: the rated row already prints the bare
+            * signed weight in its explanation, and a second bare "+0.12" would be
+            * two answers to one question (the page test found them). */}
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: w < 0 ? 'var(--color-neg)' : undefined }}>{`weight ${w > 0 ? '+' : ''}${w}`}</span>
+        </Cluster>
+      ))}
+    </Stack>
+  );
+}
+
 function RatedRow({ player, open, onToggle, ambiguous, constant, shrinkageK, poolMean }: {
   player: RatedPlayer; open: boolean; onToggle: () => void; ambiguous: boolean;
   constant: number; shrinkageK: number; poolMean: number | null;
@@ -133,7 +161,7 @@ function RatedRow({ player, open, onToggle, ambiguous, constant, shrinkageK, poo
           </span>
         </Cluster>
         <Cluster gap={3} align="center">
-          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 84, textAlign: 'right' }}>
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 84, textAlign: 'right' }} title={player.last_rated_at != null ? `last rated ${utcStamp(player.last_rated_at)}` : undefined}>
             {figure(player.games_rated)} rounds
           </span>
           {/* `confidence` is NOT the shrinkage weight, though it reads like
@@ -391,8 +419,10 @@ export function SkillRating() {
               {formula.data.formula}
             </span>
             <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>
-              {formula.data.normalization} · at least {formula.data.min_rounds} rounds · shrinkage k={formula.data.shrinkage_k}
+              {formula.data.normalization} · at least {formula.data.min_rounds} rounds · shrinkage k={formula.data.shrinkage_k} · constant {formula.data.constant}
             </span>
+            {formula.data.description && <Meta>{formula.data.description}</Meta>}
+            <FormulaWeights f={formula.data} />
           </>
         )}
       </Stack>

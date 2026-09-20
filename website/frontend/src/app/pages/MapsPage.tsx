@@ -149,6 +149,9 @@ export function MapsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                     {[
                       ['avg time', fmtSeconds(m.avg_duration)],
+                      // the endpoint's 0 is its unknown sentinel for durations
+                      ['shortest / longest', m.min_duration > 0 && m.max_duration > 0 ? `${fmtSeconds(m.min_duration)} / ${fmtSeconds(m.max_duration)}` : '—'],
+                      ['deaths', m.total_deaths.toLocaleString('en-US')],
                       ['last played', m.last_played ?? '—'],
                       ['players', String(m.unique_players)],
                       ['avg dpm', m.avg_dpm.toFixed(1)],

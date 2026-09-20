@@ -93,9 +93,18 @@ describe('ProximityPlayerPage', () => {
     await waitFor(() => expect(screen.getByLabelText('player radar')).toBeInTheDocument());
     expect(screen.getByText('40.2')).toBeInTheDocument();
     expect(screen.getByText('player-radar-v2')).toBeInTheDocument();
+    // Ledger 2026-09-09: the teamplay axis carries its OWN formula version,
+    // the dodge reaction is reported unscored beside the mechanical one, and
+    // the card's window and stagger score are the server's figures.
+    expect(screen.getByText('· teamplay prox-web-v3.0')).toBeInTheDocument();
     // Prox score: overall 32.81 → '32.8', rank 1 in window.
     await waitFor(() => expect(screen.getByText('32.8')).toBeInTheDocument());
-    expect(screen.getByText(/rank 1 in window/)).toBeInTheDocument();
+    expect(screen.getByText(/answered for this player alone \(1 scored; the cohort rank is on the proximity leaderboard\) · radar combat 38\.5 \/ team 34\.1 \/ game sense 22/)).toBeInTheDocument();
+    // the breakdown the composite is made of, the retired metrics named, and the movement totals (2026-09-09)
+    expect(screen.getByText(/combat: escape rate 0\.45 → p39 × 1 = 38\.5 · headshot % retired in prox-web-v3\.0/)).toBeInTheDocument();
+    expect(screen.getAllByText(/1 of 1 metrics scored|2 of 2 metrics scored/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/crouch 7:43 h · prone 0:08 h/)).toBeInTheDocument();
+    expect(screen.getByText(/fastest sample 873 u\/s/)).toBeInTheDocument();
     // Kill permanence: 40 gibs of 2,032 kills; own revive rate 21.7%.
     expect(screen.getByText(/40 of 2,032/)).toBeInTheDocument();
     expect(screen.getByText('21.7%')).toBeInTheDocument();

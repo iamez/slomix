@@ -1,5 +1,8 @@
+import { useEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
+import { titleFor } from '../lib/pageTitle';
 import { APP_ROUTES } from '../routes';
+import { PlayerSearch } from './PlayerSearch';
 
 /**
  * The one navigation (docs/design/11 §A AppShell; layout and labels from
@@ -66,6 +69,8 @@ function SubNav({ section }: { section: 'stats' | 'telemetry' }) {
 export function AppShell() {
   const { pathname } = useLocation();
   const section = sectionFor(pathname);
+  // The tab names the page (lib/pageTitle.ts); a link preview reads app.html's static head.
+  useEffect(() => { document.title = titleFor(pathname); }, [pathname]);
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div style={{ borderBottom: '1px solid var(--color-rule-900)' }}>
@@ -112,15 +117,17 @@ export function AppShell() {
             })}
           </nav>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <PlayerSearch compact ariaLabel="Find a player" placeholder="find a player" />
             <span className="m" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#454340' }} />
               DEV
             </span>
-            {/* Known limitation until phase 6 (auth flows): the OAuth
-                callback returns to the legacy site, not to /app — the login
-                round-trip works, the return location does not yet. */}
+            {/* ?next= brings the callback back to THIS /app page; the
+                server accepts only a same-origin /app path (auth.py
+                _safe_next_path), so a foreign value falls back to the old
+                default return. */}
             <a
-              href="/auth/login"
+              href={`/auth/login?next=${encodeURIComponent(`/app${pathname === '/' ? '' : pathname}`)}`}
               style={{
                 fontSize: 'var(--fs-value)', letterSpacing: '0.14em', textTransform: 'uppercase',
                 color: 'var(--color-text-200)', textDecoration: 'none',
@@ -145,13 +152,22 @@ export function AppShell() {
           style={{
             maxWidth: 'var(--layout-max)', margin: '0 auto', padding: 'var(--space-4) var(--space-6)', display: 'flex',
             justifyContent: 'space-between', fontSize: 'var(--fs-label)', letterSpacing: '0.14em',
-            textTransform: 'uppercase', color: 'var(--color-text-600)',
+            // text-600 measures 2.2:1 on every ground this app paints —
+            // below AA large, let alone body — and the footer carries LINKS.
+            // text-500 is the quietest colour that still clears AA body
+            // (4.58:1 on ink-800), which lib/contrast.test.ts now holds.
+            textTransform: 'uppercase', color: 'var(--color-text-500)',
           }}
         >
           <span>slomix · kept since january 2025</span>
           <span style={{ display: 'flex', gap: 'var(--space-4)' }}>
-            <Link to="/system" style={{ color: 'inherit', textDecoration: 'none' }}>system</Link>
-            <Link to="/smart-stats-diag" style={{ color: 'inherit', textDecoration: 'none' }}>diag</Link>
+            {/* system and diag are engineering pages, and a public footer
+              * carrying them reads as an unfinished site (visitor review
+              * 2026-09-07, trust). They live under About, which is where a
+              * reader goes to ask how the numbers are made — and both keep
+              * their own routes, so existing links still work. */}
+            <Link to="/welcome" style={{ color: 'inherit', textDecoration: 'none' }}>welcome</Link>
+            <Link to="/admin" style={{ color: 'inherit', textDecoration: 'none' }}>about</Link>
             <span>et:legacy stopwatch</span>
           </span>
         </div>

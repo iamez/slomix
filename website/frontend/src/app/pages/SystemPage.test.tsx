@@ -83,3 +83,17 @@ describe('SystemPage', () => {
     );
   });
 });
+
+describe('SystemPage long tail (ledger 2026-09-09)', () => {
+  it('shows the linkage breach count as a cell of the integrity card', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const pathname = String(input).split('?')[0];
+      if (pathname !== '/api/system/overview') {
+        return Promise.reject(new Error(`SystemPage called an unexpected endpoint: ${pathname}`));
+      }
+      return Promise.resolve({ ok: true, json: () => Promise.resolve(systemOverview) } as Response);
+    }));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('breaches')).toBeInTheDocument());
+  });
+});

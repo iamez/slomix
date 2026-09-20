@@ -34,3 +34,11 @@ export function sparkPathRanged(values: number[], w: number, h: number, pad: num
     })
     .join(' ');
 }
+
+/** The one place a coordinate becomes text: an SVG path over already-scaled
+ *  points, one decimal, so no page carries its own `toFixed` and a format
+ *  change is one edit. Empty for fewer than two points, as above. */
+export function svgPath(points: readonly { x: number; y: number }[]): string {
+  if (points.length < 2) return '';
+  return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(' ');
+}

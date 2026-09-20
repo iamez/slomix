@@ -1,11 +1,12 @@
 import { useState } from 'react';
+import { utcStamp } from '../lib/utcStamp';
 import { Link, useSearchParams } from 'react-router';
 import {
   useHallOfFame, useMaps, useRecords, useSeasonAwards, useSeasonCurrent,
   useSeasonLeaders,
 } from '../lib/queries';
 import type { HallOfFameEntry, RecordEntry } from '../lib/types';
-import { Absent, Chip, figure, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, figure, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable, Meta } from '../components/ui';
 
 /**
  * Record Book (docs/design/12 — absorbs the legacy records + hall-of-fame
@@ -301,6 +302,11 @@ function HofTab() {
       </div>
       {hof.isPending && <div style={{ marginTop: 'var(--space-4)' }}><Pending label="hall of fame" /></div>}
       {hof.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="hall of fame" /></div>}
+      {data && (
+        <Meta style={{ marginTop: 'var(--space-2)' }}>
+          computed {utcStamp(data.generated_at)}{data.delta_window_days != null && ` · rank deltas over the last ${data.delta_window_days} days`}
+        </Meta>
+      )}
       {data && (
         <div className="landing-split" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
           {HOF_CATEGORIES.map((cat) => {
