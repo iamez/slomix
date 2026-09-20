@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #979 consolidation review: fixed stale default source ref,
+  wrong-checkout verifier and hidden-index input flags, with four failing/restored
+  regressions and23passing fixture tests. No real deploy. Branch refresh/CI and
+  PR-specific permission remain gates. Runtime resume remains #1077 after detour.
+
+
 - (Astra, 2026-09-20) R04u independent main-based source generation reservation:
   16 focused cases pass, same-token concurrency has one winner, existing entries
   never reused, sync-error reservations retained. Mutation fails/restores. Prior

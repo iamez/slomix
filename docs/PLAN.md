@@ -18,6 +18,22 @@
 
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
+## Consolidation follow-up: artifact review #979 — 2026-09-20
+
+Preserve this older preflight proposal and fix three reviewed provenance gaps:
+refresh source origin/main before default target resolution (explicit commits
+remain offline); run the verifier from DEV_SRC_DIR rather than launcher checkout;
+reject assume-unchanged/skip-worktree flags on tracked build inputs. All four
+new regressions failed before fixes and when guards were deliberately reverted,
+then restored/cmp.23 disposable-clone build/preflight tests pass, Ruff/bash syntax
+clean. Only Vite is a tiny fixture executable; no actual app build, browser,
+real run-clone operation, service or network deployment. Source-ref fetch is
+now allowed before staging; RUN fetch/checkout/services still require validation.
+This branch still needs current-main integration and fresh CI before merge;
+no owner permission for #979. Approved batch is #1076/#1057/#962 only. Original
+runtime completion delivery/sealing resumes after consolidation, then new-site
+audit and owner-approved reversible DEV transition. NEVER MERGE remains untouched.
+
 ## Track: runtime v2 R01 (Astra)
 
 ### R04u exclusive source-generation reservation — 2026-09-20
@@ -1280,3 +1296,52 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
 - hosting ticket, če watcher potrdi populacijo B (host stall).
+
+## Astra — SPA artifact provenance before dev mutation (2026-09-07)
+
+Follow-up 2026-09-08: root completed the interrupted helper's parent-symlink
+fix. All source/output path components and run website/static parents are
+checked before any proof unlink or activation. Nineteen behavioral tests pass
+in the isolated agent Python environment. Removing the early output-parent
+check caused the static-parent test to fail with FileNotFoundError (the existing
+proof was wrongly deleted); restored with apply_patch and cmp. Node version is
+recorded as metadata, not enforced against .nvmrc by this slice; use the pinned
+toolchain from #969. No real build, deploy or service action performed.
+
+- Implemented locally on `fix/website-artifact-preflight`; no real build,
+  deployment, restart or production changes. Parent review and feature PR next.
+- `npm run build:app` keeps `prebuild:app` API generation, then wraps the
+  existing Vite command with `scripts/spa_artifact.py`. A deployable build
+  requires the exact target commit checked out and all tracked changes committed.
+  Record includes source SHA, frontend/config/lock/OpenAPI/generated-type input
+  hashes, output hashes and Node version. Failed builds invalidate old provenance;
+  changed source during a build cannot receive successful provenance.
+- **Policy changes:** `SKIP_STATIC=1` is rejected, not an escape from missing
+  or stale artifacts. Untracked frontend inputs and ignored source/public inputs
+  other than generated API types are refused. Frontend production `.env` files,
+  `VITE_*` overrides and non-production `NODE_ENV` are unsupported and fail with
+  an actionable error. Commit-before-build applies even to unrelated tracked edits.
+- `dev_deploy.sh` pins the requested ref in the source clone (fetch source refs
+  explicitly before choosing/building the target), verifies and copies artifacts
+  into a unique sibling staging directory, and revalidates staged bytes before
+  any run-clone checkout. Initial artifact failure occurs before even fetching
+  into the run clone. `DEV_PREFLIGHT_ONLY=1` performs staging/checks only and
+  cleans its own temporary directory; it does not change services or run checkout.
+- Only proven SPA output is installed. **Legacy `static/modern` is preserved
+  with a warning**, not copied on a timestamp claim; legacy provenance remains
+  a separate slice. Previous SPA output is retained in a uniquely named sibling
+  recovery directory; automatic backup deletion is not part of this change.
+- Evidence: 15 behavioral tests passed with disposable Git clones, mock Vite
+  and mutation-recording executables. Missing, corrupt, dirty, wrong-target,
+  stale, changed generated inputs, untracked input, unsupported env, symlink and
+  SKIP_STATIC cases leave the active fixture checkout/assets untouched and call
+  no fetch/checkout/service command. Additional cases cover copy corruption,
+  failed/during-build source changes and successful disposable activation with
+  restarts disabled, previous assets retained and legacy unchanged.
+- Mutation: disabling output-hash equality was seen accepting corrupt output
+  and failing `assert result.returncode != 0`; restored, `cmp` passed, all 15
+  tests passed again. Ruff, shell syntax and whitespace checks passed.
+- Limits: this is trusted-local provenance/integrity bookkeeping, not signing,
+  hermetic dependency verification or an atomic code-plus-assets release manager.
+  Failures after successful preflight/checkout may still require owner recovery;
+  no live activation or browser rendering has been proven by these tests.
