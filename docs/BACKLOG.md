@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04q offline producer helper/proof, not game integration.
+  139 combined tests pass; short-write mutation emits false completion and fails,
+  restored/cmp. Fresh name/single writer required; durable receipt, digest and
+  collisions remain next. Owner allowed local development, no deployment.
+
 - (Astra, 2026-09-20) Source-completion investigation: round notification can
   precede file write; generic saved log and delayed file-created notifier are not
   exact durable receipts. Local runtime counterexample confirms equal metadata

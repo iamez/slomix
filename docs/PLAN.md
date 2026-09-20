@@ -20,6 +20,26 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04q offline producer completion prototype — 2026-09-20
+
+Owner continuation accepted offline producer-protocol development, NOT deployment.
+New standalone Lua helper (not wired into SaveStats/game modules) validates a
+bounded chunk payload/name, checks each engine write count, attempts close even
+on write error and notifies only after all writes and close return. Callback
+failure propagates with completed bytes retained. Receipt binds filename/size
+and writer_closed state, not digest/fsync durability or import acknowledgement.
+FS_WRITE is not exclusive creation: caller-reserved fresh immutable name and
+single writer are explicit preconditions. Collision prevention, durable receipt,
+trusted digest and integration in both SaveStats paths remain activation gates.
+ET write-count/void-close semantics checked in local engine source and upstream
+g_lua.c; deployed engine remains unverified. No game/SSH/service/DB changes.
+139 combined tests pass0skips: real Lua interpreter and temp filesystem include
+short/missing-count writes, open/write/close/notify failures and invalid payloads.
+Bytes/stat/hash agree for completed files. Weakening write-count equality emits
+a false receipt and fails short-write proof; restored/cmp. Lua parse/Ruff clean.
+Next durable receipt and collision-safe snapshot design before producer wiring;
+original runtime/new-site audit/reversible dev order remains unchanged.
+
 ### R04p remote metadata stability guard — 2026-09-20
 
 Completion investigation: STATS_READY is emitted on intermission (default send
