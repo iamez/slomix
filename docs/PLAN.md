@@ -20,6 +20,24 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04t caller-driven completion retry — 2026-09-20
+
+record_completion_once validates the same caller receipt as publication. Existing
+receipt must match requested size/hash as well as captured content; differing
+request returns receipt_conflict, never content_present. Missing receipt publishes
+only against verified bytes; missing_content/content_conflict remain separate.
+Malformed manifests, I/O and publication races propagate for later inspection.
+No loop, overwrite, source acknowledgement or durability upgrade on retry.
+Caller owns trusted immutable receipt/spool. Publication checks bytes twice;
+local filesystem waits remain outside any wall-clock bound.
+187 combined tests pass0skips. Actual filesystem proves no writes on repeat,
+pre-link sync failure retries publication, post-link failure observes existing
+content, missing/corrupt data never acknowledged. Removing caller-identity guard
+fails two cases content_present != receipt_conflict; restored/cmp. Ruff clean.
+#1074 reported checks green/no inline findings at refresh. Next source collision
+reservation and trusted completion delivery before producer integration. Original
+runtime/new-site/reversible dev sequence retained; no services/DB/deploy changes.
+
 ### R04s read-only completion recovery — 2026-09-20
 
 On #1073: inspect_completion_manifest distinguishes missing_manifest,
