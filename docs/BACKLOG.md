@@ -7,6 +7,18 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) Source-completion investigation: round notification can
+  precede file write; generic saved log and delayed file-created notifier are not
+  exact durable receipts. Local runtime counterexample confirms equal metadata
+  and hashes while writer remains open (7bytes then18). Next owner decision on
+  offline source-producer protocol vs retaining source freeze; no deployment.
+
+- (Astra, 2026-09-20) R04p adds fail-closed source metadata checks before read
+  and before local publication. 127 combined cases pass; disabling EOF guard
+  fails three real-child/offline-transport proofs, restored/cmp. Checked-in Lua
+  writes final name directly, so stable metadata is NOT proof of producer close.
+  Trusted completion/manifest remains a gate; no remote/service changes.
+
 - (Astra, 2026-09-20) R04o combines #1069/#1064 and keeps observed spool content
   separate from supervised child outcome. 117 cases pass; actual spawned offline
   retries recover missing content and skip already-complete/conflicting content.

@@ -6,6 +6,20 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · STATS_READY is round timing, not exact-file completion.**
+  Repository webhook defaults to immediate intermission emission; stats writer
+  schedules SaveStats3000ms later and also writes on shutdown. Generic saved log
+  lacks exact file identity. A synthetic open-writer proof retained equal stats
+  and hashes before a later append. Do not promote these hints into completion
+  receipts; require a producer protocol and identify deployed code separately.
+
+- **2026-09-20 · Stable SFTP metadata does not prove producer completion.**
+  Checked-in c0rnp0rn8.lua SaveStats writes final filenames directly. Compare
+  required regular-file mode/size/mtime on handle and path before read and EOF
+  to reject observed drift before publication, but do not infer writer closure
+  or inode identity. Same-size/same-mtime changes can escape metadata checks;
+  trusted digest and immutable-source completion contract are still required.
+
 - **2026-09-20 · Retry result must preserve worker and content separately.**
   A timed-out SSH close can leave verified final bytes; reconciliation must return
   both timed_out and match, not report worker success or assume missing content.
