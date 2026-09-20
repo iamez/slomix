@@ -6,6 +6,18 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · A receipt must accept every supported producer basename.**
+  Lua accepted240-byte names while manifest publishing capped200, stranding valid
+  captures. Aligned240 and tested actual filesystem publication at200/201/240,
+  rejection241, final254-byte name against pathconf. Test boundary composition,
+  not merely each component's individually reasonable limit.
+
+- **2026-09-20 · Two external checks can hide absent GitHub Actions.**
+  Stacked runtime CI push filter matches feat/db-runtime-* only; the Lua-scoped
+  prototype branch did not trigger Actions. Verify workflow runs for exact SHA,
+  not merely a green CodeRabbit/Codacy list. A same-SHA matching verification ref
+  runs existing checks without changing code; keep its purpose explicit.
+
 - **2026-09-20 · Check ET write counts before signalling writer completion.**
   Local and upstream g_lua.c return FS_Write byte count, but FCloseFile returns
   no durability status. Offline prototype rejects short/missing counts and signals

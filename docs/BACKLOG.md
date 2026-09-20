@@ -7,6 +7,17 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #1073 review4057411193 corrected manifest name cap200->240
+  to match Lua producer. Real-file boundary tests and old-limit mutation verified;
+  157 combined tests pass. #1072 verification-alias CI succeeded at exactcba88132.
+  Next resume reader/recovery; no service/deployment or source changes.
+
+- (Astra, 2026-09-20) R04r persists verified completion manifests without
+  overwrite;153 combined tests pass, content-guard mutation fails/restored.
+  #1071 retry succeeded. #1072 lacked Actions due to branch filter; same-SHA
+  verification alias uses existing feat/db-runtime-* trigger. No code bypass.
+  Next manifest recovery and source collision protocol, no activation.
+
 - (Astra, 2026-09-20) R04q offline producer helper/proof, not game integration.
   139 combined tests pass; short-write mutation emits false completion and fails,
   restored/cmp. Fresh name/single writer required; durable receipt, digest and
