@@ -14,6 +14,7 @@ import pytest
 
 from shared.runtime_ssh import RuntimeSSHConfig
 from shared.runtime_ssh_capture import SSHCaptureTask
+from shared.runtime_supervised_capture import capture_ssh_once
 from shared.runtime_worker import run_bounded_capture_task
 
 NAME = '2026-09-20-120000-oasis-round-1.txt'
@@ -122,3 +123,56 @@ def test_relative_spool_rejected(tmp_path):
     task = _task(tmp_path)
     with pytest.raises(ValueError, match='absolute Path'):
         SSHCaptureTask(task.ssh, task.remote_path, Path('relative'), 3, DIGEST)
+
+
+@pytest.mark.parametrize('mode', ['ok', 'corrupt', 'read-block', 'close-block'])
+def test_supervised_retry_preserves_worker_and_content(tmp_path, monkeypatch, mode):
+    """Post-reap inspection and a second call do not confuse timeout with absence."""
+    tmp_path.chmod(0o700)
+    marker = tmp_path / 'events'
+    calls = []
+
+    def offline_worker(task, **limits):
+        calls.append(task)
+        return run_bounded_capture_task(partial(_offline_child, task, marker, mode), **limits)
+
+    monkeypatch.setattr('shared.runtime_supervised_capture.run_bounded_capture_task', offline_worker)
+    task = _task(tmp_path)
+    result = capture_ssh_once(task, timeout_seconds=2, shutdown_grace=0.2)
+    assert len(calls) == 1
+    assert result.content == ('match' if mode in ('ok', 'close-block') else 'missing')
+    assert result.worker.status == ('timed_out' if mode.endswith('block') else
+                                    'failed' if mode == 'corrupt' else 'completed')
+    assert not Path(f'/proc/{result.worker.pid}').exists()
+    assert result.worker.pid not in [child.pid for child in multiprocessing.active_children()]
+    if result.content == 'match':
+        again = capture_ssh_once(task, timeout_seconds=2)
+        assert again.content == 'match' and again.worker is None
+        assert len(calls) == 1
+        assert subprocess.check_output(['sha256sum', str(tmp_path / NAME)], text=True).split()[0] == DIGEST
+    else:
+        leftovers = {path: path.read_bytes() for path in tmp_path.glob('*.part')}
+        mode = 'ok'
+        again = capture_ssh_once(task, timeout_seconds=5)
+        assert again.content == 'match' and again.worker.status == 'completed'
+        assert len(calls) == 2
+        assert {path: path.read_bytes() for path in tmp_path.glob('*.part')} == leftovers
+        assert (tmp_path / NAME).read_bytes() == PAYLOAD
+    print(f'Reconciled task: {result.worker.status}, content={result.content}, attempts={len(calls)}')
+
+
+@pytest.mark.parametrize('payload,state', [(PAYLOAD, 'match'), (b'xyz', 'conflict')])
+def test_existing_content_never_spawns(tmp_path, monkeypatch, payload, state):
+    """Neither an already captured snapshot nor a conflict may open a connection."""
+    tmp_path.chmod(0o700)
+    final = tmp_path / NAME
+    final.write_bytes(payload)
+    final.chmod(0o600)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError('Existing content must not spawn capture')
+
+    monkeypatch.setattr('shared.runtime_supervised_capture.run_bounded_capture_task', forbidden)
+    result = capture_ssh_once(_task(tmp_path), timeout_seconds=2)
+    assert result.content == state and result.worker is None
+    assert final.read_bytes() == payload

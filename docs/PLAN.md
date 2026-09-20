@@ -20,6 +20,26 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04o supervised capture reconciliation — 2026-09-20
+
+Normal ancestry merge combines #1069 with #1064; documentation conflicts retain
+both tracks. capture_ssh_once inspects first, skips match/conflict without spawn,
+otherwise supervises one SSH task and inspects again only after the child is
+reaped. Result preserves observed content and child outcome independently:
+timed_out+match is possible and is not converted into worker success. No source
+ack, deletion, retry loop, import or service activation. Inspection remains a
+byte-bounded local filesystem operation outside the child deadline; no overall
+wall-clock bound is claimed. Caller must keep private spool/snapshot immutable.
+117 combined tests pass. Real child/filesystem with offline SSH seam proves
+retry after corruption/interrupted read succeeds without touching orphan parts;
+retry after close timeout reuses verified final without a new child. Existing
+conflict remains unchanged. Disabling preinspection short-circuit fails two
+tests with Existing content must not spawn capture; restored/cmp, Ruff clean.
+#1069 all reported checks green; no individual merge permission inferred.
+Next trusted source metadata/discovery and integration with verified importer;
+single-writer handoff/dev failure matrix remain gates. New-site audit follows
+runtime completion as originally planned; production remains untouched.
+
 ### R04n concrete SSH capture task — 2026-09-20
 
 On #1068: picklable SSHCaptureTask carries only explicit configuration into the

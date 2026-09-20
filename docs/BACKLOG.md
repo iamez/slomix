@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04o combines #1069/#1064 and keeps observed spool content
+  separate from supervised child outcome. 117 cases pass; actual spawned offline
+  retries recover missing content and skip already-complete/conflicting content.
+  Mutation fails/restores. No orphan deletion or source acknowledgement. Next
+  source metadata/discovery and verified importer integration; no services changed.
+
 - (Astra, 2026-09-20) R04n composes SSH session/file ownership and verified stream
   publication inside a picklable capture-only task on #1068. 97 combined cases
   pass; offline transport with actual child/filesystem demonstrates timeout can

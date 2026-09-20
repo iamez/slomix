@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Retry result must preserve worker and content separately.**
+  A timed-out SSH close can leave verified final bytes; reconciliation must return
+  both timed_out and match, not report worker success or assume missing content.
+  Inspect before spawning the next attempt, skip match/conflict, leave orphan
+  partials untouched. Local inspection is not covered by the child's deadline.
+
 - **2026-09-20 · Transport close timeout can follow successful publication.**
   A real disposable child with an offline SSH seam published verified bytes then
   blocked in file close. Supervisor reaped it as timed_out while final bytes and
