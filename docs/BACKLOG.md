@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-19) Independent R04b constructor-config prerequisite over
+  main2518735f;154 cases pass, actual subprocess and falsey-config mutation proof.
+  Separate open stack #1051–#1056 remains intact. #1055 review findings fixed in
+  847c1b7d and synced to #1056 at74408882; both threads answered/resolved, fresh CI
+  required. Resume config/logging startup boundary after review, no activation.
+
 - (Astra, 2026-09-20) R04u independent main-based source generation reservation:
   16 focused cases pass, same-token concurrency has one winner, existing entries
   never reused, sync-error reservations retained. Mutation fails/restores. Prior
