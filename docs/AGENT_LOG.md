@@ -6,6 +6,11 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Undefined disk capacity is not zero usage.**
+  A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
+  is instead measurable 100%/fail. Compare collector ratios with df used/available
+  bytes, not exact displayed integers: df rounds its displayed percentage upward.
+
 - **2026-09-20 · A failed reservation may still own its namespace.**
   Atomic mkdir prevents two same-token writers from reserving one generation.
   A later fsync failure can leave that directory; retry must refuse reuse even
