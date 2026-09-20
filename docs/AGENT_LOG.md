@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · A failed reservation may still own its namespace.**
+  Atomic mkdir prevents two same-token writers from reserving one generation.
+  A later fsync failure can leave that directory; retry must refuse reuse even
+  when empty. Never infer an empty directory is free. Keep source reservation,
+  immutable payload completion and durable receipt delivery as separate states.
+
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
   Include every changed Python path in local lint. Module-attribute aliases
