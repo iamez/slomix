@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #1059 strengthened with neutral process_file preflight
+  lifecycle subprocess proofs (duplicate/outage/cancel),36 focused cases pass.
+  Unwanted disconnect mutation failed/restored. Next real PG successful-write
+  proof remains pending; no application database or service touched.
+
 - (Astra, 2026-09-20) R04d implemented on separate worktree, based on #1057
   plus unchanged parser slice from #1056. Neutral import/construction and lazy
   default setup proven in subprocesses;78 regressions pass; mutation restored.

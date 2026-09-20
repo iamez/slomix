@@ -22,6 +22,14 @@
 
 ### R04d neutral importer startup — 2026-09-20
 
+Follow-up preflight lifecycle proof: three fresh subprocesses invoke real
+process_file with a caller-owned protocol-test pool: duplicate, query outage,
+and cancellation. They assert lease release, retained pool identity, retryable
+outage and propagated cancellation, with setup/presentation imports forbidden.
+36 focused cases pass. Adding disconnect to the duplicate branch fails the
+success contract (borrowed pool close raises); restored/cmp. This is NOT a real
+PostgreSQL commit proof and does not cover the full successful write path yet.
+
 Branch feat/db-runtime-import-startup-r04d builds on #1057 at908d238e and
 cherry-picks #1056 parser-only slice65f5cbac as aaee6c52 (not its cache stack).
 Parser/test contents unchanged; progress notes from both sides preserved.
