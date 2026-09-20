@@ -45,7 +45,7 @@ async def import_ready_file(manager, file_path: Path) -> ImportStepResult:
             if await manager.is_file_processed(file_path.name):
                 return ImportStepResult('imported', 'Already processed')
             duplicate = await manager.find_processed_duplicate(file_path)
-            if not duplicate or duplicate == file_path.name:
+            if not duplicate or duplicate == file_path.name or not _can_wait_for_r1(duplicate):
                 return ImportStepResult('waiting_for_r1', 'Matching R1 file is not available')
             # Let the canonical path record the renamed duplicate's marker.
     result = await manager.process_file(file_path)

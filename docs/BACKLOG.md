@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #1060 cross-half dedupe review: canonical hash lookup
+  now scopes R1/R2 separately, not only the runtime waiting guard. Actual-PG
+  zero-delta R2 proof and failing/restored SQL mutation verify the root fix.
+  Historical repairs and full source identity are separate, not silently done.
+
 - (Astra, 2026-09-20) #1060 calendar review fixed: impossible R2 timestamps no
   longer wait for R1.23 unit/PG cases pass,7 calendar mutations fail/restored.
   Resume bounded stream capture on the #1062 stack; no live activation.

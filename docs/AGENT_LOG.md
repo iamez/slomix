@@ -20,6 +20,13 @@ data here.
   handlers. Import-only callers intentionally no longer initialize logging.
 
 
+- **2026-09-20 · Header-free payload equality is not cross-half identity.**
+  An unchanged cumulative R2 has the same payload hash as R1. Canonical import
+  and neutral duplicate preflight must scope successful hashes by half before
+  treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
+  removing the SQL half filter loses that half. Same-half cross-match identity
+  still needs a stronger source contract; do not infer it from this narrow fix.
+
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
   Include every changed Python path in local lint. Module-attribute aliases

@@ -75,12 +75,22 @@ async def test_cancellation_propagates():
 async def test_renamed_duplicate_reaches_canonical_marker_path():
     """Content deduplication remains reachable after R1 retention expires."""
     subject = manager(result=(True, 'Duplicate payload of original'))
-    subject.find_processed_duplicate.return_value = 'original'
+    subject.find_processed_duplicate.return_value = '2026-09-20-121000-original-round-2.txt'
     path = Path('2026-09-20-121000-mirror-round-2.txt')
     result = await import_ready_file(subject, path)
     assert result.status == 'imported' and result.message == 'Duplicate payload of original'
     subject.find_processed_duplicate.assert_awaited_once_with(path.absolute())
     subject.process_file.assert_awaited_once_with(path.absolute())
+
+
+@pytest.mark.parametrize('duplicate', ['2026-09-20-120000-map-round-1.txt', 'invalid'])
+async def test_only_confirmed_round_two_duplicate_can_bypass_waiting(duplicate):
+    """Identical R1 payload is not evidence that a zero-delta R2 was imported."""
+    subject = manager()
+    subject.find_processed_duplicate.return_value = duplicate
+    result = await import_ready_file(subject, Path('2026-09-20-121000-map-round-2.txt'))
+    assert result.status == 'waiting_for_r1'
+    subject.process_file.assert_not_awaited()
 
 
 @pytest.mark.parametrize('name', [

@@ -11,7 +11,9 @@ import pytest
 from tests.integration.test_runtime_events_pg import connection_options
 
 
-@pytest.mark.parametrize('scenario', ['single', 'ordered_pair', 'r2_first', 'late_r1', 'deferred_r1'])
+@pytest.mark.parametrize('scenario', [
+    'single', 'ordered_pair', 'r2_first', 'late_r1', 'deferred_r1', 'zero_delta',
+])
 def test_neutral_import_commits_player_event_and_retry(tmp_path, scenario):
     """Real parser, SQL and commit work with presentation/setup imports blocked."""
     options = connection_options()
@@ -25,7 +27,8 @@ def test_neutral_import_commits_player_event_and_retry(tmp_path, scenario):
     r2 = tmp_path / '2026-09-20-121000-goldrush-round-2.txt'
     r2.write_text(
         '\\'.join(['TestServer', 'goldrush', 'legacy6', '2', '2', '1', '12:00', '7:36', '456'])
-        + '\n' + '\\'.join(['a' * 32, 'Fixture', '1', '1', '1 25 40 8 4 2']) + '\n',
+        + '\n' + '\\'.join(['a' * 32, 'Fixture', '1', '1',
+                            '1 10 20 3 2 1' if scenario == 'zero_delta' else '1 25 40 8 4 2']) + '\n',
         encoding='utf-8',
     )
     if scenario in {'late_r1', 'deferred_r1'}:
@@ -75,6 +78,14 @@ async def main():
         if scenario != 'single':
             r1 = Path(sys.argv[1])
             r2 = r1.parent / '2026-09-20-121000-goldrush-round-2.txt'
+            if scenario == 'zero_delta':
+                assert (await manager.process_file(r1))[0]
+                r1.rename(r1.with_suffix('.retired'))
+                waiting = await import_ready_file(manager, r2)
+                assert waiting.status == 'waiting_for_r1', waiting
+                assert not await manager.is_file_processed(r2.name)
+                assert await admin.fetchval('SELECT count(*) FROM runtime_events') == 1
+                r1.with_suffix('.retired').rename(r1)
             if scenario == 'deferred_r1':
                 waiting = await import_ready_file(manager, r2)
                 assert waiting.status == 'waiting_for_r1', waiting
@@ -97,6 +108,8 @@ async def main():
                 ORDER BY r.round_number
             """)
             expected = [(1, 3), (2, 8)] if scenario == 'late_r1' else [(0, 8), (1, 3), (2, 5)]
+            if scenario == 'zero_delta':
+                expected = [(0, 3), (1, 3), (2, 0)]
             assert [(r['round_number'], r['kills']) for r in rows] == expected, rows
             if scenario == 'late_r1':
                 assert rows[-1]['round_status'] == 'orphan_r2', rows

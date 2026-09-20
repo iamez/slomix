@@ -31,6 +31,19 @@ cutover. Production remains frozen. Build/test success is not a website audit.
 
 ### R04e dependency-aware import step — 2026-09-20
 
+Review4056385615 RCA: payload hash omits the header, so unchanged cumulative
+R2 equals R1. Scope canonical duplicate queries to the same filename round suffix
+in BOTH the neutral preflight and process_file; waiting bypass additionally
+requires a valid R2 source. Preserve legacy unscoped lookup for callers omitting
+filename. Actual PG zero-delta case: R1 retired => waiting/no R2 marker; restored
+=> R0=3/R1=3/R2=0 and two half events. Removing SQL half filter reproduces
+Skipped duplicate payload file and missing R2; restored/cmp. Same-half identity
+across different matches remains legacy payload-based behavior, not a complete
+source-identity guarantee. No historical data repair or application DB changes.
+66 combined unit/actual-PG tests pass; two waiting-gate mutations fail as well,
+restored/cmp. Changed small modules Ruff clean; manager diagnostics identical
+to parent20-code/message multiset. Disposable PG stopped; fresh CI required.
+
 Review4056323000: validate actual calendar/time before dependency waiting,
 not only regex shape.23 unit/PG cases pass, including impossible timestamp
 through canonical failure, leap-day and midnight boundaries. Skipping calendar

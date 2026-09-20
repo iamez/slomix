@@ -1496,20 +1496,29 @@ class PostgreSQLDatabaseManager:
             )
             return result > 0
 
-    async def find_processed_by_hash(self, file_hash: str | None) -> str | None:
-        """Find an already-successfully-processed filename by content hash."""
+    async def find_processed_by_hash(
+        self, file_hash: str | None, *, filename: str | None = None,
+    ) -> str | None:
+        """Find successful content within the same half for canonical stats files.
+
+        Payload hashing omits the header, so an unchanged R2 can equal R1.
+        Omitted/noncanonical filenames retain the legacy unscoped lookup.
+        """
         if not file_hash:
             return None
+        suffix = next((f'%-round-{number}.txt' for number in (1, 2)
+                       if filename and filename.endswith(f'-round-{number}.txt')), None)
         async with self.pool.acquire() as conn:
             return await conn.fetchval(
                 """
                 SELECT filename
                 FROM processed_files
                 WHERE file_hash = $1 AND success = TRUE
+                  AND ($2::text IS NULL OR filename LIKE $2)
                 ORDER BY processed_at DESC
                 LIMIT 1
                 """,
-                file_hash,
+                file_hash, suffix,
             )
 
     async def find_processed_duplicate(self, file_path: Path) -> str | None:
@@ -1519,7 +1528,7 @@ class PostgreSQLDatabaseManager:
         propagate; they are not evidence that no duplicate exists.
         """
         _, payload_hash = self._compute_file_hashes(file_path)
-        return await self.find_processed_by_hash(payload_hash)
+        return await self.find_processed_by_hash(payload_hash, filename=file_path.name)
 
     def _compute_file_hashes(self, file_path: Path) -> tuple[str, str]:
         """
@@ -1603,7 +1612,7 @@ class PostgreSQLDatabaseManager:
                 return True, "Already processed"
 
             # Skip renamed mirror files that have identical payload content.
-            duplicate_source = await self.find_processed_by_hash(payload_hash)
+            duplicate_source = await self.find_processed_by_hash(payload_hash, filename=filename)
             if duplicate_source and duplicate_source != filename:
                 self.stats['files_skipped'] += 1
                 await self.mark_file_processed(
