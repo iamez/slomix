@@ -102,6 +102,16 @@ _SPECIAL_CASE_TABLES: tuple[str, ...] = ("lua_round_teams", "lua_spawn_stats")
 # these carries the four-column round identity the generic legs key on, and
 # the contract test rejects an exemption for any table that does.
 _DETECTION_EXEMPT_TABLES: dict[str, str] = {
+    "lua_correction_receipts": (
+        "committed correction receipt: non-null round_id records the target "
+        "accepted in the receipt transaction, not a link to repair; no full "
+        "source identity for generic relinking, which must not rewrite history"
+    ),
+    "runtime_events": (
+        "immutable import journal: round_id is assigned in the canonical "
+        "round transaction and is non-null historical provenance; no full "
+        "source identity for generic relinking, which must not rewrite history"
+    ),
     "player_comprehensive_stats": (
         "stats path: the importer assigns round_id while creating the rounds "
         "row itself (0 NULLs on dev); no round_start_unix/session_date "

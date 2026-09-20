@@ -96,7 +96,9 @@ async def get_proximity_carrier_events(
                carry_distance, beeline_distance, efficiency,
                duration_ms, map_name, killer_name, pickup_time
         FROM proximity_carrier_event {where_sql}
-        ORDER BY session_date DESC, pickup_time DESC
+        -- pickup_time is the round clock (Lua gameTime(), restarts every
+        -- round): latest means latest ROUND first, then latest in it
+        ORDER BY session_date DESC, round_start_unix DESC NULLS LAST, pickup_time DESC
         LIMIT 20
         """,
         tuple(params),

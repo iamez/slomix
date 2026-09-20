@@ -30,6 +30,15 @@ SERIES_BUCKET_MS = 1000
 SOLO_RADIUS = 500  # units from nearest teammate = "solo" (lurker convention)
 
 
+def _last_event(path: list) -> str | None:
+    """The `event` of the last path point, when the tracker wrote one."""
+    if not path:
+        return None
+    last = path[-1]
+    ev = last.get("event") if isinstance(last, dict) else None
+    return str(ev) if ev else None
+
+
 def _downsample_path(path: list, step_ms: int) -> list[dict]:
     """Thin a 200ms path to step_ms, keeping the rich per-point fields."""
     out: list[dict] = []
@@ -204,6 +213,7 @@ async def get_player_journey(
 
     # Objective involvement (carrier runs, objective runs, constructions).
     objective_events: list[dict] = []
+    objective_events_unavailable: str | None = None
     try:
         carrier_rows = await db.fetch_all(
             f"""
@@ -250,8 +260,13 @@ async def get_player_journey(
             {"type": "construction", "time": int(r[0] or 0), "action": r[1], "objective": r[2]}
             for r in (constr_rows or [])
         ]
-    except Exception:
+    except Exception as exc:
         logger.exception("player-journey objective lookup failed (continuing without)")
+        # Named, not zeroed — and not partial either: a failure after the first
+        # query would otherwise leave the carrier rows in the lives while the
+        # summary says unavailable (Codex on #1009, twice).
+        objective_events_unavailable = f"objective lookup failed: {type(exc).__name__}"
+        objective_events = []
 
     # Bucket every OTHER player's path once for the proximity series.
     others: list[dict] = []
@@ -350,7 +365,10 @@ async def get_player_journey(
             "duration_ms": int(r[6] or 0),
             "total_distance": float(r[8] or 0),
             "sprint_pct": float(r[9] or 0),
-            "death_type": "round_end" if death_ms is None else None,
+            # The tracker's last path event names how the life ended
+            # (killed / selfkill / fallen / world / teamkill / disconnect …);
+            # a life without a death time ended with the round.
+            "death_type": "round_end" if death_ms is None else _last_event(path),
             "path": _downsample_path(path, downsample_ms),
             "kills": kills,
             "death": death,
@@ -372,6 +390,7 @@ async def get_player_journey(
             "kills": total_kills,
             "deaths": total_deaths,
             "avg_life_s": round(alive_total_ms / len(lives) / 1000, 1) if lives else 0,
-            "objective_events": len(objective_events),
+            "objective_events": None if objective_events_unavailable else len(objective_events),
+            "objective_events_unavailable": objective_events_unavailable,
         },
     }

@@ -6,6 +6,129 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-19 · Lint modified legacy files as well as new modules.**
+  R04c's new files passed Ruff but its legacy re-export block failed CI I001.
+  Include every changed Python path in local lint. Module-attribute aliases
+  retain the legacy function identities without unused-import ambiguity;
+  mutation-test the export identity rather than assuming an alias is correct.
+
+- **2026-09-19 · Logging emission is separate from process setup.**
+  Importing bot.logging_config creates its log directory. Runtime-only callers
+  can use shared.database_logging without that side effect; legacy exports stay
+  compatible. Prove the boundary in a fresh subprocess with forbidden-import
+  hooks, then mutate an import after definitions so a circular-import collection
+  error does not masquerade as an executed boundary guard. Manager startup still
+  needs its own extraction; moving dotenv imports can change log-directory order.
+
+- **2026-09-18 · Verify release registration from the evaluated array.**
+  A migration filename appearing somewhere in a shell config does not prove
+  membership in MIGRATIONS: even a comment passes a substring assertion.
+  Inspect the evaluated Bash array and compare exact entries. Commenting out
+  migration 090 reproduced the missing-registration failure; restore with cmp.
+
+- **2026-09-18 · Every new round_id table needs a linkage decision.**
+  The schema-driven coverage contract also applies to runtime receipt tables.
+  lua_correction_receipts records the target of a committed correction, so
+  generic relinking must not rewrite its historical provenance. Add a justified
+  exemption and run test_round_id_coverage_contract.py alongside PG proofs;
+  focused transaction tests alone did not catch this CI failure.
+
+- **2026-09-18 · Measure the pre-push hook's actual comparison range.**
+  New branches compare with the main merge-base; existing branches compare
+  with their previous remote tip, intersected with paths changed vs main.
+  A three-file update can correctly pass while its dependent stack has26files.
+  Do not mistake total stack size for the hook's update size or bypass the hook.
+
+- **2026-09-18 · Test retention against the actual normalized producer.**
+  Lua correction metadata uses END_REASON_ENUM (uppercase), not raw webhook
+  text. A lowercase-only inbox validator rejected valid producer output while
+  synthetic fixtures without end_reason passed. Reuse the canonical enum and
+  exercise WebhookRoundMetadataService before retaining input; raw timelimit
+  normalizes to NORMAL, not a new TIMELIMIT value.
+
+- **2026-09-18 · Correction fixtures must preserve integer seconds.**
+  A REAL fixture accepted values the live INTEGER player-duration column
+  rejects. Use INTEGER in boundary proofs; validate finite, nonnegative,
+  integral durations before SQL. Canonical helpers that swallow collisions
+  cannot establish atomic correction success: enforce conflicts in the same
+  native transaction as metadata, DPM and its journal event.
+
+- **2026-09-18 · Post-import correction failure is not import failure.**
+  The importer and bot mark the file successful before Lua overrides; ingress
+  RAM/DB/session gates can skip any retry and pending metadata is popped.
+  Rethrowing or moving only the bot marker cannot guarantee recovery. Give
+  corrections their own atomic boundary and retained-input retry contract;
+  do not misclassify an already committed import as RetryableImportFailure.
+
+- **2026-09-15 · Retry ownership must travel with the chain.** Capture the
+  original webhook claim explicitly when scheduling, retain it across attempts,
+  and release it only on retryable terminal exits. Looking up the current alias
+  owner at cleanup time can release a replacement. Immediate release while a
+  retry is pending instead permits competing polling publication. Prove both
+  pending exclusion and terminal alias cleanup with actual asyncio tasks.
+
+- **2026-09-15 · A post-await duplicate needs the same trigger cleanup.**
+  Another endstats attempt can claim a filename during DB preflight. The
+  losing webhook must delete its notification just like the initial duplicate
+  path, but must not release the winner's marker. Inject ownership during the
+  awaited DB call and exercise both successful and failed Discord deletion.
+
+- **2026-09-15 · A filename is not an attempt identity.** Polling cleanup
+  must compare its claim object with the current owner before removing a RAM
+  marker. A later retry may own the same filename, and richer selection may
+  select an alias already owned elsewhere. Exception and soft-failure paths
+  both need the identity guard; a raw set.discard silently defeats it.
+
+- **2026-09-15 · Test the gate before the handler too.** Endstats had four
+  filename gates, including monitor preflight in webhook_handler_mixin.
+  A direct handler retry passed while real polling still rejected the failed
+  filename. Exercise preflight plus handler/storage; preserve terminal and
+  NULL/unknown states when narrowly allowing explicit publication failures.
+
+- **2026-09-14 · Best-effort catches are unsafe around opt-in journal writes.**
+  Restart detection used to swallow errors. With the status producer enabled,
+  failures must reach the canonical import rollback; actual status update,
+  event and notification share that transaction. Guard completed status in
+  the UPDATE, not only the earlier SELECT, to avoid journaling stale no-ops.
+  Atomic recording does not prove the restart heuristic itself correct.
+
+- **2026-09-14 · Lock the selected source, not only the destination.** A
+  NULL-only timing fill can commit stale Lua values if its source changes
+  concurrently. Lock both selected rows with SKIP LOCKED until commit; prove
+  both source-first skip/retry and fill-first blocked relinking on real PG.
+  This is not a guarantee against later changes or newly inserted sources.
+
+- **2026-09-14 · Initial-event dedup is not update-event dedup.** A timing
+  source can undergo value -> NULL -> value across a repair. A permanent
+  round/type or content-hash key would hide the later real transition. R02a
+  keeps only the initial import key unique; row-locked NULL-to-value fills
+  emit each actual transition and repeated successful fills are no-ops.
+  Consumers still cannot use sequence ID as commit order.
+
+- **2026-09-14 · Rollback is not retry eligibility.** FileTracker treats
+  success=false processed_files rows as terminal too; UltimateBot also cached
+  them in RAM. DB/preflight/transaction failures must return a structured
+  retryable result without either marker. Keep deterministic parse failures
+  separate. R01 proves a failed journal import can retry and commit; existing
+  activity/lookback windows still limit automatic recovery.
+
+- **2026-09-10 · A migration has three installation paths to keep aligned.**
+  R01 initially added SQL alone, omitting the latest release config and the
+  canonical dump used before deploy_clean's baseline. Register it in the
+  release array and mirror DDL in the dump; run release-contract and real
+  fresh-bootstrap parity tests. A local opt-in PG test also needs an explicit
+  CI path or its only real SQL coverage silently skips in the matrix.
+
+- **2026-09-08 · Import success must be logged after transaction exit.**
+  `pg_notify` participates in the import transaction and can fail at COMMIT;
+  the emitter returning does not prove persistence. R01 moves success counts
+  and logs after COMMIT; a canonical-import test injects commit failure and
+  checks that no success is reported. Updated 2026-09-14: transient failures
+  now leave no terminal processed-file marker, so a later poll can retry. This mock is
+  wiring evidence, not real PostgreSQL transaction proof. Initial journal
+  events are not final-round events: validation warnings and post-commit
+  correlation/Lua/endstats changes remain distinct facts.
+
 - **2026-09-07 · A directory's mtime is not its contents' mtime.** `ls -la
   <dir>` reports when the directory entry list last changed (a file added or
   removed), not when files inside were written; a rebuilt bundle that reuses

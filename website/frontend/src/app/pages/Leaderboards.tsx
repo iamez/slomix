@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useUrlState } from '../lib/urlState';
 import { Link } from 'react-router';
 import { useLeaderboard } from '../lib/queries';
-import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable, figure } from '../components/ui';
 
 /**
  * Leaderboards (docs/design/12 row 3) — legacy leaderboard.js carried over:
@@ -41,9 +42,11 @@ function formatValue(stat: string, value: number): string {
 
 
 export function Leaderboards() {
-  // Legacy defaults: stat=games ("Rounds"), period=season.
-  const [stat, setStat] = useState('games');
-  const [period, setPeriod] = useState('season');
+  // Legacy defaults: stat=games ("Rounds"), period=season. Both live in the
+  // address bar so a board can be linked as the reader is seeing it; the
+  // default is never written, so a bare /leaderboards is still the default.
+  const [stat, setStat] = useUrlState('stat', 'games', STATS.map((s) => s.key));
+  const [period, setPeriod] = useUrlState('period', 'season', PERIODS.map((p) => p.key));
   const board = useLeaderboard(stat, period);
   const data = board.isError ? undefined : board.data;
   const statLabel = STATS.find((s) => s.key === stat)?.label ?? stat.toUpperCase();
@@ -96,9 +99,9 @@ export function Leaderboards() {
             >
               <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(row.rank).padStart(2, '0')}</span>
               <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-              <span className="m" style={{ fontSize: 'var(--fs-value)', textAlign: 'right', color: 'var(--color-text-100)' }}>{formatValue(stat, row.value)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-value)', textAlign: 'right', color: 'var(--color-text-100)' }} title={stat === 'kills' && row.deaths != null ? `${figure(row.deaths)} deaths` : undefined}>{formatValue(stat, row.value)}</span>
               {stat !== 'games' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.rounds}</span>}
-              {stat !== 'kills' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kills ?? '—'}</span>}
+              {stat !== 'kills' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }} title={row.deaths != null ? `${figure(row.deaths)} deaths` : undefined}>{row.kills ?? '—'}</span>}
               {stat !== 'kd' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kd.toFixed(2)}</span>}
             </Link>
           ))}

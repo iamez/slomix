@@ -4,6 +4,7 @@
  "round_number": 2,
  "round_start_unix": 1787514030,
  "round_end_unix": 1787514750,
+ "round_duration_seconds": 720,
  "map_name": "supply",
  "target_guid": "9F2B3930797D7D142795B1B6EE194722",
  "target_name": "JaKaZc",

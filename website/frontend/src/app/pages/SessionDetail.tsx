@@ -2,8 +2,12 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
+import { PlayerMapMatrix } from '../components/PlayerMapMatrix';
+import { hms } from '../components/RoundsTable';
 import { RoundsTab, roundsReason } from '../components/RoundsTab';
+import { SessionGraphsPanel } from '../components/SessionGraphs';
 import { TeamplayTab } from '../components/TeamplayTab';
 import { PlayerDrilldown } from '../components/PlayerDrilldown';
 import { SessionStory } from './Story';
@@ -74,9 +78,12 @@ function Scoreboard({ scoring }: { scoring: SessionScoring }) {
       <SectionHead
         label="scoreboard"
         aside={
-          <span className="lbl">
-            {scoring.team_a_name} {scoring.team_a_score} — {scoring.team_b_score} {scoring.team_b_name}
-          </span>
+          <Cluster gap={2} align="baseline">
+            <span className="lbl">
+              {scoring.team_a_name} {scoring.team_a_score} — {scoring.team_b_score} {scoring.team_b_name}
+            </span>
+            {scoring.total_maps != null && <Meta>{scoring.total_maps} maps scored</Meta>}
+          </Cluster>
         }
       />
       <Stack gap={1} className="rows">
@@ -279,6 +286,12 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
         label="mvp votes"
         aside={<span className="lbl">{figure(totalVotes)} votes cast by players</span>}
       />
+      {(q.data.my_vote != null || q.data.most_underrated_guid != null) && (
+        <Meta>
+          {q.data.my_vote != null ? `your vote: ${q.data.candidates.find((c) => c.guid === q.data.my_vote)?.name ?? String(q.data.my_vote)}` : 'you have not voted'}
+          {q.data.most_underrated_guid != null ? ` · most underrated: ${q.data.candidates.find((c) => c.guid === q.data.most_underrated_guid)?.name ?? q.data.most_underrated_guid}` : ''}
+        </Meta>
+      )}
       <Stack gap={1} className="rows">
         {q.data.candidates.filter((c) => c.votes > 0).map((c) => (
           <Cluster key={c.guid} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
@@ -288,6 +301,7 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
               <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', width: 60, textAlign: 'right' }}>
                 {c.vote_pct.toFixed(0)}%
               </span>
+              {c.kis_rank != null && <Meta>KIS rank {figure(c.kis_rank)}</Meta>}
             </Cluster>
           </Cluster>
         ))}
@@ -308,15 +322,17 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
 function TopDpm({ sessionId }: { sessionId: number }) {
   const board = useSessionLeaderboard(sessionId, 3);
   return (
-    <Stack gap={2} parity="session.top-dpm">
-      <SectionHead label="top dpm" aside={<span className="lbl">computed, not voted</span>} />
-      {board.isPending && <Pending label="top dpm" />}
-      {board.isError && <Unavailable what="top dpm" />}
-      {board.data && (board.data.length === 0 ? (
-        <Absent reason="no counted rounds carry damage for this session, so there is no dpm to rank" />
-      ) : (
+    <Panel
+      parity="session.top-dpm"
+      label="top dpm"
+      aside="computed, not voted"
+      q={board}
+      empty="no counted rounds carry damage for this session, so there is no dpm to rank"
+      isEmpty={(d) => d.length === 0}
+    >
+      {(d) => (
         <Stack gap={1} className="rows">
-          {board.data.map((row) => (
+          {d.map((row) => (
             <Cluster key={row.rank} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-row)' }}>{row.name}</span>
               <Cluster gap={3} align="baseline">
@@ -328,8 +344,8 @@ function TopDpm({ sessionId }: { sessionId: number }) {
             </Cluster>
           ))}
         </Stack>
-      ))}
-    </Stack>
+      )}
+    </Panel>
   );
 }
 
@@ -399,6 +415,7 @@ function PlayersTab({ players, sessionId, teams }: { players: SessionPlayerTotal
         renderExpanded={(p) => <PlayerDrilldown sessionId={sessionId} guid8={p.player_guid} name={p.player_name} />}
         minWidth={1400}
         label="players"
+        exportable
       />
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
         totals over the session's counted rounds · sorted by dpm
@@ -543,6 +560,7 @@ function Basics({ basics, sessionId }: { basics: SessionBasics; sessionId: numbe
         renderExpanded={(p) => <PlayerDrilldown sessionId={sessionId} guid8={p.guid} name={p.name} />}
         minWidth={1160}
         label="the basics"
+        exportable
       />
       {!c.kis_covered && <Absent reason="KIS is not covered for this session — the proximity tracker scored no kill here, so the two kis columns say nothing, not zero" />}
       {c.kis_covered && c.kis_kills < c.total_kills && (
@@ -649,6 +667,16 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
           <Link to="/sessions" className="lbl" style={{ textDecoration: 'none' }}>← sessions</Link>
           <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)' }}>
             #{sessionId} · {detail.round_count} rounds · {detail.matches.length} maps · {detail.player_count} players · {clock(duration)}
+            {/* `?.` on the block: a recording from before the clock existed has none */}
+            {/* A historical evening can know its end (the last file time) and
+              * not its start (the first round lost both duration sources):
+              * `_session_clock` answers start:null, end, span:null on purpose,
+              * and a measured end must not vanish behind the missing start. */}
+            {basics.data?.clock && (basics.data.clock.start || basics.data.clock.end) && (
+              basics.data.clock.start
+                ? <> · {basics.data.clock.start}{basics.data.clock.end ? `–${basics.data.clock.end}` : ''}{basics.data.clock.span_seconds != null ? ` (${hms(basics.data.clock.span_seconds)} wall clock)` : ''}</>
+                : <> · ended {basics.data.clock.end} <Meta>start not measured</Meta></>
+            )}
           </span>
         </Stack>
         {teams.length === 2
@@ -688,6 +716,8 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
       <More label="more about the night">
         <Scoreboard scoring={detail.scoring} />
         <TeamTotals matrix={detail.team_matrix} />
+        <PlayerMapMatrix matrix={detail.team_matrix} />
+        <SessionGraphsPanel sessionId={sessionId} />
         <LivesOfTheNight sessionId={sessionId} />
         {verdicts.isPending && <Pending label="form" />}
         {verdicts.isError && <Unavailable what="form" />}

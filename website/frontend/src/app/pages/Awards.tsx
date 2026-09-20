@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useUrlState, useUrlStateNullable } from '../lib/urlState';
 import { Link } from 'react-router';
 import { useAwards, useAwardsLeaderboard } from '../lib/queries';
 import type { AwardRow } from '../lib/types';
@@ -158,10 +159,13 @@ function ByPlayer({ days, awardType }: { days: number | null; awardType: string 
 }
 
 export function Awards() {
-  const [tab, setTab] = useState<'round' | 'player'>('round');
-  // Legacy default: last 30 days.
-  const [days, setDays] = useState<number | null>(30);
-  const [awardType, setAwardType] = useState<string | null>(null);
+  const [tab, setTab] = useUrlState<'round' | 'player'>('tab', 'round', ['round', 'player']);
+  // Legacy default: last 30 days. In the address bar `days=all` is the
+  // all-time state, because "no parameter" already means the 30-day default.
+  const [daysRaw, setDaysRaw] = useUrlState<string>('days', '30', ['7', '30', '90', 'all']);
+  const days = daysRaw === 'all' ? null : Number(daysRaw);
+  const setDays = (next: number | null) => { setDaysRaw(next == null ? 'all' : String(next)); };
+  const [awardType, setAwardType] = useUrlStateNullable('award');
   // The dropdown lists REAL award names from every source this page has:
   // the legacy twelve as the floor, the leaderboard's top_award values, and
   // the award names on the first unfiltered awards page — top_award alone
