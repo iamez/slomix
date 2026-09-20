@@ -20,6 +20,28 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04p remote metadata stability guard — 2026-09-20
+
+Discovery: checked-in c0rnp0rn8.lua SaveStats writes directly to the final stats
+name (FS_WRITE, header/player writes, close); legacy SSHHandler uses sftp.get.
+This is code evidence, not verification of deployed Lua or remote corpus. Neither
+path supplies an immutable snapshot manifest. Keep trusted source identity and
+producer completion as activation gates; equal metadata does not prove closure.
+SSHCaptureTask now requires regular-file mode/size/mtime from lstat before open,
+expected size agreement, and matching handle/path metadata before reading and
+again at EOF BEFORE local publication. Missing metadata fails closed. Paramiko
+stat/lstat semantics checked against official SFTP API documentation.
+127 combined tests pass. Real spawned task/filesystem with offline SFTP seam
+rejects growth, handle mtime drift and named-path drift without publishing final;
+rejects symlink/directory/missing fields/wrong size before opening remote file.
+Mutation disabling EOF verification publishes invalid final and fails all three
+drift cases; restored/cmp. Ruff/whitespace clean. No actual SSH or service changes.
+Limitations: no inode identity, writer lock, same-size/same-mtime detection or
+parent-path symlink protection. Digest and immutable-source preconditions remain.
+#1070 reported checks green, no inline findings at refresh, no merge permission.
+Next: source completion/manifest contract and verified importer composition;
+original runtime-first/new-site audit/reversible dev sequence remains unchanged.
+
 ### R04o supervised capture reconciliation — 2026-09-20
 
 Normal ancestry merge combines #1069 with #1064; documentation conflicts retain
