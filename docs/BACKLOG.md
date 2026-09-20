@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04e caller-driven dependency guard implemented: missing
+  R1 defers R2 without terminal marker;69 combined tests including actual PG
+  pass; guard mutation observed/restored. Immutable spool is a precondition,
+  not implemented transport/retention. Next bounded capture/publication design.
+  Owner-approved overall scope now includes full new-site audit after runtime.
+
 - (Astra, 2026-09-20) Real PG R1/R2 ordering characterized;63 tests pass.
   Activation gap confirmed: late R1 does not repair already-marked orphan R2.
   Next priority dependency-aware capture scheduling, not more unrelated refactors.

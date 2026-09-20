@@ -11,7 +11,7 @@ import pytest
 from tests.integration.test_runtime_events_pg import connection_options
 
 
-@pytest.mark.parametrize('scenario', ['single', 'ordered_pair', 'r2_first', 'late_r1'])
+@pytest.mark.parametrize('scenario', ['single', 'ordered_pair', 'r2_first', 'late_r1', 'deferred_r1'])
 def test_neutral_import_commits_player_event_and_retry(tmp_path, scenario):
     """Real parser, SQL and commit work with presentation/setup imports blocked."""
     options = connection_options()
@@ -28,7 +28,7 @@ def test_neutral_import_commits_player_event_and_retry(tmp_path, scenario):
         + '\n' + '\\'.join(['a' * 32, 'Fixture', '1', '1', '1 25 40 8 4 2']) + '\n',
         encoding='utf-8',
     )
-    if scenario == 'late_r1':
+    if scenario in {'late_r1', 'deferred_r1'}:
         fixture.rename(fixture.with_suffix('.pending'))
     script = r'''
 import asyncio
@@ -49,6 +49,7 @@ class BlockSetup(importlib.abc.MetaPathFinder):
             raise ModuleNotFoundError('Forbidden ingestion dependency: ' + fullname)
 sys.meta_path.insert(0, BlockSetup())
 from postgresql_database_manager import PostgreSQLDatabaseManager
+from shared.runtime_import import import_ready_file
 
 async def main():
     options = json.loads(os.environ.pop('NEUTRAL_IMPORT_TEST_CONNECTION'))
@@ -74,12 +75,22 @@ async def main():
         if scenario != 'single':
             r1 = Path(sys.argv[1])
             r2 = r1.parent / '2026-09-20-121000-goldrush-round-2.txt'
+            if scenario == 'deferred_r1':
+                waiting = await import_ready_file(manager, r2)
+                assert waiting.status == 'waiting_for_r1', waiting
+                for table in ('rounds', 'processed_files', 'runtime_events'):
+                    assert await admin.fetchval(f'SELECT count(*) FROM {table}') == 0
+                r1.with_suffix('.pending').rename(r1)
             paths = [r1, r2] if scenario == 'ordered_pair' else [r2, r1]
             for path in paths:
                 if scenario == 'late_r1' and path == r1:
                     r1.with_suffix('.pending').rename(r1)
-                result = await manager.process_file(path)
-                assert result[0], result
+                if scenario == 'deferred_r1':
+                    result = await import_ready_file(manager, path)
+                    assert result.status == 'imported', result
+                else:
+                    result = await manager.process_file(path)
+                    assert result[0], result
             rows = await admin.fetch("""
                 SELECT r.round_number, r.round_status, p.kills
                 FROM rounds r JOIN player_comprehensive_stats p ON p.round_id=r.id
