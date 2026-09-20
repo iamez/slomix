@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
+  A neutral real-PG fixture supplied32 hex characters but the canonical regular
+  stats parser stored8 via short_guid. The first test's32-character assertion
+  was wrong; corrected after inspecting the actual parser and observing DB rows.
+  Do not change persistence semantics to satisfy a mistaken test expectation.
+
 - **2026-09-20 · Explicit configuration is not enough if imports initialize the process.**
   The manager previously imported dotenv and configured root logging before its
   constructor could inspect supplied config. R04d moves legacy setup behind

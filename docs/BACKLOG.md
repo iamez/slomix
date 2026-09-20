@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #1059 now includes real-PG neutral R1 import proof:
+  canonical parser/writes/event/marker, observer connection, duplicate retry,
+  caller pool still usable.60 combined tests pass; missing-event mutation caught.
+  Disposable PG stopped. Next R2/late arrival and single-writer/capture work.
+
 - (Astra, 2026-09-20) #1059 strengthened with neutral process_file preflight
   lifecycle subprocess proofs (duplicate/outage/cancel),36 focused cases pass.
   Unwanted disconnect mutation failed/restored. Next real PG successful-write

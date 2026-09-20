@@ -22,6 +22,17 @@
 
 ### R04d neutral importer startup — 2026-09-20
 
+Actual-PG follow-up: fresh subprocess with Discord/config/logging imports blocked
+ran canonical parser and process_file, with no mocked persistence methods.
+Private disposable PG schema bootstrapped explicitly by test only; observer
+connection confirmed one R1 round/player (3 kills), event and successful marker.
+COUNT and fetched rows agree; repeated file adds no player/event, borrowed pool
+remains usable. Synthetic single-player fixture, NOT R2/capture/cutover proof.
+Initial assertion expected32-char GUID; canonical parser short_guid proved8,
+so corrected test, not code. Disabling event emission caused actual-PG assertion
+failure; restored/cmp, combined60 cases pass0skips2existingwarnings. Test PG
+stopped, shutdown log/status agree; random schemas removed. No live DB changes.
+
 Follow-up preflight lifecycle proof: three fresh subprocesses invoke real
 process_file with a caller-owned protocol-test pool: duplicate, query outage,
 and cancellation. They assert lease release, retained pool identity, retryable
