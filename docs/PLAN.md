@@ -31,6 +31,11 @@ cutover. Production remains frozen. Build/test success is not a website audit.
 
 ### R04e dependency-aware import step — 2026-09-20
 
+Review4056323000: validate actual calendar/time before dependency waiting,
+not only regex shape.23 unit/PG cases pass, including impossible timestamp
+through canonical failure, leap-day and midnight boundaries. Skipping calendar
+validation fails7 cases; restored/cmp. Ruff clean; disposable PG stopped.
+
 Review4056294780/4056294781: preserve canonical renamed-payload deduplication
 when R1 is gone, via a public read-only manager preflight; malformed R2 names
 use canonical import/failure instead of waiting.14 unit/actual-PG cases pass:

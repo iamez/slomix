@@ -2,6 +2,7 @@
 
 import re
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -12,6 +13,18 @@ class ImportStepResult:
 
     status: Literal['waiting_for_r1', 'imported', 'retryable_failure', 'failed']
     message: str
+
+
+def _can_wait_for_r1(filename: str) -> bool:
+    """Only a structurally and calendrically valid R2 can await a future R1."""
+    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-2\.txt',
+                        filename, re.ASCII):
+        return False
+    try:
+        datetime.strptime(filename[:17] + '+0000', '%Y-%m-%d-%H%M%S%z')
+    except ValueError:
+        return False
+    return True
 
 
 async def import_ready_file(manager, file_path: Path) -> ImportStepResult:
@@ -26,8 +39,7 @@ async def import_ready_file(manager, file_path: Path) -> ImportStepResult:
     is not a filesystem lock or a guard against concurrent spool mutation.
     """
     file_path = file_path.absolute()
-    if re.fullmatch(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-2\.txt',
-                    file_path.name, re.ASCII):
+    if _can_wait_for_r1(file_path.name):
         dependency = manager.parser.find_corresponding_round_1_file(str(file_path))
         if dependency is None:
             if await manager.is_file_processed(file_path.name):

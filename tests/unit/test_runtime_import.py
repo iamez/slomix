@@ -83,11 +83,26 @@ async def test_renamed_duplicate_reaches_canonical_marker_path():
     subject.process_file.assert_awaited_once_with(path.absolute())
 
 
-async def test_malformed_round_two_uses_canonical_failure():
+@pytest.mark.parametrize('name', [
+    'bad-round-2.txt', '2026-13-32-999999-goldrush-round-2.txt',
+    '2026-02-29-120000-goldrush-round-2.txt', '2026-04-31-120000-map-round-2.txt',
+    '2026-09-20-240000-map-round-2.txt', '2026-09-20-126000-map-round-2.txt',
+    '2026-09-20-120060-map-round-2.txt', '0000-01-01-120000-map-round-2.txt',
+])
+async def test_malformed_round_two_uses_canonical_failure(name):
     """Invalid names must not be mistaken for a temporarily missing dependency."""
     subject = manager(result=(False, 'Parse error: invalid filename'))
-    path = Path('bad-round-2.txt')
+    path = Path(name)
     result = await import_ready_file(subject, path)
     assert result.status == 'failed'
     subject.parser.find_corresponding_round_1_file.assert_not_called()
     subject.process_file.assert_awaited_once_with(path.absolute())
+
+
+@pytest.mark.parametrize('stamp', ['2024-02-29-235959', '2026-01-01-000000'])
+async def test_valid_calendar_boundaries_can_wait(stamp):
+    """Leap-day and midnight inputs retain the dependency-waiting contract."""
+    subject = manager()
+    result = await import_ready_file(subject, Path(f'{stamp}-map-round-2.txt'))
+    assert result.status == 'waiting_for_r1'
+    subject.process_file.assert_not_awaited()
