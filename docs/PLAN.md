@@ -20,6 +20,22 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### Consolidation: historical Opus handoff #963 — 2026-09-20
+
+Preserve historical measurements, not obsolete operating instructions. Normal
+main integration restores the tracked docs/HANDOFF-astra.md reference. Correct
+release attribution (#952/#955/#958 after1.45.0), timer static-state inference,
+journal rotation/config activation advice and bundled lessons. Local journalctl
+manual confirms vacuum handles archived files and rotation precedes vacuum when
+combined; no cleanup or service action executed. Git ancestry independently
+confirms the release sequence; GitHub confirms #912 merged2026-09-07.
+#912's historical live arena duel caveat is not proven resolved by its merge:
+owner-controlled live verification remains separate. #962 is approved in the
+consolidation queue, with current-main checks/runtime proof required before merge.
+All host measurements in the old handoff remain explicitly historical. Original
+runtime resume is #1077 completion delivery/sealing, then new-site audit and
+approved reversible DEV cutover. #963 has no merge permission.
+
 ### R04u exclusive source-generation reservation — 2026-09-20
 
 Independent main-based primitive, not a reset of the runtime plan. Existing

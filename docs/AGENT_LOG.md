@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Squash merge status is not an ancestry predicate.**
+  The historical handoff in docs/HANDOFF-opus5-2026-09-07.md reported seven
+  false negatives from ancestry-only checks. Verify the PR's merged state and
+  main's actual content before declaring old work missing. Artifact identity,
+  cold-cache sampling, directory mtime and shared stash ownership each retain
+  their separate dated entries below; do not combine them into one lesson.
+
 - **2026-09-20 · A failed reservation may still own its namespace.**
   Atomic mkdir prevents two same-token writers from reserving one generation.
   A later fsync failure can leave that directory; retry must refuse reuse even
