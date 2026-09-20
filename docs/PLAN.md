@@ -22,6 +22,17 @@
 
 ### R04p remote metadata stability guard — 2026-09-20
 
+Completion investigation: STATS_READY is emitted on intermission (default send
+delay zero), whereas checked-in stats writer delays SaveStats by3000ms and also
+has a ShutdownGame path. Generic Stats saved log has no filename/digest; deprecated
+on_created notifier merely sleeps3s. None establishes durable exact-file closure.
+Executed synthetic local proof: path stat/open-handle fstat and two hashes agree
+while writer remains open, then append changes7bytes to18. No live-server claims.
+Before source-side expansion, ask owner whether to develop an offline producer
+completion protocol (recommended, no deploy) or keep source frozen and continue
+other runtime work with this activation gate unresolved. Do not substitute a
+delay heuristic. Detailed research/proof stay local, no game/Lua/service changes.
+
 Discovery: checked-in c0rnp0rn8.lua SaveStats writes directly to the final stats
 name (FS_WRITE, header/player writes, close); legacy SSHHandler uses sftp.get.
 This is code evidence, not verification of deployed Lua or remote corpus. Neither
