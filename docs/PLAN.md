@@ -20,6 +20,26 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04o supervised capture reconciliation — 2026-09-20
+
+Normal ancestry merge combines #1069 with #1064; documentation conflicts retain
+both tracks. capture_ssh_once inspects first, skips match/conflict without spawn,
+otherwise supervises one SSH task and inspects again only after the child is
+reaped. Result preserves observed content and child outcome independently:
+timed_out+match is possible and is not converted into worker success. No source
+ack, deletion, retry loop, import or service activation. Inspection remains a
+byte-bounded local filesystem operation outside the child deadline; no overall
+wall-clock bound is claimed. Caller must keep private spool/snapshot immutable.
+117 combined tests pass. Real child/filesystem with offline SSH seam proves
+retry after corruption/interrupted read succeeds without touching orphan parts;
+retry after close timeout reuses verified final without a new child. Existing
+conflict remains unchanged. Disabling preinspection short-circuit fails two
+tests with Existing content must not spawn capture; restored/cmp, Ruff clean.
+#1069 all reported checks green; no individual merge permission inferred.
+Next trusted source metadata/discovery and integration with verified importer;
+single-writer handoff/dev failure matrix remain gates. New-site audit follows
+runtime completion as originally planned; production remains untouched.
+
 ### R04n concrete SSH capture task — 2026-09-20
 
 On #1068: picklable SSHCaptureTask carries only explicit configuration into the
@@ -95,6 +115,27 @@ Verified53 combined capture/spool/integrity cases pass. Real local sockets prove
 success and stalled-EOF cleanup. Disabling post-read deadline fails DID NOT RAISE;
 restored/cmp. Ruff clean. No remote SSH, database or service changes. Next integrate
 connection lifecycle and explicit source identity/reconciliation before activation.
+
+### R04i read-only spool reconciliation — 2026-09-20
+
+Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
+name stability checks before conflict. All 49 filesystem tests pass. Restoring
+the early return fails replacement-after-open regression; restored/cmp. Ruff
+clean. Review 4056550740 case-count spacing corrected. Fresh CI required.
+
+Contract: inspect a caller-retained immutable private spool entry against required
+size and SHA-256, returning missing/match/conflict. Missing is only final-entry
+ENOENT; directory/access/I/O failures propagate. Never delete/replace files or
+write DB markers. Open no-follow/nonblocking, require owned regular0600 file,
+bound reads and compare descriptor/name identity before certifying content.
+Match does not certify durability after failed fsync or import completion.
+This is a primitive, not automatic retry policy, full source identity or transport
+activation. Verify actual post-link-fsync failure, conflicts and replacement race.
+Verified 48 combined filesystem cases pass: actual directory-fsync failure still
+permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
+entries rejected and I/O errors propagate. Removing digest and identity guards
+fails 2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
+retry scheduling or make ambiguous durability safe for source deletion.
 
 ### R04g capture integrity contract — 2026-09-20
 
