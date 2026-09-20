@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04t completion retry composes reader/publisher without
+  overwrite.187 combined tests pass; wrong requested size/hash guard mutation
+  fails/restores. Missing/corrupt content remains distinct; existing content does
+  not gain durability acknowledgement. Next source reservation/delivery, no deploy.
+
 - (Astra, 2026-09-20) R04s read-only manifest recovery implemented with explicit
   missing/conflict/match states; malformed/unsafe/I/O remains an error.177 tests
   pass, replaced-entry mutation fails/restores. #1073 refreshed checks green.

@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Retry must match the requested identity, not only stored bytes.**
+  A self-consistent existing completion receipt can describe a different requested
+  snapshot. Compare caller size/hash before returning content_present; otherwise
+  return receipt_conflict without writes. Retrying after sync failure observes
+  content but does not retroactively establish its crash durability.
+
 - **2026-09-20 · A recovered manifest and its payload are separate observations.**
   Reader distinguishes missing manifest from missing payload and content conflict.
   Duplicate JSON keys, unsafe paths, malformed content and concurrent replacement
