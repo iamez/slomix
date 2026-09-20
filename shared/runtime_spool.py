@@ -117,10 +117,8 @@ def inspect_published_stats_file(
             if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
                     or stat.S_IMODE(before.st_mode) != 0o600):
                 raise ValueError('Published entry must be an owned regular mode 0600 file')
-            if before.st_size != expected_size:
-                return 'conflict'
             digest = hashlib.sha256()
-            remaining = expected_size + 1
+            remaining = expected_size + 1 if before.st_size == expected_size else 0
             total = 0
             while remaining:
                 chunk = os.read(fd, min(64 * 1024, remaining))

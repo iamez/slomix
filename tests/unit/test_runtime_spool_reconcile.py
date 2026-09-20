@@ -120,3 +120,22 @@ def test_inspection_requires_digest(tmp_path):
     """Never certify a retry using size alone."""
     with pytest.raises(ValueError, match='requires an expected SHA-256'):
         inspect_published_stats_file(tmp_path, NAME, expected_size=3, expected_sha256=None)
+
+
+def test_wrong_sized_inode_replaced_after_open_is_not_conflict(tmp_path, monkeypatch):
+    """Even size-only rejection must describe the named entry, not a stale inode."""
+    path = publish(tmp_path)
+    path.write_bytes(b'old-size')
+    original_open = os.open
+    def open_then_replace(name, *args, **kwargs):
+        fd = original_open(name, *args, **kwargs)
+        if name == NAME:
+            replacement = tmp_path / 'replacement'
+            replacement.write_bytes(b'abc')
+            replacement.chmod(0o600)
+            os.replace(replacement, path)
+        return fd
+    monkeypatch.setattr(os, 'open', open_then_replace)
+    with pytest.raises(RuntimeError, match='changed during inspection'):
+        inspect(tmp_path)
+    assert path.read_bytes() == b'abc'

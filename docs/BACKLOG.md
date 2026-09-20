@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
+  49 cases pass, early-return mutation fails/restored. Next compose a single
+  caller-driven retry step; no scheduling, source deletion or service activation.
+
 - (Astra, 2026-09-20) R04i on #1062: read-only spool reconciliation implemented,
   48 filesystem cases pass with failed/restored digest and identity mutations.
   No automatic cleanup, overwrite, retry loop, DB or service changes. Next wire
