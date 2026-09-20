@@ -22,6 +22,14 @@
 
 ### R04r durable completion manifest — 2026-09-20
 
+Review4057411193 fixed: manifest basename limit now matches producer240 ASCII
+bytes, not200. Real filesystem cases cover200/201/240, reject241; maximum final
+name254bytes checked against pathconf NAME_MAX. Restoring old200limit fails201
+and240 cases with Manifest filename must be a bounded string; restored/cmp.
+157 combined tests pass0skips, Ruff clean. Parent1072 exact-SHA verification run
+35522307960 succeeded. Fresh CI/review required for this follow-up; no merge
+permission inferred. Resume manifest reader/recovery after review correction.
+
 Persist a caller-authenticated writer_closed receipt only after size/SHA256 match
 the immutable local capture. Strict v1 schema; private0700 directory, temp0600,
 file fsync, no-clobber hard link, directory fsync. Existing identical/conflicting

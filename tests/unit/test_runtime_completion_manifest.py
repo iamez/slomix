@@ -99,3 +99,27 @@ def test_wrong_digest_never_published(spool):
     with pytest.raises(ValueError, match='does not match'):
         publish_completion_manifest(spool, RECEIPT, expected_sha256='0' * 64)
     assert list(spool.iterdir()) == [spool / NAME]
+
+
+@pytest.mark.parametrize('length', [200, 201, 240])
+def test_producer_filename_lengths_have_manifests(tmp_path, length):
+    """Every producer-supported boundary fits a real Linux manifest entry."""
+    tmp_path.chmod(0o700)
+    prefix, suffix = '2026-09-20-120000-', '-round-1.txt'
+    filename = prefix + 'a' * (length - len(prefix) - len(suffix)) + suffix
+    assert len(filename.encode('ascii')) == length
+    publish_stats_file(tmp_path, filename, [b'abc'], expected_size=3, expected_sha256=HASH)
+    result = publish_completion_manifest(
+        tmp_path, {**RECEIPT, 'filename': filename}, expected_sha256=HASH,
+    )
+    assert len(result.name.encode('ascii')) == length + len('.complete.json')
+    assert len(result.name.encode('ascii')) <= os.pathconf(tmp_path, 'PC_NAME_MAX')
+    assert json.loads(result.read_text())['filename'] == filename
+
+
+def test_name_beyond_producer_limit_rejected(spool):
+    """Do not extend producer identity limits merely because Linux permits it."""
+    prefix, suffix = '2026-09-20-120000-', '-round-1.txt'
+    filename = prefix + 'a' * (241 - len(prefix) - len(suffix)) + suffix
+    with pytest.raises(ValueError, match='bounded string'):
+        publish_completion_manifest(spool, {**RECEIPT, 'filename': filename}, expected_sha256=HASH)

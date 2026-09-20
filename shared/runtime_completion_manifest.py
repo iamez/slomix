@@ -33,7 +33,9 @@ def publish_completion_manifest(
             or completion['state'] != 'writer_closed'):
         raise ValueError('Expected a version 1 writer_closed receipt')
     filename, size = completion['filename'], completion['bytes']
-    if not isinstance(filename, str) or len(filename) > 200:
+    # Match the Lua producer's 240-byte ASCII basename contract. The suffix
+    # adds 14 bytes, fitting Linux NAME_MAX=255 without narrowing valid input.
+    if not isinstance(filename, str) or len(filename) > 240:
         raise ValueError('Manifest filename must be a bounded string')
     content = inspect_published_stats_file(
         directory, filename, expected_size=size, expected_sha256=expected_sha256,
