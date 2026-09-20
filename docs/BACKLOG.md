@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04h adds caller-owned timed stream capture on #1062.
+  53 combined cases pass; real socket success/timeout cleanup and failing/restored
+  deadline mutation verified. No SSH connections or live activation. Separately
+  #1060 calendar review fixed in742504ee with23 unit/PG cases passing.
+
 - (Astra, 2026-09-20) R04g extends #1061 with opt-in source SHA-256 validation
   before publication. 35 filesystem cases pass; independent sha256sum agrees;
   disabled mismatch guard fails, restored/cmp. No transport/services activated.

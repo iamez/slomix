@@ -20,6 +20,19 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04h bounded stream capture — 2026-09-20
+
+Contract: caller-owned synchronous reader honours bounded read and settimeout;
+capture sets per-read timeout capped by remaining monotonic deadline, verifies
+size and required source SHA-256, requires EOF, then publishes via R04f/g.
+No connection/authentication, executor, scheduling or source close ownership.
+Deadline covers stream consumption, not filesystem durability or SSH handshake;
+blocking readers which ignore timeouts cannot be forcibly cancelled here.
+Verified53 combined capture/spool/integrity cases pass. Real local sockets prove
+success and stalled-EOF cleanup. Disabling post-read deadline fails DID NOT RAISE;
+restored/cmp. Ruff clean. No remote SSH, database or service changes. Next integrate
+connection lifecycle and explicit source identity/reconciliation before activation.
+
 ### R04g capture integrity contract — 2026-09-20
 
 Stacked on #1061: add an optional expected SHA-256 to completed-file publication.
