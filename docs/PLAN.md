@@ -22,6 +22,23 @@
 
 ### R04k verified spool to canonical import — 2026-09-20
 
+Review 4056749351: constructor flag allow_legacy_r1_fallback defaults True for
+legacy compatibility; verified runtime import requires literal False. Strict
+parser searches only R2's directory and rejects symlink/non-file R1 candidates
+in exact/same-day/midnight paths. Actual PG fixture has valid R1 only in cwd/
+local_stats and remains waiting with zero DB writes until published into spool.
+Re-enabling fallback mutates waiting into imported and fails the PG guard;
+restored/cmp. Review 4056749353 rejects '..' in waiting eligibility. Review
+4056750531 prose spacing corrected. Expanded 153 tests pass; small changed files
+lint clean, parser/manager diagnostics unchanged by code/message against parent.
+Disposable PG stopped. Caller still must guarantee retained immutable R1 content;
+this is directory isolation, not independent source digest verification for R1.
+
+SSH follow-up discovery: installed Paramiko from_transport calls invoke_subsystem,
+whose _wait_for_event invokes event.wait() without a timeout. Existing phase
+budgets therefore do not bound subsystem negotiation; retain the explicit worker
+deadline activation gate. #1067 checks all pass; no network/service activation.
+
 Integration branch combines #1065 capture/reconciliation and #1060 importer
 via normal ancestry merge; preserved both document histories, no code conflicts.
 New import_verified_file observes content before the dependency-aware importer:

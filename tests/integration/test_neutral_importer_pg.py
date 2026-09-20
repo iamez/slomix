@@ -74,7 +74,7 @@ async def main():
         )
         manager = PostgreSQLDatabaseManager(config=SimpleNamespace(
             database_type='postgresql', excluded_maps=frozenset(),
-        ))
+        ), allow_legacy_r1_fallback=False)
         manager.pool = pool
         # Explicit test-only bootstrap, never part of neutral construction.
         await manager._create_schema_if_missing()
@@ -86,6 +86,9 @@ async def main():
             r2 = r1.parent / '2026-09-20-121000-goldrush-round-2.txt'
             if scenario == 'verified_spool':
                 sources = {path: path.with_suffix('.source').read_bytes() for path in (r1, r2)}
+                legacy = r1.parent / 'local_stats'
+                legacy.mkdir()
+                (legacy / r1.name).write_bytes(sources[r1])
                 async def verified(path, digest=None):
                     return await import_verified_file(
                         manager, path.parent, path.name, expected_size=len(sources[path]),

@@ -17,7 +17,7 @@ class ImportStepResult:
 
 def _can_wait_for_r1(filename: str) -> bool:
     """Only a structurally and calendrically valid R2 can await a future R1."""
-    if not re.fullmatch(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-2\.txt',
+    if '..' in filename or not re.fullmatch(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-2\.txt',
                         filename, re.ASCII):
         return False
     try:

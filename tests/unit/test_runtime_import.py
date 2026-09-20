@@ -95,6 +95,7 @@ async def test_only_confirmed_round_two_duplicate_can_bypass_waiting(duplicate):
 
 @pytest.mark.parametrize('name', [
     'bad-round-2.txt', '2026-13-32-999999-goldrush-round-2.txt',
+    '2026-09-20-120000-foo..bar-round-2.txt',
     '2026-02-29-120000-goldrush-round-2.txt', '2026-04-31-120000-map-round-2.txt',
     '2026-09-20-240000-map-round-2.txt', '2026-09-20-126000-map-round-2.txt',
     '2026-09-20-120060-map-round-2.txt', '0000-01-01-120000-map-round-2.txt',

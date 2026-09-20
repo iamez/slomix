@@ -1,6 +1,7 @@
 """Filesystem verification must gate all calls into the database importer."""
 
 import asyncio
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -12,11 +13,12 @@ from shared.runtime_spool import publish_stats_file
 
 NAME = '2026-09-20-120000-map-round-1.txt'
 DIGEST = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+MANAGER = SimpleNamespace(parser=SimpleNamespace(allow_legacy_r1_fallback=False))
 
 
 async def ingest(directory):
     """Use fixed source metadata independently of local contents."""
-    return await import_verified_file(None, directory, NAME, expected_size=3, expected_sha256=DIGEST)
+    return await import_verified_file(MANAGER, directory, NAME, expected_size=3, expected_sha256=DIGEST)
 
 
 @pytest.mark.parametrize('present', [False, True])
@@ -41,7 +43,7 @@ async def test_verified_content_preserves_import_outcome(tmp_path, monkeypatch, 
     monkeypatch.setattr(runtime_ingest, 'import_ready_file', importer)
     result = await ingest(tmp_path)
     assert result.capture_status == 'match' and result.import_result is expected
-    importer.assert_awaited_once_with(None, path.absolute())
+    importer.assert_awaited_once_with(MANAGER, path.absolute())
 
 
 async def test_cancellation_propagates(tmp_path, monkeypatch):
@@ -58,4 +60,15 @@ async def test_unavailable_spool_never_imports(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime_ingest, 'import_ready_file', importer)
     with pytest.raises(FileNotFoundError):
         await ingest(tmp_path / 'absent')
+    importer.assert_not_awaited()
+
+
+async def test_legacy_parser_cannot_enter_verified_import(tmp_path, monkeypatch):
+    """Require explicit isolation at construction, not temporary parser mutation."""
+    publish_stats_file(tmp_path, NAME, [b'abc'], expected_size=3)
+    importer = AsyncMock()
+    monkeypatch.setattr(runtime_ingest, 'import_ready_file', importer)
+    manager = SimpleNamespace(parser=SimpleNamespace(allow_legacy_r1_fallback=True))
+    with pytest.raises(ValueError, match='spool-only R1'):
+        await import_verified_file(manager, tmp_path, NAME, expected_size=3, expected_sha256=DIGEST)
     importer.assert_not_awaited()

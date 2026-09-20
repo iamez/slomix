@@ -63,7 +63,7 @@ class PostgreSQLDatabaseManager:
     Handles all database operations from creation to disaster recovery.
     """
 
-    def __init__(self, stats_dir: str = "local_stats", *, config=None):
+    def __init__(self, stats_dir: str = "local_stats", *, config=None, allow_legacy_r1_fallback: bool = True):
         """Accept caller-owned configuration, or preserve legacy loading by default.
 
         The object uses the existing database_type/postgres_* / excluded_maps
@@ -81,7 +81,7 @@ class PostgreSQLDatabaseManager:
             )
 
         self.stats_dir = Path(stats_dir)
-        self.parser = C0RNP0RN3StatsParser()
+        self.parser = C0RNP0RN3StatsParser(allow_legacy_r1_fallback=allow_legacy_r1_fallback)
         self.pool = None
 
         # Stats tracking

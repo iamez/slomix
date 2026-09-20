@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Verified R2 bytes do not isolate the parser's R1 search.**
+  The legacy finder also searches cwd/local_stats. Construct runtime managers
+  with allow_legacy_r1_fallback=False; import_verified_file requires this mode.
+  Exact/same-day/midnight searches then remain in the input directory and reject
+  symlink R1 entries. Retained immutable R1 remains a caller precondition.
+  Actual-PG proof must include a plausible external R1, not merely an empty cwd.
+
 - **2026-09-20 · Content reconciliation is not durability or import completion.**
   A link can succeed before directory fsync fails. Inspecting size and SHA-256
   can recognize the existing complete file without overwrite, but cannot prove
@@ -20,8 +27,8 @@ data here.
   size-only; the optional parameter is not evidence of transport integration.
   Test equal-length corruption and compare successful output by another tool.
 - **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
-  A neutral real-PG fixture supplied32 hex characters but the canonical regular
-  stats parser stored8 via short_guid. The first test's32-character assertion
+  A neutral real-PG fixture supplied 32 hex characters but the canonical regular
+  stats parser stored 8 via short_guid. The first test's 32-character assertion
   was wrong; corrected after inspecting the actual parser and observing DB rows.
   Do not change persistence semantics to satisfy a mistaken test expectation.
 

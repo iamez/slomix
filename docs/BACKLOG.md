@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) Priority #1066 review detour: verified import now requires
+  spool-only parser; legacy cwd/local_stats fallback and R1 symlinks cannot supply
+  runtime differential. 153 tests pass, actual-PG fallback mutation fails/restored.
+  Invalid '..' names leave waiting path; prose nits addressed. Resume hard SSH
+  worker deadline design, then source identity and single-writer gates.
+
 - (Astra, 2026-09-20) R04k integration branch combines #1065 and #1060 without
   changing either foundation implementation. Verified local content gates
   canonical importer; 137 unit/actual-PG cases pass, conflict-gate mutation fails
@@ -45,7 +51,7 @@
   Historical repairs and full source identity are separate, not silently done.
 
 - (Astra, 2026-09-20) #1060 calendar review fixed: impossible R2 timestamps no
-  longer wait for R1.23 unit/PG cases pass,7 calendar mutations fail/restored.
+  longer wait for R1. 23 unit/PG cases pass, 7 calendar mutations fail/restored.
   Resume bounded stream capture on the #1062 stack; no live activation.
 
 - (Astra, 2026-09-20) Review detour after opening integrity PR #1062:

@@ -23,7 +23,8 @@ async def import_verified_file(
     """Only a matching immutable spool entry reaches canonical import.
 
     Caller owns capture, expected source identity, stable private spool/R1
-    retention, manager and pool. Local inspection is synchronous and byte-bounded,
+    retention, manager and pool. Construct the manager with
+    allow_legacy_r1_fallback=False. Local inspection is synchronous and byte-bounded,
     not time-bounded; use in a dedicated ingestion process, not a web handler.
     No executor, network connection, retry loop, deletion or durability ack.
     Files must remain immutable between verification and parsing; no locking or
@@ -36,5 +37,7 @@ async def import_verified_file(
     )
     if state != 'match':
         return VerifiedImportResult(state, None)
+    if manager.parser.allow_legacy_r1_fallback is not False:
+        raise ValueError('Verified import requires a spool-only R1 parser')
     result = await import_ready_file(manager, directory / filename)
     return VerifiedImportResult(state, result)
