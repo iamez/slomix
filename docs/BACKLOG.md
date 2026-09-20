@@ -13,6 +13,17 @@
   847c1b7d and synced to #1056 at74408882; both threads answered/resolved, fresh CI
   required. Resume config/logging startup boundary after review, no activation.
 
+- (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
+  and explicit re-exports. All changed Python files lint clean, 25 tests pass;
+  wrong-export mutation observed/restored. Resume manager startup discovery
+  after fresh CI/review; no services or DB changed.
+
+- (Astra, 2026-09-19) R04c: neutral logging helpers extracted on an independent
+  main-based branch. 25 regression tests pass; blocked-import subprocess proof
+  and failing/restored mutation complete. Legacy setup unchanged; independent
+  ingestion still pending. #1050 merged; no merge approval for #1051–#1057.
+  Continue with review and neutral manager startup, preserving original R04 scope.
+
 - (Astra, 2026-09-18) R02d5 explicit durable Lua retry steps implemented in
   separate worktree /tmp/slomix-astra-runtime-r02d5. Five-attempt bound,
   persistent due state, quarantine, contention deferral and error visibility;

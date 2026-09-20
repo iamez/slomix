@@ -20,6 +20,13 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+2026-09-20 checkpoint: owner-approved #1058 merged as b5e20c9d after prescribed
+cycle (0 red/threads/behind, unchanged SHA). Squash tree equals da1a5136.
+Fresh14 logging/retry cases passed before merge. R04b synced main normally;
+both progress sections retained in documentation conflicts, no constructor
+changes. Older approval/CI notes below are historical. #1057 not approved.
+Next startup contract: /tmp/slomix-r04d-startup-contract-2026-09-20.md (local).
+
 ### R04b explicit importer constructor configuration — 2026-09-19
 
 Independent branch feat/db-runtime-import-config-r04b based on main2518735f;
@@ -44,6 +51,37 @@ at import, parser still imports Discord on this independent main-based branch
 effects. Next separate explicit startup/logging ownership while preserving legacy
 behavior; then R04 source/cadence/metadata/single-writer acceptance proofs. No
 activation, service operation, production changes or new merge permission.
+
+### R04c neutral database logging helpers — 2026-09-19
+
+239775fc received all22successful checks, Codex no-major-issues review and
+CodeRabbit no actionable findings. Addressed its remaining docstring-coverage
+warning by documenting all four test functions; no production code changes.
+Fresh checks required after this documentation-only follow-up. Await #1058
+individual merge permission; do not infer permission from continuation requests.
+
+Review follow-up: #1058 initial CI failed I001 in the modified legacy module;
+the initial local lint scope covered only new files and missed it. Explicit
+module-attribute aliases now preserve exports without the CodeQL unused-import
+finding4053798928. All three changed Python files lint clean; 25 regressions
+pass again. Wrong-export mutation failed identity guard, restored/cmp verified.
+Fresh exact-head CI and external review are still required; no merge approval.
+
+Independent main-based slice extracts unchanged database/import/performance
+record emitters into shared.database_logging; legacy bot imports re-export
+the same functions. No logging setup, directory creation or bot dependencies
+in the new module. Legacy setup and dotenv ordering remain unchanged.
+25 focused regression cases pass (two existing websockets warnings). An actual
+subprocess emits three records with bot/Discord/dotenv/website imports blocked;
+no root-handler/environment changes or log directory creation. Adding an eager
+bot import at module end fails with `Forbidden dependency: bot`; restored/cmp.
+The first mutation at module start failed collection on circular import instead,
+so it was replaced by the executable guard mutation above. New files lint clean.
+This is a foundation, NOT independent ingestion: manager startup, transport,
+single-writer handoff and failure-matrix proofs still need separate slices.
+#1050 is merged; #1051–#1057 remain unmerged and need individual permission.
+Next: review/CI, then compose neutral manager startup without changing legacy
+dotenv/log-directory ordering. No deployment, service or live DB changes.
 
 ### R02d5 durable bounded Lua repair attempts — 2026-09-18
 
