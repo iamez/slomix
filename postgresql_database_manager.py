@@ -34,48 +34,26 @@ from pathlib import Path
 
 import asyncpg
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
 from bot.community_stats_parser import C0RNP0RN3StatsParser
-from bot.config import load_config
 from bot.stats import StatsCalculator
+from shared import database_logging
+from shared.database_logging import (
+    log_performance_warning,
+    log_stats_import,
+)
 from shared.import_result import RetryableImportFailure
 from shared.round_status_events import mark_round_restart, status_events_enabled
 from shared.runtime_events import emit_round_stats_imported, event_stream_enabled
 
-# Import comprehensive logging system
-try:
-    from bot.logging_config import (
-        get_logger,
-        log_database_operation,
-        log_performance_warning,
-        log_stats_import,
-        setup_logging,
-    )
-    # Setup comprehensive logging
-    setup_logging(logging.INFO)
-    logger = get_logger('bot.database.manager')
-except ImportError:
-    # Fallback to basic logging if logging_config not available
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('postgresql_manager.log', encoding='utf-8'),
-            logging.StreamHandler()
-        ]
-    )
-    logger = logging.getLogger('PostgreSQLManager')
+logger = logging.getLogger('bot.database.manager')
+log_database_operation = database_logging.log_database_operation
 
-    def log_database_operation(*args, **kwargs):
-        pass
 
-    def log_stats_import(*args, **kwargs):
-        pass
+def load_config():
+    """Retain the legacy loader seam without setup during module import."""
+    from shared.importer_startup import load_legacy_config
 
-    def log_performance_warning(*args, **kwargs):
-        pass
+    return load_legacy_config()
 
 
 class PostgreSQLDatabaseManager:
@@ -85,8 +63,15 @@ class PostgreSQLDatabaseManager:
     Handles all database operations from creation to disaster recovery.
     """
 
-    def __init__(self, stats_dir: str = "local_stats"):
-        self.config = load_config()
+    def __init__(self, stats_dir: str = "local_stats", *, config=None, allow_legacy_r1_fallback: bool = True):
+        """Accept caller-owned configuration, or preserve legacy loading by default.
+
+        The object uses the existing database_type/postgres_* / excluded_maps
+        attribute contract. Explicit configuration bypasses legacy dotenv and
+        logging setup; default construction performs that setup lazily.
+        Construction does not connect, migrate, validate Discord credentials or create a pool.
+        """
+        self.config = load_config() if config is None else config
         self.event_stream_enabled = event_stream_enabled()
 
         if self.config.database_type != 'postgresql':
@@ -96,7 +81,7 @@ class PostgreSQLDatabaseManager:
             )
 
         self.stats_dir = Path(stats_dir)
-        self.parser = C0RNP0RN3StatsParser()
+        self.parser = C0RNP0RN3StatsParser(allow_legacy_r1_fallback=allow_legacy_r1_fallback)
         self.pool = None
 
         # Stats tracking
@@ -1511,21 +1496,39 @@ class PostgreSQLDatabaseManager:
             )
             return result > 0
 
-    async def find_processed_by_hash(self, file_hash: str | None) -> str | None:
-        """Find an already-successfully-processed filename by content hash."""
+    async def find_processed_by_hash(
+        self, file_hash: str | None, *, filename: str | None = None,
+    ) -> str | None:
+        """Find successful content within the same half for canonical stats files.
+
+        Payload hashing omits the header, so an unchanged R2 can equal R1.
+        Omitted/noncanonical filenames retain the legacy unscoped lookup.
+        """
         if not file_hash:
             return None
+        suffix = next((f'%-round-{number}.txt' for number in (1, 2)
+                       if filename and filename.endswith(f'-round-{number}.txt')), None)
         async with self.pool.acquire() as conn:
             return await conn.fetchval(
                 """
                 SELECT filename
                 FROM processed_files
                 WHERE file_hash = $1 AND success = TRUE
+                  AND ($2::text IS NULL OR filename LIKE $2)
                 ORDER BY processed_at DESC
                 LIMIT 1
                 """,
-                file_hash,
+                file_hash, suffix,
             )
+
+    async def find_processed_duplicate(self, file_path: Path) -> str | None:
+        """Read successful payload identity without parsing or writing markers.
+
+        The caller must supply an immutable completed file. File/DB failures
+        propagate; they are not evidence that no duplicate exists.
+        """
+        _, payload_hash = self._compute_file_hashes(file_path)
+        return await self.find_processed_by_hash(payload_hash, filename=file_path.name)
 
     def _compute_file_hashes(self, file_path: Path) -> tuple[str, str]:
         """
@@ -1609,7 +1612,7 @@ class PostgreSQLDatabaseManager:
                 return True, "Already processed"
 
             # Skip renamed mirror files that have identical payload content.
-            duplicate_source = await self.find_processed_by_hash(payload_hash)
+            duplicate_source = await self.find_processed_by_hash(payload_hash, filename=filename)
             if duplicate_source and duplicate_source != filename:
                 self.stats['files_skipped'] += 1
                 await self.mark_file_processed(

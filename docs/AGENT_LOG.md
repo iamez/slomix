@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Verified R2 bytes do not isolate the parser's R1 search.**
+  The legacy finder also searches cwd/local_stats. Construct runtime managers
+  with allow_legacy_r1_fallback=False; import_verified_file requires this mode.
+  Exact/same-day/midnight searches then remain in the input directory and reject
+  symlink R1 entries. Retained immutable R1 remains a caller precondition.
+  Actual-PG proof must include a plausible external R1, not merely an empty cwd.
+
 - **2026-09-20 · Content reconciliation is not durability or import completion.**
   A link can succeed before directory fsync fails. Inspecting size and SHA-256
   can recognize the existing complete file without overwrite, but cannot prove
@@ -19,12 +26,47 @@ data here.
   snapshot, not from the just-received bytes. Without it the API remains
   size-only; the optional parameter is not evidence of transport integration.
   Test equal-length corruption and compare successful output by another tool.
+- **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
+  A neutral real-PG fixture supplied 32 hex characters but the canonical regular
+  stats parser stored 8 via short_guid. The first test's 32-character assertion
+  was wrong; corrected after inspecting the actual parser and observing DB rows.
+  Do not change persistence semantics to satisfy a mistaken test expectation.
+
+- **2026-09-20 · Explicit configuration is not enough if imports initialize the process.**
+  The manager previously imported dotenv and configured root logging before its
+  constructor could inspect supplied config. R04d moves legacy setup behind
+  the default loader while preserving dotenv-before-log-path selection. Test in
+  fresh processes with forbidden imports; also pin unchanged sys.path and root
+  handlers. Import-only callers intentionally no longer initialize logging.
+
+
+- **2026-09-20 · Header-free payload equality is not cross-half identity.**
+  An unchanged cumulative R2 has the same payload hash as R1. Canonical import
+  and neutral duplicate preflight must scope successful hashes by half before
+  treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
+  removing the SQL half filter loses that half. Same-half cross-match identity
+  still needs a stronger source contract; do not infer it from this narrow fix.
 
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
   Include every changed Python path in local lint. Module-attribute aliases
   retain the legacy function identities without unused-import ambiguity;
   mutation-test the export identity rather than assuming an alias is correct.
+
+- **2026-09-19 · Parser parity needs nonempty players and a controlled clock.**
+  The committed legacy sample_stats_files parse headers but zero player rows.
+  Header parity alone cannot certify R2 player calculations. Supply valid player
+  lines with a known differential and freeze the parser's generated timestamp
+  when comparing subprocess outputs. A blocked-import subprocess proves absence
+  of Discord/config dependencies more strongly than checking imports in pytest.
+
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
 
 - **2026-09-19 · Logging emission is separate from process setup.**
   Importing bot.logging_config creates its log directory. Runtime-only callers
