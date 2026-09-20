@@ -20,6 +20,25 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04r durable completion manifest — 2026-09-20
+
+Persist a caller-authenticated writer_closed receipt only after size/SHA256 match
+the immutable local capture. Strict v1 schema; private0700 directory, temp0600,
+file fsync, no-clobber hard link, directory fsync. Existing identical/conflicting
+receipts and symlinks are never replaced. Post-link fsync failure can leave final
+visible; propagate and reconcile, do not blindly rewrite. This persists the
+manifest, not a producer trust proof, source reservation, payload fsync or import
+acknowledgement. No producer wiring/deployment. Caller retains immutable snapshot.
+153 combined tests pass0skips. Real filesystem shows sync order, exact receipt
+content/size/hash, duplicate/symlink refusal and pre/post-link error outcomes.
+Allowing mismatched content causes wrong-digest test DID NOT RAISE; restored/cmp.
+Ruff clean. Next receipt recovery/reader and collision-safe source reservation.
+Original runtime-first/new-site audit/reversible dev sequence remains intact.
+CI follow-up: #1071 retry succeeded without code changes. #1072 had no Actions
+run because feat/lua-runtime-* is outside push filter and base is a feature
+branch. Push same cba88132 to feat/db-runtime-completion-proof-r04q for exact-SHA
+verification; alias has no independent changes. No merge approval inferred.
+
 ### R04q offline producer completion prototype — 2026-09-20
 
 Owner continuation accepted offline producer-protocol development, NOT deployment.
