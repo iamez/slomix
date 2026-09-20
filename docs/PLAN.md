@@ -25,6 +25,16 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### Consolidation: preserve Node pin #969 — 2026-09-20
+
+Normal merge of current main retains shared exact .nvmrc CI inputs and explicit
+PyYAML development dependency. Four pin-contract and two plan-contract tests pass.
+This refresh preserves the reviewed version; it does not claim a current security
+release audit, frontend build or system toolchain upgrade. Fresh CI/review required.
+No merge permission for #969; only #1076/#1057/#962 currently authorized. Original
+runtime resumes after this consolidation detour at #1077 completion delivery and
+snapshot sealing, followed by new-site audit and approved reversible DEV cutover.
+
 ### R04c neutral database logging helpers — 2026-09-19
 
 239775fc received all22successful checks, Codex no-major-issues review and
