@@ -20,6 +20,22 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04j single-attempt capture reconciliation — 2026-09-20
+
+Contract: inspect before source iteration; content_present skips input but is
+not a durability/import acknowledgement; conflict preserves file without reading
+source; missing publishes through existing verified no-clobber primitive.
+All exceptions propagate, including source FileExistsError, races and post-link
+sync errors. A later caller-driven attempt re-inspects. No loop, scheduler,
+connection creation, source deletion or service activation. Caller owns bounded
+source, timeouts and cleanup. Verify interrupted transfer, racing publication,
+ambiguous sync failure and retry with no source consumption.
+Verified 55 combined filesystem cases pass. Removing match/conflict short-circuits
+fails two tests with Source must not be consumed; restored/cmp. Real filesystem
+proof preserves inode/bytes on repeat and leaves one winning file after a race.
+Ruff and whitespace clean; external review/CI required. This composes publication
+and reconciliation, not the SSH connection owner or automatic retry scheduler.
+
 ### R04i read-only spool reconciliation — 2026-09-20
 
 Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
