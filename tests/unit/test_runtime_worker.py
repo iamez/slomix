@@ -6,9 +6,11 @@ import signal
 import time
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from shared import runtime_worker
 from shared.runtime_worker import run_bounded_capture_task
 
 
@@ -47,6 +49,36 @@ def test_failed_child_is_not_success(capfd):
     assert result.status == 'failed' and result.exit_code == 1
     assert 'fixture task failure' not in capfd.readouterr().err
     assert not Path(f'/proc/{result.pid}').exists()
+
+
+@pytest.mark.parametrize('fails', [False, True])
+def test_late_parent_observation_preserves_finished_child(tmp_path, monkeypatch, fails):
+    """A clock advance after real join cannot change an observed child exit."""
+    process_type = multiprocessing.get_context('spawn').Process
+    original_join = process_type.join
+    clock = [100.0]
+    joined = []
+
+    def delayed_observation(process, timeout=None):
+        original_join(process, timeout)
+        assert not process.is_alive(), 'Fixture child did not finish within join budget'
+        joined.append(process.pid)
+        clock[0] = 106.0
+
+    # Patch only the supervisor's clock, not multiprocessing's real wait clock.
+    monkeypatch.setattr(runtime_worker, 'time', SimpleNamespace(monotonic=lambda: clock[0]))
+    monkeypatch.setattr(process_type, 'join', delayed_observation)
+    marker = tmp_path / 'child'
+    task = _fail if fails else partial(_complete, marker)
+    result = run_bounded_capture_task(task, timeout_seconds=5)
+    assert result.status == ('failed' if fails else 'completed')
+    assert result.exit_code == (1 if fails else 0)
+    assert joined == [result.pid]
+    if not fails:
+        assert int(marker.read_text()) == result.pid
+    assert not Path(f'/proc/{result.pid}').exists()
+    assert result.pid not in [p.pid for p in multiprocessing.active_children()]
+    print(f'Late observer proof: child exit={result.exit_code}, status={result.status}, reaped')
 
 
 def test_parent_interruption_still_reaps_child(tmp_path, monkeypatch):

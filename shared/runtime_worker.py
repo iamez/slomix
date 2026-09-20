@@ -47,6 +47,8 @@ def run_bounded_capture_task(
     processes. No task return value is transported. Normal return means completed;
     exceptions/SystemExit become failed without transmitting exception text.
     Startup counts against the deadline; shutdown may add two grace periods.
+    Timeout means the child is still alive after the bounded join. A late parent
+    observation cannot establish the exact exit time of an already finished child.
     OS process startup and uninterruptible kernel waits cannot be hard-bounded.
     Failure to reap raises, never reports successful cleanup. Forced termination
     skips child finally blocks: retain sources and reconcile .part/final files.
@@ -61,7 +63,7 @@ def run_bounded_capture_task(
         process.start()
         pid = process.pid
         process.join(max(0.0, deadline - time.monotonic()))
-        timed_out = process.is_alive() or time.monotonic() >= deadline
+        timed_out = process.is_alive()
     finally:
         if process.pid is not None:
             _reap(process, shutdown_grace)

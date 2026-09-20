@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Observation time is not child exit time.**
+  After a bounded join, a late parent clock read cannot prove an already exited
+  child exceeded its budget. Use observed liveness for timeout intervention and
+  preserve completed/failed exit status otherwise. Test with a real child and
+  an isolated supervisor clock jump, keeping multiprocessing waits real.
+
 - **2026-09-20 · Reserve and consume producer dispatch separately.**
   An existing generation directory is not permission to rerun its writer.
   Persist an exclusive claim before dispatch and retain it even after failures;

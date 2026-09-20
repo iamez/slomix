@@ -20,6 +20,22 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04v review follow-up: child outcome versus observation time — 2026-09-20
+
+PR #1077 review4057826087 found inherited supervisor logic classifying an
+already exited child as timed_out when the parent reads its clock late.
+After bounded join, classify timeout by child liveness; preserve exit status
+otherwise. Startup still reduces join budget, shutdown still reaps owned child.
+This does not prove an exact child exit timestamp or a hard OS deadline.
+Real spawn/join tests advance only the supervisor clock after confirmed exit;
+both successful and failed children retain their outcomes. Existing blocked-read,
+blocked-close and SIGTERM-refusal proofs remain required. Restoring the old
+condition fails both new cases; fix restored and cmp verified.
+Combined offline capture/SSH/Lua/reservation/spool suite: 163 passed, zero skips;
+Ruff and whitespace checks pass. No live SSH or deployed-service proof claimed.
+Next remains trusted completion delivery and immutable snapshot sealing, then
+new-site audit and owner-approved reversible dev transition. No services changed.
+
 ### R04v one-shot producer handoff — 2026-09-20
 
 Combine #1076 and #1072 by normal ancestry merge (documentation retained from

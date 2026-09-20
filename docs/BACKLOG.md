@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #1077 review4057826087: fix inherited worker false timeout
+  after child exit and late parent observation. Real-child success/failure
+  regressions and failed/restored mutation added; no source/service activation.
+  Resume trusted completion delivery and snapshot sealing after review checks.
+
 - (Astra, 2026-09-20) R04v combines reservation and offline Lua prototype; durable
   exclusive claim precedes one producer dispatch, generation scopes path/callback.
   Concurrency/error/repeat proofs and two failed/restored mutations complete.
