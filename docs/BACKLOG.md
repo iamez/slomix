@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #966 refreshed against main;9snapshot/plan tests pass,
+  Ruff clean. Actual review-snapshot refs and NEVER MERGE PRs unchanged. Keep
+  this older tooling proposal for review, not authorized for merge. Runtime
+  resume #1077 completion delivery/sealing remains after consolidation.
+
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
   wrong-export mutation observed/restored. Resume manager startup discovery

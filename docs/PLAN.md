@@ -20,6 +20,15 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### Consolidation: preserve immutable-review tooling #966 — 2026-09-20
+
+Normal main integration retained this older tooling proposal. Seven disposable
+repository CLI tests plus two plan contracts pass; Ruff clean. Tests use local
+fixture remotes only; actual NEVER MERGE refs/PRs remain untouched. No merge
+permission for #966. Current authorized batch is #1076/#1057/#962 only. Original
+runtime resume remains #1077 completion delivery/snapshot sealing after this
+consolidation detour, then new-site audit and approved reversible DEV transition.
+
 ### R04c neutral database logging helpers — 2026-09-19
 
 239775fc received all22successful checks, Codex no-major-issues review and
