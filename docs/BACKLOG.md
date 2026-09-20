@@ -7,6 +7,26 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #1060 cross-half dedupe review: canonical hash lookup
+  now scopes R1/R2 separately, not only the runtime waiting guard. Actual-PG
+  zero-delta R2 proof and failing/restored SQL mutation verify the root fix.
+  Historical repairs and full source identity are separate, not silently done.
+
+- (Astra, 2026-09-20) #1060 calendar review fixed: impossible R2 timestamps no
+  longer wait for R1.23 unit/PG cases pass,7 calendar mutations fail/restored.
+  Resume bounded stream capture on the #1062 stack; no live activation.
+
+- (Astra, 2026-09-20) Review detour after opening integrity PR #1062:
+  #1060 now preserves renamed payload deduplication after R1 removal and routes
+  malformed R2 names to canonical failure.14 unit/PG cases pass; mutations fail
+  and restore/cmp. Disposable PG stopped. Resume bounded capture after review.
+
+- (Astra, 2026-09-20) R04e caller-driven dependency guard implemented: missing
+  R1 defers R2 without terminal marker;69 combined tests including actual PG
+  pass; guard mutation observed/restored. Immutable spool is a precondition,
+  not implemented transport/retention. Next bounded capture/publication design.
+  Owner-approved overall scope now includes full new-site audit after runtime.
+
 - (Astra, 2026-09-20) Real PG R1/R2 ordering characterized;63 tests pass.
   Activation gap confirmed: late R1 does not repair already-marked orphan R2.
   Next priority dependency-aware capture scheduling, not more unrelated refactors.
