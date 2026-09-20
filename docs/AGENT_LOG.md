@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Check ET write counts before signalling writer completion.**
+  Local and upstream g_lua.c return FS_Write byte count, but FCloseFile returns
+  no durability status. Offline prototype rejects short/missing counts and signals
+  only after close returns. This does not establish fsync, exclusive filenames or
+  durable receipts; those need separate protocols before enabling source capture.
+
 - **2026-09-20 · STATS_READY is round timing, not exact-file completion.**
   Repository webhook defaults to immediate intermission emission; stats writer
   schedules SaveStats3000ms later and also writes on shutdown. Generic saved log
