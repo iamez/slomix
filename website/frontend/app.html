@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Slomix</title>
+    <!-- The head a link preview reads (Discord, Slack, Google) — a client-side
+         page has no per-route server render, so these are the site's own words;
+         document.title changes per route in the shell (lib/pageTitle.ts). -->
+    <meta name="description" content="Slomix — the stats of a Slovenian ET:Legacy community: every evening's rounds, players, rating, proximity telemetry and the spider web." />
+    <meta property="og:site_name" content="Slomix" />
+    <meta property="og:title" content="Slomix — ET:Legacy stats" />
+    <meta property="og:description" content="Every evening's rounds, players, rating, proximity telemetry and the spider web." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="theme-color" content="#0b0b0a" />
   </head>
   <body>
     <div id="root"></div>

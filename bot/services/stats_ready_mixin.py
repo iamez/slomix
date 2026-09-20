@@ -7,6 +7,7 @@ All methods live on UltimateETLegacyBot via mixin inheritance.
 from __future__ import annotations
 
 from bot.logging_config import get_logger
+from bot.services.lua_correction_inbox import retain_lua_correction_if_enabled
 from bot.services.webhook_event_queue import WebhookHandlerSoftFail
 
 logger = get_logger("bot.core")
@@ -77,6 +78,9 @@ class _StatsReadyMixin:
                     f"(duration {actual_duration}s < 30s minimum)"
                 )
                 return
+
+            # Persist before RAM queue/dedup and downstream worker side effects.
+            await retain_lua_correction_if_enabled(getattr(self, "db_adapter", None), round_metadata)
 
             # Pre-parse spawn stats and display names so the worker does not
             # need the original embed.fields shape — attach them to the

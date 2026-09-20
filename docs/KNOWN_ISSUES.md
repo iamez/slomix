@@ -13,6 +13,33 @@
 
 ## Open — data pipeline
 
+### Profile `aim` / `advanced`: a cache nobody warms, on a table nobody can read cold — Medium (researched 2026-09-08, deferred)
+
+**Symptom.** `/api/players/{guid}/profile?sections=aim` costs 9–46 s cold per player (three
+players measured 2026-09-08: 8.9 / 22.2 / 45.9 s), `advanced` 1–9 s; both ~0 s warm. The new SPA
+therefore never requests them (`lib/queries.ts`), and the legacy page fetched them deferred.
+
+**Cause (EXPLAIN ANALYZE on dev).** The flick/spread query reads every shot of the player —
+124 186 rows scattered over 17 212 heap pages (≈130 MB from disk) of a 370 MB table, then an
+external sort at `work_mem` 4 MB; 9.6 s, all I/O. `shared_buffers` is 128 MB against 2 GB of
+tables on a 1.8 GB box, so "warm" is the OS page cache the next import evicts. `advanced` has two
+`LEFT(col, 8) = $1` predicates that no index can serve (parallel seq scan of all 155 167
+`combat_engagement` rows, 1.6 s). The `player_aim_summary` cache (migration 077) has exactly one
+writer — the lazy read of `sections=aim` that the new site never issues — and its fingerprint
+(`COUNT/MAX(event_time)/SUM(round_id)`) dies at every import; it held 5 rows.
+
+**Paths, not chosen yet** (owner: researched, deferred): A `CLUSTER proximity_shot_fired USING
+idx_psf_canonical` as an ops experiment measured before/after; B expression indexes on
+`LEFT(target_guid, 8)` / `LEFT(original_victim_guid, 8)` (a numbered migration with the
+`website_app` grant); C a producer for 077 after import/relink (the KIS warm pattern in
+`voice_session_service.py`, or a `weapon_stats_mv_refresh_loop`-shaped loop in the web app); D
+UTRO from the `storytelling_kill_impact` aggregate instead of raw spawn-timing rows; E
+`SET LOCAL work_mem` for the sort; F a lazy "compute aim" button (rejected: 46 s waits).
+Recommendation when picked up: B + E first, A measured, C only if A leaves cold above ~2 s. Full
+RCA with the plans and timings: `docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md` (local).
+Note for the dataset register: `cost_ms_cold` is recorded, `warmed_by` is not — that gap is how a
+cache ends up with no producer.
+
 ### R0 summary rows counted again — a class, not one handler (2026-09-07, Fable)
 
 **Symptom.** `/api/stats/player/{name}/form` and `/rounds` (players_router) and

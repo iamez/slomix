@@ -9,7 +9,7 @@
  */
 import { useParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, decimals } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import {
   useProxDuos, useProxHitRegions, useProxHitRegionsByWeapon,
@@ -18,18 +18,28 @@ import {
   useProxScoresFormula, useProxTradesPlayerStats,
 } from '../lib/queries';
 import { ProxPanel, ProxRow } from './proximityShared';
+import { WEAPON_NAMES } from '../lib/weapons';
+import { utcStamp } from '../lib/utcStamp';
 
 const PROFILE_DAYS = 90;
 const SCORE_DAYS = 30;
 
 /** ET weapon ids as the tracker emits them (copied from the old tree's
  *  only consumer — the ids are engine constants, not guesses). */
-const WEAPON_NAMES: Record<number, string> = {
-  3: 'Knife', 8: 'MP40', 9: 'Thompson', 10: 'Sten',
-  15: 'Panzerfaust', 19: 'FG42', 23: 'Garand', 28: 'K43',
-  32: 'Colt', 33: 'Luger', 35: 'Grenade', 36: 'Grenade',
-  44: 'Landmine', 47: 'Mortar', 50: 'Dynamite', 57: 'MG42',
-};
+
+/** Seconds as h:mm, for stance and sprint totals over a 90-day window. */
+function hm(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')} h`;
+}
+
+/** "2 of 3 metrics" for a category, from metrics_scored and the breakdown's live (weighted) members. */
+function metricsScored(row: { metrics_scored?: Record<string, number>; breakdown?: Record<string, Record<string, { weight: number }>> }, cat: string): string | undefined {
+  const scored = row.metrics_scored?.[cat];
+  if (scored == null) return undefined;
+  const live = row.breakdown?.[cat] ? Object.values(row.breakdown[cat]).filter((m) => m.weight > 0).length : null;
+  return live != null ? `${figure(scored)} of ${figure(live)} metrics scored` : `${figure(scored)} metrics scored`;
+}
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
@@ -129,6 +139,9 @@ export function ProximityPlayerPage() {
           <Tile label="trades made" value={figure(p.trades_made)} />
           <Tile label="timed kills" value={figure(p.timed_kills)} />
           <Tile label="spawn denial" value={`${figure(Math.round(p.avg_denial_ms / 100) / 10)} s avg`} />
+          {p.escapes != null && <Tile label="escapes" value={figure(p.escapes)} />}
+          {p.avg_duration_ms != null && <Tile label="engagement length" value={`${figure(Math.round(p.avg_duration_ms / 100) / 10)} s avg`} />}
+          {p.spawn_avg_score != null && <Tile label="spawn timing score" value={decimals(p.spawn_avg_score)} />}
         </Cluster>
         <Cluster gap={6} style={{ flexWrap: 'wrap', marginTop: 'var(--space-4)' }}>
           <Tile label="return fire" value={`${figure(p.avg_return_fire_ms)} ms`} />
@@ -141,7 +154,7 @@ export function ProximityPlayerPage() {
       </div>
 
       <div data-parity="proximity-player.radar">
-        <SectionHead label="radar" aside={radar.data ? <span className="lbl">{radar.data.formula_version}</span> : undefined} />
+        <SectionHead label="radar" aside={radar.data ? <span className="lbl"><span>{radar.data.formula_version}</span>{radar.data.teamplay_formula_version != null && <span> · teamplay {radar.data.teamplay_formula_version}</span>}</span> : undefined} />
         {radar.isPending && <Pending label="radar" />}
         {radar.isError && <Unavailable what="radar" />}
         {radar.data && (
@@ -174,10 +187,34 @@ export function ProximityPlayerPage() {
             }
             return (
               <Stack gap={1} className="rows">
-                <ProxRow name="overall" mid={`rank ${figure(row.rank)} in window`} val={figure(row.prox_overall)} />
-                <ProxRow name="combat" val={figure(row.prox_combat)} />
-                <ProxRow name="team" val={figure(row.prox_team)} />
-                <ProxRow name="gamesense" val={figure(row.prox_gamesense)} />
+                {/* The query is filtered to this guid, so rank and player_count
+                  * describe a one-player answer, not the 30-day cohort: the
+                  * leaderboard carries the cohort rank (Codex on #1009). */}
+                <ProxRow name="overall" mid={`${d.scope.scoped ? 'scoped · ' : ''}answered for this player alone (${figure(d.player_count)} scored; the cohort rank is on the proximity leaderboard) · radar ${row.prox_radar.map((ax) => `${ax.label.toLowerCase()} ${figure(ax.value)}`).join(' / ')}`} val={figure(row.prox_overall)} />
+                <ProxRow name="combat" mid={metricsScored(row, 'prox_combat')} val={figure(row.prox_combat)} />
+                <ProxRow name="team" mid={metricsScored(row, 'prox_team')} val={figure(row.prox_team)} />
+                <ProxRow name="gamesense" mid={metricsScored(row, 'prox_gamesense')} val={figure(row.prox_gamesense)} />
+                {/* The breakdown the composite is made of: raw → percentile × weight
+                  * → contribution, per metric; a retired metric is named as such
+                  * rather than silently weighted 0. */}
+                {row.breakdown && Object.entries(row.breakdown).map(([cat, metrics]) => (
+                  <Meta key={cat}>
+                    {cat.replace('prox_', '')}: {Object.entries(metrics).map(([k, m]) => (
+                      m.retired_in
+                        ? `${m.label.toLowerCase()} retired in ${m.retired_in}`
+                        : `${m.label.toLowerCase()} ${m.raw == null ? '—' : decimals(m.raw)} → p${m.percentile == null ? '—' : figure(Math.round(m.percentile * 100))} × ${figure(m.weight)} = ${figure(m.contribution)}`
+                    )).join(' · ') || 'no metric scored'}
+                  </Meta>
+                ))}
+                {row.missing_metrics && row.missing_metrics.length > 0 && <Meta>missing metrics: {row.missing_metrics.join(', ')}</Meta>}
+                {row.metric_weight_coverage != null && row.metric_weight_coverage < 1 && <Meta>weight coverage {figure(Math.round(row.metric_weight_coverage * 100))}% — an unanswered metric enters the composite at a neutral 0.5 percentile (prox_scoring.py), it is not left out</Meta>}
+                {(d.quality.failed_sources.length > 0 || d.quality.below_coverage_dropped > 0 || d.quality.metric_weight_coverage < 1) && (
+                  <Meta>
+                    quality: {d.quality.failed_sources.length > 0 ? `failed sources ${d.quality.failed_sources.join(', ')}` : 'every source answered'}
+                    {d.quality.below_coverage_dropped > 0 ? ` · ${figure(d.quality.below_coverage_dropped)} players dropped below the coverage floor` : ''}
+                    {d.quality.metric_weight_coverage < 1 ? ` · weight coverage ${figure(Math.round(d.quality.metric_weight_coverage * 100))}%` : ''}
+                  </Meta>
+                )}
                 {d.quality.successful_sources < d.quality.total_sources && (
                   <Meta>{figure(d.quality.successful_sources)}/{figure(d.quality.total_sources)} sources answered</Meta>
                 )}
@@ -208,7 +245,8 @@ export function ProximityPlayerPage() {
                 {kp && <ProxRow name="revived against" mid={`${figure(kp.tapouts)} tapouts`} val={figure(kp.revives_against)} />}
                 {kp && <ProxRow name="denial per kill" val={`${figure(Math.round(kp.avg_denied_ms / 100) / 10)} s`} />}
                 {rv && <ProxRow name="own deaths revived" mid={`${figure(rv.times_revived)} of ${figure(rv.times_killed)}`} val={`${figure(Math.round(rv.revive_rate * 1000) / 10)}%`} />}
-                {rv && <ProxRow name="own deaths gibbed" val={`${figure(Math.round(rv.gib_rate * 1000) / 10)}%`} />}
+                {rv && <ProxRow name="own deaths gibbed" mid={`${figure(rv.times_gibbed)} gibbed · ${figure(rv.times_tapped)} tapped out`} val={`${figure(Math.round(rv.gib_rate * 1000) / 10)}%`} />}
+                {rv && rv.avg_wait_ms != null && <ProxRow name="wait before a revive" mid="average while down" val={`${figure(Math.round(rv.avg_wait_ms / 100) / 10)} s`} />}
               </Stack>
             );
           }}
@@ -250,11 +288,11 @@ export function ProximityPlayerPage() {
       </div>
 
       <div data-parity="proximity-player.player-card">
-        <ProxPanel label="the competitive card" aside={`${PROFILE_DAYS}d`} q={card}
+        <ProxPanel label="the competitive card" aside={card.data?.timeline_range_days != null ? `${figure(card.data.timeline_range_days)}d` : `${PROFILE_DAYS}d`} q={card}
           empty="no scored rounds in this window" isEmpty={(d) => d.stagger.kills === 0 && d.clutch.situations === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
-              <ProxRow name="stagger kills" mid={`${figure(d.stagger.stagger_kills)} of ${figure(d.stagger.kills)} kills`} val={`${figure(d.stagger.stagger_rate)}%`} />
+              <ProxRow name="stagger kills" mid={`${figure(d.stagger.stagger_kills)} of ${figure(d.stagger.kills)} kills · avg score ${figure(d.stagger.avg_score)}`} val={`${figure(d.stagger.stagger_rate)}%`} />
               <ProxRow name="time denied" mid={`attack ${figure(Math.round(d.sides.attack.denied_s / 60))} min · defense ${figure(Math.round(d.sides.defense.denied_s / 60))} min`} val={`${figure(Math.round(d.stagger.denied_s / 60))} min`} />
               <ProxRow name="clutches" mid={`${figure(d.clutch.wins)} of ${figure(d.clutch.situations)} situations`} val={`${figure(d.clutch.win_pct)}%`} />
               {d.clutch.best && (
@@ -271,6 +309,7 @@ export function ProximityPlayerPage() {
           empty="no crossfire pairs in this window" isEmpty={(d) => d.duos.length === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
+              {(!d.ready && d.message) || d.generated_at ? <Meta>{!d.ready && d.message ? `${d.message} · ` : ''}{d.generated_at ? `computed ${utcStamp(d.generated_at)}` : ''}</Meta> : null}
               {d.duos.slice(0, 6).map((u) => (
                 <ProxRow key={`${u.player1 ?? '?'}:${u.player2 ?? '?'}`}
                   name={`${u.player1 ? stripEtColors(u.player1) : '?'} + ${u.player2 ? stripEtColors(u.player2) : '?'}`}
@@ -313,7 +352,10 @@ export function ProximityPlayerPage() {
               <Stack gap={1} className="rows">
                 <ProxRow name="stance" mid={`crouch ${figure(row.crouching_pct)}% · prone ${figure(row.prone_pct)}%`} val={`stand ${figure(row.standing_pct)}%`} />
                 <ProxRow name="speed" mid={`peak avg ${figure(row.avg_peak_speed)} u/s`} val={`${figure(row.avg_speed)} u/s`} />
-                <ProxRow name="sprint share" val={`${figure(row.avg_sprint_pct)}%`} />
+                <ProxRow name="sprint share" mid={`${hm(row.sprint_sec)} sprinting`} val={`${figure(row.avg_sprint_pct)}%`} />
+                <ProxRow name="stance time" mid={`crouch ${hm(row.crouching_sec)} · prone ${hm(row.prone_sec)}`} val={`stand ${hm(row.standing_sec)}`} />
+                <ProxRow name="distance" mid={`${figure(Math.round(row.avg_distance_per_sec))} u/s while alive · ${figure(Math.round(row.avg_post_spawn_dist))} u after a spawn`} val={`${figure(Math.round(row.total_distance / 1000))} k u`} />
+                <ProxRow name="peak speed" mid={`fastest sample ${figure(Math.round(row.max_peak_speed))} u/s`} val={`${figure(row.avg_peak_speed)} u/s avg`} />
                 <ProxRow name="lives tracked" mid={`${figure(Math.round(row.alive_sec / 60))} min alive`} val={figure(row.tracks)} />
               </Stack>
             );

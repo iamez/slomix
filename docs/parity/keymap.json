@@ -25,8 +25,8 @@
           "parity": "home.insights"
         },
         "Map Distribution": {
-          "status": "unmapped",
-          "note": "no SPA equivalent yet - the maps page shows per-map records, not the home page's share-of-rounds chart"
+          "parity": "maps.summary",
+          "note": "the legacy home chart was the share of rounds per map; the SPA's maps page carries rounds per map in its summary tiles and grid (maps.summary, maps.grid) — the home page shows the season block instead, by design (2026-09-08)"
         }
       }
     },
@@ -51,8 +51,8 @@
           "parity": "session.teams"
         },
         "Charts": {
-          "status": "unmapped",
-          "note": "the legacy charts tab was not carried; the SPA grew a rounds tab instead, but no decision retiring the charts is on record"
+          "parity": "session.graphs",
+          "note": "the legacy charts tab (playstyle radar, DPM timeline, advanced metrics) is the session summary's graphs panel since #990 (2026-09-08), keyed by gaming session and gated like the basics"
         }
       }
     },

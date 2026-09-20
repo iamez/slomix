@@ -12,7 +12,7 @@
  * is drawn as a thinned sparkline, never a table.
  */
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Meta, Pending, SectionHead, Unavailable, figure, decimals } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import { ProxPanel, ProxRow } from './proximityShared';
 import {
@@ -22,7 +22,9 @@ import {
   useProxSupportSummary,
 } from '../lib/queries';
 import { mapLabel } from '../lib/maps';
+import { utcStamp } from '../lib/utcStamp';
 import type { ProxCohesion } from '../lib/types';
+import { mmss } from '../components/RoundsTable';
 
 /** The data-completeness band: which source tables actually captured this
  * scope. Required sources that are not ready are the headline; optional
@@ -35,21 +37,43 @@ function QualityBand({ sessionDate }: { sessionDate: string | null }) {
       <SectionHead label="data completeness" aside={<span className="lbl">per source table · this scope</span>} />
       {q.isPending && <Pending label="data completeness" />}
       {q.isError && <Unavailable what="data completeness" />}
-      {q.data && (q.data.overall_status !== 'ready' && q.data.overall_status !== 'ok' ? (
+      {q.data && (q.data.overall_status !== 'ready' && q.data.overall_status !== 'ok' && q.data.overall_status !== 'partial' ? (
         // The HTTP-200 error shape carries only statuses — formatting its
         // missing counts crashed the whole route into the error boundary
-        // instead of this line (Codex on #861, P1).
+        // instead of this line (Codex on #861, P1). `partial` is NOT that
+        // shape: it carries the counts (missing sides, breaches) and is
+        // exactly when they matter (Codex on #1004).
         <Unavailable what={`data completeness (${q.data.overall_status})`} />
       ) : (
         <Stack gap={1}>
           <Meta>
-            scope {q.data.selected_scope_status} · maintenance {q.data.global_maintenance_status}
+            {q.data.overall_status === 'partial' && <>partial · </>}scope {q.data.selected_scope_status} · maintenance {q.data.global_maintenance_status}
             {q.data.round_correlation.avg_completeness_pct != null && (
               <>
                 {' · '}correlation {q.data.round_correlation.avg_completeness_pct.toFixed(1)}%
                 {' ('}{q.data.round_correlation.complete_count}/{q.data.round_correlation.correlation_count} complete{')'}
               </>
             )}
+            {q.data.round_correlation.expected_round_sides != null && (
+              <>
+                {' · '}sides {figure(q.data.round_correlation.present_proximity_sides ?? 0)}/{figure(q.data.round_correlation.expected_round_sides)}
+                {(q.data.round_correlation.missing_existing_round_sides ?? 0) > 0 && <>, {figure(q.data.round_correlation.missing_existing_round_sides ?? 0)} missing</>}
+                {(q.data.round_correlation.unpaired_round_sides ?? 0) > 0 && <>, {figure(q.data.round_correlation.unpaired_round_sides ?? 0)} unpaired</>}
+              </>
+            )}
+            {/* linkage is measured over the WHOLE database (_sanitize_linkage), never this scope — the scope is printed with it */}
+            {q.data.linkage && <> · linkage {q.data.linkage.status} ({q.data.linkage.scope}{q.data.linkage.breach_count > 0 ? `, ${figure(q.data.linkage.breach_count)} breaches` : ''}{q.data.linkage.metrics ? `, ${figure(Object.keys(q.data.linkage.metrics).length)} metrics` : ''})</>}
+            {q.data.linkage?.breaches && q.data.linkage.breaches.length > 0 && <> · breached: {q.data.linkage.breaches.map((b) => `${b.metric} ${figure(b.value)} > ${figure(b.threshold)}`).join(', ')}</>}
+            {q.data.linkage?.errors && q.data.linkage.errors.length > 0 && <> · linkage errors: {q.data.linkage.errors.join('; ')}</>}
+            {q.data.generated_at && <> · computed {utcStamp(q.data.generated_at)}</>}
+            {q.data.cache_freshness && (
+              <>
+                {' · '}caches {q.data.cache_freshness.status}
+                {q.data.cache_freshness.latest_kis_created_at && <>, KIS {utcStamp(q.data.cache_freshness.latest_kis_created_at)}</>}
+                {q.data.cache_freshness.latest_context_created_at && <>, context {utcStamp(q.data.cache_freshness.latest_context_created_at)}</>}
+              </>
+            )}
+            {q.data.round_correlation.latest_created_at && <> · correlated {utcStamp(q.data.round_correlation.latest_created_at)}</>}
           </Meta>
           <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
             {Object.entries(q.data.signals).map(([key, sig]) => (
@@ -136,6 +160,11 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.total_events)} timed kills</Meta>
+                {/* Per team, from the same response: a side's denial average
+                  * is what a player's score is read against. */}
+                {d.team_averages.length > 0 && (
+                  <Meta>{d.team_averages.map((t) => `${t.team.toLowerCase()} ${t.avg_score.toFixed(3)} over ${figure(t.total_kills)} kills`).join(' · ')}</Meta>
+                )}
                 {/* The board wants 3+ kills per player — a narrow scope can
                   * hold real events and no qualifier (Codex on #861 r2). */}
                 {d.leaders.length === 0 && <Meta>nobody reached the three-kill board threshold here</Meta>}
@@ -154,7 +183,7 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 <Meta>{figure(d.total_events)} locks</Meta>
                 {d.leaders.length === 0 && <Meta>nobody reached the three-lock board threshold here</Meta>}
                 {d.leaders.slice(0, 5).map((l) => (
-                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.locks)} locks · err ${l.avg_err_deg.toFixed(1)}°`} val={`${figure(l.avg_lock_ms)} ms`} />
+                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.locks)} locks · err ${l.avg_err_deg.toFixed(1)}° · ${figure(l.avg_dist)} u away · ${figure(Math.round(l.total_lock_ms / 1000))} s on target`} val={`${figure(l.avg_lock_ms)} ms`} />
                 ))}
               </Stack>
             )}
@@ -168,6 +197,10 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 {d.leaders.slice(0, 5).map((l) => (
                   <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`fastest ${figure(l.fastest_ms)} ms`} val={`${figure(l.trades)} · ${figure(l.avg_reaction_ms)} ms`} />
                 ))}
+                {(d.speed_distribution ?? []).length > 0 && <Meta>by speed: {d.speed_distribution!.map((t) => `${t.tier} ${figure(t.count)}`).join(' · ')}</Meta>}
+                {(d.recent_trades ?? []).slice(0, 5).map((t, i) => (
+                  <ProxRow key={`trade:${i}`} name={`${stripEtColors(t.trader)} avenged ${stripEtColors(t.victim)}`} mid={`killed by ${stripEtColors(t.killer)} · ${mapLabel(t.map)} · ${t.date}`} val={`${figure(t.delta_ms)} ms`} />
+                ))}
               </Stack>
             )}
           </ProxPanel>
@@ -177,14 +210,14 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
           <ProxPanel label="revives" aside="medics under pressure" q={revives} empty={noTracker} isEmpty={(d) => d.summary.total_revives === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
-                <Meta>{figure(d.summary.total_revives)} revives · {d.summary.under_fire_pct.toFixed(1)}% under fire</Meta>
+                <Meta>{figure(d.summary.total_revives)} revives · {d.summary.under_fire_pct.toFixed(1)}% under fire · nearest enemy {figure(d.summary.avg_enemy_distance)} u away on average</Meta>
                 {/* The board needs 2+ revives per medic, so a sparse scope
                   * can have real totals and NO qualifying leader — the
                   * totals must survive that (Codex on #861). */}
                 {d.leaders.length === 0 ? (
                   <Meta>no medic reached the two-revive board threshold here</Meta>
                 ) : d.leaders.slice(0, 5).map((l) => (
-                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.under_fire_count)} under fire`} val={figure(l.revives)} />
+                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.under_fire_count)} under fire · enemy ${figure(l.avg_enemy_dist)} u away`} val={figure(l.revives)} />
                 ))}
               </Stack>
             )}
@@ -195,9 +228,14 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
           <ProxPanel label="focus fire" aside="who the room shoots at" q={focus} empty={noTracker} isEmpty={(d) => d.targets.length === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
-                <Meta>{figure(d.summary.total_events)} events · avg {d.summary.avg_attackers.toFixed(1)} attackers</Meta>
+                <Meta>{figure(d.summary.total_events)} events · avg {d.summary.avg_attackers.toFixed(1)} attackers{d.summary.avg_damage != null ? ` · ${figure(Math.round(d.summary.avg_damage))} dmg per event` : ''}{d.summary.avg_duration_ms != null ? ` · ${figure(Math.round(d.summary.avg_duration_ms / 100) / 10)} s each` : ''}</Meta>
                 {d.targets.slice(0, 5).map((t) => (
                   <ProxRow key={t.guid} name={stripEtColors(t.name)} mid={`${figure(t.total_damage_taken)} dmg taken`} val={`${figure(t.times_focused)}×`} />
+                ))}
+                {/* the latest focus events themselves (ledger 2026-09-09) */}
+                {(d.recent ?? []).slice(0, 5).map((r, i) => (
+                  <ProxRow key={`recent:${r.target_name ?? '?'}:${i}`} name={`${r.target_name ? stripEtColors(r.target_name) : 'unknown'} · ${mapLabel(r.map_name)}`}
+                    mid={`${figure(r.attacker_count)} attackers · ${figure(r.total_damage)} dmg · ${figure(Math.round(r.duration / 100) / 10)} s`} val={`focus ${decimals(r.focus_score)}`} />
                 ))}
               </Stack>
             )}
@@ -210,6 +248,9 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
               <Stack gap={1} className="rows">
                 <Meta>
                   {figure(d.summary.total_kills ?? 0)} kills · median {figure(d.summary.median_kill_distance ?? 0)} u
+                  {d.summary.avg_kill_distance != null ? ` · avg ${figure(Math.round(d.summary.avg_kill_distance))} u` : ''}
+                  {d.summary.unique_attackers != null ? ` · ${figure(d.summary.unique_attackers)} attackers` : ''}
+                  {d.summary.maps_tracked != null ? ` · ${figure(d.summary.maps_tracked)} maps` : ''}
                 </Meta>
                 {d.by_class.map((c) => (
                   <ProxRow key={c.class} name={c.class.toLowerCase()} mid={`${figure(c.kills)} kills`} val={`${figure(c.avg_distance)} u`} />
@@ -229,10 +270,14 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                   {d.team_summary.map((t) => (
                     <Meta key={t.team}>
                       {t.team.toLowerCase()}: dispersion {t.avg_dispersion.toFixed(0)} · {t.avg_alive.toFixed(1)} alive · {figure(t.samples)} samples
+                      {t.avg_max_spread != null ? ` · widest ${figure(Math.round(t.avg_max_spread))} u` : ''}{t.avg_stragglers != null ? ` · ${decimals(t.avg_stragglers)} stragglers` : ''}
                     </Meta>
                   ))}
                 </Cluster>
                 <CohesionSparkline data={d} />
+                {d.timeline.length > 0 && d.timeline[0].round_time != null && (
+                  <Meta>{figure(d.timeline.length)} samples on the round clock, {mmss((d.timeline[0].round_time ?? 0) / 1000)} to {mmss((d.timeline[d.timeline.length - 1].round_time ?? 0) / 1000)}</Meta>
+                )}
                 {d.buddy_pairs.slice(0, 4).map((b) => (
                   <ProxRow key={b.guids} name={b.guids} mid={`${figure(b.times_paired)}× paired`} val={`${figure(b.avg_distance)} u`} />
                 ))}
@@ -246,8 +291,11 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.team_summary.map((t) => (
-                  <ProxRow key={t.team} name={t.team.toLowerCase()} mid={`${figure(t.objective_pushes)} at objectives · quality ${t.avg_quality.toFixed(2)}`} val={figure(t.pushes)} />
+                  <ProxRow key={t.team} name={t.team.toLowerCase()} mid={`${figure(t.objective_pushes)} at objectives · quality ${t.avg_quality.toFixed(2)}${t.avg_alignment != null ? ` · alignment ${decimals(t.avg_alignment)}` : ''}${t.avg_participants != null ? ` · ${decimals(t.avg_participants, 1)} players` : ''}${t.avg_speed != null ? ` · ${figure(Math.round(t.avg_speed))} u/s` : ''}`} val={figure(t.pushes)} />
                 ))}
+                {(d.quality_distribution ?? []).length > 0 && (
+                  <Meta>by quality: {d.quality_distribution!.map((q) => `${q.team.toLowerCase()} ${q.tier} ${figure(q.count)}`).join(' · ')}</Meta>
+                )}
               </Stack>
             )}
           </ProxPanel>
@@ -261,7 +309,11 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
               <Stack gap={1} className="rows">
                 <Meta>
                   {figure(d.executed)} of {figure(d.total_opportunities)} executed ({d.utilization_rate_pct.toFixed(1)}%) · avg {d.avg_angle.toFixed(0)}°
+                  {d.avg_damage != null ? ` · ${figure(Math.round(d.avg_damage))} dmg per crossfire` : ''}
                 </Meta>
+                {(d.angle_buckets ?? []).length > 0 && (
+                  <Meta>by angle: {d.angle_buckets!.map((b) => `${b.bucket} ${figure(b.executed)}/${figure(b.count)}`).join(' · ')} (executed/opportunities)</Meta>
+                )}
                 {d.top_duos.slice(0, 5).map((duo) => (
                   <ProxRow
                     key={`${duo.teammate1_guid}:${duo.teammate2_guid}`}
@@ -279,9 +331,12 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
           <ProxPanel label="support uptime" aside="time spent near teammates" q={support} empty={noTracker} isEmpty={(d) => !d.summary.total_rounds}>
             {(d) => (
               <Stack gap={1} className="rows">
-                <Meta>{figure(d.summary.total_rounds ?? 0)} rounds · avg {(d.summary.avg_uptime_pct ?? 0).toFixed(1)}%</Meta>
+                <Meta>{figure(d.summary.total_rounds ?? 0)} rounds · avg {(d.summary.avg_uptime_pct ?? 0).toFixed(1)}%{d.summary.max_uptime_pct != null ? ` · best round ${decimals(d.summary.max_uptime_pct, 1)}%` : ''}{d.summary.avg_coverage_pct != null ? ` · coverage ${decimals(d.summary.avg_coverage_pct, 1)}%` : ''}</Meta>
                 {d.by_map.slice(0, 5).map((m) => (
-                  <ProxRow key={m.map_name} name={mapLabel(m.map_name)} mid={`${figure(m.rounds)} rd`} val={`${m.avg_uptime_pct.toFixed(1)}%`} />
+                  <ProxRow key={m.map_name} name={mapLabel(m.map_name)} mid={`${figure(m.rounds)} rd${m.max_uptime_pct != null ? ` · best ${decimals(m.max_uptime_pct, 1)}%` : ''}${m.total_samples != null ? ` · ${figure(m.total_support_samples ?? 0)} of ${figure(m.total_samples)} samples` : ''}`} val={`${m.avg_uptime_pct.toFixed(1)}%`} />
+                ))}
+                {(d.rounds ?? []).slice(0, 5).map((r, i) => (
+                  <ProxRow key={`round:${r.session_date}:${r.map_name}:${String(r.round_number)}:${i}`} name={`${mapLabel(r.map_name)} r${String(r.round_number)} · ${r.session_date}`} mid={`${figure(r.support_samples ?? 0)} of ${figure(r.total_samples ?? 0)} samples near a teammate`} val={`${decimals(r.support_uptime_pct, 1)}%`} />
                 ))}
               </Stack>
             )}
@@ -294,11 +349,12 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
           <ProxPanel label="classes" aside="movement by role" q={classes} empty={noTracker} isEmpty={(d) => d.classes.length === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
+                {d.generated_at && <Meta>computed {utcStamp(d.generated_at)}</Meta>}
                 {d.classes.map((c) => (
                   <ProxRow
                     key={c.player_class}
                     name={c.player_class.toLowerCase()}
-                    mid={`${figure(c.tracks)} tracks · sprint ${c.avg_sprint_pct == null ? '—' : `${c.avg_sprint_pct.toFixed(0)}%`}`}
+                    mid={`${figure(c.tracks)} tracks${c.players != null ? ` · ${figure(c.players)} players` : ''} · sprint ${c.avg_sprint_pct == null ? '—' : `${c.avg_sprint_pct.toFixed(0)}%`}${c.avg_duration_ms != null ? ` · ${figure(Math.round(c.avg_duration_ms / 1000))} s per life` : ''}${c.avg_spawn_reaction_ms != null ? ` · first move ${figure(c.avg_spawn_reaction_ms)} ms` : ''}`}
                     val={c.avg_distance == null ? '—' : `${figure(Math.round(c.avg_distance))} u`}
                   />
                 ))}
@@ -314,11 +370,18 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 {d.return_fire.slice(0, 3).map((r) => (
                   <ProxRow key={`rf:${r.guid}`} name={stripEtColors(r.name)} mid={`return fire · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
                 ))}
+                {/* one row per (player, class): the endpoint groups by class, so
+                  * the same player can sit on the board twice — say which class */}
+                {d.dodge.slice(0, 3).map((r) => (
+                  <ProxRow key={`dg:${r.guid}:${r.player_class}`} name={`${stripEtColors(r.name)} (${r.player_class.toLowerCase()})`} mid={`dodge · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
+                ))}
                 {d.class_summary.map((c) => (
                   <ProxRow
                     key={c.player_class}
                     name={c.player_class.toLowerCase()}
-                    mid={`${figure(c.events)} events`}
+                    // the three channels with their sample counts: an average
+                    // without its denominator is a number, not a measurement
+                    mid={`${figure(c.events)} events · dodge ${c.avg_dodge_reaction_ms == null ? '—' : `${figure(c.avg_dodge_reaction_ms)} ms`} (${figure(c.dodge_samples)}) · support ${c.avg_support_reaction_ms == null ? '—' : `${figure(c.avg_support_reaction_ms)} ms`} (${figure(c.support_samples)}) · rf samples ${figure(c.return_samples)}`}
                     // null, not zero: a class with no return-fire SAMPLES has
                     // no average to claim (Codex on #861, P1).
                     val={c.avg_return_fire_ms == null ? '— rf' : `${figure(c.avg_return_fire_ms)} ms rf`}

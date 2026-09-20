@@ -6,9 +6,11 @@
  * the projection machinery is the spider-web work.
  */
 import { useState } from 'react';
+import { WEAPON_NAMES } from '../lib/weapons';
 import { Cluster, Stack } from '../components/layout';
-import { Lbl, Meta, figure } from '../components/ui';
+import { Lbl, Meta, figure, decimals } from '../components/ui';
 import { mapLabel } from '../lib/maps';
+import { utcStamp } from '../lib/utcStamp';
 import { stripEtColors } from '../lib/names';
 import {
   useProxCombatHeatmap, useProxDangerZones, useProxHotzones, useProxKillLines,
@@ -74,6 +76,9 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
               <DotCanvas pts={d.zones.map((z) => ({ x: z.x, y: z.y, count: z.deaths }))}
                 tone="var(--color-neg)" label={`danger zones on ${mapLabel(d.map_name)}`} />
               <Meta>grid {figure(d.grid_size)} u · deadliest cell {figure(Math.max(...d.zones.map((z) => z.deaths)))} deaths</Meta>
+              {/* Who dies there: the class split summed over every cell. */}
+              <Meta>by class: {Object.entries(d.zones.reduce<Record<string, number>>((acc, z) => { for (const [cls, n] of Object.entries(z.classes)) acc[cls] = (acc[cls] ?? 0) + (n ?? 0); return acc; }, {}))
+                .sort((a, b) => b[1] - a[1]).map(([cls, n]) => `${cls.toLowerCase()} ${figure(n)}`).join(' · ') || 'none recorded'}</Meta>
             </Stack>
           )}
         </ProxPanel>
@@ -102,6 +107,8 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                   ))}
                 </svg>
                 <Meta>{figure(d.lines.length)} kills with both positions known{d.lines.length > 400 ? ' · drawing the first 400' : ''}</Meta>
+                <Meta>by weapon: {Object.entries(d.lines.reduce<Record<string, number>>((acc, l) => { const w = WEAPON_NAMES[l.weapon_id] ?? `weapon ${l.weapon_id}`; acc[w] = (acc[w] ?? 0) + 1; return acc; }, {}))
+                  .sort((a, b) => b[1] - a[1]).slice(0, 6).map(([w, n]) => `${w} ${figure(n)}`).join(' · ')}</Meta>
               </Stack>
             );
           }}
@@ -114,32 +121,53 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
           {(d) => (
             <Stack gap={2}>
               <DotCanvas pts={d.hotzones} tone="var(--color-accent-warm, var(--color-accent))" label={`hotzones on ${mapLabel(d.map_name)}`} />
-              <Meta>{figure(d.hotzones.reduce((a, z) => a + z.count, 0))} engagements across {figure(d.hotzones.length)} cells</Meta>
+              <Meta>{figure(d.hotzones.reduce((a, z) => a + z.count, 0))} engagements across {figure(d.hotzones.length)} cells · {figure(d.hotzones.reduce((a, z) => a + z.kills, 0))} kills, {figure(d.hotzones.reduce((a, z) => a + z.deaths, 0))} deaths</Meta>
             </Stack>
           )}
         </ProxPanel>
       </div>
 
       <div data-parity="proximity.movers">
-        <ProxPanel label="movers" aside="distance · sprint" q={movers} empty={NO_ROWS}
+        <ProxPanel label="movers" aside="distance · sprint · reaction · survival" q={movers} empty={NO_ROWS}
           isEmpty={(d) => d.distance.length === 0 && d.sprint.length === 0}>
           {(d) => (
-            <Cluster gap={7} align="start" style={{ flexWrap: 'wrap' }}>
-              <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
-                <Lbl>distance</Lbl>
-                {d.distance.slice(0, 5).map((r) => (
-                  <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)}
-                    val={`${figure(Math.round(r.total_distance / 1000))} k u`} />
-                ))}
-              </Stack>
-              <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
-                <Lbl>sprint share</Lbl>
-                {d.sprint.slice(0, 5).map((r) => (
-                  <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)}
-                    val={`${figure(r.sprint_pct)}%`} />
-                ))}
-              </Stack>
-            </Cluster>
+            <Stack gap={2}>
+              {!d.ready && d.message && <Meta>{d.message}</Meta>}
+              <Cluster gap={7} align="start" style={{ flexWrap: 'wrap' }}>
+                <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
+                  <Lbl>distance</Lbl>
+                  {d.distance.slice(0, 5).map((r) => (
+                    <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
+                      val={`${figure(Math.round(r.total_distance / 1000))} k u`} />
+                  ))}
+                </Stack>
+                <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
+                  <Lbl>sprint share</Lbl>
+                  {d.sprint.slice(0, 5).map((r) => (
+                    <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
+                      val={`${figure(r.sprint_pct)}%`} />
+                  ))}
+                </Stack>
+                {/* The other two boards the endpoint answers and the page never drew (ledger 2026-09-09). */}
+                <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
+                  {/* AVG(time_to_first_move_ms): spawn → first move, not a reaction to a hit (proximity_movement.py) */}
+                  <Lbl>first move after a spawn</Lbl>
+                  {d.reaction.slice(0, 5).map((r) => (
+                    <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
+                      val={`avg ${figure(r.reaction_ms)} ms`} />
+                  ))}
+                </Stack>
+                <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
+                  {/* AVG(duration_ms) over the player's tracks (proximity_movement.py), not a single longest life */}
+                  <Lbl>average life</Lbl>
+                  {d.survival.slice(0, 5).map((r) => (
+                    <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
+                      val={`avg ${figure(Math.round(r.duration_ms / 1000))} s`} />
+                  ))}
+                </Stack>
+              </Cluster>
+              {d.generated_at && <Meta>computed {utcStamp(d.generated_at)}</Meta>}
+            </Stack>
           )}
         </ProxPanel>
       </div>
@@ -196,6 +224,28 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                           pitch from {figure(d.pitch_hist.edges[0])}° to {figure(d.pitch_hist.edges[d.pitch_hist.edges.length - 1])}°
                           {' · '}{figure(d.total)} samples · yaw in {figure(d.yaw_buckets)} buckets of {figure(d.yaw_bucket_width_deg)}°
                         </Meta>
+                        {/* The circular statistics the legacy page drew (proximity.js:4175):
+                          * Rayleigh p < 0.05 = the shots have a preferred direction;
+                          * r near 0 = aimed everywhere. */}
+                        {d.circular && (
+                          <Meta>
+                            direction: mean yaw {figure(Math.round(d.circular.mean_yaw_deg))}° · r {decimals(d.circular.resultant_length)} · circular std ±{figure(Math.round(d.circular.circular_std_deg))}°
+                            {' · '}{d.circular.rayleigh_p < 0.05 ? `a preferred direction (Rayleigh p ${d.circular.rayleigh_p < 0.001 ? '< 0.001' : decimals(d.circular.rayleigh_p, 3)})` : `no preferred direction (Rayleigh p ${decimals(d.circular.rayleigh_p)})`}
+                            {' · '}pitch {d.circular.pitch_mean_deg >= 0 ? '+' : ''}{figure(Math.round(d.circular.pitch_mean_deg))}° ± {figure(Math.round(d.circular.pitch_std_deg))}° over {figure(d.circular.n)} shots
+                          </Meta>
+                        )}
+                        {d.hotzones.some((h) => h.rose) && (() => {
+                          const top = [...d.hotzones].sort((a, b) => b.count - a.count)[0];
+                          const rose = top.rose ?? [];
+                          const peak = rose.indexOf(Math.max(...rose));
+                          return (
+                            <Meta>
+                              busiest zone ({figure(top.count)} shots): mean yaw {top.mean_yaw == null ? '—' : `${figure(Math.round(top.mean_yaw))}°`}, r {top.r == null ? '—' : decimals(top.r)}
+                              {rose.length > 0 ? ` · rose peak bucket ${figure(peak + 1)} of ${figure(rose.length)} (${figure(Math.max(...rose))} shots)` : ''}
+                            </Meta>
+                          );
+                        })()}
+                        {d.narrative && d.narrative.length > 0 && <Meta>{d.narrative.join(' · ')}</Meta>}
                       </Stack>
                     );
                   }}
