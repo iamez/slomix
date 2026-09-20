@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04j adds one caller-driven capture attempt on #1064.
+  55 filesystem tests pass; source-consumption guard mutation fails/restored.
+  Match/conflict skip input; missing publishes; every exception remains visible.
+  No source acknowledgement/deletion, scheduler, SSH or service activation.
+
 - (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
   49 cases pass, early-return mutation fails/restored. Next compose a single
   caller-driven retry step; no scheduling, source deletion or service activation.
