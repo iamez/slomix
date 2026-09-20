@@ -33,6 +33,15 @@
   deadline mutation verified. No SSH connections or live activation. Separately
   #1060 calendar review fixed in742504ee with23 unit/PG cases passing.
 
+- (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
+  49 cases pass, early-return mutation fails/restored. Next compose a single
+  caller-driven retry step; no scheduling, source deletion or service activation.
+
+- (Astra, 2026-09-20) R04i on #1062: read-only spool reconciliation implemented,
+  48 filesystem cases pass with failed/restored digest and identity mutations.
+  No automatic cleanup, overwrite, retry loop, DB or service changes. Next wire
+  explicit reconciliation policy with connection ownership and immutable source.
+
 - (Astra, 2026-09-20) R04g extends #1061 with opt-in source SHA-256 validation
   before publication. 35 filesystem cases pass; independent sha256sum agrees;
   disabled mismatch guard fails, restored/cmp. No transport/services activated.

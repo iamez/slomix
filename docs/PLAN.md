@@ -96,6 +96,27 @@ success and stalled-EOF cleanup. Disabling post-read deadline fails DID NOT RAIS
 restored/cmp. Ruff clean. No remote SSH, database or service changes. Next integrate
 connection lifecycle and explicit source identity/reconciliation before activation.
 
+### R04i read-only spool reconciliation — 2026-09-20
+
+Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
+name stability checks before conflict. All 49 filesystem tests pass. Restoring
+the early return fails replacement-after-open regression; restored/cmp. Ruff
+clean. Review 4056550740 case-count spacing corrected. Fresh CI required.
+
+Contract: inspect a caller-retained immutable private spool entry against required
+size and SHA-256, returning missing/match/conflict. Missing is only final-entry
+ENOENT; directory/access/I/O failures propagate. Never delete/replace files or
+write DB markers. Open no-follow/nonblocking, require owned regular0600 file,
+bound reads and compare descriptor/name identity before certifying content.
+Match does not certify durability after failed fsync or import completion.
+This is a primitive, not automatic retry policy, full source identity or transport
+activation. Verify actual post-link-fsync failure, conflicts and replacement race.
+Verified 48 combined filesystem cases pass: actual directory-fsync failure still
+permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
+entries rejected and I/O errors propagate. Removing digest and identity guards
+fails 2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
+retry scheduling or make ambiguous durability safe for source deletion.
+
 ### R04g capture integrity contract — 2026-09-20
 
 Stacked on #1061: add an optional expected SHA-256 to completed-file publication.
