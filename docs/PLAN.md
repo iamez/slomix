@@ -20,6 +20,28 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04k verified spool to canonical import — 2026-09-20
+
+Integration branch combines #1065 capture/reconciliation and #1060 importer
+via normal ancestry merge; preserved both document histories, no code conflicts.
+New import_verified_file observes content before the dependency-aware importer:
+missing/conflict => no import_result or manager calls; match => canonical result
+kept separate from capture status. I/O/DB/cancellation propagate. Caller owns
+stable immutable spool, retained R1, source metadata and borrowed manager/pool.
+Local verification remains synchronous/byte-bounded, not time-bounded; dedicated
+ingestion process only. No locks against same-UID mutation, source deletion,
+connection lifecycle, scheduler or activation. Actual-PG composition must prove
+missing/conflict/waiting leave zero rows/events/markers, then R2-first import and
+repeat preserve differential, events and idempotence with Discord/setup blocked.
+Verified 137 combined unit/actual-PG cases pass. Real capture -> verified import
+proof has zero rows/markers/events before valid R1/R2 availability, then
+R0=8/R1=3/R2=5 and exactly two half events. Repeated capture does not consume
+source; repeated verified import is Already processed with unchanged counts.
+Bypassing conflict gate fails the actual-PG assertion, restored/cmp. New files
+Ruff clean. Imported foundation code byte-identical to both parent branches;
+only new composition/tests/docs added. Disposable PG stopped; no application
+DB/service or source transport activation. Fresh CI/review required.
+
 ### R04j single-attempt capture reconciliation — 2026-09-20
 
 Contract: inspect before source iteration; content_present skips input but is

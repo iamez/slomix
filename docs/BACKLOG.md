@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04k integration branch combines #1065 and #1060 without
+  changing either foundation implementation. Verified local content gates
+  canonical importer; 137 unit/actual-PG cases pass, conflict-gate mutation fails
+  and restores/cmp. PG stopped. Next connection/source identity and review;
+  no deployment, services, source deletion or automatic scheduler.
+
 - (Astra, 2026-09-20) R04j adds one caller-driven capture attempt on #1064.
   55 filesystem tests pass; source-consumption guard mutation fails/restored.
   Match/conflict skip input; missing publishes; every exception remains visible.
