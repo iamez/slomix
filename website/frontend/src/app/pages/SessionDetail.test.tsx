@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -30,6 +30,7 @@ import killImpact from './__fixtures__/api_storytelling_kill_impact.json';
 import killImpactDetails from './__fixtures__/api_storytelling_kill_impact_details.json';
 import kisFormula from './__fixtures__/api_storytelling_formula.json';
 import weaponsByPlayer from './__fixtures__/api_stats_weapons_by_player.json';
+import graphs from './__fixtures__/api_stats_session_gaming_session_id_graphs.json';
 import { perMapTotals } from '../lib/perMap';
 import type { SessionRound } from '../lib/types';
 import type { SessionAwards, SessionBasics } from '../lib/types';
@@ -59,6 +60,7 @@ const BODIES: [string, unknown][] = [
   ['/storytelling/kill-impact', killImpact],
   ['/storytelling/formula', kisFormula],
   ['/stats/weapons/by-player', weaponsByPlayer],
+  ['/graphs', graphs],
 ];
 
 /** Match the END of the pathname, not a substring of the URL: '/detail'
@@ -134,6 +136,8 @@ describe('SessionDetail', () => {
     renderPage();
     await openMore();
     await waitFor(() => expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument());
+    // The scoring block's own count, beside the score (recorded 6).
+    expect(screen.getByText('6 maps scored')).toBeInTheDocument();
     expect(screen.getAllByText('etl_adlernest').length).toBeGreaterThan(0);
     // A full hold is not a time, and the recording has one.
     expect(screen.getAllByText(/fullhold/).length).toBeGreaterThan(0);
@@ -265,6 +269,86 @@ describe('SessionDetail', () => {
     expect(screen.getByRole('button', { name: 'one player' })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('draws the player × map matrix with a metric switch, and a dash for a map not played', { timeout: 15000 }, async () => {
+    const tm = (detail as { team_matrix: { rosters: { team_a: { player_name: string; cells: { played: boolean; dpm: number; kd: number }[]; totals: { dpm: number; kd: number } }[] } } }).team_matrix;
+    const first = tm.rosters.team_a[0];
+    // The recording has every player on every map; the absent cell is
+    // constructed, because a fixture cannot fail on a value it lacks.
+    const withGap = {
+      ...detail,
+      team_matrix: {
+        ...tm,
+        rosters: { ...tm.rosters, team_a: [{ ...first, cells: first.cells.map((c, i) => (i === 0 ? { ...c, played: false, dpm: 0, kd: 0, damage: 0 } : c)) }, ...tm.rosters.team_a.slice(1)] },
+      },
+    };
+    renderPage(withOverride('/detail', () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withGap) } as Response)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText('player × map')).toBeInTheDocument(), { timeout: 4000 });
+    const matrix = document.querySelector('[data-parity="session.matrix.team-a"]') as HTMLElement;
+    expect(matrix.textContent).toContain(first.player_name);
+    expect(matrix.textContent).toContain('—');
+    // the session column shows the player's evening dpm; switching to k/d swaps it
+    expect(matrix.textContent).toContain(String(first.totals.dpm));
+    fireEvent.click(within(document.querySelector('[data-parity="session.matrix"]') as HTMLElement).getByRole('button', { name: 'k/d' }));
+    await waitFor(() => expect((document.querySelector('[data-parity="session.matrix.team-a"]') as HTMLElement).textContent).toContain(first.totals.kd.toFixed(1)));
+  });
+
+  it('names an empty team roster as an absence and still draws the other team', async () => {
+    const tm = (detail as { team_matrix: { rosters: { team_a: unknown[]; team_b: unknown[] } } }).team_matrix;
+    const oneSided = { ...detail, team_matrix: { ...tm, rosters: { team_a: tm.rosters.team_a, team_b: [] } } };
+    renderPage(withOverride('/detail', () => json(oneSided)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText(/no player of Team B could be placed on a side/)).toBeInTheDocument());
+    expect(document.querySelector('[data-parity="session.matrix.team-a"]')).not.toBeNull();
+    expect(document.querySelector('[data-parity="session.matrix.team-b"]')).toBeNull();
+  });
+
+  it('calls a failed matrix unavailable and a session without rosters absent, with the reason', async () => {
+    const failed = { ...detail, team_matrix: { available: false, reason: 'side_mapping_failed' } };
+    renderPage(withOverride('/detail', () => json(failed)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText(/player × map matrix: unavailable/)).toBeInTheDocument());
+    const none = { ...detail, team_matrix: { available: false, reason: 'no_teams' } };
+    const second = renderPage(withOverride('/detail', () => json(none)));
+    await openMore();
+    await waitFor(() => expect(second.container.textContent).toContain('no lua team rosters for this session'));
+  });
+
+  it('draws the playstyle radar, the dpm timeline and the advanced table over the counted rounds, without frag potential', async () => {
+    renderPage();
+    await openMore();
+    await waitFor(() => expect(screen.getByText('counted rounds only · 10 rounds · 7 players')).toBeInTheDocument());
+    const first = (graphs as { players: { name: string }[] }).players[0];
+    expect(screen.getByLabelText(`playstyle of ${first.name}`)).toBeInTheDocument();
+    expect(screen.getByLabelText('dpm per round')).toBeInTheDocument();
+    const advanced = document.querySelector('[data-parity="session.graphs.advanced"]') as HTMLElement;
+    expect(advanced.textContent).toContain('dmg eff');
+    expect(document.body.textContent).not.toMatch(/frag potential/i);
+    // choosing another player moves the radar
+    const second = (graphs as { players: { name: string }[] }).players[1];
+    fireEvent.click(screen.getByRole('button', { name: second.name }));
+    await waitFor(() => expect(screen.getByLabelText(`playstyle of ${second.name}`)).toBeInTheDocument());
+  });
+
+  it('strips ET colour codes from graph names and aligns a player who sat out a round on the session axis', async () => {
+    const g = graphs as { rounds: { round_id: number }[]; players: { name: string; guid: string; dpm_timeline: { round_id: number }[] }[] };
+    const coloured = {
+      ...g,
+      players: g.players.map((p, i) => (i === 0
+        // drop the player's OWN second round, so the gap is one they played around
+        ? { ...p, name: '^1bronze^7', dpm_timeline: p.dpm_timeline.filter((t, k) => k !== 1) }
+        : p)),
+    };
+    renderPage(withOverride('/graphs', () => json(coloured)));
+    await openMore();
+    await waitFor(() => expect(screen.getByLabelText('playstyle of bronze')).toBeInTheDocument());
+    expect(document.body.textContent).not.toContain('^1bronze');
+    // the chosen player's line breaks where the round is missing: two paths, not one
+    const svg = screen.getByLabelText('dpm per round');
+    const accent = [...svg.querySelectorAll('path')].filter((el) => el.getAttribute('stroke') === 'var(--color-accent)');
+    expect(accent.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('shows the per-player totals on their own tab', async () => {
     renderPage(fixtureFetch, '/session-detail/154/players');
     await openMore();
@@ -328,7 +412,9 @@ describe('SessionDetail', () => {
     expect(panel.textContent).toContain(`${first.life_seconds}s alive`);
   });
 
-  it('states the lives cutoff from the payload, and stays silent on older wire shapes', async () => {
+  // Three full renders of a page that now carries the matrix and the graphs
+  // (R3c/R3d): 5.4 s under jsdom on 2026-09-08, hence the wider budget.
+  it('states the lives cutoff from the payload, and stays silent on older wire shapes', { timeout: 60000 }, async () => {
     // The endpoint's `total` is len(lives) AFTER the limit — a total that is
     // not a total — so the disclosure reads qualifying_total, counted before
     // the cut (Codex on #842, fourth cutoff of the family). The recorded
@@ -336,11 +422,11 @@ describe('SessionDetail', () => {
     // live 2026-08-31; all three numbers come from the fixture.
     const f = bestLives as { lives: unknown[]; qualifying_total: number; min_kills: number };
     expect(f.qualifying_total).toBeGreaterThan(f.lives.length);
-    renderPage();
+    const first = renderPage();
     await openMore();
     await waitFor(() => expect(screen.getByText(
       new RegExp(`showing the top ${f.lives.length} of ${f.qualifying_total} lives with ≥${f.min_kills} kills`),
-    )).toBeInTheDocument());
+    )).toBeInTheDocument(), { timeout: 20000 });
 
     // A response recorded before the fields existed omits them — an absent
     // key is not 0, and the line must vanish rather than crash or claim
@@ -348,28 +434,39 @@ describe('SessionDetail', () => {
     // above is still mounted and carries the line, so a screen-wide
     // queryByText would look at the wrong page and could never fail.
     const { qualifying_total: _qt, min_kills: _mk, ...old } = bestLives as Record<string, unknown>;
+    // Each tree is unmounted before the next mounts: four live pages, each
+    // with the matrix, the graphs and the role boards, is what made the
+    // fourth render time out on CI (#1017, #1022) even at 40 s.
+    first.unmount();
     const second = renderPage(withOverride('/storytelling/best-lives', () => json(old)));
     await openMore();
-    await waitFor(() => expect(second.container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    await waitFor(() => expect(second.container.querySelector('[data-parity="session.lives"]')).not.toBeNull(), { timeout: 20000 });
     expect(second.container.textContent).toContain('s alive');
     expect(second.container.textContent).not.toContain('showing the top');
 
     // And when everything qualifying is already on screen there is no cutoff
     // to disclose.
+    second.unmount();
     const third = renderPage(withOverride('/storytelling/best-lives', () =>
       json({ ...(bestLives as object), qualifying_total: f.lives.length })));
     await openMore();
-    await waitFor(() => expect(third.container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    await waitFor(() => expect(third.container.querySelector('[data-parity="session.lives"]')).not.toBeNull(), { timeout: 20000 });
     expect(third.container.textContent).toContain('s alive');
     expect(third.container.textContent).not.toContain('showing the top');
 
     // The threshold is QUOTED, not hardcoded — the fixture's 3 equals the
     // backend constant, so only a moved value can tell the two apart (a
     // fixture cannot fail on a value it does not contain).
+    third.unmount();
     const fourth = renderPage(withOverride('/storytelling/best-lives', () =>
       json({ ...(bestLives as object), min_kills: 4 })));
     await openMore();
-    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'));
+    // Fourth render of a page that now carries the matrix, the graphs and
+    // the role boards: under CI load the default 1 s is not enough (#995).
+    // The fourth render on a cold CI runner took 13.6 s once (#1002's run
+    // 34320304211) — the wait is generous because the render is slow, not
+    // because the assertion is loose.
+    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'), { timeout: 40000 });
   });
 
   it('tells an empty night apart from a failed request', async () => {
@@ -490,10 +587,12 @@ describe('SessionDetail — stats 2.0 summary', () => {
   it('a header click re-sorts the basics', async () => {
     renderPage();
     const kills = await screen.findByRole('button', { name: /^dmg/ });
+    // The sort state is on the columnheader wrapping the button (a11y pass).
+    const header = screen.getByRole('columnheader', { name: /^dmg/ });
     fireEvent.click(kills);
-    expect(kills).toHaveAttribute('aria-sort', 'descending');
+    expect(header).toHaveAttribute('aria-sort', 'descending');
     fireEvent.click(kills);
-    expect(kills).toHaveAttribute('aria-sort', 'ascending');
+    expect(header).toHaveAttribute('aria-sort', 'ascending');
   });
 
   it('the awards read as sentences with the nickname and the engine name behind it', async () => {
@@ -531,6 +630,16 @@ describe('SessionDetail — stats 2.0 summary', () => {
     await waitFor(() => expect(screen.getByText('scoreboard')).toBeInTheDocument());
     expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /more about the night ▾/ })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('a clock that knows its end but not its start still prints the end', async () => {
+    // _session_clock answers start:null, end, span:null when the first round
+    // lost both duration sources; the measured end must not vanish with it.
+    const endOnly = { ...basicsFull, clock: { start: null, end: '22:18', span_seconds: null } };
+    const { container } = renderPage(withOverride('/basics', () => json(endOnly)));
+    await waitFor(() => expect(container.querySelector('[data-parity="session.head"]')?.textContent).toContain('ended 22:18'));
+    expect(container.querySelector('[data-parity="session.head"]')?.textContent).toContain('start not measured');
+    expect(container.querySelector('[data-parity="session.head"]')?.textContent).not.toMatch(/wall clock|null/);
   });
 
   it('a failed basics call leaves the rest of the summary standing', async () => {
@@ -645,7 +754,7 @@ describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
   type DetailPlayer = { player_guid: string; player_name: string; dpm: number };
   const players = (detail as { players: DetailPlayer[] }).players;
   const top = [...players].sort((a, b) => b.dpm - a.dpm)[0];
-  const allRounds = (rounds as { rounds: SessionRound[] }).rounds;
+  const allRounds = (rounds as unknown as { rounds: SessionRound[] }).rounds;
 
   async function openTop(entry = '/session-detail/154/players') {
     const rendered = renderPage(fixtureFetch, entry);

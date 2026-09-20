@@ -1,0 +1,367 @@
+{
+ "protocol": "docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md §8",
+ "candidates": [
+  {
+   "id": "dpm",
+   "kind": "positive_control",
+   "formula": "damage given × 60 / seconds played, from player_comprehensive_stats for that round",
+   "expected_direction": "positive",
+   "parameters": {
+    "source": "player_comprehensive_stats"
+   },
+   "caveat": null
+  },
+  {
+   "id": "noise",
+   "kind": "negative_control",
+   "formula": "uniform(0, 1) seeded by (round_id, guid)",
+   "expected_direction": "positive",
+   "parameters": {
+    "seed": 20260909
+   },
+   "caveat": null
+  },
+  {
+   "id": "moving_share",
+   "kind": "candidate",
+   "formula": "share of alive samples with speed > MOVING_UPS",
+   "expected_direction": "positive",
+   "parameters": {
+    "moving_ups": 100.0
+   },
+   "caveat": "a within-round median split cannot separate 'moved more' from 'was on the attacking side' — attackers move more and share the outcome (§7.4.1); a side-stratified test needs the attacking side per round (lua_round_teams / W5)"
+  },
+  {
+   "id": "isolation_share",
+   "kind": "oracle_diagnostic",
+   "formula": "share of alive samples with no living teammate within ISOLATION_UNITS (straight-line, §7.4: geometric separation, not route support time)",
+   "expected_direction": "negative",
+   "parameters": {
+    "isolation_units": 800.0
+   },
+   "caveat": null
+  },
+  {
+   "id": "blind_moving_share",
+   "kind": "candidate",
+   "formula": "share of MOVING samples during which the holder held NO placeable enemy belief (subject named, region inside position_claim_max_radius, counts_as_known) — moved without knowing where any enemy was; information-consistent movement, §7.4",
+   "expected_direction": "negative",
+   "parameters": {
+    "moving_ups": 100.0,
+    "placeable": "subject_guid and region.radius <= position_claim_max_radius and counts_as_known"
+   },
+   "caveat": "the information state is a lower bound on what the team knew (§6.2: Discord voice is never captured); 'blind' here is 'blind to the capture', and the median is 0.89 — nearly all movement is blind on this evidence"
+  },
+  {
+   "id": "exposure_share",
+   "kind": "oracle_diagnostic",
+   "formula": "share of alive samples with ≥ 1 living enemy holding a clear eye-to-body ray to the player (W6 tracer, static geometry) — §7.4 exposure, ORACLE form",
+   "expected_direction": "negative",
+   "parameters": {
+    "tracer": "services/line_of_sight.py",
+    "validation": "W6 2026-08-22, 99.92 %"
+   },
+   "caveat": null
+  },
+  {
+   "id": "push_into_wave_share",
+   "kind": "oracle_diagnostic",
+   "formula": "share of MOVING samples while the ENEMY's validated reinforcement wave lands within WAVE_IMMINENT_SHARE of its interval (oracle clock, §5.6/§6.3: never a scoring fallback)",
+   "expected_direction": "negative",
+   "parameters": {
+    "wave_imminent_share": 0.25,
+    "clock": "validated only"
+   },
+   "caveat": null
+  }
+ ],
+ "split": {
+  "rule": "earliest 70 % of gaming_session_id blocks by first round time = discovery; the rest = confirmation",
+  "confirmation_starts_at": "2026-07-16 214008"
+ },
+ "outcome": "the player's team is rounds.winner_team (1 = Axis, 2 = Allies) for that round",
+ "filters": [
+  "rounds: round_number in (1, 2), is_valid not false, not a bot round, winner_team in (1, 2), gaming_session_id set, ≥ 1 linked player_track",
+  "players: ≥ 6 alive samples at a 5000 ms cadence (30 s alive); moving-based shares need ≥ 6 moving samples; wave share needs a validated enemy clock",
+  "exposure: only on maps with a BSP in the indexed etmain tree; else null"
+ ],
+ "inference": {
+  "unit": "gaming_session_id block",
+  "resamples": 2000,
+  "seed": 20260909,
+  "family_wise": "max-T bootstrap, simultaneous 95 % intervals"
+ },
+ "cadence_ms": 5000,
+ "rows": 5622,
+ "blocks": {
+  "discovery": 39,
+  "confirmation": 18
+ },
+ "collected_from": "spiderweb_layer4_rows_2026-09-09.jsonl",
+ "sha256": "72bdfc319dcd54846e24d367fb9ef601aa08e13d04406d8ea2edbfde031ed30a",
+ "result": {
+  "cutoff": "2026-07-16 214008",
+  "blocks": {
+   "discovery": 39,
+   "confirmation": 18
+  },
+  "rows": {
+   "discovery": 3729,
+   "confirmation": 1893
+  },
+  "table": [
+   {
+    "id": "dpm",
+    "kind": "positive_control",
+    "expected": "positive",
+    "discovery": {
+     "point": 0.05869932432432432,
+     "rounds": 592,
+     "se": 0.016398557504544633,
+     "ci95": [
+      0.02827288827288827,
+      0.09225310604578359
+     ],
+     "sim95": [
+      0.0010641233118314497,
+      0.1163345253368172
+     ],
+     "t_crit": 3.5146506634208574,
+     "blocks": 39
+    },
+    "confirmation": {
+     "point": 0.053030303030303025,
+     "rounds": 308,
+     "se": 0.019426176246131757,
+     "ci95": [
+      0.014876575630252098,
+      0.09134615384615384
+     ],
+     "sim95": [
+      0.014876575630252098,
+      0.09134615384615384
+     ],
+     "t_crit": 1.115812418217027,
+     "blocks": 18
+    },
+    "verdict": "control passes (the harness sees a known signal)"
+   },
+   {
+    "id": "noise",
+    "kind": "negative_control",
+    "expected": "positive",
+    "discovery": {
+     "point": -0.01953344575604272,
+     "rounds": 593,
+     "se": 0.01376692369471245,
+     "ci95": [
+      -0.04588643198224536,
+      0.007424894957983182
+     ],
+     "sim95": [
+      -0.06791937325292816,
+      0.02885248174084271
+     ],
+     "t_crit": 3.5146506634208574,
+     "blocks": 39
+    },
+    "confirmation": {
+     "point": -0.002705627705627708,
+     "rounds": 308,
+     "se": 0.021238050696111822,
+     "ci95": [
+      -0.044448529411764706,
+      0.037098229573316883
+     ],
+     "sim95": [
+      -0.044448529411764706,
+      0.037098229573316883
+     ],
+     "t_crit": 1.115812418217027,
+     "blocks": 18
+    },
+    "verdict": "fails: discovery direction"
+   },
+   {
+    "id": "moving_share",
+    "kind": "candidate",
+    "expected": "positive",
+    "discovery": {
+     "point": 0.03414839797639123,
+     "rounds": 593,
+     "se": 0.020295443555428182,
+     "ci95": [
+      -0.006149502811543867,
+      0.07184188393608072
+     ],
+     "sim95": [
+      -0.037182996180115,
+      0.10547979213289746
+     ],
+     "t_crit": 3.5146506634208574,
+     "blocks": 39
+    },
+    "confirmation": {
+     "point": 0.1076839826839827,
+     "rounds": 308,
+     "se": 0.030742095938285995,
+     "ci95": [
+      0.04683469308469309,
+      0.16666666666666666
+     ],
+     "sim95": [
+      0.04683469308469309,
+      0.16666666666666666
+     ],
+     "t_crit": 1.115812418217027,
+     "blocks": 18
+    },
+    "verdict": "passes §8.4; NOT shipped: a within-round median split cannot separate 'moved more' from 'was on the attacking side' — attackers move more and share the outcome (§7.4.1); a side-stratified test needs the attacking side per round (lua_round_teams / W5)"
+   },
+   {
+    "id": "isolation_share",
+    "kind": "oracle_diagnostic",
+    "expected": "negative",
+    "discovery": {
+     "point": 0.08108487914558742,
+     "rounds": 593,
+     "se": 0.01829679903816805,
+     "ci95": [
+      0.04414885931985613,
+      0.11587250125553254
+     ],
+     "sim95": [
+      0.016778022267611964,
+      0.14539173602356287
+     ],
+     "t_crit": 3.5146506634208574,
+     "blocks": 39
+    },
+    "confirmation": {
+     "point": 0.03192640692640693,
+     "rounds": 308,
+     "se": 0.028208336900303017,
+     "ci95": [
+      -0.024796974737639293,
+      0.08688426304782686
+     ],
+     "sim95": [
+      -0.024796974737639293,
+      0.08688426304782686
+     ],
+     "t_crit": 1.115812418217027,
+     "blocks": 18
+    },
+    "verdict": "fails: discovery direction"
+   },
+   {
+    "id": "blind_moving_share",
+    "kind": "candidate",
+    "expected": "negative",
+    "discovery": {
+     "point": 0.010034904013961603,
+     "rounds": 573,
+     "se": 0.02141832703733161,
+     "ci95": [
+      -0.032744803387566516,
+      0.04936971618357485
+     ],
+     "sim95": [
+      -0.06524303331716083,
+      0.08531284134508405
+     ],
+     "t_crit": 3.5146506634208574,
+     "blocks": 39
+    },
+    "confirmation": {
+     "point": -0.006535947712418301,
+     "rounds": 306,
+     "se": 0.02433705981556149,
+     "ci95": [
+      -0.05415838019476065,
+      0.04318011978431579
+     ],
+     "sim95": [
+      -0.05415838019476065,
+      0.04318011978431579
+     ],
+     "t_crit": 1.115812418217027,
+     "blocks": 18
+    },
+    "verdict": "fails: discovery direction"
+   },
+   {
+    "id": "exposure_share",
+    "kind": "oracle_diagnostic",
+    "expected": "negative",
+    "discovery": {
+     "point": -0.043215090090090086,
+     "rounds": 592,
+     "se": 0.015020342887449521,
+     "ci95": [
+      -0.07300635514676235,
+      -0.01435969918137792
+     ],
+     "sim95": [
+      -0.09600634818427331,
+      0.009576168004093132
+     ],
+     "t_crit": 3.5146506634208574,
+     "blocks": 39
+    },
+    "confirmation": {
+     "point": -0.03800217155266015,
+     "rounds": 307,
+     "se": 0.029549975251211877,
+     "ci95": [
+      -0.09627727504562443,
+      0.01912614458721016
+     ],
+     "sim95": [
+      -0.09627727504562443,
+      0.01912614458721016
+     ],
+     "t_crit": 1.115812418217027,
+     "blocks": 18
+    },
+    "verdict": "fails: simultaneous interval includes zero"
+   },
+   {
+    "id": "push_into_wave_share",
+    "kind": "oracle_diagnostic",
+    "expected": "negative",
+    "discovery": {
+     "point": -0.04857397504456328,
+     "rounds": 374,
+     "se": 0.04843024880417987,
+     "ci95": [
+      -0.14,
+      0.051113769941225844
+     ],
+     "sim95": [
+      -0.21878938113381124,
+      0.12164143104468467
+     ],
+     "t_crit": 3.5146506634208574,
+     "blocks": 28
+    },
+    "confirmation": {
+     "point": -0.11556329849012775,
+     "rounds": 287,
+     "se": 0.05047207552506178,
+     "ci95": [
+      -0.21359146016520117,
+      -0.017683975582597808
+     ],
+     "sim95": [
+      -0.21359146016520117,
+      -0.017683975582597808
+     ],
+     "t_crit": 1.115812418217027,
+     "blocks": 18
+    },
+    "verdict": "passes the arithmetic; oracle diagnostic, does not ship (§6.4, P6)"
+   }
+  ]
+ }
+}

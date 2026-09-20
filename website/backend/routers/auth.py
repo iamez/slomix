@@ -334,8 +334,38 @@ def _discord_identity(payload: dict[str, Any]) -> tuple[int, str, str, str | Non
     return discord_id, username, display_name, avatar_text
 
 
+_NEXT_PATH_MAX = 512
+
+
+def _safe_next_path(value: str | None) -> str | None:
+    """The page to return to after login, or None.
+
+    The value arrives in the query string, so anything but a same-origin
+    path under /app would turn the login into an open redirector: an
+    absolute URL, a protocol-relative ``//host``, a backslash variant, a
+    control character or a legacy hash route are all refused and the old
+    default return applies. The SPA is the only caller that sends it
+    (AppShell's Connect ID link), and it is the only tree that has a
+    location to come back to — the legacy site routes by hash, which the
+    server never sees.
+    """
+    if not value:
+        return None
+    candidate = value.strip()
+    if len(candidate) > _NEXT_PATH_MAX or not candidate.startswith("/"):
+        return None
+    if candidate.startswith(("//", "/\\")) or any(ch in candidate for ch in "\r\n\x00"):
+        return None
+    parsed = urlsplit(candidate)
+    if parsed.scheme or parsed.netloc:
+        return None
+    if candidate != "/app" and not candidate.startswith(("/app/", "/app?")):
+        return None
+    return candidate
+
+
 @router.get("/login")
-async def login(request: Request):
+async def login(request: Request, next: str | None = None):
     _enforce_oauth_rate_limit(request, "login")
 
     config = get_discord_config()
@@ -349,6 +379,11 @@ async def login(request: Request):
     request.session["oauth_state"] = state
     request.session["oauth_state_issued_at"] = int(time.time())
     request.session["oauth_pkce_verifier"] = code_verifier
+    next_path = _safe_next_path(next)
+    if next_path:
+        request.session["oauth_next"] = next_path
+    else:
+        request.session.pop("oauth_next", None)
 
     auth_query = urlencode(
         {
@@ -379,6 +414,7 @@ async def callback(
         raise HTTPException(status_code=500, detail="Discord credentials not configured")
 
     expected_state = request.session.pop("oauth_state", None)
+    next_path = _safe_next_path(request.session.pop("oauth_next", None))
     state_issued_at = _safe_int(request.session.pop("oauth_state_issued_at", None)) or 0
     code_verifier = request.session.pop("oauth_pkce_verifier", None)
 
@@ -472,6 +508,10 @@ async def callback(
     )
 
     frontend_origin = get_frontend_origin(config)
+    if next_path:
+        # Back to the /app page the visitor pressed Connect ID on (the SPA
+        # sends ?next=; the legacy site never does and keeps its defaults).
+        return RedirectResponse(url=f"{frontend_origin}{next_path}")
     if linked_player_name:
         return RedirectResponse(url=f"{frontend_origin}/")
     return RedirectResponse(url=f"{frontend_origin}/#/profile")

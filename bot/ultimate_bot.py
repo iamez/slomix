@@ -31,6 +31,8 @@ from bot.repositories import FileRepository
 from bot.services.admin_alert_mixin import _AdminAlertMixin
 from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
 from bot.services.error_streak_store import ErrorStreakStore
+from bot.services.lua_correction_inbox import retain_lua_correction_if_enabled
+from bot.services.lua_correction_service import apply_atomic_lua_correction, lua_correction_events_enabled
 from bot.services.lua_round_storage_mixin import _LuaRoundStorageMixin
 from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
 from bot.services.round_publisher_service import RoundPublisherService
@@ -1122,7 +1124,8 @@ class UltimateETLegacyBot(
                     else:
                         db_manager.pool = self.db_adapter.pool
 
-                    success, message = await db_manager.process_file(Path(local_path))
+                    import_result = await db_manager.process_file(Path(local_path))
+                    success, message = import_result
                 finally:
                     # Only disconnect if we created our own pool — and always
                     # do it, even if connect()/migrate_schema()/process_file()
@@ -1132,6 +1135,12 @@ class UltimateETLegacyBot(
                         await db_manager.disconnect()
 
                 if not success:
+                    if getattr(import_result, "retryable", False):
+                        await self.track_error("file_processing", message, max_consecutive=5)
+                        return {
+                            "success": False, "round_id": None, "player_count": 0,
+                            "error": message, "stats_data": None, "retryable": True,
+                        }
                     # Mark parse failures as processed (with success=FALSE) to prevent
                     # infinite retry loops on legitimately unparseable files (e.g. header-only)
                     try:
@@ -1564,6 +1573,20 @@ class UltimateETLegacyBot(
                 logger.warning(f"Could not resolve round_id for metadata override: {filename}")
                 return
 
+            if lua_correction_events_enabled():
+                accepted = await apply_atomic_lua_correction(
+                    self.db_adapter, round_id, metadata,
+                    initializing_exact_start=initializing_exact_start,
+                )
+                if accepted:
+                    logger.info("Committed atomic Lua correction for round %s", round_id)
+                    # Linking has its own locks/best-effort semantics, outside this event.
+                    try:
+                        await self._link_lua_round_teams(round_id, metadata)
+                    except Exception as link_error:
+                        logger.warning("Lua correction committed; linking deferred: %s", link_error)
+                return
+
             # DEBUG LOGGING: Compare Lua timing vs stats file timing
             # This helps verify the surrender fix is working correctly
             # Query current values from DB (from stats file)
@@ -1725,6 +1748,8 @@ class UltimateETLegacyBot(
 
         except Exception as e:
             logger.warning(f"Failed to apply round metadata override: {e}")
+            if lua_correction_events_enabled():
+                raise
             # Non-fatal - stats were still imported correctly
 
 
@@ -1866,6 +1891,7 @@ class UltimateETLegacyBot(
             )
         if round_metadata.get("round_end_unix", 0) == 0 and meta.get("round_end_unix"):
             round_metadata["round_end_unix"] = int(meta.get("round_end_unix"))
+            round_metadata.setdefault("_correction_present_fields", []).append("round_end_unix")
         spawn_stats_meta = meta.get("spawn_stats")
         if isinstance(spawn_stats_meta, str):
             try:
@@ -1878,6 +1904,12 @@ class UltimateETLegacyBot(
         if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) <= 0:
             webhook_logger.warning(f"⚠️ Gametime file missing map/round metadata: {filename}")
             return False
+
+        try:
+            await retain_lua_correction_if_enabled(getattr(self, "db_adapter", None), round_metadata)
+        except ValueError as exc:
+            webhook_logger.warning("Gametime correction input rejected: %s", exc)
+            return False  # Do not mark processed; allow later files in this poll.
 
         axis_players = round_metadata.get("axis_players", [])
         allies_players = round_metadata.get("allies_players", [])
@@ -2037,6 +2069,15 @@ class UltimateETLegacyBot(
     async def _reconcile_missing_round_timing(self):
         """Backfill rounds.actual_duration_seconds from lua_round_teams
         for rounds that were processed before gametime data arrived."""
+        from shared.round_timing_reconcile import reconcile_missing_round_timing, timing_events_enabled
+
+        if timing_events_enabled():
+            try:
+                count = await reconcile_missing_round_timing(self.db_adapter, enabled=True)
+                logger.info("[TIMING RECONCILE] Committed %s journaled fills (R1/R2, unambiguous Lua only)", count)
+            except Exception as exc:
+                logger.warning("[TIMING RECONCILE] Journaled fill failed; next poll rechecks missing timing: %s", exc)
+            return
         query = """
             UPDATE rounds r SET
               actual_duration_seconds = lrt.actual_duration_seconds,

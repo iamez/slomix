@@ -8,7 +8,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.gzip import GZipMiddleware
 from starlette.middleware.sessions import SessionMiddleware
@@ -429,6 +429,13 @@ async def greatshot_spa_entry(demo_id: str | None = None):
 # does not run build:app, because production stays vanilla-only until parity
 # is proven (P2), and the deploy script is off-limits until switchover day
 # (docs/design/08 »kaj se ne dela«). Adding the build there IS the switchover.
+# robots.txt answered instead of 404 (audit 2026-09-07 B3): everything is
+# public and there is no sitemap yet, so the file says exactly that.
+@app.get("/robots.txt", include_in_schema=False)
+async def robots_txt():
+    return PlainTextResponse("User-agent: *\nAllow: /\n")
+
+
 _APP_DIST = os.path.join(project_root, "website", "static", "app")
 # Both artifacts, not just the directory: an interrupted build that left an
 # empty output dir must degrade exactly like a no-build checkout, not raise

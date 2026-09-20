@@ -90,6 +90,39 @@ now; 5–7 touch behaviour and go through the owner's DA per PR as usual.
   market panel with admin controls beside its body — each is a design decision,
   not a mechanical edit.
 
+## The datapoint ledger (2026-09-08)
+
+"Capture everything" is the house rule; the ledger is how we see what is captured
+and never shown. `scripts/datapoint_ledger.py` reads every recorded fixture of a
+path the app READS (`apiGet`, `fetch`, and any `/api/…` literal handed to a query
+helper — writes are receipts, not datapoints), lists its keys one level deep (a
+list contributes the union of its elements' keys; a table keyed by nick or guid is
+one `<map>` row), and checks each name against comment-stripped `src/app` source
+with `lib/types.ts` excluded — a declaration is not a read. `docs/parity/
+datapoints.json` is the result (`read` / `unread` / `dropped`, plus the endpoints
+whose recording is empty as `unmeasured`); `docs/parity/datapoint_decisions.json`
+holds the allowances with their reasons; **`docs/parity/datapoints_unread_baseline.txt`
+is the ratchet** — one line per unread row, which the script only ever removes
+(`--rebase-baseline`), so a new unread row fails `tests/unit/test_datapoint_ledger.py`
+even after the ledger is regenerated, and a row that became read fails until the
+baseline drops it. 574 unread rows over 176 read endpoints on 2026-09-08. A row
+closes when a page reads the key — through `<Panel>`, with a fixture-driven test —
+never by editing the baseline by hand.
+
+**Scoped references (2026-09-08, afternoon).** The first version matched a
+fixture key against one token set over the whole of `src/app`, so a new
+panel that named `advanced` or `survival_rate` for ITS endpoint flipped the
+rows of unrelated endpoints to read (Codex on #988 and #990). A reference is
+evidence only in code that can hold the answer: the pass now runs per
+endpoint over the files that call its hook (or carry the path literal) and
+everything they import, transitively (`scope_files()`); the ledger's `scope`
+block says how many files each endpoint was matched over, and names the one
+that fell back to the whole app. Correcting the instrument made the number
+go UP — unread 517 → 789 — which is what `--reseed-baseline` exists for: it
+rewrites the baseline to the current set and prints every row that came back,
+so the commit can state the delta. `--rebase-baseline` still only removes.
+
+
 ## Guards that already exist (11) — extend, do not duplicate
 
 | guard | value (2026-09-07) | what it pins |

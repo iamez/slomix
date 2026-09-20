@@ -14,6 +14,7 @@
  */
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { DataTable, type DataColumn } from '../components/DataTable';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
@@ -26,7 +27,7 @@ import { ProximityOutcomes } from './ProximityOutcomes';
 import { ProximityMapOverlays } from './ProximityMapOverlays';
 import { ProximityRoundCanvases } from './ProximityRoundCanvases';
 import { ProximityEvents } from './ProximityEvents';
-import type { LbCategory, ProximityLeaderboard } from '../lib/types';
+import type { SsrPlayer, LbCategory, ProximityLeaderboard } from '../lib/types';
 
 const LB_TABS: readonly { key: LbCategory | 'comp_skill'; label: string }[] = [
   { key: 'power', label: 'power rating' },
@@ -107,6 +108,9 @@ function Board({ category, rangeDays }: { category: LbCategory; rangeDays: numbe
               </Cluster>
               <Cluster gap={3} align="baseline">
                 <Meta>{detailFor(category, e)}</Meta>
+                {/* what the composite left out: the unscored axes it still measured, and the axes it had to default (ledger 2026-09-09) */}
+                {e.unscored && Object.keys(e.unscored).length > 0 && <Meta>unscored {Object.entries(e.unscored).map(([k, v]) => `${k} ${figure(v)}`).join(' · ')}</Meta>}
+                {e.axes_defaulted && e.axes_defaulted.length > 0 && <Meta>defaulted: {e.axes_defaulted.join(', ')}</Meta>}
                 <span className="m" style={{ fontSize: 'var(--fs-value)', width: 92, textAlign: 'right' }}>
                   {fmtValue(category, e.value)}
                 </span>
@@ -118,6 +122,9 @@ function Board({ category, rangeDays }: { category: LbCategory; rangeDays: numbe
       {q.data?.category === 'power' && q.data.attribution && (
         <Meta>
           attribution: {figure(q.data.attribution.linked_valid)} of {figure(q.data.attribution.total_rows)} source rows linkable
+          {q.data.attribution.attributable_coverage != null && <> ({figure(Math.round(q.data.attribution.attributable_coverage * 100))}%)</>}
+          {q.data.attribution.linked_invalid_excluded != null && <> · {figure(q.data.attribution.linked_invalid_excluded)} linked to invalid rounds, excluded</>}
+          {q.data.attribution.unlinked_accepted != null && <> · {figure(q.data.attribution.unlinked_accepted)} unlinked, accepted</>}
           {q.data.formula_version != null && <> · formula {q.data.formula_version}</>}
         </Meta>
       )}
@@ -133,6 +140,27 @@ function Board({ category, rangeDays }: { category: LbCategory; rangeDays: numbe
 /** Comp Skill (SSR) is all-time and group-relative — its endpoint ignores
  * range and scope entirely (owner answer A4), so the range chips do not
  * apply and saying so beats greying them out. */
+/** Rating, sessions, coverage and every component's percentile — the
+ *  components were fetched and never shown (ledger 2026-09-08). A null
+ *  component is one the player has no data for, shown as a dash. */
+function ssrColumns(players: SsrPlayer[]): DataColumn<SsrPlayer>[] {
+  const keys = [...new Set(players.flatMap((p) => Object.keys(p.components)))];
+  return [
+    { key: 'name', label: 'player', width: 150, align: 'left', format: (p) => stripEtColors(p.name), sortValue: (p) => stripEtColors(p.name) },
+    { key: 'ssr', label: 'ssr', align: 'right', format: (p) => figure(Math.round(p.ssr * 1000) / 1000), sortValue: (p) => p.ssr },
+    { key: 'n_sessions', label: 'sessions', align: 'right', sortValue: (p) => p.n_sessions },
+    { key: 'coverage', label: 'coverage', align: 'right', title: 'components with data of components in the formula', sortValue: (p) => p.coverage },
+    ...keys.map((k): DataColumn<SsrPlayer> => ({
+      key: k, label: k.replace(/_/g, ' '), align: 'right', title: `${k} — percentile among rated players; the raw value in the tooltip of each cell`,
+      format: (p) => {
+        const c = p.components[k];
+        return c?.pct == null ? <Meta>—</Meta> : <span title={c.raw == null ? undefined : `raw ${figure(c.raw)}`}>{figure(Math.round(c.pct * 100))}</span>;
+      },
+      sortValue: (p) => p.components[k]?.pct ?? null,
+    })),
+  ];
+}
+
 function CompSkillBoard() {
   const q = useSsr(true);
   return (
@@ -142,19 +170,15 @@ function CompSkillBoard() {
       {q.data && (q.data.players.length === 0 ? (
         <Absent reason="no rated players yet — SSR needs at least 5 sessions and 3 components per player" />
       ) : (
-        <Stack gap={1} className="rows">
-          {q.data.players.slice(0, 10).map((p, i) => (
-            <Cluster key={p.player_guid} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0' }}>
-              <Cluster gap={3} align="baseline">
-                <span className="m lbl" style={{ width: 20, textAlign: 'right' }}>{i + 1}</span>
-                <span style={{ fontSize: 'var(--fs-row)' }}>{stripEtColors(p.name)}</span>
-              </Cluster>
-              <span className="m" style={{ fontSize: 'var(--fs-value)', width: 92, textAlign: 'right' }}>
-                {p.ssr.toFixed(1)}
-              </span>
-            </Cluster>
-          ))}
-        </Stack>
+        <DataTable<SsrPlayer>
+          parity="proximity.comp-skill.table"
+          label="comp skill"
+          columns={ssrColumns(q.data.players)}
+          rows={q.data.players}
+          rowKey={(p) => p.player_guid}
+          defaultSort={{ key: 'ssr', dir: 'desc' }}
+          minWidth={900}
+        />
       ))}
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>all-time and group-relative — the range above does not apply here</Lbl>
     </Stack>
@@ -174,6 +198,11 @@ export function Proximity() {
   // independently caught the fall-through that would have fired thirteen
   // unbounded queries on a degraded page.
   const scopes = useProxScopes();
+  // Hover on a date chip: map_count is distinct names, maps_played counts
+  // replays as separate maps (completed R1s, the box score's rule), and a
+  // date can carry telemetry with zero completed R1s — hence both.
+  const chipTitle = (x: { map_count: number; maps_played: number; round_count: number } | undefined) =>
+    x == null ? undefined : `${x.round_count} rounds · ${x.map_count} distinct maps · ${x.maps_played} maps played`;
   const dates = [...new Set((scopes.data?.sessions ?? []).map((s) => s.session_date))].slice(0, 6);
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const windowPicked = pickedDate === 'window';
@@ -236,6 +265,7 @@ export function Proximity() {
                   type="button"
                   onClick={() => setPickedDate(d)}
                   aria-pressed={scopeDate === d}
+                  title={chipTitle(scopes.data?.sessions.find((x) => x.session_date === d))}
                   style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', color: scopeDate === d ? 'var(--color-text-100)' : 'var(--color-text-400)' }}
                 >
                   {d}
