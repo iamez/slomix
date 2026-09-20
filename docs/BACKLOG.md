@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04l neutral SSH session ownership on #1063; 73 combined
+  cases pass, strict-policy offline proof and cleanup mutation/restoration done.
+  No real network. End-to-end handshake bound and source identity still block
+  activation. #1066 capture/import integration CI/review remains in parallel.
+
 - (Astra, 2026-09-20) #1063 review: read deadline starts after spool setup;
   54 cases pass, old-placement mutation fails/restored. Investigating #1060
   cross-half payload identity before resuming transport/reconciliation.

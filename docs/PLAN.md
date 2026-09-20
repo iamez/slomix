@@ -20,6 +20,22 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04l explicit SSH session ownership — 2026-09-20
+
+On #1063: neutral RuntimeSSHConfig and caller-driven open_runtime_sftp context.
+Explicit host/user/port/absolute key and known-host paths; strict RejectPolicy,
+no agent/key discovery/password or ambient bot config. Close SFTP before SSH,
+including failure during setup/body/cleanup. Caller closes its file handles.
+Phase budgets are NOT an overall deadline: DNS, subsystem negotiation and close
+can block. Hard-bound worker/process design remains an activation gate; do not
+use an executor cancellation as proof of stopping transfer. Paramiko API checked
+against installed signature and https://docs.paramiko.org/en/stable/api/client.html.
+73 combined tests pass: recorded phase failures/cleanup and real offline Paramiko
+unknown-host rejection, no hosts mutation. Initial offline fixture lacked logger
+transport; fixed the fixture only. Cleanup mutation fails, restored/cmp; Ruff
+clean. No real SSH connection/server, credentials, service or DB changes.
+Not an activated source transport or end-to-end network proof.
+
 ### R04h bounded stream capture — 2026-09-20
 
 Review4056389676/4056392696: start the read deadline inside the generator,
