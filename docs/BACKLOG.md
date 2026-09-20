@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04g extends #1061 with opt-in source SHA-256 validation
+  before publication. 35 filesystem cases pass; independent sha256sum agrees;
+  disabled mismatch guard fails, restored/cmp. No transport/services activated.
+  Continue bounded capture and reconciliation; new-site audit follows runtime.
+
 - (Astra, 2026-09-20) Runtime PRs marked ready per owner. Copilot on #1061
   unable to review due to requester quota. Fixed supported map alphabet finding
   with24 passing filesystem tests and failed/restored old-regex mutation.

@@ -1,5 +1,6 @@
 """Linux-only no-clobber publication into a caller-owned private stats spool."""
 
+import hashlib
 import os
 import re
 import stat
@@ -13,12 +14,17 @@ _NAME = re.compile(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-[12]\.txt', 
 def publish_stats_file(
     directory: Path, filename: str, chunks: Iterable[bytes], *,
     expected_size: int, max_bytes: int = 8 * 1024 * 1024,
+    expected_sha256: str | None = None,
 ) -> Path:
     """Expose a complete, fsynced file atomically, never replacing an old one.
 
     Requires an existing owner-only directory, immutable upstream snapshot and
     bounded chunk producer (including its timeouts). Size is not an integrity
-    hash and cannot detect equal-length upstream mutation. Existing destinations
+    hash and cannot detect equal-length upstream mutation. Supply expected_sha256
+    from a trusted immutable source snapshot for content verification; omission
+    retains size-only validation. The digest must be lowercase 64-character hex.
+    This does not authenticate the source or establish snapshot immutability.
+    Existing destinations
     raise FileExistsError, even for identical bytes; callers reconcile explicitly.
     A failure after link publication may leave the complete final file visible;
     retry must inspect it, never delete/overwrite it. Crash leftovers ending in
@@ -26,6 +32,11 @@ def publish_stats_file(
     """
     if not _NAME.fullmatch(filename) or '..' in filename:
         raise ValueError('Invalid stats filename')
+    if expected_sha256 is not None and (
+        not isinstance(expected_sha256, str)
+        or re.fullmatch(r'[0-9a-f]{64}', expected_sha256, re.ASCII) is None
+    ):
+        raise ValueError('Expected SHA-256 must be lowercase 64-character hex')
     if (type(expected_size) is not int or type(max_bytes) is not int
             or not 0 < expected_size <= max_bytes):
         raise ValueError('Expected size must be positive and within the byte limit')
@@ -41,6 +52,7 @@ def publish_stats_file(
         created = True
         with os.fdopen(fd, 'wb') as stream:
             total = 0
+            digest = hashlib.sha256() if expected_sha256 is not None else None
             for chunk in chunks:
                 if not isinstance(chunk, bytes):
                     raise TypeError('Capture chunks must be bytes')
@@ -48,8 +60,12 @@ def publish_stats_file(
                 if total > expected_size:
                     raise ValueError('Capture exceeds expected size')
                 stream.write(chunk)
+                if digest is not None:
+                    digest.update(chunk)
             if total != expected_size:
                 raise ValueError('Capture is incomplete')
+            if digest is not None and digest.hexdigest() != expected_sha256:
+                raise ValueError('Capture SHA-256 mismatch')
             stream.flush()
             os.fsync(stream.fileno())
         # Same-directory hard link is atomic and fails if the final name exists.
