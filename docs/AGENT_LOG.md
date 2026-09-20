@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Forced child termination skips application cleanup.**
+  A disposable spawned capture task can be terminated and reaped after a deadline,
+  including SIGTERM refusal. This boundary is not appropriate for shared locks,
+  queues or DB transactions. Reconcile any partial/final spool state and retain
+  source; child exit is not a durability or import acknowledgement. Supervise
+  only the exact child Process object created by this caller, never services.
+
 - **2026-09-20 · A timeout around a worker is not a stopped transfer.**
   Legacy SSH listing awaits an executor future under wait_for; cancelling that
   wait does not forcibly stop its synchronous work. Runtime capture instead

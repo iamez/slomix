@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04m adds isolated capture-task deadline supervision on
+  #1067. 86 combined tests pass, real owned children reaped even after SIGTERM
+  refusal/parent interruption; timeout-status mutation fails/restores. #1066
+  latest exact-head CI all green. Next transport-specific task and source identity;
+  no services activated and no DB transactions allowed in force-stopped workers.
+
 - (Astra, 2026-09-20) R04l neutral SSH session ownership on #1063; 73 combined
   cases pass, strict-policy offline proof and cleanup mutation/restoration done.
   No real network. End-to-end handshake bound and source identity still block

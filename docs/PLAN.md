@@ -20,6 +20,29 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04m disposable capture worker supervision — 2026-09-20
+
+Contract: explicitly spawned capture-only child, monotonic operation deadline,
+terminate/join then kill/join escalation, result only after reaping. Completed,
+failed and timed_out remain separate; parent cancellation also enters cleanup.
+No DB pool/shared queues/locks/descendant processes in tasks. No task return
+payload or exception text crosses process boundary. Forced stop can skip finally
+and leave partial/complete spool state, so retain source and reconcile on retry.
+Startup counts against deadline but OS startup/uninterruptible kernel waits
+cannot be hard-bounded; cleanup has two bounded grace windows and raises if it
+cannot reap. This is an internal primitive, not SSH activation or service control.
+Prove real child success/failure, blocked task and SIGTERM refusal with procfs
+and active-child checks before integrating a transport-specific task.
+Verified 86 combined worker/SSH/capture/spool tests pass. Actual spawned children
+complete/fail, time out under SIGTERM and escalate after SIGTERM refusal; exit
+codes -15/-9 agree with absence from procfs and active_children. Parent join
+interruption also reaps, unpicklable startup leaves no task child. Two runs of
+timeout proofs measured about 2.00s/2.20s with 2s budget and 0.2s grace (cold
+spawn included). Mutation reporting timeout as completed fails both cases;
+restored/cmp. Ruff/whitespace clean. No remote connection or service/DB changes.
+Python termination semantics verified against official multiprocessing docs;
+do not use this boundary for transactions/shared locks or claim hard OS bounds.
+
 ### R04l explicit SSH session ownership — 2026-09-20
 
 On #1063: neutral RuntimeSSHConfig and caller-driven open_runtime_sftp context.
