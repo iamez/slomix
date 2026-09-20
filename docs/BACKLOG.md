@@ -16,6 +16,12 @@
   Next #962 fresh CI/review, #965 combined watchdog verification; older work order
   and preservation criteria are recorded in PLAN, not replaced by this detour.
 
+- (Astra, 2026-09-20) R04u independent main-based source generation reservation:
+  16 focused cases pass, same-token concurrency has one winner, existing entries
+  never reused, sync-error reservations retained. Mutation fails/restores. Prior
+  capture/manifest work stays in #1075 chain (24paths), not discarded. Next
+  producer handoff/identity delivery, no service or source activation.
+
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
   wrong-export mutation observed/restored. Resume manager startup discovery
