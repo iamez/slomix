@@ -7,6 +7,255 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04u independent main-based source generation reservation:
+  16 focused cases pass, same-token concurrency has one winner, existing entries
+  never reused, sync-error reservations retained. Mutation fails/restores. Prior
+  capture/manifest work stays in #1075 chain (24paths), not discarded. Next
+  producer handoff/identity delivery, no service or source activation.
+
+- (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
+  and explicit re-exports. All changed Python files lint clean, 25 tests pass;
+  wrong-export mutation observed/restored. Resume manager startup discovery
+  after fresh CI/review; no services or DB changed.
+
+- (Astra, 2026-09-19) R04c: neutral logging helpers extracted on an independent
+  main-based branch. 25 regression tests pass; blocked-import subprocess proof
+  and failing/restored mutation complete. Legacy setup unchanged; independent
+  ingestion still pending. #1050 merged; no merge approval for #1051–#1057.
+  Continue with review and neutral manager startup, preserving original R04 scope.
+
+- (Astra, 2026-09-18) R02d5 explicit durable Lua retry steps implemented in
+  separate worktree /tmp/slomix-astra-runtime-r02d5. Five-attempt bound,
+  persistent due state, quarantine, contention deferral and error visibility;
+  no background process or activation. 47 focused cases pass, mutation observed
+  and restored. Combined regression 256 passed; PG stopped. #1044/#1045 merged.
+  #1050 CodeRabbit findings fixed/resolved; fresh CI pending. #1046 ready/main
+  awaits exact-head checks then prescribed cycle. No live activation.
+
+- (Astra, 2026-09-18) R02d4 DB-only repair+receipt implemented locally:
+  shared identity advisory lock, integrity validation, exact target, atomic
+  correction/event/receipt, explicit missing/conflict outcomes. 97 cases pass;
+  rollback mutation failed/restored/cmp; PG stopped. No scheduler/activation.
+  #1041 owner-approved conditional merge cycle running; wait for stack reduction
+  before push. Owner now permits reviewed/fixed/green merges without per-PR ask.
+
+- (Astra, 2026-09-18) R02d3 default-OFF live intake implemented on separate
+  branch: STATS_READY before round-worker queue; GAMETIME before team writes.
+  70 focused cases pass, capture mutation failed/restored/cmp; invalid first
+  GAMETIME no longer starves valid next file. PG stopped. Outer message-ID
+  dedup and processed/lookback gates remain before capture; no DB-outage replay
+  guarantee. Next: external review/CI, then durable repair/completion worker.
+
+- (Astra, 2026-09-18) #1046 reviews identified producer fallback zeros,
+  zero optional end and unknown map sentinel. Added presence provenance,
+  conservative inbox filtering and actual producer PG regressions. Legacy
+  defaults unchanged; explicit zero retained. Adapter wrappers now used.
+  110-case expanded run passed; presence mutation failed/restored/cmp.
+
+- (Astra, 2026-09-18) R02d2a foundation in /tmp/slomix-astra-runtime-r02d2:
+  migration088 + versioned allowlisted durable inputs and stable duplicate IDs.
+  No ingress/worker yet. 66 focused tests pass, mutation failed/restored/cmp;
+  read-only review caught producer end-reason compatibility, fixed and tested
+  through actual producer. PG stopped. Next: publish slice, external review/CI,
+  then capture before RAM dedup and transactional repair-completion receipts.
+
+- (Astra, 2026-09-18) Authorized #1040 merged via cycle as 4a7e0738; tree
+  matches approved head. Synced main through R02c1/c2/c3/c4/d using normal
+  merges, verified no content changes. Stack reduced to 20 files. #1041
+  budget review resolved after 36 passing unit/PG cases; no permission to
+  merge further PRs inferred. No deployment; temporary PG stopped. Next:
+  fresh CI and R02d2 retained-input implementation on a separate branch.
+
+- (Astra, 2026-09-18) #1045 review follow-up: three Codacy SQL-injection
+  annotations investigated, fixed identifiers/bound values confirmed by real
+  PG hostile-input test. Mutation failed then restored/cmp; 82 cases pass.
+  CI/reviews pending, no alert suppression. R02d2 intake contract researched;
+  must bypass import stale gate for exact existing targets and persist before
+  RAM queue dedup. Stack at 25 files; no new-file expansion. Test PG stopped.
+
+- (Astra, 2026-09-18) R02d1 atomic Lua correction implemented, default OFF;
+  migration087 and changed-only event share the round/player transaction.
+  81 focused tests pass, zero skips; real PG rollback mutation failed, restored
+  with patch/cmp. Independent review fixes applied; no remaining blocker found.
+  Temporary PG stopped. Next: commit/push, draft PR and external CI/review,
+  then R02d2 retained metadata repair input. No service/live DB changes.
+
+- (Astra, 2026-09-18) R02d worktree created; real PG legacy boundary reproduced:
+  round commits while DPM update fails and is swallowed. Six focused tests pass;
+  mutation failed then restored/cmp. Helper mapped ingress gates and confirmed
+  rethrow alone cannot replay an already-marked import. Next: atomic correction
+  slice, then separate durable metadata-repair input, not import replay.
+  No fix implemented yet; temporary PG stopped, helper finished.
+
+- (Astra, 2026-09-18) #1042 merged9ffbcd5e and #1043 mergedd946772b with
+  reviewed findings resolved and green exact-head checks. #1044 now ready/main;
+  ancestry sync preserved its full content tree. Refresh CI, then prescribed
+  cycle under owner's conditional authorization. No service/deploy changes.
+
+- (Astra, 2026-09-18) #1044 exact-head d493e1e7 CI runs both successful;
+  external Codex reports no major issues. Next safe work: R02 Lua override
+  writer/caller inventory; source survey recorded locally in
+  /tmp/slomix-r02d-and-r04-dependencies-2026-09-18.md. R04 readiness/voice
+  scheduling and Lua receive ordering dependencies confirmed. No activation.
+
+- (Astra, 2026-09-18) R02c4 remaining local proofs completed: 128 focused
+  tests passed, zero skips; richer replacement, notifications and bootstrap
+  parity covered. No-op mutation failed, restored/cmp. Independent review
+  found no blocker with explicit adapter/NULL-recovery/concurrency limits.
+  Resumed and collected completed test output; temporary PG was still running,
+  now stopped. Next: draft PR/external review/exact-head CI, no merge permission.
+
+- (Astra, 2026-09-16) R02c4 canonical journal integration implemented with
+  migration086/default-OFF flag/native round lock before decisions. 124 focused
+  cases passed; actual storage+PG checks post-commit Discord outcomes, rollback,
+  unchanged retries and lock contention. Lock mutation failed, restored/cmp.
+  Remaining: richer replacement, bootstrap, commit notification, review/CI.
+  Temporary PG stopped; no live application DB or services touched.
+
+- (Astra, 2026-09-16) Runtime direction audit completed with read-only helper.
+  R02c4 remains the next slice; lock before decisions, separate storage event
+  from Discord delivery, and explicitly exclude uninstrumented maintenance
+  writers from completeness claims. Snapshot CI 35067542754 succeeded.
+  Detailed research stays local in /tmp/slomix-runtime-direction-audit-2026-09-16.md.
+  No code/runtime changes in this audit; helper completed, no processes started.
+
+- (Astra, 2026-09-16) R02c4 started in /tmp/slomix-astra-runtime-r02c4.
+  Persisted-row multiset snapshot helper + nine actual PG cases implemented;
+  multiplicity mutation failed, restored/cmp. Not yet wired into storage or
+  journal, no migration/event added. Next: serialized same-transaction event
+  integration and failure proofs. No live application DB or service changes.
+
+- (Astra, 2026-09-16) #1039 merged with explicit owner approval via cycle,
+  squash fc655855. Verified identical tree to approved head. #1040 now bases
+  main; normal merges propagated through #1041/#1042/#1043 with unchanged
+  content trees. New CI pending. No other merge/deploy authorized. Continue
+  R02c4 storage-journal design; prior stack-limit blocker is removed.
+
+- (Astra, 2026-09-15) #1043 terminal chain cleanup implemented: explicitly
+  carry original webhook identity into scheduler and retain it across retries;
+  exhaustion/missing metadata release owned aliases, preserve replacements.
+  78 focused tests passed; four mutation failures, restored/cmp. OFF covered.
+  Earlier terminal-alias TODO below is addressed for these paths; cancellation
+  and unknown persisted claims remain outside this slice. No live changes.
+
+- (Astra, 2026-09-15) #1043 scheduler handoff proof added: 39 focused tests
+  pass, including three real queued asyncio retry paths; competing claims stay
+  blocked and tasks are drained. Full-chain terminal alias cleanup remains open.
+
+- (Astra, 2026-09-15) #1043 finding 4014910266 partially fixed: webhook
+  download/parse/exception exits release owned markers only when enabled;
+  OFF and replacement ownership tested. 36 focused cases passed, cleanup
+  mutation failed and restored/cmp. Scheduled retry paths intentionally retain
+  markers to avoid parallel publication; retry-chain alias cleanup remains open.
+
+- (Astra, 2026-09-15) #1043 review 4014882361: lost post-preflight webhook
+  claim now cleans its Discord trigger without releasing the winner's marker.
+  Both deletion success/failure covered; 28 focused tests passed. Removal
+  mutation failed twice, restored with patch/cmp. No live services touched.
+  Next: exact-head CI/review; #1039 still needs specific merge approval.
+
+- (Astra, 2026-09-15) R02c3 `/tmp/slomix-astra-runtime-r02c3`, branch
+  `feat/db-runtime-endstats-markers-r02c3`: identity-based polling cleanup,
+  richer-alias ownership and atomic post-preflight claims. 83 tests passed
+  including 24 PG cases; real storage rollback releases owned marker and next
+  preflight retries. Mutation failed, restored/cmp. Partial helper review led
+  to fixing raw polling soft-failure discards; helper then usage-limited.
+  Temporary PG stopped. Published draft #1043 at 3d1dcd11, review requested,
+  external CI pending; stack at 25 files. #1039 all checks successful and
+  review threads resolved at 8f5f21af; request owner-specific merge permission
+  before growing the dependent stack with the next migration.
+
+- (Astra, 2026-09-15) R02c2 `/tmp/slomix-astra-runtime-r02c2`, branch
+  `feat/db-runtime-endstats-exceptions-r02c2`: enabled webhook retry exceptions
+  now reschedule through existing bounded attempts/delay. 53 focused tests
+  passed; real asyncio task proof covers OFF/transient/permanent/cancellation.
+  Mutation failed two guards, restored/cmp and rerun passed. No tasks left.
+  Published draft #1042, code 9c01c55b, parent #1041; CI 34934210971 running,
+  external review requested, post-push self-review complete. Next: polling
+  marker ownership/cleanup and event journal. Stack 24 files, no activation.
+
+- (Astra, 2026-09-15) #1041 review 4012369546 found unbounded polling after
+  publish_failed. Shared post-publication failure counter now persists guarded
+  publish_retry_exhausted at configured limit; pre-limit counts process-local.
+  71 tests passed including PG permanent-failure stop through real preflight;
+  mutation failed, restored/cmp, runtime rerun passed; temporary PG stopped.
+  Next: push/reply and synchronize #1042; polling exception ownership still open.
+
+- (Astra, 2026-09-15) R02c1 in `/tmp/slomix-astra-runtime-r02c`, branch
+  `feat/db-runtime-endstats-retry-r02c`. ENDSTATS_RETRY_ENABLED defaults OFF;
+  only explicit publish_failed rows can bypass the four filename gates.
+  Success/terminal/unknown/in-flight markers remain blocking. Helper found
+  missing monitor preflight; fixed and proved through real PG storage plus
+  fake publication fail/retry/success. 68 cases passed; both gate mutations
+  failed, restored/cmp, final runtime case passed. Temporary PG stopped.
+  Published draft PR #1041, code d2efd904, parent #1040. CI 34933912726 queued;
+  Codex/CodeRabbit review requested, post-push self-review complete. Next:
+  CI/review; exception/RAM recovery and events remain separate. No activation.
+
+- (Astra, 2026-09-15) Owner explicitly approved #1012 only; cycle completed
+  merge to main 9cbd8810 (zero red checks/open threads/behind commits).
+  R02a retargeted to main and both dependent branches synchronized; code trees
+  unchanged by history reconciliation. R02b now 18 files against main.
+  New CI required on synchronized heads. Migration-owner review findings on
+  084/085 answered using existing release wrapper's explicit owner credentials.
+  No live changes. Next: R02c endstats retry/storage contract in PLAN; no
+  permission inferred to merge #1039 or #1040.
+
+- (Astra, 2026-09-14) R02b in `/tmp/slomix-astra-runtime-r02b`, branch
+  `feat/db-runtime-status-r02b`, parent R02a 78aaf3a8 (CI 34859363030 passed).
+  Default-OFF older-round status producer + migration085 implemented.
+  113 combined tests passed incl. real PG/bootstrap, zero skipped; later
+  create-catch test added (14 status unit cases passed). Guard mutation
+  failed twice, restored/cmp; temporary PG stopped. Read-only helper review
+  found no blocker; both suggested coverage additions implemented.
+  Published draft #1040, b6137a61. Verified 2026-09-15: CI 34860352518 passed;
+  external Codex reviewed this SHA, no major issues. CodeRabbit rate-limited,
+  not an approval. Next: remaining review and owner merge decisions in order
+  #1012 -> #1039 -> #1040; stack at 25 files, no guard bypass. PLAN records
+  transaction contract and boundaries; no live migration or deploy.
+
+- (Astra, 2026-09-14) R02a on `feat/db-runtime-timing-r02`, stacked on
+  R01 b81221d6 (green CI/CodeQL/Hygiene; still unmerged). Migration084 and
+  default-OFF transactional Lua timing fill implemented. 106-case PG run
+  passed incl. six new R02 PG cases and bootstrap parity; cluster stopped.
+  Additional wrapper cases + mutation pass after restore (104 focused unit
+  cases). Published code 0eceda4c as draft PR #1039 against R01, not main.
+  Helper exhausted usage before independent review; no helper/server running.
+  Narrow runtime push trigger added: CI 34858646087 passed for 2e2359db.
+  Codex review 4006494535: lock the selected Lua row as well as the round;
+  two real-PG concurrency guards pass and both fail when the lock is removed.
+  20 focused cases passed; source restored byte-identically after mutation.
+  Next: source-lock fix exact-SHA CI and remaining external review, then
+  older-round restart status events as separate R02b. Full resume in PLAN.
+
+- (Astra, 2026-09-14) R01 retry and CI fixes: structured retryable failures
+  prevent terminal suppression after DB preflight/transaction errors; optional
+  SSH wrapper respects failure. Journal explicitly exempt from relinking.
+  106-case isolated PG run passed; extra preflight unit case added afterward.
+  Mutation reproduced terminal-mark regression then restored/cmp. Next: push,
+  reply to review 4000153306, inspect complete CI, then isolated R02 design.
+
+- (Astra, 2026-09-13) PR #1012: all three review replies confirmed saved;
+  synchronized main, preserving both runtime and Supastats opt-outs and both
+  agents' backlog entries. External Python CI execution remains unconfirmed.
+- (Astra, 2026-09-10) PR #1012 review fixes: release-config registration,
+  fresh-bootstrap journal mirror, and explicit CI test-service opt-in.
+  90 local tests pass with real disposable PostgreSQL, including complete
+  dump/migrations/baseline parity. CI opt-in mutation failed and was restored
+  byte-identically. Cluster stopped. Next: push/reply to the three review
+  threads and verify external checks; R02 remains a separate slice.
+
+- (Astra, 2026-09-08) Runtime v2 R01 code prepared on
+  `feat/db-runtime-events-r01` in `/tmp/slomix-astra-runtime-r01`: migration 083,
+  default-OFF canonical import journal, transactional wake-up, unit and opt-in
+  PostgreSQL tests. Updated 2026-09-09 after owner-approved isolated PG run:
+  43 passed, zero skipped, including 4 real PG commit/rollback/concurrency
+  cases. Temporary cluster stopped (log + pg_ctl independently confirmed).
+  No live DB/services changed. Next: review/PR; not R02 consumers yet.
+  Fable retains frontend ownership.
+
+- (Opus 5, 2026-09-10) **PREDAJA POSODOBLJENA**: `docs/HANDOFF-fable-2026-09-10.md` — merilnik 238 → 92 (→ 79 s #1028),
+  P0 in P1 dolga nazaj zaprta razen filtrov v URL, tabele dobile ARIA vloge; ostane §3b (sirote proximity) in §3c (filtri, izvoz, kontakt).
 - (Fable 5.1, 2026-09-09, zvečer) **PREDAJA PRED DOPUSTOM**: `docs/HANDOFF-fable-2026-09-09.md`
   (owner odsoten ~3 mesece; vnaprejšnji DA je veljal le za to sejo). Mergano danes:
   #1001–#1011, #1013 (ledger + spider web + bot brez reakcij); dev deployan po

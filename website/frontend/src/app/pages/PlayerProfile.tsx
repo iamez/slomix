@@ -17,6 +17,8 @@ import type {
   PlayerRoundsSeries,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
+import { mmss } from '../components/RoundsTable';
+import { utcStamp } from '../lib/utcStamp';
 import { Absent, ActLink, decimals, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 import { Panel } from '../components/Panel';
 
@@ -918,6 +920,8 @@ function RatingHistory({ playerId }: { playerId: string }) {
                 <Lbl>{s.session_date}</Lbl>
                 <Cluster gap={4} align="baseline">
                   <Meta>{figure(s.rounds)} rounds · {figure(s.maps)} maps</Meta>
+                  {/* That night's own rating, before it is folded into the running figure. */}
+                  {s.session_rating != null && <Meta><span title="that session's rating">night {s.session_rating}</span></Meta>}
                   <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{s.cumulative_rating}</span>
                   {/* ⛔ A null delta is the FIRST session, not a flat one. */}
                   {s.delta == null ? <Meta>first</Meta>
@@ -947,6 +951,7 @@ function RatingComponents({ playerId }: { playerId: string }) {
         <div style={{ marginTop: 'var(--space-2)' }}>
           <Meta style={{ display: 'block', marginBottom: 'var(--space-2)' }}>
             et rating {skill.data.player.et_rating.toFixed(3)} · rank {skill.data.player.rank} of {skill.data.player.total_rated}
+            {' · '}<span>{`rated as ${skill.data.player.display_name}${skill.data.player.last_rated_at != null ? `, last ${utcStamp(skill.data.player.last_rated_at)}` : ''}`}</span>
             {/* games_rated STORES rounds (skill_rating_service writes the
               * aggregate's rounds into this column; the skill page labels
               * it rounds) — "games" would overstate the sample ~2x. */}
@@ -1044,7 +1049,7 @@ function RecentDetail({ playerId }: { playerId: string }) {
           <table style={{ borderCollapse: 'collapse', width: '100%' }}>
             <thead>
               <tr>
-                {['date', 'map', 'r', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc'].map((h, i) => (
+                {['date', 'map', 'r', 'side', 'played', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc'].map((h, i) => (
                   <th key={h} style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textAlign: i < 2 ? 'left' : 'right', padding: 'var(--space-1) var(--space-2)' }}>{h}</th>
                 ))}
               </tr>
@@ -1068,6 +1073,11 @@ function RecentDetail({ playerId }: { playerId: string }) {
                     )}
                   </td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.round_number}</td>
+                  {/* team is pcs.team, an INTEGER (1 = Axis, 2 = Allies on this
+                    * wire); a round played on neither side is a dash, not a
+                    * guess. `played` is the minutes behind every rate above. */}
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.team === 1 ? 'axis' : r.team === 2 ? 'allies' : '—'}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.time_played != null ? mmss(r.time_played) : '—'}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.headshot_kills)}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.gibs)}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.revives_given)}</td>

@@ -1,6 +1,8 @@
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
-> **9. 9. 2026: novejša predaja je `docs/HANDOFF-fable-2026-09-09.md`** (owner odsoten ~3 mesece; spider web
+> **10. 9. 2026: novejša predaja je `docs/HANDOFF-fable-2026-09-10.md`** (9. 9. je posnetek tistega večera)
+>
+> **9. 9. 2026: `docs/HANDOFF-fable-2026-09-09.md`** (owner odsoten ~3 mesece; spider web
 > zaključen, merilnik podatkovnih točk 583 → 238, bot brez reakcij na Supove slike). Začni tam; ta datoteka ostaja
 > kot posnetek stanja 6. 9. in pravil.
 

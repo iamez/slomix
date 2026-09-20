@@ -350,7 +350,7 @@ export function LivePage() {
       )}
 
       <div data-parity="live.feed">
-        <SectionHead label="the ticker" aside={feed.data ? `seq ${figure(feed.data.last_seq)}` : undefined} />
+        <SectionHead label="the ticker" aside={feed.data ? `seq ${figure(feed.data.last_seq)}${feed.data.server_time != null ? ` · server clock ${utcStamp(feed.data.server_time)}` : ''}` : undefined} />
         {feed.isPending && log.length === 0 && <Pending label="feed" />}
         {feed.isError && <Unavailable what="feed" />}
         {gapNote != null && <Meta>{gapNote}</Meta>}
@@ -425,10 +425,10 @@ export function LivePage() {
               return m.is_stale ? (
                 <Absent key={k} reason={`${k} sampling is STALE — last record ${m.age_seconds != null ? `${figure(Math.round(m.age_seconds / 60))} min ago` : 'unknown'} (threshold ${figure(Math.round(m.stale_threshold_seconds / 60))} min)`} />
               ) : (
-                <Meta key={k}>{k} sampling fresh · {figure(m.count)} records</Meta>
+                <Meta key={k}>{k} sampling fresh · {figure(m.count)} records{m.last_recorded_at != null && ` · last ${utcStamp(m.last_recorded_at)}`}</Meta>
               );
             })}
-            {health.data && <Meta>api {health.data.status} · database {health.data.database}</Meta>}
+            {health.data && <Meta>{health.data.service}: api {health.data.status} · database {health.data.database}</Meta>}
           </Stack>
         )}
         {monitoring.isError && <Unavailable what="monitoring" />}

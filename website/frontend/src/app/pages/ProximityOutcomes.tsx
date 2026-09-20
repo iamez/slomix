@@ -5,10 +5,12 @@
  * is rendered, not translated.
  */
 import { Cluster, Stack } from '../components/layout';
+import { WEAPON_NAMES } from '../lib/weapons';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { mmss } from '../components/RoundsTable';
 import { Lbl, Meta, SectionHead, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
+import { fmtRoundTime } from '../lib/roundTime';
 import { utcStamp } from '../lib/utcStamp';
 import { stripEtColors } from '../lib/names';
 import {
@@ -218,7 +220,7 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
               {d.events.slice(0, 10).map((e, i) => (
                 <ProxRow key={`${e.round_id ?? 'x'}:${i}`}
                   name={`${e.victim ? stripEtColors(e.victim) : 'unknown'} down · ${e.killer ? stripEtColors(e.killer) : 'unknown'}`}
-                  mid={`${mapLabel(e.map)} r${e.round}${e.outcome ? ` · ${e.outcome}` : ''}`}
+                  mid={`${mapLabel(e.map)} r${e.round}${e.outcome ? ` · ${e.outcome}` : ''}${e.round_date ? ` · ${e.round_date}${fmtRoundTime(e.round_time) ? ` ${fmtRoundTime(e.round_time)}` : ''}` : ''}`}
                   val={e.success > 0 ? 'traded' : e.attempts > 0 ? 'attempted' : 'missed'} />
               ))}
             </Stack>
@@ -236,6 +238,11 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
                   mid={`${figure(l.hits)} of ${figure(l.shots)} shots · ${figure(l.kills)} kills`}
                   val={`${figure(l.accuracy)}%`} />
               ))}
+              {d.weapon_breakdown.length > 0 && (
+                <Meta>
+                  by weapon: {d.weapon_breakdown.map((w) => `${WEAPON_NAMES[w.weapon_id] ?? `weapon ${w.weapon_id}`} ${figure(w.accuracy)}% (${figure(w.hits)}/${figure(w.shots)}, ${figure(w.kills)} kills)`).join(' · ')}
+                </Meta>
+              )}
             </Stack>
           )}
         </ProxPanel>

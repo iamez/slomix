@@ -116,6 +116,7 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
   if (typeof ratio === 'number' && Number.isFinite(ratio)) cells.push({ k: 'unlinked captures', v: `${(ratio * 100).toFixed(1)}%` });
   if (typeof m.total_lua_rows === 'number') cells.push({ k: 'captured rounds', v: String(m.total_lua_rows) });
   if (typeof m.wrong_start_lua_rows === 'number') cells.push({ k: 'wrong-round links', v: String(m.wrong_start_lua_rows) });
+  if (typeof linkage.breach_count === 'number') cells.push({ k: 'breaches', v: String(linkage.breach_count) });
   const breaches = linkage.breaches ?? [];
   return (
     <div style={{ marginTop: 'var(--space-7)' }}>

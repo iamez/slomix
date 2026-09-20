@@ -154,7 +154,7 @@ export function ProximityPlayerPage() {
       </div>
 
       <div data-parity="proximity-player.radar">
-        <SectionHead label="radar" aside={radar.data ? <span className="lbl">{radar.data.formula_version}</span> : undefined} />
+        <SectionHead label="radar" aside={radar.data ? <span className="lbl"><span>{radar.data.formula_version}</span>{radar.data.teamplay_formula_version != null && <span> · teamplay {radar.data.teamplay_formula_version}</span>}</span> : undefined} />
         {radar.isPending && <Pending label="radar" />}
         {radar.isError && <Unavailable what="radar" />}
         {radar.data && (
@@ -288,11 +288,11 @@ export function ProximityPlayerPage() {
       </div>
 
       <div data-parity="proximity-player.player-card">
-        <ProxPanel label="the competitive card" aside={`${PROFILE_DAYS}d`} q={card}
+        <ProxPanel label="the competitive card" aside={card.data?.timeline_range_days != null ? `${figure(card.data.timeline_range_days)}d` : `${PROFILE_DAYS}d`} q={card}
           empty="no scored rounds in this window" isEmpty={(d) => d.stagger.kills === 0 && d.clutch.situations === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
-              <ProxRow name="stagger kills" mid={`${figure(d.stagger.stagger_kills)} of ${figure(d.stagger.kills)} kills`} val={`${figure(d.stagger.stagger_rate)}%`} />
+              <ProxRow name="stagger kills" mid={`${figure(d.stagger.stagger_kills)} of ${figure(d.stagger.kills)} kills · avg score ${figure(d.stagger.avg_score)}`} val={`${figure(d.stagger.stagger_rate)}%`} />
               <ProxRow name="time denied" mid={`attack ${figure(Math.round(d.sides.attack.denied_s / 60))} min · defense ${figure(Math.round(d.sides.defense.denied_s / 60))} min`} val={`${figure(Math.round(d.stagger.denied_s / 60))} min`} />
               <ProxRow name="clutches" mid={`${figure(d.clutch.wins)} of ${figure(d.clutch.situations)} situations`} val={`${figure(d.clutch.win_pct)}%`} />
               {d.clutch.best && (

@@ -271,6 +271,27 @@ describe('Proximity', () => {
     }
   });
 
+  it('the instruments print the figures their own responses carry — team denial, lock distance, revive distance, the stagger bar', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());
+    // Each of these is summed or read from the same recording the panel draws.
+    await waitFor(() => expect(screen.getByText(/allies 0\.416 over 429 kills · axis 0\.440 over 575 kills/)).toBeInTheDocument());
+    expect(screen.getByText(/1,016 u away · 330 s on target/)).toBeInTheDocument();
+    expect(screen.getByText(/nearest enemy 929 u away on average/)).toBeInTheDocument();
+    expect(screen.getByText(/a kill counts as a stagger above a score of 0\.8/)).toBeInTheDocument();
+    expect(screen.getByText(/avg score 0\.445/)).toBeInTheDocument();
+  });
+
+  it('names the capture roadmap\'s doc and each capability\'s api, and the push heatmap\'s perspective', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());
+    // v7-status: the manifest's doc, and the api behind the first capability.
+    await waitFor(() => expect(screen.getByText(/docs\/LUA_V7_CAPTURE_RESEARCH_2026-06\.md/)).toBeInTheDocument());
+    expect(screen.getByText(/et\.trap_Trace \+ ps\.viewangles/)).toBeInTheDocument();
+  });
+
   it('mounts nothing unscoped when the scope lookup fails', async () => {
     // Three reviewers independently: a failed /proximity/scopes must not
     // fall through into thirteen unbounded instrument queries.
@@ -393,6 +414,11 @@ describe('Proximity', () => {
     expect(screen.getByText(/deadliest cell 25 deaths/)).toBeInTheDocument();
     expect(screen.getByLabelText(/kill lines on/)).toBeInTheDocument();
     expect(screen.getByText(/100 kills with both positions known/)).toBeInTheDocument();
+    // Ledger 2026-09-09: the overlays now say WHO dies there and WITH WHAT,
+    // and the hotzone cells carry both sides of the engagement. Every number
+    // below is summed from the same recording the panels draw.
+    expect(screen.getByText(/by class: medic 163 · engineer 43/)).toBeInTheDocument();
+    expect(screen.getByText(/by weapon: MP40 47 · Knife 45/)).toBeInTheDocument();
     // Movers: recorded distance leader (colour codes stripped: ^pvid → vid).
     expect(screen.getByText('279 k u')).toBeInTheDocument();
     // Pick a player — heatmap (22 samples, kills_from) and the aim

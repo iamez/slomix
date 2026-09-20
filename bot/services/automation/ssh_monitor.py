@@ -571,8 +571,8 @@ class SSHMonitor:
             # Use bot's existing parser
             # This assumes the bot has a method to parse and import files
             if hasattr(self.bot, 'process_gamestats_file'):
-                await self.bot.process_gamestats_file(local_path, filename)
-                return True
+                result = await self.bot.process_gamestats_file(local_path, filename)
+                return bool(result and result.get("success"))
             else:
                 logger.error("❌ Bot missing process_gamestats_file method")
                 return False

@@ -919,3 +919,15 @@ it('shows the numbers behind the role scores, not only the scores', async () => 
   expect(screen.getAllByText(/enabled · \d[\d,]* crossfire/).length).toBeGreaterThan(0);
   expect(screen.getAllByText(/samples · ≈ \d+:\d\d alone/).length).toBeGreaterThan(0);
 });
+
+describe('Story long tail (ledger 2026-09-09)', () => {
+  it('prints the composite\'s source row counts, each player\'s details on hover, and the kis compute mode', async () => {
+    renderPage();
+    const c = composite as { coverage: { source_rows: Record<string, number> }; players: { player_name: string; details: Record<string, number> }[] };
+    const [firstSource, firstRows] = Object.entries(c.coverage.source_rows)[0];
+    await waitFor(() => expect(screen.getByText(new RegExp(`source rows: ${firstSource} ${firstRows.toLocaleString('en-US')}`))).toBeInTheDocument());
+    const cells = screen.getAllByTitle(/trade kills \d+/);
+    expect(cells.length).toBeGreaterThan(0);
+    expect(screen.getByText(/kis · kills · carrier · clutch · compute read only/)).toBeInTheDocument();
+  });
+});

@@ -218,9 +218,14 @@ function Health() {
           </div>
         ))}
       </div>
-      <Link to="/system" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', display: 'inline-block', marginTop: 'var(--space-3)', textDecoration: 'none' }}>
-        full system page →
-      </Link>
+      <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+        <Link to="/system" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>
+          full system page →
+        </Link>
+        <Link to="/smart-stats-diag" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>
+          smart-stats diagnostics →
+        </Link>
+      </div>
     </div>
   );
 }
@@ -552,7 +557,7 @@ export function About() {
         </div>
       </div>
 
-      <div className="m" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-8)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-rule-900)', fontSize: 'var(--fs-label)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-text-600, #4d4a44)' }}>
+      <div className="m" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 'var(--space-8)', paddingTop: 'var(--space-4)', borderTop: '1px solid var(--color-rule-900)', fontSize: 'var(--fs-label)', letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-text-500, #4d4a44)' }}>
         <span>slomix · built for the et:legacy community</span>
         <span>github.com/iamez/slomix</span>
       </div>

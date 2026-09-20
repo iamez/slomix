@@ -147,7 +147,7 @@ function Heatmap({ sessionDate, mapName }: { sessionDate: string; mapName: strin
           const ny = (y: number) => (spanY === 0 ? 0.5 : (y - minY) / spanY);
           return (
             <Stack gap={2}>
-              <Meta>{figure(d.push_deaths)} push deaths · {figure(d.carrier_deaths)} carrier deaths · grid {d.grid_size} u</Meta>
+              <Meta>{figure(d.push_deaths)} push deaths · {figure(d.carrier_deaths)} carrier deaths · {figure(d.unique_deaths)} distinct deaths · grid {d.grid_size} u · {d.perspective} perspective</Meta>
               <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', maxWidth: w, border: '1px solid var(--color-rule-900)' }} role="img" aria-label={`push death hotzones on ${mapLabel(d.map_name)}`}>
                 {d.hotzones.map((z, i) => (
                   <circle

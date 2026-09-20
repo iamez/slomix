@@ -217,6 +217,9 @@ export function UploadsPage() {
                     {u.category} · {bytes(u.file_size_bytes)} · {u.uploader_name}
                     {u.created_at != null && <> · {u.created_at.slice(0, 10)}</>}
                   </Meta>
+                  {/* The server sends a trimmed description with the list so
+                    * the row can say what the file is without a second call. */}
+                  {u.description_preview && <Meta>{u.description_preview}</Meta>}
                 </Stack>
                 <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
                   {u.download_count != null ? `${figure(u.download_count)} downloads` : '—'}

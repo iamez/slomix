@@ -45,6 +45,8 @@ describe('the three fields nothing else surfaces per round', () => {
     // and their values, not just the headers
     expect(screen.getByText('3:42')).toBeTruthy();       // 222 s
     expect(screen.getByText('1,204')).toBeTruthy();      // damage taken
+    // and when it was played, as a UTC stamp of the round's played_at
+    expect(screen.getByTitle('when the round was played').textContent).toMatch(/^2026-08-26 \d\d:\d\d UTC$/);
   });
 
   it('does not put them behind a toggle', () => {

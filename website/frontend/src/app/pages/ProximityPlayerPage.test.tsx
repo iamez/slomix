@@ -93,6 +93,10 @@ describe('ProximityPlayerPage', () => {
     await waitFor(() => expect(screen.getByLabelText('player radar')).toBeInTheDocument());
     expect(screen.getByText('40.2')).toBeInTheDocument();
     expect(screen.getByText('player-radar-v2')).toBeInTheDocument();
+    // Ledger 2026-09-09: the teamplay axis carries its OWN formula version,
+    // the dodge reaction is reported unscored beside the mechanical one, and
+    // the card's window and stagger score are the server's figures.
+    expect(screen.getByText('· teamplay prox-web-v3.0')).toBeInTheDocument();
     // Prox score: overall 32.81 → '32.8', rank 1 in window.
     await waitFor(() => expect(screen.getByText('32.8')).toBeInTheDocument());
     expect(screen.getByText(/answered for this player alone \(1 scored; the cohort rank is on the proximity leaderboard\) · radar combat 38\.5 \/ team 34\.1 \/ game sense 22/)).toBeInTheDocument();
