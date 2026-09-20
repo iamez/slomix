@@ -20,6 +20,22 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04i read-only spool reconciliation — 2026-09-20
+
+Contract: inspect a caller-retained immutable private spool entry against required
+size and SHA-256, returning missing/match/conflict. Missing is only final-entry
+ENOENT; directory/access/I/O failures propagate. Never delete/replace files or
+write DB markers. Open no-follow/nonblocking, require owned regular0600 file,
+bound reads and compare descriptor/name identity before certifying content.
+Match does not certify durability after failed fsync or import completion.
+This is a primitive, not automatic retry policy, full source identity or transport
+activation. Verify actual post-link-fsync failure, conflicts and replacement race.
+Verified48 combined filesystem cases pass: actual directory-fsync failure still
+permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
+entries rejected and I/O errors propagate. Removing digest and identity guards
+fails2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
+retry scheduling or make ambiguous durability safe for source deletion.
+
 ### R04g capture integrity contract — 2026-09-20
 
 Stacked on #1061: add an optional expected SHA-256 to completed-file publication.
