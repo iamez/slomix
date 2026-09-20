@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) Consolidation detour: #965 refreshed from main, preserving
+  notification/midnight fixes and both documentation tracks;42 targeted tests
+  pass,Ruff clean. Wait for #962 disk fix before combined verification. #965 has
+  no merge permission. Runtime resume #1077 c015270b: completion delivery/sealing,
+  then new-site audit and approved DEV transition. NEVER MERGE unchanged.
+
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
   wrong-export mutation observed/restored. Resume manager startup discovery

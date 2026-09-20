@@ -20,6 +20,14 @@
 
 ## Proga: Astra watchdog delivery acknowledgement
 
+Consolidation update 2026-09-20: refreshed current main with a normal merge,
+retaining both documentation tracks.42 focused watchdog/delivery/plan tests pass;
+Ruff clean. #962 remains a separate disk-formula change; combine and rerun after
+its approved merge. Only #1076/#1057/#962 currently have explicit merge permission;
+#965 preparation is authorized, its merge is not. Original runtime resumes at
+#1077 c015270b completion delivery/snapshot sealing, then new-site audit and
+owner-approved reversible DEV cutover. No services or real webhooks activated.
+
 Zadnja posodobitev: 2026-09-08 (Astra). Implemented, locally verified; not deployed.
 Contract: observations and failure streaks persist before delivery; notification
 dedup and heartbeat acknowledgements advance only after successful delivery.
