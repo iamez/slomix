@@ -1,5 +1,10 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Node pin slice follow-up (Astra, 2026-09-08): PR #969 review identified
+> PyYAML as an undeclared direct test dependency despite green CI. Declared
+> PyYAML==6.0.3 in requirements-dev and added a declaration contract. Validate
+> with the isolated agent venv; no service environment changes.
+
 > Pravilo: ta datoteka se posodobi ob VSAKEM koraku. Nič se ne »dogovori«
 > samo v pogovoru. Bereta jo obe seji (in vsak prihodnji model).
 > Podrobne raziskovalne zapiske drži lokalno (docs/REPO_BOUNDARY.md);
@@ -19,6 +24,16 @@
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
 ## Track: runtime v2 R01 (Astra)
+
+### Consolidation: preserve Node pin #969 — 2026-09-20
+
+Normal merge of current main retains shared exact .nvmrc CI inputs and explicit
+PyYAML development dependency. Four pin-contract and two plan-contract tests pass.
+This refresh preserves the reviewed version; it does not claim a current security
+release audit, frontend build or system toolchain upgrade. Fresh CI/review required.
+No merge permission for #969; only #1076/#1057/#962 currently authorized. Original
+runtime resumes after this consolidation detour at #1077 completion delivery and
+snapshot sealing, followed by new-site audit and approved reversible DEV cutover.
 
 ### R04c neutral database logging helpers — 2026-09-19
 
@@ -1259,3 +1274,20 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
 - hosting ticket, če watcher potrdi populacijo B (host stall).
+
+## Proga: Astra shared Node 22 pin
+
+Zadnja posodobitev: 2026-09-07 (Astra). Implemented; local contract verified.
+Pin local development and both CI Node setup jobs to `.nvmrc`, version 22.23.2.
+Verified against the official release index and archive (latest 22, Jod LTS),
+and the security release announcement:
+https://nodejs.org/en/blog/release/v22.23.2
+Contract tests parse package engines and workflow YAML, rejecting a pin below
+the frontend floor or an inline CI override. No local installation, dependencies,
+build, browser, global environment or service changes in this slice.
+Proof: three tests and targeted Ruff pass. Mutations to old Node 22.13.1 and
+inline CI `22.x` both failed the respective contract; restored files match
+pre-mutation snapshots by `cmp`. Independent Node JSON comparison confirms the
+pin meets the floor; parsed YAML resolves both jobs to 22.23.2. That is config
+proof, not execution under the selected Node: host Node remains v20.20.0.
+Next: root review/PR, then isolated portable runtime validation and actual CI.

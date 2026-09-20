@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
+
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
   wrong-export mutation observed/restored. Resume manager startup discovery
