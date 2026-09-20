@@ -7,6 +7,22 @@ from __future__ import annotations
 import math
 from typing import Any, Iterable
 
+# Maps whose rounds must never count toward stats, as the default both
+# consumers start from.
+#
+# ⛔ This default used to be a string literal in TWO places — bot/config.py and
+# scripts/backfill_rounds_is_valid.py — so adding a map to one and not the
+# other would make the importer and the backfill disagree about which rounds
+# are valid, silently and in opposite directions. One definition, two readers,
+# and a test that says so.
+#
+#   mp_sillyctf  — a CTF filler map run while waiting for a substitution
+#   dots_arena   — mxtor's pure-aim 1v1 arena (2026-09-04). Its whole point is
+#                  a duel loop with forced resets, so its kills, deaths and
+#                  playtime describe a drill and not a match. Owner's decision
+#                  that day: arena rounds do not enter stats at all.
+DEFAULT_EXCLUDED_MAPS = frozenset({"mp_sillyctf", "dots_arena"})
+
 END_REASON_ENUM = {
     "NORMAL",
     "OBJECTIVE",

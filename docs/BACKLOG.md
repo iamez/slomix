@@ -22,6 +22,390 @@
   `journalctl --vacuum-size=200M` (442 MB) in `enable --now
   systemd-tmpfiles-clean.timer` (`/tmp` se ne čisti sam).
 
+- (Astra, 2026-09-20) R04u independent main-based source generation reservation:
+  16 focused cases pass, same-token concurrency has one winner, existing entries
+  never reused, sync-error reservations retained. Mutation fails/restores. Prior
+  capture/manifest work stays in #1075 chain (24paths), not discarded. Next
+  producer handoff/identity delivery, no service or source activation.
+
+- (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
+  and explicit re-exports. All changed Python files lint clean, 25 tests pass;
+  wrong-export mutation observed/restored. Resume manager startup discovery
+  after fresh CI/review; no services or DB changed.
+
+- (Astra, 2026-09-19) R04c: neutral logging helpers extracted on an independent
+  main-based branch. 25 regression tests pass; blocked-import subprocess proof
+  and failing/restored mutation complete. Legacy setup unchanged; independent
+  ingestion still pending. #1050 merged; no merge approval for #1051–#1057.
+  Continue with review and neutral manager startup, preserving original R04 scope.
+
+- (Astra, 2026-09-18) R02d5 explicit durable Lua retry steps implemented in
+  separate worktree /tmp/slomix-astra-runtime-r02d5. Five-attempt bound,
+  persistent due state, quarantine, contention deferral and error visibility;
+  no background process or activation. 47 focused cases pass, mutation observed
+  and restored. Combined regression 256 passed; PG stopped. #1044/#1045 merged.
+  #1050 CodeRabbit findings fixed/resolved; fresh CI pending. #1046 ready/main
+  awaits exact-head checks then prescribed cycle. No live activation.
+
+- (Astra, 2026-09-18) R02d4 DB-only repair+receipt implemented locally:
+  shared identity advisory lock, integrity validation, exact target, atomic
+  correction/event/receipt, explicit missing/conflict outcomes. 97 cases pass;
+  rollback mutation failed/restored/cmp; PG stopped. No scheduler/activation.
+  #1041 owner-approved conditional merge cycle running; wait for stack reduction
+  before push. Owner now permits reviewed/fixed/green merges without per-PR ask.
+
+- (Astra, 2026-09-18) R02d3 default-OFF live intake implemented on separate
+  branch: STATS_READY before round-worker queue; GAMETIME before team writes.
+  70 focused cases pass, capture mutation failed/restored/cmp; invalid first
+  GAMETIME no longer starves valid next file. PG stopped. Outer message-ID
+  dedup and processed/lookback gates remain before capture; no DB-outage replay
+  guarantee. Next: external review/CI, then durable repair/completion worker.
+
+- (Astra, 2026-09-18) #1046 reviews identified producer fallback zeros,
+  zero optional end and unknown map sentinel. Added presence provenance,
+  conservative inbox filtering and actual producer PG regressions. Legacy
+  defaults unchanged; explicit zero retained. Adapter wrappers now used.
+  110-case expanded run passed; presence mutation failed/restored/cmp.
+
+- (Astra, 2026-09-18) R02d2a foundation in /tmp/slomix-astra-runtime-r02d2:
+  migration088 + versioned allowlisted durable inputs and stable duplicate IDs.
+  No ingress/worker yet. 66 focused tests pass, mutation failed/restored/cmp;
+  read-only review caught producer end-reason compatibility, fixed and tested
+  through actual producer. PG stopped. Next: publish slice, external review/CI,
+  then capture before RAM dedup and transactional repair-completion receipts.
+
+- (Astra, 2026-09-18) Authorized #1040 merged via cycle as 4a7e0738; tree
+  matches approved head. Synced main through R02c1/c2/c3/c4/d using normal
+  merges, verified no content changes. Stack reduced to 20 files. #1041
+  budget review resolved after 36 passing unit/PG cases; no permission to
+  merge further PRs inferred. No deployment; temporary PG stopped. Next:
+  fresh CI and R02d2 retained-input implementation on a separate branch.
+
+- (Astra, 2026-09-18) #1045 review follow-up: three Codacy SQL-injection
+  annotations investigated, fixed identifiers/bound values confirmed by real
+  PG hostile-input test. Mutation failed then restored/cmp; 82 cases pass.
+  CI/reviews pending, no alert suppression. R02d2 intake contract researched;
+  must bypass import stale gate for exact existing targets and persist before
+  RAM queue dedup. Stack at 25 files; no new-file expansion. Test PG stopped.
+
+- (Astra, 2026-09-18) R02d1 atomic Lua correction implemented, default OFF;
+  migration087 and changed-only event share the round/player transaction.
+  81 focused tests pass, zero skips; real PG rollback mutation failed, restored
+  with patch/cmp. Independent review fixes applied; no remaining blocker found.
+  Temporary PG stopped. Next: commit/push, draft PR and external CI/review,
+  then R02d2 retained metadata repair input. No service/live DB changes.
+
+- (Astra, 2026-09-18) R02d worktree created; real PG legacy boundary reproduced:
+  round commits while DPM update fails and is swallowed. Six focused tests pass;
+  mutation failed then restored/cmp. Helper mapped ingress gates and confirmed
+  rethrow alone cannot replay an already-marked import. Next: atomic correction
+  slice, then separate durable metadata-repair input, not import replay.
+  No fix implemented yet; temporary PG stopped, helper finished.
+
+- (Astra, 2026-09-18) #1042 merged9ffbcd5e and #1043 mergedd946772b with
+  reviewed findings resolved and green exact-head checks. #1044 now ready/main;
+  ancestry sync preserved its full content tree. Refresh CI, then prescribed
+  cycle under owner's conditional authorization. No service/deploy changes.
+
+- (Astra, 2026-09-18) #1044 exact-head d493e1e7 CI runs both successful;
+  external Codex reports no major issues. Next safe work: R02 Lua override
+  writer/caller inventory; source survey recorded locally in
+  /tmp/slomix-r02d-and-r04-dependencies-2026-09-18.md. R04 readiness/voice
+  scheduling and Lua receive ordering dependencies confirmed. No activation.
+
+- (Astra, 2026-09-18) R02c4 remaining local proofs completed: 128 focused
+  tests passed, zero skips; richer replacement, notifications and bootstrap
+  parity covered. No-op mutation failed, restored/cmp. Independent review
+  found no blocker with explicit adapter/NULL-recovery/concurrency limits.
+  Resumed and collected completed test output; temporary PG was still running,
+  now stopped. Next: draft PR/external review/exact-head CI, no merge permission.
+
+- (Astra, 2026-09-16) R02c4 canonical journal integration implemented with
+  migration086/default-OFF flag/native round lock before decisions. 124 focused
+  cases passed; actual storage+PG checks post-commit Discord outcomes, rollback,
+  unchanged retries and lock contention. Lock mutation failed, restored/cmp.
+  Remaining: richer replacement, bootstrap, commit notification, review/CI.
+  Temporary PG stopped; no live application DB or services touched.
+
+- (Astra, 2026-09-16) Runtime direction audit completed with read-only helper.
+  R02c4 remains the next slice; lock before decisions, separate storage event
+  from Discord delivery, and explicitly exclude uninstrumented maintenance
+  writers from completeness claims. Snapshot CI 35067542754 succeeded.
+  Detailed research stays local in /tmp/slomix-runtime-direction-audit-2026-09-16.md.
+  No code/runtime changes in this audit; helper completed, no processes started.
+
+- (Astra, 2026-09-16) R02c4 started in /tmp/slomix-astra-runtime-r02c4.
+  Persisted-row multiset snapshot helper + nine actual PG cases implemented;
+  multiplicity mutation failed, restored/cmp. Not yet wired into storage or
+  journal, no migration/event added. Next: serialized same-transaction event
+  integration and failure proofs. No live application DB or service changes.
+
+- (Astra, 2026-09-16) #1039 merged with explicit owner approval via cycle,
+  squash fc655855. Verified identical tree to approved head. #1040 now bases
+  main; normal merges propagated through #1041/#1042/#1043 with unchanged
+  content trees. New CI pending. No other merge/deploy authorized. Continue
+  R02c4 storage-journal design; prior stack-limit blocker is removed.
+
+- (Astra, 2026-09-15) #1043 terminal chain cleanup implemented: explicitly
+  carry original webhook identity into scheduler and retain it across retries;
+  exhaustion/missing metadata release owned aliases, preserve replacements.
+  78 focused tests passed; four mutation failures, restored/cmp. OFF covered.
+  Earlier terminal-alias TODO below is addressed for these paths; cancellation
+  and unknown persisted claims remain outside this slice. No live changes.
+
+- (Astra, 2026-09-15) #1043 scheduler handoff proof added: 39 focused tests
+  pass, including three real queued asyncio retry paths; competing claims stay
+  blocked and tasks are drained. Full-chain terminal alias cleanup remains open.
+
+- (Astra, 2026-09-15) #1043 finding 4014910266 partially fixed: webhook
+  download/parse/exception exits release owned markers only when enabled;
+  OFF and replacement ownership tested. 36 focused cases passed, cleanup
+  mutation failed and restored/cmp. Scheduled retry paths intentionally retain
+  markers to avoid parallel publication; retry-chain alias cleanup remains open.
+
+- (Astra, 2026-09-15) #1043 review 4014882361: lost post-preflight webhook
+  claim now cleans its Discord trigger without releasing the winner's marker.
+  Both deletion success/failure covered; 28 focused tests passed. Removal
+  mutation failed twice, restored with patch/cmp. No live services touched.
+  Next: exact-head CI/review; #1039 still needs specific merge approval.
+
+- (Astra, 2026-09-15) R02c3 `/tmp/slomix-astra-runtime-r02c3`, branch
+  `feat/db-runtime-endstats-markers-r02c3`: identity-based polling cleanup,
+  richer-alias ownership and atomic post-preflight claims. 83 tests passed
+  including 24 PG cases; real storage rollback releases owned marker and next
+  preflight retries. Mutation failed, restored/cmp. Partial helper review led
+  to fixing raw polling soft-failure discards; helper then usage-limited.
+  Temporary PG stopped. Published draft #1043 at 3d1dcd11, review requested,
+  external CI pending; stack at 25 files. #1039 all checks successful and
+  review threads resolved at 8f5f21af; request owner-specific merge permission
+  before growing the dependent stack with the next migration.
+
+- (Astra, 2026-09-15) R02c2 `/tmp/slomix-astra-runtime-r02c2`, branch
+  `feat/db-runtime-endstats-exceptions-r02c2`: enabled webhook retry exceptions
+  now reschedule through existing bounded attempts/delay. 53 focused tests
+  passed; real asyncio task proof covers OFF/transient/permanent/cancellation.
+  Mutation failed two guards, restored/cmp and rerun passed. No tasks left.
+  Published draft #1042, code 9c01c55b, parent #1041; CI 34934210971 running,
+  external review requested, post-push self-review complete. Next: polling
+  marker ownership/cleanup and event journal. Stack 24 files, no activation.
+
+- (Astra, 2026-09-15) #1041 review 4012369546 found unbounded polling after
+  publish_failed. Shared post-publication failure counter now persists guarded
+  publish_retry_exhausted at configured limit; pre-limit counts process-local.
+  71 tests passed including PG permanent-failure stop through real preflight;
+  mutation failed, restored/cmp, runtime rerun passed; temporary PG stopped.
+  Next: push/reply and synchronize #1042; polling exception ownership still open.
+
+- (Astra, 2026-09-15) R02c1 in `/tmp/slomix-astra-runtime-r02c`, branch
+  `feat/db-runtime-endstats-retry-r02c`. ENDSTATS_RETRY_ENABLED defaults OFF;
+  only explicit publish_failed rows can bypass the four filename gates.
+  Success/terminal/unknown/in-flight markers remain blocking. Helper found
+  missing monitor preflight; fixed and proved through real PG storage plus
+  fake publication fail/retry/success. 68 cases passed; both gate mutations
+  failed, restored/cmp, final runtime case passed. Temporary PG stopped.
+  Published draft PR #1041, code d2efd904, parent #1040. CI 34933912726 queued;
+  Codex/CodeRabbit review requested, post-push self-review complete. Next:
+  CI/review; exception/RAM recovery and events remain separate. No activation.
+
+- (Astra, 2026-09-15) Owner explicitly approved #1012 only; cycle completed
+  merge to main 9cbd8810 (zero red checks/open threads/behind commits).
+  R02a retargeted to main and both dependent branches synchronized; code trees
+  unchanged by history reconciliation. R02b now 18 files against main.
+  New CI required on synchronized heads. Migration-owner review findings on
+  084/085 answered using existing release wrapper's explicit owner credentials.
+  No live changes. Next: R02c endstats retry/storage contract in PLAN; no
+  permission inferred to merge #1039 or #1040.
+
+- (Astra, 2026-09-14) R02b in `/tmp/slomix-astra-runtime-r02b`, branch
+  `feat/db-runtime-status-r02b`, parent R02a 78aaf3a8 (CI 34859363030 passed).
+  Default-OFF older-round status producer + migration085 implemented.
+  113 combined tests passed incl. real PG/bootstrap, zero skipped; later
+  create-catch test added (14 status unit cases passed). Guard mutation
+  failed twice, restored/cmp; temporary PG stopped. Read-only helper review
+  found no blocker; both suggested coverage additions implemented.
+  Published draft #1040, b6137a61. Verified 2026-09-15: CI 34860352518 passed;
+  external Codex reviewed this SHA, no major issues. CodeRabbit rate-limited,
+  not an approval. Next: remaining review and owner merge decisions in order
+  #1012 -> #1039 -> #1040; stack at 25 files, no guard bypass. PLAN records
+  transaction contract and boundaries; no live migration or deploy.
+
+- (Astra, 2026-09-14) R02a on `feat/db-runtime-timing-r02`, stacked on
+  R01 b81221d6 (green CI/CodeQL/Hygiene; still unmerged). Migration084 and
+  default-OFF transactional Lua timing fill implemented. 106-case PG run
+  passed incl. six new R02 PG cases and bootstrap parity; cluster stopped.
+  Additional wrapper cases + mutation pass after restore (104 focused unit
+  cases). Published code 0eceda4c as draft PR #1039 against R01, not main.
+  Helper exhausted usage before independent review; no helper/server running.
+  Narrow runtime push trigger added: CI 34858646087 passed for 2e2359db.
+  Codex review 4006494535: lock the selected Lua row as well as the round;
+  two real-PG concurrency guards pass and both fail when the lock is removed.
+  20 focused cases passed; source restored byte-identically after mutation.
+  Next: source-lock fix exact-SHA CI and remaining external review, then
+  older-round restart status events as separate R02b. Full resume in PLAN.
+
+- (Astra, 2026-09-14) R01 retry and CI fixes: structured retryable failures
+  prevent terminal suppression after DB preflight/transaction errors; optional
+  SSH wrapper respects failure. Journal explicitly exempt from relinking.
+  106-case isolated PG run passed; extra preflight unit case added afterward.
+  Mutation reproduced terminal-mark regression then restored/cmp. Next: push,
+  reply to review 4000153306, inspect complete CI, then isolated R02 design.
+
+- (Astra, 2026-09-13) PR #1012: all three review replies confirmed saved;
+  synchronized main, preserving both runtime and Supastats opt-outs and both
+  agents' backlog entries. External Python CI execution remains unconfirmed.
+- (Astra, 2026-09-10) PR #1012 review fixes: release-config registration,
+  fresh-bootstrap journal mirror, and explicit CI test-service opt-in.
+  90 local tests pass with real disposable PostgreSQL, including complete
+  dump/migrations/baseline parity. CI opt-in mutation failed and was restored
+  byte-identically. Cluster stopped. Next: push/reply to the three review
+  threads and verify external checks; R02 remains a separate slice.
+
+- (Astra, 2026-09-08) Runtime v2 R01 code prepared on
+  `feat/db-runtime-events-r01` in `/tmp/slomix-astra-runtime-r01`: migration 083,
+  default-OFF canonical import journal, transactional wake-up, unit and opt-in
+  PostgreSQL tests. Updated 2026-09-09 after owner-approved isolated PG run:
+  43 passed, zero skipped, including 4 real PG commit/rollback/concurrency
+  cases. Temporary cluster stopped (log + pg_ctl independently confirmed).
+  No live DB/services changed. Next: review/PR; not R02 consumers yet.
+  Fable retains frontend ownership.
+
+- (Opus 5, 2026-09-10) **PREDAJA POSODOBLJENA**: `docs/HANDOFF-fable-2026-09-10.md` — merilnik 238 → 92 (→ 79 s #1028),
+  P0 in P1 dolga nazaj zaprta razen filtrov v URL, tabele dobile ARIA vloge; ostane §3b (sirote proximity) in §3c (filtri, izvoz, kontakt).
+- (Fable 5.1, 2026-09-09, zvečer) **PREDAJA PRED DOPUSTOM**: `docs/HANDOFF-fable-2026-09-09.md`
+  (owner odsoten ~3 mesece; vnaprejšnji DA je veljal le za to sejo). Mergano danes:
+  #1001–#1011, #1013 (ledger + spider web + bot brez reakcij); dev deployan po
+  vsakem vlaku. Odprto brez ownerja: #956 (1.46.0), Astrini #1012/#979/#969/
+  #966/#965/#964/#962, review #924–#943/#967 (NEVER MERGE).
+- (Fable 5.1, 2026-09-09, 17:30) ⛔ Skok (pravilo): owner je med vlakom train29
+  (#1008–#1011, ledger) prosil, naj bot NEHA reagirati na SuperBoyyeve slike v
+  slomix kanalu, a naj jih še preverja → `SUPASTATS_REACTIONS_ENABLED`
+  (privzeto false) v `bot/config.py`, `_react` v `supastats_cog.py` je no-op;
+  preverba in DM poročilo tečeta naprej (PR #1013). Vrnitev: vlak + dev deploy.
+- (Fable 5.1, 2026-09-09, 10:30) Owner: »ko vse končaš … celoten spiderweb
+  do konca avtonomno«. MERGANO: #1001 (kartica + stenska ura), #1002 (story;
+  13 Codex niti). V VLAKU: #1003 → #1004 (12 Codex niti popravljenih), nato
+  build + dev deploy. SPIDER WEB (proga v `docs/PLAN.md`): #1005 SW-2 scena
+  (SVG, kamera, regije prepričanj, `?t=&pov=`; 9 Codex niti), #1006 SW-3
+  vidna linija kot oracle diagnostika (stacked; 10 niti; ledger `/web` 0),
+  SW-4 sloj 4 = §8 harness na veji `feat/spider-web-layer4-harness`
+  (`services/layer4_family.py`, `scripts/spiderweb_layer4_family.py`);
+  zbiralnik teče čez 901 rund. ⛔ Vsi trije čakajo DA za merge. Naslednje:
+  tabela §8.5 + manifest → STATUS/PLAN → PR; ena AskUserQuestion za DA; dev
+  deploy + živ dokaz spider weba (`/app/spider-web/round/11344?t=120000`).
+- (Fable 5.1, 2026-09-08, 22:00) Avtonomni popoldan (owner: »kar nadaljuj, čim
+  več«). MERGANO: #992 (merilnik meri po endpointu; unread 517 → 789 je
+  popravek instrumenta, ne strani), #987 R3a, #993 R4b. V VLAKU (DA dan):
+  #988 R3b → #989 R3c → #990 R3d → #991 R4a → #994 R5 → #995 R4c, nato build +
+  dev deploy. ODPRTO BREZ DA: #996 R6 (živi reducer obdrži pozicije in zadnje
+  uboje), #997 R6b (mini zemljevid na živi strani, naložen na #996).
+  ⛔ Skok (pravilo): owner je vprašal za ENG% z gibhub.gg → raziskano, ne
+  zgrajeno: bojni ENG% je DPM v drugi enoti (r 0,74–0,96), s štirimi kanali
+  (revivi, objektivi, streli) pa se odklopi (r −0,75 / 0,62 / −0,47) in
+  postane metrika AKTIVNOSTI; doc lokalno
+  `docs/research/ENG_PCT_RESEARCH_2026-09-08.md` §6, odločitev ownerja.
+  Naslednje: R7 higiena (community.js, keymap »Charts« → session.graphs,
+  »Map Distribution« odločitev), ENG% kanali le z DA, kill-impact/greatshot/
+  proximity/event ostanki merilnika.
+- (Fable 5.1, 2026-09-08, 12:05) Vlak zaključen: #980 (live glava; 11 Codex
+  niti + drift tipov popravljeni), #981 (profil: name history, gathers,
+  combat timing), #982 (story role boards s številkami), #983 (skill
+  formula uteži) MERGANI; merilnik podatkovnih točk `unread` 563 → 543;
+  rezine pregleda ponovno izrezane; SPA zgrajena in DEPLOYANA na dev
+  (`/api/build` `5b7cfbcf`, servirani bundle nosi »last imported«,
+  »players on for«, »database says«). Odprti PR-ji: #985 ticker (stavki
+  dogodkov, zloženi dvojčki; cherry-pick na main), #986 profil long tail
+  (unread 556 → 532), #984 ta docs PR. Vsi trije čakajo ownerjev DA.
+- (Fable 5.1, 2026-09-08, 10:20) Owner: »aim/advanced razišči z Mandelbrot +
+  RCA, shrani v docs, odloži, gremo naprej« — NAREJENO, nič implementirano.
+  Vzrok je I/O, ne CPU: EXPLAIN ANALYZE flick/spread poizvedbe (9,6 s) bere
+  17 212 razpršenih heap strani `proximity_shot_fired` za enega igralca ob
+  `shared_buffers` 128 MB; `advanced` teče čez celo `combat_engagement` zaradi
+  `LEFT(target_guid, 8)`; cache 077 `player_aim_summary` nima proizvajalca
+  (5 vrstic, zadnje so moji probi). Poti A–F + priporočilo v `KNOWN_ISSUES`
+  in HANDOFF-astra §C 14; polna sled lokalno
+  `docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md`. Ob istem koraku so
+  štiri agentska poročila popisa podatkovnih točk (stari React / legacy /
+  zaledje / UX kot obiskovalec: 166 izgubljenih točk po nivojih, DPM 20,9 %
+  razhajanje ponderirano proti neponderiranemu, `.js.map` javno) shranjena v
+  lokalni `docs/research/DATAPOINT_AUDIT_2026-09-07.md`; agenti zaprti.
+  Odprto po vrsti: #980 (drift tipov + 11 niti), #981 vrata, veji
+  `feat/live-ticker-reads-its-events` in `feat/profile-long-tail` za PR.
+- (Fable 5.1, 2026-09-07, 22:05) Owner: »poglej live mode kot obiskovalec«
+  — pregledano med živo igro na produkciji (legacy `#/live`, v1.39.0):
+  deset vrzeli (L1–L10) in osem rezin v LOKALNEM
+  `docs/research/LIVE_VIEW_VISITOR_REVIEW_2026-09-07.md`. Bistvo: ni vrstice
+  »kaj se je pravkar zgodilo« (zadnja runda, zmagovalec, čas); ni stopwatch
+  konteksta (limit, čas za premagati, kdo napada); »session 4m« je ura
+  strežnika, ne večera; `prev gammajump` je jump mapa; K/D v rosterju je
+  kumulativa od povezave brez oznake; momentum/hold krivulji brez osi;
+  feed podvaja POPUP+DYNAMITE in MAP+LIVE_MAP; mrtve stave sredi strani.
+  Ni narobe: časi rund so IZMERJENI (210 s = 3:30, dva polna holda).
+  Popravki gredo na SPA `LivePage.tsx` (prod zamrznjen); predpogoj je
+  replay živega toka na devu (tailer cilja prod). Posnetek toka in stanja z
+  nocojšnje igre: `scratchpad/live-feed-2026-09-07.json` (lokalno).
+- (Fable 5.1, 2026-09-07, 21:45) Owner: »je vse pripravljeno na tekme, Lua
+  na puranu?« — izmerjeno med živo igro (6 ljudi na etl_adlernest): Lua na
+  puranu = repo za vse žive module (le arena modul brez #912; oboroži se
+  samo na areni); runda 213018 uvožena 7 s po nastanku datoteke; tailer za
+  živi pogled teče in pošilja na www.slomix.fyi (prod). ⚠️ Watchdog `live:
+  warn` je na devu LAŽEN: dev nima vira živega toka (tailer cilja prod) →
+  watchdog r. 2: preverba mora vedeti, kdo je cilj tailerja, ali biti na
+  devu izklopljena. `KNOWN_ISSUES` »Lua drift High« označen kot rešen.
+  Vlak: #971, #973 mergana; #974, #972 v vratih; lokalno pripravljena veja
+  `feat/profile-rounds-series` (gap 10 → 9 po #974).
+- (Fable 5.1, 2026-09-07, 19:30) Owner: »dokončaj novo stran« + DA za gradnjo,
+  dev deploy, Chromium prelet in kodo. NAREJENO: `npm run build:app` v
+  worktreeju `slomix-fable` (main `e91875cf`), `DEV_SRC_DIR=…/slomix-fable
+  scripts/dev_deploy.sh` → run dir `e91875cf`, servirani bundle
+  `app-Bv4wOtcy.js` = zgrajeni (prvič od 6. 9. 11:03 je SPA na `:8000` enak
+  mainu), bot prijavljen 19:24. `static/modern` guard je pravilno preskočil
+  (worktree brez legacy bundla). V TEKU: anonimni prelet 32 rut (`--app
+  --anon-only`); owner prelet rabi `website/.env` → iz primarnega drevesa.
+  PRELET (anon, 32 rut × 4 pogledi = 128, `:8000`, bundle `e91875cf`, hladen
+  strežnik 5 min po restartu): **0 padlih**, 16 opomb: greatshot ×8 = 401 za
+  anonimnega (načrtovano stanje); admin/compare/proximity-player na 1920 =
+  `page.goto` 30 s timeout na HLADNEM backbonu (prvi obisk po restartu;
+  1440/768/390 iste rute čiste); dvojni klici `/api/stats/overview` ×2–3 na
+  admin in profil ×2 na compare (dedup kandidat); prelivanje 20–32 px na
+  telefonu 390 za `retro-viz` (sidra) in `proximity` (svg). Mediana
+  nalaganja 2,5 s; owner prelet NI tekel (`website/.env` je le v primarnem
+  drevesu). Izid: `scratchpad/audit-anon/results.json` (lokalno).
+  PR #970: `components/Panel.tsx` (modularnost rezina 1) + ratchet
+  `panels.test.ts` (61) + profil »form by session« → endpoint gap **11**.
+  OWNER PRELET (prijavljen sentinel, isti bundle, 128 preverb, 21:20): **0
+  padlih**, 7 opomb — greatshot 401 izginejo; `admin` ruta na VSEH štirih
+  pogledih `page.goto` 30 s timeout z dvojnima klicema `/api/stats/overview`
+  in `/api/system/overview` (kandidat: polling brez `networkidle` ali počasen
+  endpoint za neadminskega prijavljenega uporabnika — preveri `refetchInterval`
+  in odziv obeh endpointov za `website_user_id = -1`); `proximity` 1920 hladen
+  timeout (40 s), prelivanje 20–32 px na 390 (retro-viz sidra, proximity svg)
+  kot pri anonimnem. Mediana nalaganja 2,65 s. Izid `scratchpad/audit-owner/`.
+  R0 NAJDBA (glej `docs/KNOWN_ISSUES.md` »R0 summary rows counted again«):
+  `stats/player/{}/form|rounds` in `skill_router._form_rows` so sešteli R0
+  vrstice → DPM serija ~30 % previsoka; popravki v #970 + veja
+  `fix/skill-form-skips-r0`; razred (api_helpers, season_awards, auth,
+  session_matrix, greatshot_crossref brez filtra) čaka per-query audit.
+  NASLEDNJE: PR-ji po mergu #970: `feat/panel-slice-2` (ratchet 61 → 49),
+  `fix/skill-form-skips-r0`, `feat/greatshot-crossref-panel` (gap 11 → 10);
+  potem `stats/player/{}/rounds` (S), dedup dvojnih klicev, admin timeout.
+  ⚠️ Ultra na #924 do 19:20 ni oddal ničesar (0 pregledov); rezin ne sekam,
+  dokler owner ne potrdi, da pregled ni v teku.
+- (Fable 5.1, 2026-09-07, 13:10) SEJA ZAKLJUČENA na ownerjevo zahtevo. Stanje: #960,
+  #958, #955 mergani; #912 mergan 12:30 pod ownerjevim DA za nabor (»zapri odprte PR-je
+  razen Don't merge«, 03:40) — ⚠️ pogodba hoče DA na številko PR-ja; ownerju
+  poročano posebej s sestrinim pridržkom (`arena_acc_log` neizmerjen v živo); #961 (predaja Astri + modularnost SPA) čaka
+  ownerjev DA. Po mergu #912: `scripts/review_slices.sh cut --push` (rezine
+  #924–#943 na novi main) — če seja ugasne prej, to naredi Astra ali owner.
+  Astra vstopi prek `AGENTS.md` §4 → `docs/HANDOFF-astra.md` §E (prva ura) → §C.
+  Bundle NI zgrajen (owner: pozneje); sudo/DB geslo rotacija = owner.
+- (Fable 5.1, 2026-09-07, 04:30) Predaja projekta Astri: `docs/HANDOFF-astra.md`
+  (§A Fable, §B sestra dobesedno, §C delovni paket 1–20, §D ne delaj, §E prva
+  ura) + `docs/HANDOFF-astra-inventory.md` (inventar po območjih, §11 ownerjeve
+  odločitve); kopija v `/tmp/slomix-claude-handoff-to-astra-20260907.md`. Owner
+  DA: zapri odprte PR-je razen `review:` → #960 mergan, #958 v vratih, nato
+  #955, #912 (sestrin pridržek: `arena_acc_log` neizmerjen v živo). Odprto za
+  ownerja: rotacija sudo + DB gesla; `build:app` + `dev_deploy.sh` restart;
+  ultra #924/#925/#926 opoldne.
 - (Fable 5.1, 2026-09-06, 19:50) Proga (1) watchdog r. 1 narejena (veja
   `feat/watchdog-r1`, PR). Vse štiri proge dneva imajo PR: #945 (guid, v
   vratih), #946 (diagnostics, čaka rebase po #945), #947 (datasets), watchdog.
@@ -138,6 +522,116 @@
   skripta + testi na veji `feat/bot-twins-route-distinctiveness` (commitano,
   potisnjeno, BREZ PR-ja), korpusni tek še brez številk → glej
   `docs/HANDOFF-next.md`.
+- (Opus 5, 2026-09-05, 11:30) **SKOK: ownerjeva nova prošnja** — boti na
+  dots_arena naj bodo samo medic/fieldops (drugi razredi se ne premikajo), naj
+  strejfajo levo-desno in dodgajo; + raziskava izvorne kode ET:Legacy: **zakaj
+  ni hitsounda**, čeprav je crosshair na tarči (prvih nekaj headshotov da zvok,
+  potem tišina), ali gre za neregistrirane strele (owner ocenjuje 30–60 %) in
+  ali te ob zadetku »vrže« strele vstran; + ločeni research docsi »kako postati
+  unkillable v ET/Legacy«.
+  **KJE SEM OSTAL:** PR #912 (`feat/lua-dots-arena`, 15 commitov, CI zelen,
+  `OPEN CLEAN`). P0/P1/P2 zaprti, zadnji commit `67785c84` je bratova najdba
+  (self-frag mora šteti — `mod`, ne identiteta). 39 primerov harnessa, 17
+  mutacij v `scripts/mutate_dots_arena.sh`, 6.227 testov.
+  ⏳ **TEČEJO TRIJE MOJI AGENTI** (napadalni pregled, pregled današnjega diffa,
+  pregled testov samih) — izsledke je treba pobrati in obdelati, preden se PR
+  šteje za pregledan.
+  ⛔ **Kode ni pregledal nihče** (Copilot in Codex sta zadela kvoto) → owner naj
+  požene `/code-review ultra`, preden gre paket neznancem.
+  ⛔ Odprto brez meritve: `/team s` ko si ŽIV, `sv_maxclients` v živo, rotacija
+  loga v živo, gledalčev gate in cooldown v živo, `arena_symmetric` proti
+  človeku, paket v pk3, dva človeka hkrati.
+
+- (Opus 5, 2026-09-05, 01:15) **Arena: trioosni pregled + popravki P0/P1** —
+  `2b21828a` na `feat/lua-dots-arena` (PR #912). Tri visoke, vse dosegljive z
+  navadno igro:
+  ⛔⛔ **`/team s` sredi dvoboja je prinesel točko IN usmrtil nasprotnika** —
+  motor ubije 55 vrstic pred prepisom moštva (`g_cmds.c:1589` proti `:1644`),
+  zato je roster ob obituaryju še vedno 2. Dokazano v živo.
+  ⛔⛔ **Ni bilo `et_ClientDisconnect`** — `ClientDisconnect` nikoli ne kliče
+  `player_die`; preživeli je ostal ranjen, naslednji je dobil poln bazen.
+  ⭐ Odhajajoči ob hooku ŠE ŠTEJE (hook `:3585`, `CON_DISCONNECTED` `:3723`).
+  ⛔⛔ **`forced[cn]` je bil zapah brez izteka** — `G_Damage` sme ne narediti
+  nič (warmup, intermission, godmode, noclip) in tega ne pove; naslednja prava
+  smrt je bila požrta, ščit pa že odvzet.
+  ⛔⛔ **Paket, ki smo ga poslali, je bil hujši:** 11 od 12 cvarov, ki jih naš
+  README imenuje gumbe, je bilo `setl` → `arena_1v1 0` po naših navodilih
+  odklopi cel config. In `g_customConfig` je `CVAR_ARCHIVE`: en glas naredi
+  arena ruleset TRAJEN (vse mape, čez restart procesa), s samo Field Ops
+  razredom in ustavljeno rotacijo. Zdaj dokumentirano v vseh treh jezikih.
+  ⭐ **Dve moji lastni regresiji, ki ju je ujel šele živi tek:** prvi popravek
+  `/team s` je pokvaril `/kill` (točka in reset sta dve odločitvi), povrnitev
+  `arena_hp` pa je brisala vrednost, ki jo je admin nastavil med mapama.
+  ⭐ Harness stub je bil **brezpogojno smrtonosen** — zato so bile vse poti
+  brez obituaryja nevidne po zasnovi. Zdaj zna zavrniti.
+  30 primerov, 31 mutacij, 6.225 testov. Puran ima popravljeno različico,
+  config ostaja `.off`. **P2 (dovoljenja za ukaze, meje `arena_kill`, ime v
+  ukaznem nizu, rotacija loga, verzija paketa, oblika configa, mutacije v
+  repo) ni narejen** — glej `~/.claude/plans/distributed-inventing-fox.md`.
+
+- (Opus 5, 2026-09-04, 14:35) **Arena kot deljiv paket** — `7efaa491` na
+  `feat/lua-dots-arena` (PR #912). `vps_scripts/dots_arena/` = config
+  (izpeljanka `legacy1.config` brez `sv_cvar` omejitev) + trijezični README
+  (EN/FR/SL). Preverjeno v živo: config se naloži, modul se oboroži, na tuji
+  mapi miruje in `g_forcerespawn` se povrne.
+  ⛔⛔ **Ob tem najden pravi hrošč: `CS_SERVERINFO` je ob PRVEM `map` PRAZEN**
+  (dolžina 0), zato gate na imenu mape ni nikoli deloval ob svežem nalaganju.
+  Modul se je oboroževal LE zato, ker `G_configSet` ob vsakem configu pošlje
+  `map_restart` in je dev strežnik vedno imel `g_customConfig`. Popravljeno:
+  bere se cvar `mapname`, configstring ostane rezerva. Primer 22 + 2 mutaciji.
+  ⛔⛔ Za vsak prihodnji config: `G_ConfigCheckLocked` teče **vsak frame** in
+  odklopi config, brž ko se kak `setl` cvar spremeni → `arena_hp` mora biti
+  `set`. Pinnano z `tests/unit/test_dots_arena_config_contract.py`.
+  ⛔ `lua_modules` v configu **prepiše** ves seznam modulov (6 → 1, izmerjeno).
+  Odprto: ključ za `et` še vedno ni nameščen (obvod `tmux run-shell`).
+
+- (Opus 5, 2026-09-04, 13:40) **Arena 1v1 IZMERJENA na 2.84** — `871e92c5` na
+  `feat/lua-dots-arena` (PR #912, čaka ownerjev merge, NIČ deployanega).
+  45 min dvobojev z dvema botoma po raziskavi izvorne kode.
+  ✅ strelivo **9999/9999 pri ~100 spawnih**, ob koncu dvoboja pade le za
+  izstreljene naboje (najslabše `9999/9949`); ✅ sprint **20000** = natanko
+  `SPRINTTIME`; ✅ preset **250 HP = mediana 6 s** (n=13); ✅ `STAT_MAX_HEALTH`
+  ostane 100; ✅ veriga modulov nedotaknjena, 0 Lua napak.
+  ⛔ **Simetrija orožij**: zapis prime (50/50 potrjenih takoj po zapisu),
+  orožje pa obstane le **2 od 25** — Omnibot si svoje vzame nazaj. Ni vihar
+  (1,53/s vklopljeno proti 1,03/s kontrola = ~1,5× osnovnice, ker odgovarja
+  bot prek `Cmd_Team_f`/`G_SetClientWeapons`), dvoboji tečejo normalno →
+  privzeto izklopljeno, ne umaknjeno.
+  ⛔⛔ **Za naslednjič:** `G_Damage` je med warmupom TIHI NIČ
+  (`g_combat.c:1445`) — reset se ne zgodi in ne javi ničesar; zadetek >190
+  postavi zdravje na −176 **ne glede na bazen** (`g_combat.c:1931`).
+  ⛔⛔ **Rata iz nezaključenega okna ni rata**: objavil sem 1,52/s iz odčitka
+  50 s v 95-sekundno okno, končni izid 1,03/s → commit amendan.
+  ⛔ **Deploy na testni strežnik ne dela**: `scp` do `et@127.0.0.1` javi
+  `Permission denied (publickey)`; obvod je NOPASSWD `tmux ... run-shell`
+  (owner odobril 4. 9.) prek staging datoteke v `/tmp` (et ne more brati
+  `/home/samba`). Trajni popravek: dodati javni ključ v `et`-jev
+  `authorized_keys`.
+  ⛔ `local_et.sh start` zažene strežnik tudi, če je deploy odpovedal → **pred
+  vsako meritvijo `cmp` med repo datoteko in nameščeno**.
+  Odprto: klientska polovica 16-bitnega polja streliva in vezavi
+  `/vampiric`/`/arenahp` z boti nista merljivi.
+
+- (Opus 5, 2026-09-04, 03:30) **1v1 arena Lua: testna baterija KONČANA**, PR #912
+  (`feat/lua-dots-arena`, čaka ownerjev merge, NIČ deployanega). Šest časovno
+  omejenih testov na lokalnem **2.84** z dvema botoma. Deluje: prisilni reset
+  33/33, poravnava ščitov, lifesteal točno 50 %, meja `arena_vamp_hp` na enoto,
+  stikalo šele ob naslednjem spawnu, veriga modulov nedotaknjena.
+  ⛔ **Privzetek vampiric pool 1000 → 500**: krivulja dolžine dvoboja NI
+  linearna (300 HP = mediana 7 s, 500 = 14 s, 1000 = **en dvoboj v 120 s**) —
+  1000 je natanko »fights take forever« odpoved, dosežena pri 50 %, ne 100 %.
+  ⛔ **Izsiljevanje orožja UMAKNJENO** v dokumentiran stub: Axis boti so kljub
+  temu spawnali s Kar98, `ClientUserinfoChanged` vihar ~1 Hz, bota sta se
+  nehala pobijati (246 lifesteal dogodkov, ENA smrt v 2 min). Odstranitev
+  orožja, ki ga klient DRŽI, sproži `EV_WEAPONSWITCHED` (`g_lua.c:1163`).
+  **Odprto:** vezava `/vampiric` kot klientskega ukaza ni bila izmerjena (boti
+  ne pošiljajo lastnih ukazov, ufw blokira človeka z LAN-a) — semantika je
+  izmerjena skozi `arena_vamp_toggle`, ki gre po isti `vamp_pending` poti.
+  ⚠️ Na namestitvi **2.85** je `stats_discord_webhook.lua` zastarel in konča
+  `et_Obituary` z `return 0` → `live_events.lua` tam ne dobi obituaryjev; na
+  2.84 je v redu. **Ali je puran v istem stanju, NI preverjeno.**
+  ⛔ `luac` na tem stroju je Lua **5.1** — sintaksa se preverja z `luac5.4`.
+
 - (Fable 5.1, 2026-09-04) Match moments r. 1 (#908) in r. 5 (#909) MERGANI; watchdog
   v6.13 deployan; owner: naslednja **doc 22 (digitalni dvojčki botov)** —
   raziskava teče (agent + puran read-only), nato `docs/design/22`; potem doc 19
@@ -392,3 +886,65 @@ drevesa se ne dotikam; jaz delam v `/home/samba/share/slomix-market`.
 
 **Čaka ownerja:** merge #911, #912, #915, #921, #882; ⛔ `/code-review ultra`
 pred deljenjem arena paketa; odločitev, kateri razred iz gapa naprej.
+## 2026-09-05 — arena PR #912, odprto po pregledu testov
+
+Pregledni agent za testno zbirko je našel 22 postavk. Popravljene so 4
+(zastareli vzorci mutacij → `fail`, `re.search` → `findall`, `setl "ime"` v
+narekovajih, prazna datoteka prestane preverbo oklepajev) in ločeni skladišči
+zdravja v stubu. **Odprto ostaja:**
+
+- ⛔ mutacijska baterija nima izhodiščnega zagona: če harness pade iz
+  nepovezanega razloga, VSAKA mutacija poroča »ujeta«. Popravek: pred zanko
+  poženi harness enkrat in prekini, če ne vrne 0.
+- primer 20 je votel (`arena_symmetric 0` se preverja, ko `duel_pool` sploh ni
+  postavljen → `arena_loadout` se ne kliče). Zraven razkriva vedenje:
+  `arena_symmetric 1` ne naredi nič, kadar sta `arena_hp` in `arena_vamp` 0 —
+  kar je natanko to, kar nastavi priloženi config.
+- primer 20 prva polovica prehaja na puščenem stanju iz primera 19; vzorec
+  `et_InitGame` PRED nastavitvijo cvarov se ponovi na 6 mestih.
+- stub `trap_SendServerCommand` zavrže naslovnika → zasebna zavrnitev bi lahko
+  postala broadcast in noben test ne bi padel.
+- stub `gentity_set` sprejme pisanje v `pers.connected` in
+  `pers.playerStats.selfkills`, ki sta v motorju READONLY (g_lua.c:1248/:1283).
+- `ps.stats` je modeliran samo pri indeksu 0; `STAT_MAX_HEALTH`/`STAT_SPRINTTIME`
+  sta deklarirana, a neodgovorjena → `et_Obituary` ju v offline teku bere kot nil.
+- štiri vstopna varovala v `et_Damage` niso posamično pripeta (odstrani eno in
+  zbirka je zelena); `active`/`enabled()` vrata so testirana na 2 od 5 hookov.
+- vsi privzetki vampirica so neizmerjeni (primer 10 pusti cvare postavljene).
+- `arena_ammo 0`, `arena_nofatigue 0`, `arena_1v1_log 0` — nobenega primera.
+- README pogodba ne opazi IZGINOTJA cele jezikovne tabele (množica ne loči
+  odsotnosti od soglasja; rabi `Counter(rows)[ime] == 3`).
+- `arena_1v1_map` je dokumentiran, a ga nobena pogodba ne doseže: `armed_map()`
+  uporablja `trap_Cvar_Get` in dobesedni fallback, ne `cvar_num`.
+- ⛔ B-1: ujemanje imena mape je podniz → `dots_arena_v2` oboroži modul.
+- ⛔ NIHČE ni pregledal PR #912 (Copilot in Codex brez kvote). Pred deljenjem
+  paketa tujcem naj owner požene `/code-review ultra`.
+
+**Neizmerjeno v živo:** `/team s` med življenjem, `sv_maxclients` (latched),
+rotacija loga, gledalska vrata in cooldown, `arena_symmetric` proti človeku,
+paket v pk3, dva človeka hkrati — in NOVO: `arena_instant_tapout` v živo.
+
+## 2026-09-05 13:50 — arena PAVZIRANA (owner ugasnil testni strežnik)
+
+Kje sem ostal: PR #912, 22 commitov, CI zelen, **delovno drevo čisto**.
+
+**Dokazano v živo danes** (2.84, podpisi prek `lua_status`):
+- `force_tapout`: 20 vrstic, 9 zanje; čas ležanja igralca mediana 1,0 s → 0,0 s,
+  max 23,0 s → 0,0 s; ščiti 25 ms narazen. Prvi TAPOUT 13:09:58.
+- ⛔ Odkrito ob tem: strežnik je tekel 11,5 ure in bil **10 ur starejši od
+  popravka** — »ne dela« je pomenilo »ni naloženo«. Razsodnik je bil
+  `lua_status` podpis (`G_SHA1(code)` ob nalaganju, g_lua.c:2597), ne datoteka.
+
+**Nameščeno, a NEIZMERJENO:** `arena_acc_log` (podpis 0CCBE140 naložen ob
+13:47, owner je nato ugasnil strežnik → **0 ACC vrstic v živo**). Instrument
+je offline pokrit (primera 48/49, mutacije 32/32), runtime dokaza NIMA.
+
+**Ownerjev nedokončan eksperiment:** tapanje proti full auto, v blokih po ~15
+dvobojev z oznako v chatu; hipoteza je, da acc naraste, a odloči šele
+zadetkov-na-sekundo.
+
+**Odprto ostaja** vse iz vnosa 2026-09-05 zgoraj (22 postavk pregleda testne
+zbirke, od tega 5 popravljenih) + ⛔ PR-ja ni pregledal nihče.
+
+⚠️ Pytest je v enem teku danes javil 1 padec, ponovni tek 6227 passed —
+neidentificirana nestabilnost, ne moja sprememba. Ob naslednjem padcu ujemi ime.

@@ -121,3 +121,43 @@ def test_empty_players_defaults_to_valid_nonbot():
     v = derive_round_validity({}, "supply", set())
     assert v["is_bot_round"] is False
     assert v["is_valid"] is True
+
+
+# ── one default, two readers ────────────────────────────────────────────────
+
+
+def test_the_arena_is_excluded_by_default():
+    """dots_arena is a duel drill with forced resets, not a match: its kills,
+    deaths and playtime describe the loop rather than a game. Owner's decision
+    2026-09-04 — arena rounds do not enter stats at all."""
+    from bot.core.round_contract import DEFAULT_EXCLUDED_MAPS
+
+    assert "dots_arena" in DEFAULT_EXCLUDED_MAPS
+    parsed = {
+        "players": [_human("vid", "AAAA1111"), _human("olz", "BBBB2222")],
+        "bot_player_count": 0,
+        "human_player_count": 2,
+        "is_bot_round": False,
+    }
+    v = derive_round_validity(parsed, "dots_arena", DEFAULT_EXCLUDED_MAPS)
+    assert v["is_valid"] is False, (
+        "an arena round with only humans must still be invalid — the bot rule "
+        "cannot carry this one, because a 1v1 has no bots in it")
+
+
+def test_both_readers_of_the_default_share_one_definition():
+    """⛔ The default lived as a literal in bot/config.py AND in
+    scripts/backfill_rounds_is_valid.py. Two copies of "which maps do not
+    count" is how an importer and a backfill end up disagreeing about the same
+    round, silently and in opposite directions."""
+    import re
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    for path in ("bot/config.py", "scripts/backfill_rounds_is_valid.py"):
+        text = (repo / path).read_text(encoding="utf-8")
+        assert "DEFAULT_EXCLUDED_MAPS" in text, f"{path} does not read the shared default"
+        stray = re.findall(r'["\']mp_sillyctf["\']', text)
+        assert not stray, (
+            f"{path} still hardcodes a filler map name ({stray}) — add it to "
+            f"DEFAULT_EXCLUDED_MAPS in bot/core/round_contract.py instead")

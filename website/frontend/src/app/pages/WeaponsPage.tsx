@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { useUrlState } from '../lib/urlState';
 import { hasFailed } from '../lib/responseStatus';
 import { useWeapons, useWeaponsByPlayer, useWeaponsHof } from '../lib/queries';
 import type { WeaponPeriod } from '../lib/queries';
 import type { WeaponRow } from '../lib/types';
-import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable, figure } from '../components/ui';
 
 /**
  * Weapons (docs/design/12 row 6) — legacy matches.js weapons view carried
@@ -129,7 +130,7 @@ function MasteryGrid({ period }: { period: WeaponPeriod }) {
   const players = byPlayer.data?.players ?? [];
   return (
     <div data-parity="weapons.mastery" style={{ marginTop: 'var(--space-6)' }}>
-      <SectionHead label="player weapon mastery · top 4 weapons each" />
+      <SectionHead label="player weapon mastery · top 4 weapons each" aside={byPlayer.data?.player_count != null ? <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{figure(byPlayer.data.player_count)} players shown</Lbl> : undefined} />
       {byPlayer.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="mastery" /></div>}
       {byPlayer.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="mastery" /></div>}
       {byPlayer.isSuccess && players.length === 0 && (
@@ -163,8 +164,8 @@ function MasteryGrid({ period }: { period: WeaponPeriod }) {
 }
 
 export function WeaponsPage() {
-  const [period, setPeriod] = useState<WeaponPeriod>('all');
-  const [category, setCategory] = useState('all');
+  const [period, setPeriod] = useUrlState<WeaponPeriod>('period', 'all', PERIODS);
+  const [category, setCategory] = useUrlState<string>('category', 'all');
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>weapons · what the kills were made with</Lbl>

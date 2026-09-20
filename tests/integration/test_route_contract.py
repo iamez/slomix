@@ -144,12 +144,16 @@ def _normalise_call(raw: str, glued: bool = False) -> tuple[str, bool]:
     path = _API_BASE_PREFIX + _INTERPOLATION_RE.sub("{}", raw).rstrip("/")
     if glued:
         return path, True
-    if path.endswith("/{}"):
-        # Nothing is known behind the last interpolation. Strip every trailing
-        # one and report a prefix — the old behaviour, still correct here.
-        while path.endswith("/{}"):
-            path = path[: -len("/{}")]
-        return path, True
+    # ⛔ A call that ENDS in an interpolated segment is NOT a prefix either
+    # (2026-09-08). `${API_BASE}/stats/matches/${id}` is one more segment than
+    # the list endpoint, and the two are different operations; reporting the
+    # prefix `/api/stats/matches` let the new app's LIST call clear the match
+    # detail nobody built. Measured 2026-09-07: three shapes hidden that way
+    # (`/stats/matches/{}`, `/sessions/{}`, `/uploads/resumable/{}`), the same
+    # class as the mid-path truncation fixed on 2026-09-05, from the other
+    # end of the path. The segment count IS known — one parameter — so the
+    # shape is exact: `/api/stats/matches/{}`, which a spec template
+    # (`/api/stats/matches/{match_id}`) instantiates and a list call does not.
     return path, False
 
 # Matches a hardcoded `/api/...` literal wherever it appears — covers call

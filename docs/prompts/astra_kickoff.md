@@ -19,7 +19,10 @@ service or touch the game server; never `git add -A`; nothing secret or raw
 into the public repo; never type into other agents' terminals; the box has
 2 GB RAM and only the owner's `:8000` runs unasked.
 
-**Hour one is read-only.** In this order: `docs/HANDOFF-next.md` →
+**Hour one is read-only.** In this order: `docs/HANDOFF-astra.md` (the
+full-project handoff of 2026-09-07: §C is your work package, §D the do-nots
+with reasons) → `docs/HANDOFF-astra-inventory.md` (every open item with size,
+source, dependency and proof; §11 the owner decisions) → `docs/HANDOFF-next.md` →
 `docs/PLAN.md` → `docs/BACKLOG.md` (first screen) → `docs/KNOWN_ISSUES.md`
 (headings) → `docs/process/MANDELBROT_RCA.md` → `docs/REVIEW_GUIDE.md` →
 `docs/AGENT_LOG.md` → `docs/SPIDERWEB_STATUS.md`. Then, still read-only:
@@ -32,7 +35,8 @@ propose in priority order with the risk of each, and the questions you
 genuinely cannot resolve from the documents (options, one decision at a
 time, your recommendation marked). Wait for the owner's pick.
 
-**Order of work** (owner, 2026-09-06): (1) triage and fix the findings of the
+**Order of work** (owner, 2026-09-06; expanded to twenty items in
+`docs/HANDOFF-astra.md` §C on 2026-09-07 — that list wins where they differ): (1) triage and fix the findings of the
 ultra code reviews — each review is a `review:` PR that is never merged;
 findings arrive as PR comments or from the owner; classify every finding by
 the 12-point checklist item, verify it by measurement before fixing, and
@@ -68,7 +72,7 @@ branch, and tell the owner the PR number and what it needs from them.
 
 ## Short form (later sessions)
 
-Read `docs/HANDOFF-next.md`, `docs/BACKLOG.md` (first screen) and
+Read `docs/HANDOFF-astra.md` §C (strike-through = done), `docs/HANDOFF-next.md`, `docs/BACKLOG.md` (first screen) and
 `docs/AGENT_LOG.md` (top entries). Then `git status`, `gh pr list`,
 `free -m`. Continue the slice named in HANDOFF §2 under the loop in
 `docs/process/MANDELBROT_RCA.md`; proofs in the PR body; wait for the owner

@@ -90,6 +90,10 @@ const TRADE_COLUMNS: readonly DataColumn<TradeRow>[] = [
   { key: 'missed', label: 'missed', title: 'opportunities with no attempt', width: 56, sortValue: (r) => r.trade_missed },
   { key: 'isolation', label: 'isolation deaths', title: 'deaths with no teammate in range to trade', width: 100, sortValue: (r) => r.isolation_deaths },
   { key: 'avenged', label: 'avenged', title: 'own deaths a teammate traded', width: 62, sortValue: (r) => r.avenged_count },
+  { key: 'avenge_tries', label: 'avenge tries', title: 'times this player went after the killer of a teammate — the attempt, whether or not it landed', width: 84,
+    sortValue: (r) => r.avenger_attempt_events },
+  { key: 'avenge_dmg', label: 'avenge dmg', title: 'damage dealt in those attempts; 0 with attempts means they engaged and missed', width: 84,
+    sortValue: (r) => r.avenger_attempt_damage, format: (r) => figure(Math.round(r.avenger_attempt_damage)) },
 ];
 
 export function TeamplayTab({ gsid, sessionDate }: { gsid: number; sessionDate: string }) {

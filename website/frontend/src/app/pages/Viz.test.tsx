@@ -162,6 +162,10 @@ describe('WeaponsPage', () => {
     // never render as '16,148k'.
     expect(screen.getByText('16,148')).toBeInTheDocument();
     expect(screen.queryByText('16,148k')).toBeNull();
+    // player_count from the same response (recorded 25).
+    // player_count counts the TRUNCATED list (records_weapons.py:567-575), so
+    // the label says "shown", not "in the period" (Codex on #1026).
+    expect(screen.getByText('25 players shown')).toBeInTheDocument();
     // Category filter narrows client-side; the share text stays global.
     fireEvent.click(screen.getByRole('button', { name: 'smg' }));
     // The grid heading counts the filtered rows (smg = mp40/thompson/sten);
@@ -297,6 +301,10 @@ describe('RetroViz', () => {
     for (const opt of screen.getAllByRole('option')) {
       expect(opt.textContent).not.toMatch(/match summary/i);
     }
+    // The damage table also carries assists, self kills and xp (ledger 2026-09-09).
+    await waitFor(() => expect(screen.getByTitle('kill assists')).toBeInTheDocument());
+    expect(screen.getByTitle('self kills')).toBeInTheDocument();
+    expect(screen.getByText('xp')).toBeInTheDocument();
     // Recorded round 11277: supply R1, winner_team 2 = Allies.
     await waitFor(() => expect(screen.getByText('Allies')).toBeInTheDocument());
     expect(screen.getByText('11:54')).toBeInTheDocument();

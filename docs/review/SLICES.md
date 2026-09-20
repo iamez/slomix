@@ -15,15 +15,38 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 18 files, 5312 changed lines (limit 500 / 8 000).
+Size at cut time: 13 files, 4505 changed lines (limit 500 / 8 000).
 
-**Area: proximity capture (Lua v6.14), parser, storytelling/moments services, the spider-web layer 1 and replay.**
+**Area: proximity capture (the tracker Lua v6.14 under `proximity/lua`), parser, storytelling/moments services, the spider-web layer 1 and replay.** The other server-side Lua modules (`vps_scripts/`) are slice 01b.
 Context: `docs/SPIDERWEB_STATUS.md`, `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md` §4–§8, `docs/design/17_PROXIMITY_POPIS.md`.
 - `proximity/lua/proximity_tracker.lua`: the damage hook fires at the top of `G_Damage` (pre-hit health, every entity incl. `script_mover`); the frame-health section (`FM wall / self`); `recordVehicleDamage`; the unified start-state gate. Look for work on the frame path that could stall the server (the sweep in `stats_discord_webhook.lua` is a known one).
 - `proximity/parser/parser.py`: R2 differential is never recomputed; `first/last_escort_time`; `VehicleDestroyed`.
 - `website/backend/services/round_web_service.py`: life resolution (§4.3, half-open death boundary), staleness measured from `t` not from death, `derive_velocity`/`build_edges` z-axis, the empty-round shortcut returning every key, clock-quality verdicts.
 - `website/backend/services/storytelling/*`: camp episodes, escort mover detector thresholds (from measurement, control ≈ 21 %), kill impact; `advanced_metrics.py` must not weight stats artificially.
 - Migrations 078–082 touched by this area are immutable; judge the code that reads them.
+
+## 01b-lua-modules
+
+**Review vehicle — NEVER MERGE.** Production runs v1.39.0; this PR's diff is
+exactly what changed in *lua modules* since then. The base branch is `main` with
+these paths put back to their v1.39.0 state (`scripts/review_slices.sh`), so
+the checkout you review in is the full current repository while the diff
+stays under the review size limit.
+
+Read `docs/REVIEW_GUIDE.md` first: it lists the conventions that look like
+bugs and are deliberate, the items already known to be open, and how proofs
+are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
+please tag each with the checklist item it belongs to (1–12).
+
+Size at cut time: 10 files, 3589 changed lines (limit 500 / 8 000).
+
+**Area: the server-side Lua modules under `vps_scripts/` (everything except the proximity tracker): `stats_discord_webhook.lua` (round-end webhook, pending-retry sweep), `c0rnp0rn8.lua` stats writer (useful-kills and assist counters are OURS, not the engine's), live events / frame-health instrumentation (v6.13 `FM wall/self`), the 1v1 arena module (#912: `force_tapout`, lifesteal, `arena_acc_log` — installed, NOT yet measured live), and the deploy/status helpers.**
+Context: `docs/GAMESERVER_CLAUDE.md`, `docs/GAMESERVER_LIVE_LUA_MAP.md` (claims 4 modules; 6 are live), `docs/AGENT_LOG.md` entries on `G_Damage` order and `CS_SERVERINFO` being empty on the first `map`.
+- Anything on the frame path that can stall the server: `os.execute`/`io.popen` in the webhook sweep runs on `os.time()` through pauses and at 0 players; `trap_FS_Write` bursts at round end.
+- `et_Damage`/`G_Damage` semantics: the hook runs BEFORE health is subtracted; `DAMAGE_NO_PROTECTION` does not bypass godmode; `MOD_SUICIDE` is 33 live; `victim == killer` also catches your own grenade.
+- Config traps: `setl` cvars in a shared config, `lua_modules` in a config REPLACES the whole list, `G_ConfigCheckLocked` unloads on cvar change.
+- Stats writer: `topshots[15]` useful kills = victim had ≥ limbo/2 ahead; assists are a 1 500 ms window with a MOD filter (two counters disagree on 40 of 1 005 rounds).
+- Do not judge by the deployed copy on the game server: repo and server differ (`KNOWN_ISSUES.md` "Lua drift"); review the repo.
 
 ## 02-backend-routers
 
@@ -38,7 +61,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 33 files, 6628 changed lines (limit 500 / 8 000).
+Size at cut time: 33 files, 6779 changed lines (limit 500 / 8 000).
 
 **Area: FastAPI routers (except proximity/storytelling/replay).**
 - The `response_model` layer added in phase 2–4 (220 handlers still untyped are listed in `tests/data/response_model_gap.txt`; the file is a ratchet). Typed handlers must not drop fields the legacy JS reads — `docs/parity/keymap.json` is the map.
@@ -61,7 +84,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 11 files, 7695 changed lines (limit 500 / 8 000).
+Size at cut time: 11 files, 7760 changed lines (limit 500 / 8 000).
 
 **Area: the new SPA's data layer — `src/app/lib` (queries, types, api client, formatting, wrapped card).**
 Context: `docs/design/06_ARHITEKTURA.md`, `09_KAKO_DOKAZEMO_PARITETO.md`.
@@ -84,7 +107,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 21 files, 3613 changed lines (limit 500 / 8 000).
+Size at cut time: 21 files, 3668 changed lines (limit 500 / 8 000).
 
 **Area: the SPA shell — components, layout primitives, routes, main entry, CSS tokens.**
 Context: `docs/design/11` (local) is summarised in `website/frontend/AGENTS.md`.
@@ -107,7 +130,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 20 files, 7369 changed lines (limit 500 / 8 000).
+Size at cut time: 20 files, 7406 changed lines (limit 500 / 8 000).
 
 **Area: SPA pages — home, players, leaderboards, records, rivalries, matchups, team comparison, compare, wrapped, about/admin, awards, maps.**
 Context: `docs/design/12_PRESLIKAVA_ROUT.md`, `docs/parity/keymap.json` (`data-parity` keys).
@@ -194,7 +217,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 45 files, 3942 changed lines (limit 500 / 8 000).
+Size at cut time: 47 files, 4020 changed lines (limit 500 / 8 000).
 
 **Area: legacy JS (production frontend), Discord bot changes, migrations 078–082, tools, CI workflows, install/deploy scripts, root files.**
 - Legacy JS gets fixes only (design decision 2026-08-23); `fetchJSON` throws on any non-2xx.
@@ -253,7 +276,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 25 files, 6798 changed lines (limit 500 / 8 000).
+Size at cut time: 25 files, 6828 changed lines (limit 500 / 8 000).
 
 **Area: SPA page tests and fixtures.**
 - A test must be able to SEE its subject: count carriers, not `x in text`; fixtures are recordings (union of shapes); a fixture cannot fail on a value it does not contain — look for tests that pass on an empty collection.
@@ -272,7 +295,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 21 files, 2479 changed lines (limit 500 / 8 000).
+Size at cut time: 22 files, 2589 changed lines (limit 500 / 8 000).
 
 **Area: SPA lib/component tests, vocabulary/token/route/fixture-coverage ratchets.**
 - Ratchets use `toBe` on a budget, never `toBeLessThanOrEqual`; the budget only goes down.
@@ -292,7 +315,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 23 files, 6743 changed lines (limit 500 / 8 000).
+Size at cut time: 25 files, 6842 changed lines (limit 500 / 8 000).
 
 **Area: scripts a–l (audits, backtests, build tools, e2e sentinel, health check, frame-health report).**
 - `audit_website_browser.mjs`: SPA-aware dead-state detection, sample params, page-closed-after-timeout hardening.
@@ -313,7 +336,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 21 files, 5263 changed lines (limit 500 / 8 000).
+Size at cut time: 23 files, 5646 changed lines (limit 500 / 8 000).
 
 **Area: scripts m–z (record_api_corpus, repair_playtime, route audit list, validation family, review_slices, twins generator).**
 - `validation_family.py`: shared draws for family-wise claims; `nan` comparisons must not pass silently.
@@ -333,7 +356,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 20 files, 2769 changed lines (limit 500 / 8 000).
+Size at cut time: 21 files, 4113 changed lines (limit 500 / 8 000).
 
 **Area: integration, Lua, smoke and data tests (everything under `tests/` except `tests/unit`).**
 - `test_endpoint_gap.py`: the extractor must not count a truncated prefix as covered; templated writes must not register their prefix.
@@ -352,7 +375,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 27 files, 5048 changed lines (limit 500 / 8 000).
+Size at cut time: 29 files, 5434 changed lines (limit 500 / 8 000).
 
 **Area: unit tests a–h.**
 - Look for tests that cannot see their subject (grep-shaped assertions), controls that never fail, and `pytest` fixtures that mask a DB outage as empty data.
@@ -370,7 +393,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 17 files, 7315 changed lines (limit 500 / 8 000).
+Size at cut time: 17 files, 7387 changed lines (limit 500 / 8 000).
 
 **Area: unit tests i–o.**
 - Same lens as 17: a guarantee check must not be able to CAUSE the failure it detects (the empty-collection case); mutation evidence per guard.
@@ -388,7 +411,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 27 files, 7674 changed lines (limit 500 / 8 000).
+Size at cut time: 30 files, 7928 changed lines (limit 500 / 8 000).
 
 **Area: unit tests p–r (parity keymap, pre-push secret guard, proximity, response models, round time).**
 - `test_pre_push_secret_guard.py` fixtures document the four credential shapes the hook still misses.
@@ -407,7 +430,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 28 files, 5665 changed lines (limit 500 / 8 000).
+Size at cut time: 28 files, 5679 changed lines (limit 500 / 8 000).
 
 **Area: unit tests s–z and non-test helpers under `tests/unit`.**
 - Session scoring, skill rating, storytelling, time fields, twins, upload validation. Same lens as 17.
