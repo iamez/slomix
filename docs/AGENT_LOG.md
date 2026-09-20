@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · A recovered manifest and its payload are separate observations.**
+  Reader distinguishes missing manifest from missing payload and content conflict.
+  Duplicate JSON keys, unsafe paths, malformed content and concurrent replacement
+  must raise, never appear absent. A complete receipt recovered after directory
+  sync failure can match bytes but still does not authorize source deletion.
+
 - **2026-09-20 · A receipt must accept every supported producer basename.**
   Lua accepted240-byte names while manifest publishing capped200, stranding valid
   captures. Aligned240 and tested actual filesystem publication at200/201/240,
