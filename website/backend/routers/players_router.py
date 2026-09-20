@@ -1841,6 +1841,11 @@ async def get_player_form(
 ):
     """
     Get player's recent form - session DPM (aggregated per gaming session).
+
+    R1/R2 only: the importer still writes a round_number = 0 "summary" row per
+    map whose damage is the two halves added again (docs/CLAUDE.md). Measured
+    2026-09-07 for one regular: 26 R0 rows carried 96,970 damage against
+    99,536 across their 56 R1+R2 rows, so this series was ~1.9x too high.
     """
     player_guid = await resolve_player_guid(db, player_name)
     use_guid = player_guid is not None
@@ -1858,6 +1863,7 @@ async def get_player_form(
         FROM player_comprehensive_stats p
         JOIN rounds r ON p.round_id = r.id
         WHERE p.player_guid = $1
+        AND p.round_number IN (1, 2)
         AND p.time_played_seconds > 0
         AND r.gaming_session_id IS NOT NULL
         GROUP BY r.gaming_session_id
@@ -1940,6 +1946,7 @@ async def get_player_rounds(
             p.time_played_seconds
         FROM player_comprehensive_stats p
         WHERE p.player_guid = $1
+        AND p.round_number IN (1, 2)
         AND p.time_played_seconds > 60
         ORDER BY p.round_date DESC, p.round_id DESC
         LIMIT $2

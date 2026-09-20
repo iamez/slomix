@@ -1,5 +1,11 @@
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
+> **10. 9. 2026: novejša predaja je `docs/HANDOFF-fable-2026-09-10.md`** (9. 9. je posnetek tistega večera)
+>
+> **9. 9. 2026: `docs/HANDOFF-fable-2026-09-09.md`** (owner odsoten ~3 mesece; spider web
+> zaključen, merilnik podatkovnih točk 583 → 238, bot brez reakcij na Supove slike). Začni tam; ta datoteka ostaja
+> kot posnetek stanja 6. 9. in pravil.
+
 Vstopna točka za avtonomnega agenta. Vir resnice za načrt je `docs/PLAN.md`,
 pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
 KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
@@ -75,7 +81,7 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
    proximity+spiderweb+Lua) → **#925** (02 backend routerji) → **#926** (03 SPA
    lib); ostali #927–#943 po dnevih (odprti 6. 9. kot draft). ⛔ Stara baza `19c61847` je bila hash iz PRE-prepisne zgodovine
    (pravi #802 merge = `87a7063d`); veja izbrisana.
-3. **Astra (Codex CLI, od 7. 9.)**: vstop = `AGENTS.md` (Codex ga naloži sam;
+3. **Astra (Codex CLI, od 7. 9.)**: **predaja celotnega projekta = `docs/HANDOFF-astra.md` (§C delovni paket, §D ne delaj) + `docs/HANDOFF-astra-inventory.md`** (7. 9.); vstop = `AGENTS.md` (Codex ga naloži sam;
    preveri s `codex debug prompt-input "ping"`), kickoff
    `docs/prompts/astra_kickoff.md`, zanka `docs/process/MANDELBROT_RCA.md`,
    dnevnik `docs/AGENT_LOG.md`. Vrstni red (owner): triaža najdb ultra →

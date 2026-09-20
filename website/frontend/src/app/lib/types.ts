@@ -16,6 +16,9 @@ export interface LiveRosterMember {
     kills: number; deaths: number; damage: number;
     dpm: number | null; alive: boolean;
   };
+  /** Last known position (map plane) and facing, when a LIVE_MOVEMENT
+   *  sample is under a minute old (reducer since 2026-09-08). */
+  pos?: { x: number; y: number; yaw: number | null; age_seconds: number };
 }
 
 export interface LiveState {
@@ -31,6 +34,38 @@ export interface LiveState {
   map_age_seconds?: number | null;
   round_number: number | null;
   round_elapsed_seconds: number | null;
+  /** Stopwatch context from the reducer (2026-09-07), read defensively
+   * until the snapshot is re-frozen: the side that attacks on this map
+   * (constant across the two halves), how the last half ended, and the
+   * time the second half must beat. */
+  /** Returned by the reducer since 2026-08; typed on 2026-09-08 when the
+   * live page started reading them (ledger). */
+  previous_map?: string | null;
+  session_start_seconds?: number | null;
+  recent_objectives?: { type: string; team: string | null; verb: string; player: string | null; objective: string | null; at?: number }[];
+  recent_roster_changes?: { name: string; action: string; side: string | null; age_seconds: number }[];
+  /** The last kills of the half with both positions on the map plane
+   *  (reducer since 2026-09-08; the tracker sent them all along) — a mini
+   *  map draws from these later. Empty between rounds. */
+  recent_kills?: {
+    killer_slot: number | null; victim_slot: number | null;
+    killer: string | null; victim: string | null;
+    killer_pos: { x: number; y: number } | null; victim_pos: { x: number; y: number } | null;
+    distance: number | null; killer_health: number | null; mod_id: number | null;
+    age_seconds: number;
+  }[];
+  attacking_side?: 'axis' | 'allies' | null;
+  last_round_result?: {
+    round_number: number | null;
+    map: string | null;
+    reason: 'timelimit' | 'surrender' | 'objective' | 'other';
+    reason_raw: string;
+    winner_side: 'axis' | 'allies' | null;
+    duration_seconds: number;
+    full_hold: boolean;
+    ended_age_seconds: number;
+  } | null;
+  time_to_beat_seconds?: number | null;
   roster: {
     axis: LiveRosterMember[];
     allies: LiveRosterMember[];
@@ -62,8 +97,10 @@ export interface VoiceCurrent {
    * Codex on #806, wave 5). Read defensively so the page starts qualifying
    * staleness the moment the backend exposes it (response_model work). */
   updated_at?: string | null;
-  members: unknown[];
-  channels: unknown[];
+  /** diagnostics_router voice-activity/current: a member is {name, channel_name};
+   *  a channel is {id, name, members} — one tracked channel today. */
+  members: { name: string; channel_name: string }[];
+  channels: { id: string | null; name: string; members: { name: string; channel_name: string }[] }[];
 }
 
 /** GET /api/stats/overview — corpus: api_stats_overview.json */
@@ -267,6 +304,11 @@ export type LastSessionScoring =
   | { available: false; reason?: string };
 
 export interface LastSession {
+  /** Since 2026-09-09 the Home card reads them: maps by name with their play
+   *  counts and the checks the aggregator raised (e.g. an unassigned player).
+   *  Always sent (the drift test holds the type to the API). */
+  map_counts: Record<string, number>;
+  stats_checks: string[];
   date: string;
   /** null when the latest rounds carry no session id (sessions_router) —
    * the hero then links by DATE instead. */
@@ -317,6 +359,10 @@ export interface StatsTrends {
 /** One row of GET /api/stats/matches — corpus: api_stats_matches.json.
  * axis/allies score fields are null in the recording — read as nullable. */
 export interface MatchRow {
+  /** Recorded null on the corpus; the legacy leaderboard drew score_display when present. */
+  score_display?: string | null;
+  axis_score?: number | null;
+  allies_score?: number | null;
   id: number;
   /** Nullable for the same reason as LastSessionMatch, and by the same rule
    *  rather than a different mood: `get_recent_matches` selects
@@ -344,6 +390,95 @@ export interface MatchRow {
   format: string;
 }
 
+/** GET /api/stats/matches/{match_id} — the box score of one half: both
+ *  logical teams with every player's row, the team totals and who won.
+ *  Recorded 2026-09-08 from round 11321 (corpus: api_stats_matches_match_id.json).
+ *  `match_id` is the round id; the handler also accepts a date and answers
+ *  with that day's LAST round, which the app never uses (a day can hold
+ *  several sessions). `headshots` counts head HITS, `headshot_kills` the
+ *  kills — both are served so a column can say which it shows. */
+export interface MatchDetailsPlayer {
+  name: string;
+  kills: number;
+  deaths: number;
+  damage_given: number;
+  damage_received: number;
+  time_played: number;
+  team: number;
+  xp: number;
+  headshots: number;
+  revives_given: number;
+  accuracy: number;
+  gibs: number;
+  selfkills: number;
+  teamkills: number;
+  times_revived: number;
+  useful_kills: number;
+  shots: number;
+  hits: number;
+  time_dead: number;
+  time_denied: number;
+  double_kills: number;
+  triple_kills: number;
+  quad_kills: number;
+  multi_kills: number;
+  mega_kills: number;
+  player_guid: string;
+  headshot_kills: number;
+  dpm: number;
+  kd: number;
+}
+export interface MatchDetailsTeam {
+  name: string;
+  players: MatchDetailsPlayer[];
+  totals: { kills: number; deaths: number; damage: number };
+  is_winner: boolean;
+}
+export interface MatchDetails {
+  match: {
+    id: number;
+    map_name: string | null;
+    round_number: number;
+    round_date: string | null;
+    /** 'Axis' | 'Allies' | 'Draw' — the side, not the logical team. */
+    winner: string;
+    /** `rounds.actual_time` text, null when the round carried none. */
+    duration: string | null;
+    /** `rounds.round_outcome` raw — null on 26 rows (sessions_router). */
+    outcome: string | null;
+    time_limit: string | null;
+    gaming_session_id: number | null;
+  };
+  team1: MatchDetailsTeam;
+  team2: MatchDetailsTeam;
+  player_count: number;
+}
+
+/** GET /api/players/{identifier}/card — the hover card the legacy player
+ *  list showed: the rating, the archetype, a 90-day form with percentiles
+ *  against the pool, a dpm sparkline, the badges earned and the career
+ *  totals. Recorded 2026-09-08 (corpus: api_players_identifier_card.json).
+ *  ⚠️ Its percentiles are NOT the rating components' — a different pool
+ *  and window (measured 2026-09-06: dpm 57 / survival 64 / revives 79
+ *  against 58.9 / 83.9 / 44.6 for one player). */
+export interface PlayerCard {
+  status: string;
+  guid: string;
+  name: string;
+  /** Present with null VALUES for a player without a rating row — not a
+   *  null object (Codex on #1001). */
+  rating: { value: number | null; tier: string | null; games_rated: number | null; trend: string | null } | null;
+  archetype: string | null;
+  window_days: number;
+  small_sample: boolean;
+  form: { rounds: number; kills: number; deaths: number; kd: number; dpm: number; revives: number; headshot_pct: number; time_dead_pct: number };
+  /** null values under small_sample (1–9 rounds in the window). */
+  percentiles: Record<string, number | null>;
+  sparkline_dpm: number[];
+  badges: { type: string; threshold: number; emoji: string; title: string; color: string }[];
+  career: { kills: number; sessions: number };
+}
+
 /** GET /api/seasons/current — corpus: api_seasons_current.json */
 export interface SeasonCurrent {
   id: string;
@@ -351,6 +486,7 @@ export interface SeasonCurrent {
   days_left: number;
   start_date: string;
   end_date: string;
+  next_season_id: number | string | null;
   next_season_name: string;
   next_season_start: string;
 }
@@ -369,7 +505,10 @@ export interface SeasonLeaders {
   status: string;
   note: string | null;
   failed_metrics: string[];
-  leaders: Record<string, { player: string; value: number } | null>;
+  /** Every category but `longest_session` is a (player, value) pair;
+   *  `longest_session` is the evening with the most rounds — a different
+   *  shape under the same map (records_seasons.py LongestSession). */
+  leaders: Record<string, { player: string; value: number } | null> & { longest_session?: { rounds: number; date: string } | null };
 }
 
 /** GET /api/seasons/current/summary — corpus: api_seasons_current_summary.json */
@@ -483,6 +622,10 @@ export interface SkillMovers {
   movers_up: SkillMoverRow[];
   movers_down: SkillMoverRow[];
   new_players: SkillMoverRow[];
+  /** The server's own sentence for what the movement is measured against. */
+  baseline_desc: string | null;
+  /** The weights the movement is scored with (metric → weight). */
+  form_weights?: Record<string, number>;
 }
 
 /** GET /api/challenges/current — corpus: api_challenges_current.json
@@ -494,9 +637,48 @@ export interface ChallengeCurrent {
 }
 
 /** GET /api/stats/tonight — corpus: api_stats_tonight.json */
+/** One half of a map in TEAM terms — the handler resolves axis/allies into
+ *  the two logical teams that swap sides between halves (players_router
+ *  get_tonight). */
+export interface TonightRound {
+  round: number;
+  /** 'a' | 'b' | null — a string here so a recorded JSON fixture satisfies the type. */
+  winner: string | null;
+  axis_score: number;
+  allies_score: number;
+  a_on_axis: boolean;
+  duration: number | null;
+  is_fullhold: boolean;
+}
+export interface TonightMap {
+  map_number: number;
+  /** null when `lua_round_teams.map_name` was null — preserved, not invented. */
+  map: string | null;
+  rounds: TonightRound[];
+  /** 'a' | 'b' | 'draw' | 'pending' */
+  winner: string;
+  a_points: number;
+  b_points: number;
+}
+/** GET /api/stats/tonight — the evening's score board. Recorded 2026-09-08
+ *  from the handler over the rows of 2026-09-07 (the endpoint is bound to
+ *  CURRENT_DATE, so an active evening can only be recorded while it runs;
+ *  the same code over the same rows the morning after is the honest
+ *  substitute). The quiet form (`api_stats_tonight.quiet.json`) is what a
+ *  night with no rounds answers: empty teams/score/maps, nulls elsewhere. */
 export interface TonightStatus {
   status: string;
   active: boolean;
+  current_map?: string | null;
+  last_update_unix?: number | null;
+  age_seconds?: number | null;
+  teams: { a?: { name: string; roster: string[] }; b?: { name: string; roster: string[] } };
+  score: { a_maps?: number; b_maps?: number; a_rounds?: number; b_rounds?: number; maps_completed?: number };
+  maps: TonightMap[];
+  momentum: { a: number; b: number }[];
+  current: { map: string; round: number; status: string; r2_pending: boolean; beat_seconds: number | null } | null;
+  director: string | null;
+  hold_probability: { map: string; curve: { t: number; p: number }[] } | null;
 }
 
 /** GET /api/live-status — fixture api_live_status.json RECORDED FRESH from
@@ -510,16 +692,14 @@ export interface LiveStatus {
     channel_name: string;
     /** true when the voice read failed INSIDE a 200 — count is then an
      * initialized zero, not a measurement (Codex on #811, wave 3). */
-    error?: boolean;
-  };
+    error?: boolean; updated_at?: string | null; };
   game_server: {
     online: boolean;
     hostname: string;
     map: string | null;
     player_count: number;
     max_players: number;
-    ping_ms: number | null;
-  };
+    ping_ms: number | null; updated_at?: string | null; };
 }
 
 /** GET /api/stats/activity-calendar?days= — corpus: api_stats_activity_calendar.json */
@@ -683,6 +863,10 @@ export interface AwardsLeaderboard {
  * Win rates are null when no side ever won — legacy defaulted them to 50,
  * an invented middle; here null renders a dash. */
 export interface MapStatsRow {
+  /** Recorded: min 0 is the endpoint's unknown sentinel, like avg_duration. */
+  min_duration: number;
+  max_duration: number;
+  total_deaths: number;
   name: string;
   total_rounds: number;
   matches_played: number;
@@ -813,6 +997,8 @@ export interface VizPlayer {
   revives_given: number;
   denied_playtime: number;
   gibs: number;
+  self_kills: number;
+  kill_assists: number;
   dpm: number;
   efficiency: number;
   xp: number;
@@ -894,6 +1080,26 @@ export interface SessionLineups {
  * fields the rest of the site omits per round (`time_played_seconds`, `gibs`,
  * `damage_received`) are the reason that endpoint exists.
  */
+/** GET /api/rounds/{round_id}/player/{player_guid}/details — one player's
+ *  breakdown of one half: combat, support, objectives, sprees, time, misc
+ *  and the per-weapon table with the deaths column the legacy modal had.
+ *  Recorded 2026-09-08 from round 11430 (corpus:
+ *  api_rounds_round_id_player_player_guid_details.json). ⛔ The legacy
+ *  matches.js:970 read `combat.useful_kills` and `w.weapon_name`; neither
+ *  exists — the recording is the arbiter: useful kills sit under `support`,
+ *  the weapon is `name` and comes as the WS_ token. */
+export interface RoundPlayerDetails {
+  player_name: string;
+  round: { id: number; map_name: string; round_number: number; round_date: string };
+  combat: { kills: number; deaths: number; damage_given: number; damage_received: number; headshot_kills: number; headshots: number; gibs: number; accuracy: number; shots: number; hits: number };
+  support: { revives_given: number; times_revived: number; useful_kills: number; useless_kills: number; kill_assists: number };
+  objectives: { stolen: number; returned: number; dynamites_planted: number; dynamites_defused: number };
+  sprees: { double_kills: number; triple_kills: number; quad_kills: number; multi_kills: number; mega_kills: number };
+  time: { played_seconds: number; dead_minutes: number; denied_playtime: number };
+  misc: { xp: number; team_kills: number; self_kills: number };
+  weapons: { name: string; kills: number; deaths: number; headshots: number; hits: number; shots: number; accuracy: number }[];
+}
+
 export interface RoundPlayerRow {
   player_guid: string;
   player_name: string;
@@ -909,6 +1115,13 @@ export interface RoundPlayerRow {
   revives_given: number;
   times_revived: number;
   xp: number;
+  /** The four per-round counters nothing read until 2026-09-08, and the
+   *  flag that says the dead time was rebuilt, not measured. */
+  team_gibs: number;
+  kill_steals: number;
+  tank_meatshield: number;
+  death_spree_worst: number;
+  time_dead_reconstructed: boolean;
 }
 
 export interface SessionRound {
@@ -924,6 +1137,17 @@ export interface SessionRound {
   /** False for a cancelled round: show it, leave it out of totals. */
   counts_toward_totals: boolean;
   match_id: string | null;
+  /** The webhook's own record of the round (lua_round_teams) and the round
+   *  row's provenance — typed 2026-09-08 when the tab started showing them.
+   *  `surrender` is null when nobody gave up; `team` 1 = Axis, 2 = Allies. */
+  surrender: { caller_name: string; team: number | null } | null;
+  pauses: { count: number; total_seconds: number };
+  time_limit_minutes: number | null;
+  warmup_seconds: number | null;
+  bot_player_count: number | null;
+  score_confidence: string | null;
+  /** The limit this half set for the next one. */
+  next_timelimit_minutes: number | null;
   players: RoundPlayerRow[];
 }
 
@@ -995,6 +1219,29 @@ export interface ProfileLifetime extends ProfileSection {
   damage_received: number;
   time_played_seconds: number;
   xp: number;
+  /** The long tail the legacy profile drew and the page dropped (ledger
+   * 2026-09-08): objectives, dynamite, multi-kills, sprees, support. */
+  hours_played: number | null;
+  objectives_completed: number;
+  objectives_destroyed: number;
+  objectives_stolen: number;
+  objectives_returned: number;
+  dynamites_planted: number;
+  dynamites_defused: number;
+  double_kills: number;
+  triple_kills: number;
+  quad_kills: number;
+  multi_kills: number;
+  mega_kills: number;
+  best_killing_spree: number;
+  shots: number;
+  useful_kills: number;
+  kill_assists: number;
+  revives_given: number;
+  times_revived: number;
+  self_kills: number;
+  team_kills: number;
+  team_damage_given: number;
 }
 
 export interface ProfileSkill extends ProfileSection {
@@ -1030,6 +1277,8 @@ export interface ProfileWeapons extends ProfileSection {
   weapons?: ProfileWeaponRow[];
   overall_accuracy: number | null;
   overall_hs_accuracy: number | null;
+  total_shots?: number;
+  total_hits?: number;
 }
 
 export interface ProfileHitRegions extends ProfileSection {
@@ -1037,6 +1286,9 @@ export interface ProfileHitRegions extends ProfileSection {
     head: number; arms: number; body: number; legs: number;
     head_pct: number; arms_pct: number; body_pct: number; legs_pct: number;
   } | null;
+  /** The same split per weapon, hit COUNTS plus the head share; the other
+   *  shares are derived on the page from `total`. */
+  per_weapon?: { weapon: string; head: number; arms: number; body: number; legs: number; total: number; head_pct: number }[];
 }
 
 export interface ProfileMovement extends ProfileSection {
@@ -1045,6 +1297,10 @@ export interface ProfileMovement extends ProfileSection {
   peak_speed: number | null;
   sprint_pct: number | null;
   avg_distance_per_life: number | null;
+  /** Units covered in the first seconds after a spawn — the "how far before the first fight" figure. */
+  avg_post_spawn_distance?: number | null;
+  /** Seconds spent sprinting across every tracked life. */
+  sprint_sec?: number | null;
   stance?: {
     standing_pct: number; crouching_pct: number; prone_pct: number;
   } | null;
@@ -1079,6 +1335,9 @@ export interface ProfileRelationships extends ProfileSection {
   top_victims?: ProfileOpponent[];
   best_teammates?: ProfileTeammate[];
   worst_teammates?: ProfileTeammate[];
+  /** Ranked by win rate of the duel, not by count: RIVAL / PREY classes. */
+  hardest_opponents?: ProfileOpponent[];
+  easiest_opponents?: ProfileOpponent[];
   baseline_dpm: number | null;
 }
 
@@ -1127,6 +1386,37 @@ export interface PlayerProfile {
   relationships: ProfileRelationships;
   maps: ProfileMaps;
   recent_matches: ProfileRecentMatches;
+  /** Requested since 2026-09-08 (cheap sections the legacy profile drew and
+   * the new page never asked for — ledger). */
+  nick_history: ProfileNickHistory;
+  gather_summary: ProfileGatherSummary;
+  combat_timing: ProfileCombatTiming;
+}
+
+/** Every name this guid has played under, with first/last sight and how
+ * many rows carried it. */
+export interface ProfileNickHistory {
+  available: boolean;
+  names: { name: string; first_seen: string | null; last_seen: string | null; uses: number }[];
+}
+/** Gathers (organised evenings) as wins/losses/draws with the running streak. */
+export interface ProfileGatherSummary {
+  available: boolean;
+  gathers: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  win_rate: number | null;
+  current_streak: number;
+  current_type: string | null;
+  longest_win: number;
+  longest_loss: number;
+}
+/** Median time to kill and median return fire, with the sample each rests on. */
+export interface ProfileCombatTiming {
+  available: boolean;
+  time_to_kill: { median_ms: number | null; kills: number } | null;
+  return_fire: { median_ms: number | null; samples: number; coverage_pct: number | null } | null;
 }
 
 /* ── Rivalries (docs/design/12 row 25) ────────────────────────────────────
@@ -1296,6 +1586,12 @@ export interface SkillFormula {
   shrinkage_k: number;
   normalization: string;
   range: string;
+  /** The formula's own tables (read since 2026-09-08 — 24 keys fetched and
+   * never shown): metric -> weight (signed), metric -> what it measures,
+   * source -> the metrics it feeds. */
+  weights: Record<string, number>;
+  metrics: Record<string, string>;
+  metric_sources: Record<string, string[]>;
 }
 
 export interface SsrComponent {
@@ -1420,6 +1716,7 @@ export interface StoryBoxScore {
   winner: string;
   winner_name: string;
   maps: StoryBoxScoreMap[];
+  scope?: StoryAnswerScope;
 }
 
 /** GET /api/storytelling/moments. `detail` varies by `type` — a carrier run
@@ -1435,6 +1732,12 @@ export interface StoryMoment {
   impact_stars: number;
   time_formatted: string;
   detail?: unknown;
+  /** multikill / team_wipe carry how long the run took and who fell;
+   *  `kills` is the LIST of the kills on that wire (Codex on #1002). */
+  duration_ms?: number;
+  victims?: string[];
+  kills?: unknown[] | number;
+  team?: string;
 }
 
 export interface StoryMoments {
@@ -1477,9 +1780,13 @@ export interface StoryPwcPlayer {
   rounds_lost: number;
   total_rounds: number;
   components: Record<string, number>;
+  /** pwc round by round, with the round's own figures. */
+  per_round?: { round_number: number; map_name: string; pwc: number; won: boolean; kills: number; damage: number; objectives: number; revives: number }[];
 }
 
 export interface StoryWinContribution {
+  /** The same scope object every storytelling answer carries (recorded). */
+  scope?: StoryAnswerScope;
   status: string;
   mvp: {
     guid: string;
@@ -1504,6 +1811,16 @@ export interface StoryKisPlayer {
   clutch_kills: number;
   avg_impact: number;
   archetype: string;
+  /** The rest of the row (kis.py): the kinds of kill the score is made of
+   *  and the context figures. Typed 2026-09-08 when the panel started
+   *  printing them; `time_dead_pct` is a fraction (0.17 = 17 %). */
+  solo_clutch_kills: number;
+  outnumbered_kills: number;
+  spawn_denial_kills: number;
+  dpm: number;
+  denied_time: number;
+  time_dead_pct: number;
+  revives_given: number;
 }
 
 export interface StoryKillImpact {
@@ -1511,6 +1828,8 @@ export interface StoryKillImpact {
   players: StoryKisPlayer[];
   total: number;
   total_kills: number;
+  /** How the numbers were produced: read_only means served from the table. */
+  compute?: { status: string };
 }
 
 export interface StorySynergyGroup {
@@ -1554,6 +1873,38 @@ export interface StoryRolePlayer {
   enabler_score?: number;
   solo_pct?: number;
   hold_pct?: number | null;
+  /** The numbers behind each score (read since 2026-09-08; the legacy
+   * "invisible value" board showed them, the new boards showed only the
+   * score). gravity: */
+  engagements?: number;
+  avg_attackers?: number;
+  total_attention_ms?: number;
+  total_engaged_ms?: number;
+  alive_ms?: number;
+  /** space created: */
+  productive_deaths?: number;
+  wasted_deaths?: number;
+  total_deaths?: number;
+  teammate_kills_after?: number;
+  /** enabler: */
+  enabled_kills?: number;
+  crossfire_assists?: number;
+  trade_assists?: number;
+  total_assists?: number;
+  own_kills?: number;
+  /** alone (lurker): */
+  solo_samples?: number;
+  total_samples?: number;
+  tracks?: number;
+  solo_time_est_s?: number;
+  /** camp-profile: the hold share's parts — time held, time standing
+   *  still and its share, alive time, the three busiest 512 u cells as
+   *  [x, y, seconds]. Typed 2026-09-08 when the board started showing them. */
+  still_pct?: number | null;
+  hold_time_s?: number | null;
+  still_time_s?: number | null;
+  alive_s?: number | null;
+  top_cells?: [number, number, number][];
 }
 
 export interface StoryRoleBoard {
@@ -1561,6 +1912,31 @@ export interface StoryRoleBoard {
   metric: string;
   description: string;
   players: StoryRolePlayer[];
+  /** camp-profile carries how many tracks it read and the thresholds it
+   *  used; the other boards do not. */
+  coverage?: { tracks_fetched: number; tracks_used: number; tracks_skipped: number };
+  thresholds?: Record<string, number>;
+  /** The metric's own constants, when the board publishes them: lurker's
+   *  radius and sampling, enabler's window and distance, space's window. */
+  solo_radius?: number;
+  downsample_ms?: number;
+  time_window_ms?: number;
+  distance_threshold?: number;
+  window_ms?: number;
+  /** Every storytelling answer carries the scope it was computed over. */
+  scope?: StoryAnswerScope;
+}
+
+/** The scope block every storytelling endpoint answers with — the same
+ *  object on all of them, so the page prints it once. */
+export interface StoryAnswerScope {
+  kind: string;
+  version?: string;
+  gaming_session_id: number;
+  dates: string[];
+  accepted_round_count: number;
+  distinct_map_names: string[];
+  last_round_unix: number | null;
 }
 
 /** GET /api/storytelling/player-narratives — generated prose per player. */
@@ -1741,6 +2117,9 @@ export interface StoryKisKill {
   is_objective_area: boolean | null;
   kill_time_ms: number | null;
   killer_health: number;
+  /** The flags and the moment's roster the multipliers were read from. */
+  axis_alive?: number | null;
+  allies_alive?: number | null;
 }
 
 export interface StoryKisDetails {
@@ -1799,8 +2178,8 @@ export interface StoryKillMatrixCell {
  *  engine units (the server refuses to invent a metre conversion). Same union
  *  shape as the matrix: the empty branch omits `unit` (movement.py:78-95). */
 export type StoryMovement =
-  | { status: string; available: false; reason: string; players: [] }
-  | { status: string; available: true; unit: string; players: StoryMovementPlayer[] };
+  | { status: string; available: false; reason: string; players: []; scope?: StoryAnswerScope }
+  | { status: string; available: true; unit: string; players: StoryMovementPlayer[]; scope?: StoryAnswerScope };
 
 export interface StoryMovementPlayer {
   guid_short: string;
@@ -1814,8 +2193,10 @@ export interface StoryMovementPlayer {
   peak_speed: number;
   /** null for the same reason as distance_per_min (movement.py:70-73). */
   sprint_pct: number | null;
-  post_spawn_distance: number;
-  alive_ms: number;
+  /** Null on tracks that never carried them (older captures) — movement.py
+   *  keeps the NULL instead of folding it to 0. */
+  post_spawn_distance: number | null;
+  alive_ms: number | null;
 }
 
 /** GET /api/storytelling/useless-defense-deaths — defensive deaths that gave
@@ -1941,12 +2322,70 @@ export interface SessionTeamAggregate {
 
 /** Same rule as the scoring block: unavailable means `{available: false,
  *  reason}` and nothing else. */
+/** One cell of the player × map matrix (`rosters[].cells[]`) and, with the
+ *  ratios, a player's session totals. `played: false` cells carry zeros the
+ *  page must not print as a 0 — the player was not on that map. */
+export interface SessionMatrixCell {
+  map_index: number;
+  played: boolean;
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  revives: number;
+  times_revived: number;
+  assists: number;
+  gibs: number;
+  hs_kills: number;
+  hits: number;
+  shots: number;
+  weapon_hs: number;
+  dpm: number;
+  kd: number;
+  accuracy: number;
+  hs_pct: number;
+  return_fire_ms: number | null;
+}
+export interface SessionMatrixPlayer {
+  player_guid: string;
+  player_name: string;
+  totals: Omit<SessionMatrixCell, 'map_index' | 'played'>;
+  cells: SessionMatrixCell[];
+}
+/** One player's line of one round (`rounds_detail[round_id][]`) — the side
+ *  they were on that half, which the matrix cells (per map) cannot say. */
+export interface SessionMatrixRoundRow {
+  player_guid: string;
+  player_name: string;
+  team: string;
+  side: number;
+  kills: number;
+  deaths: number;
+  damage: number;
+  damage_received: number;
+  dpm: number;
+  kd: number;
+  time_played: number;
+  revives: number;
+  assists: number;
+  gibs: number;
+  hs_kills: number;
+  return_fire_ms: number | null;
+}
 export interface SessionTeamMatrix {
   available: boolean;
   reason?: string;
   team_a_name?: string;
   team_b_name?: string;
   aggregates?: { team_a: SessionTeamAggregate; team_b: SessionTeamAggregate };
+  /** The columns of the matrix, in play order; typed 2026-09-08 when the
+   *  page started drawing it (the old React had the matrix, the new one
+   *  showed the team totals only). */
+  /** Scores are null when stopwatch scoring was unavailable or the map is
+   *  not in its index (session_matrix_service tests pin both). */
+  maps?: { map_name: string; map_index: number; team_a_score: number | null; team_b_score: number | null }[];
+  rosters?: { team_a: SessionMatrixPlayer[]; team_b: SessionMatrixPlayer[] };
+  rounds_detail?: Record<string, SessionMatrixRoundRow[]>;
 }
 
 /** One player's session totals. `alive_pct` and `alive_pct_lua` are two
@@ -2014,6 +2453,42 @@ export interface SessionMatch {
 }
 
 /** GET /api/stats/session/{id}/detail */
+/** GET /api/stats/session/{gsid}/graphs — the playstyle axes, the advanced
+ *  metrics and the per-round DPM series of an evening over its COUNTED
+ *  rounds (`gate`). Recorded 2026-09-08 from session 152 through the handler
+ *  (corpus: api_stats_session_gaming_session_id_graphs.json). ⛔ The
+ *  legacy page called the DATE form, which merges the sessions of a day. */
+export interface SessionGraphPlayer {
+  name: string;
+  guid: string;
+  combat_offense: { kills: number; deaths: number; damage_given: number; kd: number; dpm: number };
+  /** `headshots` = head HITS. */
+  combat_defense: { revives: number; kill_assists: number; gibs: number; headshots: number; useful_kills: number; full_selfkills: number; times_revived: number; team_kills: number; self_kills: number };
+  /** `frag_potential` is served and NOT drawn — the owner's standing
+   *  decision keeps it off every visitor-facing surface. */
+  advanced_metrics: {
+    frag_potential: number; damage_efficiency: number; survival_rate: number; time_denied: number;
+    time_denied_raw_seconds: number; time_dead_raw_seconds: number; useful_kills_per_round: number;
+    deaths_per_round: number; rounds_played: number; aggression_score: number; pressure_score: number;
+    risk_load: number; empty_death_burden: number; discipline_score: number; dead_time_share: number;
+  };
+  /** Eight axes, 0–100. */
+  playstyle: { aggression: number; precision: number; survivability: number; support: number; lethality: number; brutality: number; consistency: number; efficiency: number };
+  /** A point names its round, so a series aligns on the session's round
+   *  axis (`rounds`) and a map the player sat out stays a gap. */
+  dpm_timeline: { label: string; dpm: number; round_id: number; round_number: number; map_name: string | null }[];
+}
+export interface SessionGraphs {
+  gaming_session_id: number;
+  date: string;
+  gate: string;
+  rounds_counted: number;
+  /** The counted rounds in play order — the x axis of every dpm series. */
+  rounds: { round_id: number; label: string; map_name: string | null; round_number: number }[];
+  player_count: number;
+  players: SessionGraphPlayer[];
+}
+
 export interface SessionDetail {
   session_id: number;
   date: string;
@@ -2154,6 +2629,11 @@ export interface SessionBasicsPlayer {
 export interface SessionBasics {
   gaming_session_id: number;
   date: string | null;
+  /** When the evening ran — the first counted round's start, the last one's
+   *  end (start + measured duration) and the span; nulls when unrecorded.
+   *  The two fields the date-keyed /api/sessions/{date} carried and the
+   *  gsid family did not (2026-09-08). */
+  clock: { start: string | null; end: string | null; span_seconds: number | null };
   coverage: SessionBasicsCoverage;
   teams: SessionBasicsTeam[];
   players: SessionBasicsPlayer[];
@@ -2182,6 +2662,39 @@ export interface SessionAwards {
   rounds_counted: number;
   rounds_with_awards: number;
   categories: SessionAwardCategory[];
+}
+
+/** GET /api/rounds/{round_id}/awards — the same table SessionAwards sums,
+ *  broken out by round.
+ *
+ *  ⚠️ Three nullable fields, each for a measured reason (see RoundAwards in
+ *  records_matches.py): `guid` is null for award rows that never resolved to
+ *  a player, and `numeric` is null for awards whose figure is a rendered
+ *  string with no number behind it — typing that one as `number` once
+ *  rejected 3 rounds out of 40 and turned the page into a 500.
+ */
+export interface RoundAwardEntry {
+  award: string;
+  player: string;
+  guid: string | null;
+  value: string;
+  numeric: number | null;
+}
+
+export interface RoundAwardCategory {
+  name: string;
+  emoji: string;
+  awards: RoundAwardEntry[];
+}
+
+export interface RoundAwards {
+  round_id: number;
+  map_name: string | null;
+  round_number: number | null;
+  round_date: string | null;
+  /** ⚠️ A mapping, not a list: the backend builds categories from the award
+   *  table and naming them in a model would silently drop any new one. */
+  categories: Record<string, RoundAwardCategory>;
 }
 
 // ---------------------------------------------------------------------------
@@ -2444,6 +2957,9 @@ export interface PlayerMatchRound {
  *  only the teamplay duo boards have ever sent — so its crossfire board
  *  rendered "name + ?" forever; not carried. */
 export interface LbEntryBase {
+  /** The power board's extras: axes measured but not scored, and axes the composite had to default. */
+  unscored?: Record<string, number>;
+  axes_defaulted?: string[];
   guid: string;
   name: string;
   value: number;
@@ -2562,8 +3078,17 @@ export interface ProxQuality {
     correlation_count?: number;
     complete_count?: number;
     avg_completeness_pct?: number;
+    /** Round SIDES the correlation expected against those proximity holds,
+     *  and the two ways they can be missing (typed 2026-09-10). */
+    expected_round_sides?: number;
+    present_proximity_sides?: number;
+    missing_existing_round_sides?: number;
+    unpaired_round_sides?: number;
+    latest_created_at?: string | null;
   };
-  linkage?: { scope: string; status: string; breach_count: number };
+  linkage?: { scope: string; status: string; breach_count: number; metrics?: Record<string, number>; breaches?: { metric: string; value: number; threshold: number }[]; errors?: string[] };
+  /** When the KIS and the context caches were last written. */
+  cache_freshness?: { status: string; latest_context_created_at: string | null; latest_kis_created_at: string | null };
   /** RECORDS, not strings — joining them rendered "[object Object]" in the
    *  truth strip precisely when a warning existed (Codex on #861). */
   warnings: { code: string; level: string; message: string }[];
@@ -2584,6 +3109,8 @@ export interface ProxScopes {
     session_date: string;
     engagements: number;
     map_count: number;
+    /** Replays count separately (completed R1s, the box score's rule) — can be 0 on a date with telemetry. */
+    maps_played: number;
     round_count: number;
     /** The full hierarchy — slice 5's map and round chips read it; slice 2
      *  only needed the dates and typed these away until the picker did. */
@@ -2796,6 +3323,8 @@ export interface CompPersonalBests {
     sessions_played: number;
   }[];
   scope_note: string;
+  /** What the server narrowed to, echoed back — a date, or nothing. */
+  scope_applied?: Record<string, string | number | null> | null;
 }
 
 export interface CompManAdvantage {
@@ -2897,6 +3426,8 @@ export interface CarrierReturns {
     returner_name: string | null; returner_team: string; flag_team: string;
     original_carrier_guid: string; return_delay_ms: number; map_name: string;
     return_time: number;
+    /** Where the flag lay when it was returned (map units). */
+    drop_x?: number; drop_y?: number; drop_z?: number;
   }[];
   /** avg_delay_ms arrives as NULL (not absent) on an empty scope —
    *  measured on 2026-09-01 and 2026-05-01. */
@@ -2909,6 +3440,9 @@ export interface VehicleProgress {
     vehicle_name: string; vehicle_type: string; map_name: string;
     session_date: string; round_number: number; total_distance: number;
     max_health: number; final_health: number; destroyed_count: number;
+    /** Where the mover began and ended the round (0,0,0 when unrecorded). */
+    start_x?: number; start_y?: number; start_z?: number;
+    end_x?: number; end_y?: number; end_z?: number;
   }[];
 }
 
@@ -2942,6 +3476,8 @@ export interface ObjectiveRuns {
     assisted_runs: number; team_effort_runs: number; unopposed_runs: number;
     total_self_kills: number; total_team_kills: number;
     avg_path_efficiency: number | null;
+    /** The engineer's objective actions in the scope (recorded 2026-09-08). */
+    plants: number; defuses: number; builds: number; destroys: number;
   }[];
   recent_runs: {
     engineer_name: string | null; action_type: string; track_name: string;
@@ -3040,7 +3576,7 @@ export interface PlayerJourney {
   scope: ProxScope;
   player: { guid: string; name: string | null; team: string } | null;
   lives: JourneyLife[];
-  summary: { lives?: number };
+  summary: { lives?: number; kills?: number; deaths?: number; avg_life_s?: number | null; objective_events?: number | null; objective_events_unavailable?: string | null };
   message?: string | null;
 }
 
@@ -3171,6 +3707,8 @@ export interface ProxEventDetail {
   round_number: number;
   round_start_unix: number | null;
   round_end_unix: number | null;
+  /** shared/round_time.py's canonical duration; absent on older recordings. */
+  round_duration_seconds?: number | null;
   map_name: string;
   target_guid: string | null;
   target_name: string | null;
@@ -3276,6 +3814,13 @@ export interface ProxScoreRow {
   prox_gamesense: number;
   prox_overall: number;
   prox_radar: { label: string; value: number }[];
+  /** Per category, per metric: the raw value, its percentile in the window,
+   *  the weight and the contribution; a retired metric carries `retired_in`
+   *  and weight 0 (prox-web-v3.0 retired headshot % and return-fire speed). */
+  breakdown?: Record<string, Record<string, { label: string; raw: number | null; percentile: number | null; weight: number; contribution: number; retired_in?: string }>>;
+  metrics_scored?: Record<string, number>;
+  metric_weight_coverage?: number;
+  missing_metrics?: string[];
 }
 
 export interface ProxScores {
@@ -3532,8 +4077,9 @@ export interface SpiderPlayer {
   z: number;
   health: number;
   weapon: number;
-  stance: number;
-  speed: number;
+  /** null when the sample carried no stance / speed (older samples). */
+  stance: number | null;
+  speed: number | null;
   alive: boolean;
   track_id: number;
   stale_ms: number;
@@ -3546,12 +4092,35 @@ export interface SpiderPlayer {
   velocity_reason: string | null;
 }
 
+/** One direction of a traced ray: the tracer's status and the reason it gives. */
+export interface SpiderLosVerdict { status: 'clear' | 'blocked' | 'indeterminate' | string; reason: string }
+
 export interface SpiderEdge {
   a: string;
   b: string;
   kind: string;
   distance: number;
   recently_contested: boolean;
+  /** SW-3, world view only: eye-to-body availability in both directions.
+   *  Null for a teammate pair, a down or unplaced player, any other view,
+   *  or a map without geometry — the snapshot's `line_of_sight` block says
+   *  which. Absent on recordings from before the diagnostic existed. */
+  line_of_sight?: { a_to_b: SpiderLosVerdict; b_to_a: SpiderLosVerdict } | null;
+}
+
+/** The oracle line-of-sight diagnostic (services/line_of_sight.py): what it
+ *  means, what validated it, and per player how many living enemies had a
+ *  clear ray to them. `available:false` carries the reason — a view, or a
+ *  host without the map's geometry. */
+export interface SpiderLineOfSight {
+  available: boolean;
+  reason: string | null;
+  scope: string;
+  validated_by: { measured_at: string; script: string; segments: number; maps: number; agreement_pct: number; compared_to: string; caveat: string };
+  geometry: string | null;
+  pairs_traced: number;
+  /** Null = at least one incoming ray was indeterminate and none clear — undecided, not zero. */
+  exposure: Record<string, number | null>;
 }
 
 export interface SpiderWebSnapshot {
@@ -3560,8 +4129,9 @@ export interface SpiderWebSnapshot {
   map_name: string;
   round_duration_ms: number;
   teams: string[];
-  first_position_ms: number;
-  velocity_max_dt_ms: number;
+  /** null for a round without tracks / without a valid manifest. */
+  first_position_ms: number | null;
+  velocity_max_dt_ms: number | null;
   player_count: number;
   overlap_conflicts: number;
   players: SpiderPlayer[];
@@ -3579,6 +4149,67 @@ export interface SpiderWebSnapshot {
   };
   withheld_by_pov: string[];
   notes: string[];
+  /** Layer 3 — what each player KNOWS at this moment (information_state.py):
+   *  per holder, the beliefs the server grants them and the counts derived
+   *  from those. Typed 2026-09-08 when the page started drawing them; the
+   *  legacy spider-web.js had. `gaps` names every player without a state
+   *  and why — a player is never simply absent (the server's own note). */
+  information_state: {
+    holders: Record<string, SpiderHolder>;
+    audible_gunfire_radius: number | null;
+    pov: string | null;
+    /** Why a requested pov has no holder — the server's sentence. */
+    pov_unavailable?: string | null;
+    /** Channels the whole state cannot have (team pov: the union). */
+    unavailable?: Record<string, string>;
+    /** A team or player view returns every own-team position as known —
+     *  the server says so (§6: the voice channel is not captured, so
+     *  own-team knowledge is a stated simplification, not a measurement). */
+    own_team_positions_are_a_simplification?: boolean;
+  };
+  gaps: Record<string, string>;
+  /** Layer-1 validation the snapshot cites: where the coordinates were
+   *  checked, over how many rounds and samples, and what was excluded. */
+  reconstruction_accuracy: {
+    measured_at: string;
+    script: string;
+    rounds: number;
+    samples: Record<string, number>;
+    sources: string[];
+    unit: string;
+    excluded: string;
+  };
+  /** Geometric distance to the nearest teammate, by guid — not tactical
+   *  support distance (the server's own note). */
+  nearest_teammate_separation: Record<string, number>;
+  /** Absent on recordings from before SW-3. */
+  line_of_sight?: SpiderLineOfSight;
+}
+
+export interface SpiderBelief {
+  kind: string;
+  source: string;
+  subject_guid: string | null;
+  roster_state: string | null;
+  t_observed: number | null;
+  confidence: number;
+  counts_as_known: boolean;
+  /** Null on beliefs the recording carries without one (position regions). */
+  capability: string | null;
+  expiry_basis: string | null;
+  region: { x: number; y: number; z: number; radius: number } | null;
+}
+export interface SpiderHolder {
+  holder_guid: string;
+  known_enemy_count: number;
+  /** An INTERVAL — the server publishes the uncertainty, not a point. */
+  nearest_known_enemy_distance: { min: number; max: number } | null;
+  nearest_heard_activity_distance: { min: number; max: number } | null;
+  beliefs: SpiderBelief[];
+  position_claim_max_radius: number | null;
+  /** Channels this holder cannot have, each with the server's reason. */
+  unavailable: Record<string, string>;
+  notes: string[];
 }
 
 /** Flat triangle mesh under /assets/maps/geometry/<map>.json — static, and
@@ -3589,7 +4220,8 @@ export interface MapMesh {
   vertices: number[];
   indexes: number[];
   floor_normal_z: number;
-  bounds: unknown;
+  /** Null in the test stub; the exported files always carry one. */
+  bounds: { min: number[]; max: number[] } | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -3606,7 +4238,29 @@ export interface ProxKillOutcomes {
     avg_delta_ms: number; avg_denied_ms: number;
   };
   outcomes: Record<string, { count: number; avg_delta_ms: number; avg_denied_ms?: number }>;
-  events: unknown[];
+  /** One row per kill of the scope, newest first (200 in the recording):
+   *  what became of it and who did the gibbing or the reviving. */
+  events: ProxKillOutcomeEvent[];
+}
+export interface ProxKillOutcomeEvent {
+  /** Level clock in ms (the round's own time), not an epoch. */
+  kill_time: number;
+  victim_guid: string;
+  victim_name: string;
+  killer_guid: string;
+  killer_name: string;
+  kill_mod: number;
+  outcome: string;
+  delta_ms: number;
+  effective_denied_ms: number;
+  /** Empty strings when nobody gibbed / revived — not null, on this wire. */
+  gibber_guid: string;
+  gibber_name: string;
+  reviver_guid: string;
+  reviver_name: string;
+  session_date: string;
+  map_name: string;
+  round_number: number;
 }
 
 export interface ProxHeadshotRates {
@@ -3630,7 +4284,15 @@ export interface ProxTeamplay {
     avg_delay_ms: number; times_focused: number; focus_escapes: number;
     kill_rate_pct: number;
   }[];
-  sync: unknown[];
+  /** The same row shape as crossfire_kills, ranked by delay; and the
+   *  focus-survival board, which adds the survival share. */
+  sync: ProxTeamplayRow[];
+  focus_survival?: (ProxTeamplayRow & { survival_rate_pct: number })[];
+}
+export interface ProxTeamplayRow {
+  guid: string; name: string | null; crossfire_kills: number;
+  crossfire_participations: number; crossfire_final_blows: number;
+  avg_delay_ms: number; times_focused: number; focus_escapes: number;
 }
 
 export interface ProxTradesSummary {
@@ -3699,6 +4361,20 @@ export interface ProxSummary {
   avg_attackers: number;
   escape_rate_pct: number;
   kill_rate_pct: number;
+  /** The rest of the evening in numbers (typed 2026-09-08 when the page
+   *  started showing them; fetched and dropped until then): movement and
+   *  sampling figures, the duo list, and how many rows each v5 source
+   *  table holds for the scope. */
+  unique_players: number;
+  avg_track_distance_m: number;
+  avg_speed: number;
+  avg_sprint_pct: number;
+  avg_time_to_first_move_ms: number;
+  sample_rounds: number;
+  top_duos: { player1: string; player2: string; crossfire_kills: number; crossfire_count: number; avg_delay_ms: number }[];
+  top_duos_partial: boolean;
+  v5_counts: Record<string, number>;
+  v5_counts_unknown: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -3819,8 +4495,9 @@ export interface ProxMovers {
   limit: number;
   distance: (ProxMoversRow & { total_distance: number })[];
   sprint: (ProxMoversRow & { sprint_pct: number })[];
-  reaction: unknown[];
-  survival: unknown[];
+  /** Fastest reaction (ms to the first move after a hit) and longest life, top N each (recorded 5). */
+  reaction: (ProxMoversRow & { reaction_ms: number })[];
+  survival: (ProxMoversRow & { duration_ms: number })[];
 }
 
 /** mode ∈ kills_from | victims_die | player_dies | presence | aim — the
@@ -3847,10 +4524,16 @@ export interface ProxPlayerAim {
   total: number;
   sampled: boolean;
   scope: ProxScope;
-  hotzones: { x: number; y: number; count: number }[];
+  /** Each hot zone carries its yaw rose (one count per bucket), the mean yaw
+   *  and the resultant length r (0 = aimed everywhere, 1 = one direction). */
+  hotzones: { x: number; y: number; count: number; rose?: number[]; mean_yaw?: number | null; r?: number | null }[];
   yaw_buckets: number;
   yaw_bucket_width_deg: number;
   pitch_hist: { edges: number[]; counts: number[] };
+  /** Circular statistics over every shot's yaw and pitch (legacy proximity.js
+   *  4175): Rayleigh p < 0.05 = a preferred direction. */
+  circular?: { n: number; mean_yaw_deg: number; resultant_length: number; circular_std_deg: number; rayleigh_p: number; pitch_mean_deg: number; pitch_std_deg: number } | null;
+  narrative?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -3873,8 +4556,10 @@ export type AvailabilityStatus = 'LOOKING' | 'AVAILABLE' | 'MAYBE' | 'NOT_PLAYIN
 // (#830, with the documented my_status tri-state) — reused, not redeclared.
 
 export interface PlanningToday {
+  /** Derived from availability_entries even with no planning row (planning.py _planning_state); absent on older recordings. */
+  committed_count?: number;
   date: string;
-  session_ready: { ready: boolean; looking_count: number; threshold: number };
+  session_ready: { ready: boolean; looking_count: number; threshold: number; event_key?: string };
   unlocked: boolean;
   participant_count: number;
   participants: { user_id: number; display_name: string | null; status: string }[];
@@ -4258,6 +4943,8 @@ export interface MemoryCard {
 }
 
 export interface SkillPlayerForm {
+  /** The weights the form composite used (recorded: dpm, kd, obj, acc, kills, impact). */
+  form_weights?: Record<string, number>;
   status: string;
   player_guid: string;
   player_name: string | null;
@@ -4368,7 +5055,8 @@ export interface LiveFeed {
   events: { seq: number; type: string; [k: string]: unknown }[];
   oldest_seq: number | null;
   last_seq: number;
-  server_time: number;
+  /** Epoch seconds; absent on the older feed-buffer shape a fixture still carries. */
+  server_time?: number;
 }
 
 export interface ActivityHistory {
@@ -4520,4 +5208,88 @@ export interface DatasetRegistry {
   registry_version: string;
   count: number;
   datasets: DatasetDescriptor[];
+}
+
+/** `/api/stats/player/{player_name}/form` — session-aggregated DPM, oldest
+ *  first, one point per gaming session with more than two minutes played
+ *  (`players_router.get_player_form`). Recorded 2026-09-07 from dev; no
+ *  response_model on the backend yet, so this is the observed shape. */
+export interface PlayerSessionFormPoint {
+  label: string;
+  date: string;
+  dpm: number;
+  rounds: number;
+  kd: number;
+}
+export interface PlayerSessionForm {
+  sessions: PlayerSessionFormPoint[];
+  avg_dpm: number;
+  trend: 'improving' | 'declining' | 'stable' | 'insufficient_data';
+}
+
+/** `/api/greatshot/{demo_id}/crossref` — the analysed demo matched against
+ *  the stats database (`greatshot.get_crossref`, per-user: the demo must be
+ *  the caller's). Recorded 2026-09-07 from dev. `matched: false` carries the
+ *  server's `reason`; `matched: true` carries the round it picked, with its
+ *  confidence and the criteria that agreed, and one comparison row per
+ *  player seen in the demo or in the database. Numbers the demo scanner does
+ *  not know arrive as null or 0 — the page must not paint them as measured. */
+export interface GreatshotCrossrefRound {
+  round_id: number;
+  match_id: string | null;
+  round_number: number;
+  round_date: string | null;
+  round_time: string | null;
+  map_name: string | null;
+  duration_seconds: number | null;
+  winner_team: number | null;
+  gaming_session_id: number | null;
+  player_count: number | null;
+  confidence: number;
+  match_details: string[];
+  demo_round_index?: number;
+}
+export interface GreatshotCrossrefStats {
+  kills: number | null;
+  deaths: number | null;
+  damage_given: number | null;
+  damage_received: number | null;
+  accuracy: number | null;
+  headshots: number | null;
+  time_played_seconds: number | null;
+  time_played_minutes: number | null;
+  tpm: number | null;
+  player_guid?: string;
+  headshot_kills?: number | null;
+  revives_given?: number | null;
+  team?: number | null;
+  efficiency?: number | null;
+  kdr?: number | null;
+  skill_rating?: number | null;
+  dpm?: number | null;
+}
+export interface GreatshotCrossrefComparison {
+  demo_name: string | null;
+  db_name: string | null;
+  matched: boolean;
+  demo_stats: GreatshotCrossrefStats | null;
+  db_stats: GreatshotCrossrefStats | null;
+}
+export type GreatshotCrossref =
+  | { matched: false; reason: string }
+  | { matched: true; round: GreatshotCrossrefRound; db_player_stats: Record<string, GreatshotCrossrefStats>; comparison: GreatshotCrossrefComparison[] };
+/** `/api/stats/player/{player_name}/rounds` — per-round DPM, oldest first,
+ *  one point per counted half with more than a minute played
+ *  (`players_router.get_player_rounds`; R1/R2 only since #970). `label` is
+ *  the map name cut to twelve characters by the server. Recorded 2026-09-07
+ *  from dev before #970 was deployed there, so the recorded values still
+ *  include the R0 copy; the shape is the same. */
+export interface PlayerRoundPoint {
+  label: string;
+  date: string;
+  dpm: number;
+}
+export interface PlayerRoundsSeries {
+  rounds: PlayerRoundPoint[];
+  avg_dpm: number;
 }

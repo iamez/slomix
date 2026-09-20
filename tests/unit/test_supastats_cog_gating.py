@@ -97,9 +97,26 @@ def _reacting_message():
     return msg, reactions
 
 
+def _reactions_on(cog):
+    cog.config.supastats_reactions_enabled = True
+    return cog
+
+
+@pytest.mark.asyncio
+async def test_reactions_are_off_by_default_but_the_check_still_reports(monkeypatch):
+    """Owner, 2026-09-09: stop reacting on supa's messages, keep checking."""
+    cog, dms = _cog_with_captured_dms(monkeypatch)
+    assert getattr(cog.config, "supastats_reactions_enabled", False) is False
+    msg, reactions = _reacting_message()
+    await cog._run_check(msg, _attachment(SMALL_IMAGE_BYTES + 1), source="auto")
+    assert reactions == []
+    assert dms, "the DM report must still go out with reactions off"
+
+
 @pytest.mark.asyncio
 async def test_small_non_sheet_gets_no_reaction(monkeypatch):
     cog, _ = _cog_with_captured_dms(monkeypatch)
+    _reactions_on(cog)
     msg, reactions = _reacting_message()
     await cog._run_check(msg, _attachment(5 * 1024), source="auto")
     assert reactions == []
@@ -108,6 +125,7 @@ async def test_small_non_sheet_gets_no_reaction(monkeypatch):
 @pytest.mark.asyncio
 async def test_large_non_sheet_gets_cross(monkeypatch):
     cog, _ = _cog_with_captured_dms(monkeypatch)
+    _reactions_on(cog)
     msg, reactions = _reacting_message()
     await cog._run_check(msg, _attachment(SMALL_IMAGE_BYTES + 1), source="auto")
     assert reactions == ["❌"]
@@ -115,6 +133,7 @@ async def test_large_non_sheet_gets_cross(monkeypatch):
 
 async def _run_success_path(monkeypatch, report_text):
     cog, dms = _cog_with_captured_dms(monkeypatch)
+    _reactions_on(cog)
     fake_sheet = SimpleNamespace(map_count=8, kills=[1] * 6,
                                  kills_checksum_ok=True, map_points=None)
     monkeypatch.setattr(supastats_cog, "read_supastats_image",

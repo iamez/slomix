@@ -18,6 +18,7 @@ import type {
   BetsMarketCurrent,
   MarketOpenResponse,
   MemoryCard,
+  PlayerCard,
   PlayerVsStats,
   SkillPlayerForm,
   SkillPlayerHistory,
@@ -120,6 +121,9 @@ import type {
   RecentPrediction,
   RecentRound,
   RivalryLeaderboard,
+  MatchDetails,
+  RoundAwards,
+  RoundPlayerDetails,
   RoundViz,
   SeasonAwards,
   SeasonCurrent,
@@ -128,6 +132,7 @@ import type {
   SessionAwards,
   SessionBasics,
   SessionDetail,
+  SessionGraphs,
   SessionGoodNight,
   SessionLeaderRow,
   SessionLineups,
@@ -181,6 +186,9 @@ import type {
   WeaponsHallOfFame,
   Diagnostics,
   Wrapped,
+  PlayerSessionForm,
+  GreatshotCrossref,
+  PlayerRoundsSeries,
 } from './types';
 
 /**
@@ -245,6 +253,10 @@ export function useOverview() {
 const PROFILE_SECTIONS = [
   'identity', 'skill', 'streaks', 'weapons', 'hit_regions', 'movement',
   'relationships', 'maps', 'recent_matches',
+  // Measured cold on dev 2026-09-08 for a regular: nick_history 0.42 s,
+  // gather_summary 0.04 s, combat_timing 1.36 s (all ~0 warm) — cheap
+  // enough for the one request. `aim` 8.9 s and `advanced` 9.3 s stay out.
+  'nick_history', 'gather_summary', 'combat_timing',
 ].join(',');
 
 /** The profile is ONE endpoint with sections (players_profile_router): the
@@ -417,6 +429,17 @@ export function useRecentMatches(limit = 5) {
   return useQuery({
     queryKey: ['recent-matches', limit],
     queryFn: () => apiGet('/api/stats/matches', { query: { limit } }) as Promise<MatchRow[]>,
+  });
+}
+
+/** The box score of one half. Mounted only once a row is opened — a
+ *  disabled query is pending forever in React Query v5. */
+export function useMatchDetails(roundId: number | null) {
+  return useQuery({
+    queryKey: ['match-details', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/stats/matches/{match_id}', { pathParams: { match_id: String(roundId!) } }) as Promise<MatchDetails>,
   });
 }
 
@@ -612,6 +635,37 @@ export function useRecentRounds() {
   return useQuery({
     queryKey: ['recent-rounds'],
     queryFn: () => apiGet('/api/rounds/recent', { query: { limit: 50 } }) as Promise<RecentRound[]>,
+  });
+}
+
+/** Awards for one round, grouped by category.
+ *
+ * ⛔ `enabled` keeps this from firing until a round is actually picked — the
+ * rounds table lists up to 18 of them and eagerly fetching each one would be
+ * 18 calls to answer a question nobody asked.
+ */
+/** One player's breakdown of one half. Disabled until both ids are known —
+ *  and a disabled query is pending forever in React Query v5, so the caller
+ *  mounts it only once a row was clicked. */
+export function useRoundPlayerDetails(roundId: number | null, playerGuid: string | null) {
+  return useQuery({
+    queryKey: ['round-player-details', roundId, playerGuid],
+    enabled: roundId != null && playerGuid != null,
+    queryFn: () =>
+      apiGet('/api/rounds/{round_id}/player/{player_guid}/details', {
+        pathParams: { round_id: roundId!, player_guid: playerGuid! },
+      }) as Promise<RoundPlayerDetails>,
+  });
+}
+
+export function useRoundAwards(roundId: number | null) {
+  return useQuery({
+    queryKey: ['round-awards', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/rounds/{round_id}/awards', {
+        pathParams: { round_id: roundId! },
+      }) as Promise<RoundAwards>,
   });
 }
 
@@ -902,6 +956,16 @@ export function useStoryKisDetails(gsid: number, playerGuid: string | null) {
 /** Everything the session totals are built from: matches, per-player totals,
  *  stopwatch scoring and the team matrix. One 39 KB response rather than the
  *  legacy page's five calls. */
+/** The graphs of an evening over its counted rounds — keyed by gaming
+ *  session, never by date (a day can hold several). */
+export function useSessionGraphs(sessionId: number) {
+  return useQuery({
+    queryKey: ['session-graphs', sessionId],
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/graphs', { pathParams: { gaming_session_id: sessionId } }) as Promise<SessionGraphs>,
+  });
+}
+
 export function useSessionDetail(sessionId: number | null) {
   return useQuery({
     queryKey: ['session-detail', sessionId],
@@ -1511,11 +1575,20 @@ export function useProxRoundTracks(roundId: number | null) {
  *  the last moment on screen while scrubbing; react-query's keying makes
  *  the winner commit (a superseded response can never overwrite a newer
  *  key's cache entry). */
+/** The previous snapshot may stand in while a new moment loads — but only
+ *  within the SAME point of view. Across a switch the oracle's players and
+ *  beliefs would be drawn under a team's label until the request landed
+ *  (Codex on #1005), so a snapshot of another view is not a placeholder. */
+export function sameView(prev: SpiderWebSnapshot | undefined, pov: string): SpiderWebSnapshot | undefined {
+  if (!prev) return undefined;
+  return (prev.information_state?.pov ?? 'world') === pov ? prev : undefined;
+}
+
 export function useSpiderWebMoment(roundId: number | null, tMs: number, pov: string) {
   return useQuery({
     queryKey: ['spider-web', roundId, tMs, pov],
     enabled: roundId != null,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev) => sameView(prev, pov),
     queryFn: () =>
       apiGet('/api/replay/round/{round_id}/web', {
         pathParams: { round_id: roundId! },
@@ -2078,6 +2151,18 @@ export function usePlayerVsStats(guid: string, sessionId: number) {
 }
 
 /** The career keepsake behind the profile's "memory card" section. */
+/** The hover card of the legacy player list, on the profile since 2026-09-08. */
+export function usePlayerCard(guid: string | null) {
+  return useQuery({
+    queryKey: ['player-card', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/players/{identifier}/card', {
+      pathParams: { identifier: guid! },
+    }) as Promise<PlayerCard>,
+  });
+}
+
 export function useMemoryCard(guid: string | null) {
   return useQuery({
     queryKey: ['memory-card', guid],
@@ -2098,6 +2183,37 @@ export function useSkillPlayerForm(guid: string | null) {
     queryFn: () => apiGet('/api/skill/player/{identifier}/form', {
       pathParams: { identifier: guid! },
     }) as Promise<SkillPlayerForm>,
+  });
+}
+
+/** Session-by-session DPM with a date per point, rounds per session, the
+ *  average and a six-session trend — what `/api/skill/player/{}/form` does
+ *  not carry (PlayerProfile's own note measured the two series equal to
+ *  rounding). The handler resolves a guid or a name. */
+export function usePlayerSessionForm(identifier: string | null, limit = 20) {
+  return useQuery({
+    queryKey: ['player-session-form', identifier, limit],
+    enabled: !!identifier,
+    retry: false,
+    queryFn: () => apiGet('/api/stats/player/{player_name}/form', {
+      pathParams: { player_name: identifier! },
+      query: { limit },
+    }) as Promise<PlayerSessionForm>,
+  });
+}
+
+/** The last rounds one by one — the grain below the session series:
+ *  a map and a DPM per counted half. Not the profile's "last rounds"
+ *  table (that is `/api/player/{name}/matches`); same word, different data. */
+export function usePlayerRoundsSeries(identifier: string | null, limit = 30) {
+  return useQuery({
+    queryKey: ['player-rounds-series', identifier, limit],
+    enabled: !!identifier,
+    retry: false,
+    queryFn: () => apiGet('/api/stats/player/{player_name}/rounds', {
+      pathParams: { player_name: identifier! },
+      query: { limit },
+    }) as Promise<PlayerRoundsSeries>,
   });
 }
 
@@ -2144,6 +2260,19 @@ export function useGreatshotDetail(demoId: string | null) {
         pathParams: { demo_id: demoId! },
       }) as Promise<GreatshotDetail>,
     staleTime: 30 * 1000,
+  });
+}
+
+/** The demo matched against the stats database — the caller's own demo
+ *  only (401 signed out, 404 someone else's). */
+export function useGreatshotCrossref(demoId: string | null) {
+  return useQuery({
+    queryKey: ['greatshot-crossref', demoId],
+    enabled: !!demoId,
+    retry: false,
+    queryFn: () => apiGet('/api/greatshot/{demo_id}/crossref', {
+      pathParams: { demo_id: demoId! },
+    }) as Promise<GreatshotCrossref>,
   });
 }
 

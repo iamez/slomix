@@ -1,0 +1,2881 @@
+{
+ "recorded_at": 1788809981.1641147,
+ "oldest_seq": 2512,
+ "last_seq": 2939,
+ "events": [
+  {
+   "seq": 2512,
+   "type": "POPUP",
+   "level_ms": 5526125,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809523.1677108,
+   "team": "allies",
+   "verb": "planted",
+   "objective": "the Door Controls",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2513,
+   "type": "DYNAMITE",
+   "level_ms": 5526125,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809523.1677108,
+   "action": "plant",
+   "slot": 2,
+   "objective": "the Door Controls",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2516,
+   "type": "KILL",
+   "level_ms": 5531275,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809527.342954,
+   "killer_slot": 6,
+   "victim_slot": 5,
+   "killer": ".olz",
+   "victim": "wiseBoy",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2518,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809520410,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809527.342954,
+   "killer_slot": 6,
+   "victim_slot": 5,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": -41,
+    "y": -2357,
+    "z": -336
+   },
+   "victim_pos": {
+    "x": 197,
+    "y": -2255,
+    "z": -336
+   },
+   "killer_health": 120,
+   "distance": 259,
+   "src": "livex"
+  },
+  {
+   "seq": 2527,
+   "type": "KILL",
+   "level_ms": 5536825,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809533.5743322,
+   "killer_slot": 4,
+   "victim_slot": 6,
+   "killer": "qmr",
+   "victim": ".olz",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2528,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809525963,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809533.5743322,
+   "killer_slot": 4,
+   "victim_slot": 6,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 807,
+    "y": -1273,
+    "z": -336
+   },
+   "victim_pos": {
+    "x": 1023,
+    "y": -2099,
+    "z": -336
+   },
+   "killer_health": 52,
+   "distance": 854,
+   "src": "livex"
+  },
+  {
+   "seq": 2531,
+   "type": "KILL",
+   "level_ms": 5539600,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809535.6513286,
+   "killer_slot": 2,
+   "victim_slot": 1,
+   "killer": ".lgz",
+   "victim": "vid",
+   "mod": "MOD_GRENADE_PINEAPPLE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2532,
+   "type": "KILL",
+   "level_ms": 5539600,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809535.6513286,
+   "killer_slot": 2,
+   "victim_slot": 3,
+   "killer": ".lgz",
+   "victim": "KaNii",
+   "mod": "MOD_GRENADE_PINEAPPLE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2533,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809528732,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809535.6513286,
+   "killer_slot": 2,
+   "victim_slot": 1,
+   "mod_id": 18,
+   "killer_pos": {
+    "x": 452,
+    "y": -999,
+    "z": -328
+   },
+   "victim_pos": {
+    "x": 359,
+    "y": -1475,
+    "z": -336
+   },
+   "killer_health": 7,
+   "distance": 485,
+   "src": "livex"
+  },
+  {
+   "seq": 2534,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809528733,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809535.6513286,
+   "killer_slot": 2,
+   "victim_slot": 3,
+   "mod_id": 18,
+   "killer_pos": {
+    "x": 452,
+    "y": -999,
+    "z": -328
+   },
+   "victim_pos": {
+    "x": 421,
+    "y": -1289,
+    "z": -328
+   },
+   "killer_health": 7,
+   "distance": 292,
+   "src": "livex"
+  },
+  {
+   "seq": 2535,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5541075,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809537.7355213,
+   "slot": 3,
+   "name": "KaNii",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2538,
+   "type": "KILL",
+   "level_ms": 5543625,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809539.8269017,
+   "killer_slot": 2,
+   "victim_slot": 2,
+   "killer": ".lgz",
+   "victim": ".lgz",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2539,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809532763,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809539.8269017,
+   "killer_slot": 2,
+   "victim_slot": 2,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 183,
+    "y": -1547,
+    "z": -319
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2540,
+   "type": "KILL",
+   "level_ms": 5544450,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809541.9177942,
+   "killer_slot": 4,
+   "victim_slot": 4,
+   "killer": "qmr",
+   "victim": "qmr",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2541,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809533607,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809541.9177942,
+   "killer_slot": 4,
+   "victim_slot": 4,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 378,
+    "y": -1510,
+    "z": -288
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2542,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5545200,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809541.9177942,
+   "slot": 3,
+   "name": "KaNii",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2549,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809541000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809541.9177942,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2555,
+   "type": "OBJECTIVE_DESTROYED",
+   "level_ms": 5556125,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809552.3901343,
+   "detail": "2 the Door Controls",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2556,
+   "type": "ANNOUNCE",
+   "level_ms": 5556125,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809552.3901343,
+   "text": "The Doors are opening!!",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2560,
+   "type": "KILL",
+   "level_ms": 5569575,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809566.9823985,
+   "killer_slot": 1,
+   "victim_slot": 4,
+   "killer": "vid",
+   "victim": "qmr",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2561,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809558723,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809566.9823985,
+   "killer_slot": 1,
+   "victim_slot": 4,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": 1004,
+    "y": -1059,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": 958,
+    "y": -502,
+    "z": -30
+   },
+   "killer_health": 117,
+   "distance": 567,
+   "src": "livex"
+  },
+  {
+   "seq": 2562,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5570250,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809566.9823985,
+   "slot": 1,
+   "name": "vid",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2565,
+   "type": "KILL",
+   "level_ms": 5574700,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809571.144568,
+   "killer_slot": 6,
+   "victim_slot": 6,
+   "killer": ".olz",
+   "victim": ".olz",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2566,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809563836,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809571.144568,
+   "killer_slot": 6,
+   "victim_slot": 6,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": -710,
+    "y": 713,
+    "z": 88
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2574,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809571000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809571.144568,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2576,
+   "type": "KILL",
+   "level_ms": 5577275,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809573.2289736,
+   "killer_slot": 6,
+   "victim_slot": 5,
+   "killer": ".olz",
+   "victim": "wiseBoy",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2577,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809566425,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809573.2289736,
+   "killer_slot": 6,
+   "victim_slot": 5,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": -1100,
+    "y": 171,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": -933,
+    "y": 1091,
+    "z": 113
+   },
+   "killer_health": 129,
+   "distance": 935,
+   "src": "livex"
+  },
+  {
+   "seq": 2587,
+   "type": "KILL",
+   "level_ms": 5593200,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809589.9165602,
+   "killer_slot": 2,
+   "victim_slot": 6,
+   "killer": ".lgz",
+   "victim": ".olz",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2589,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809582341,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809589.9165602,
+   "killer_slot": 2,
+   "victim_slot": 6,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 1225,
+    "y": -246,
+    "z": -96
+   },
+   "victim_pos": {
+    "x": 711,
+    "y": 807,
+    "z": -96
+   },
+   "killer_health": 48,
+   "distance": 1172,
+   "src": "livex"
+  },
+  {
+   "seq": 2595,
+   "type": "KILL",
+   "level_ms": 5595425,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809592.018781,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "killer": "vid",
+   "victim": ".lgz",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2596,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809584576,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809592.018781,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 1132,
+    "y": -996,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": 1139,
+    "y": -167,
+    "z": -96
+   },
+   "killer_health": 140,
+   "distance": 845,
+   "src": "livex"
+  },
+  {
+   "seq": 2597,
+   "type": "REVIVE",
+   "level_ms": 5596075,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809592.018781,
+   "slots": "4 2",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2599,
+   "type": "KILL",
+   "level_ms": 5598350,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809594.1070225,
+   "killer_slot": 5,
+   "victim_slot": 1,
+   "killer": "wiseBoy",
+   "victim": "vid",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2600,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809587506,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809594.1070225,
+   "killer_slot": 5,
+   "victim_slot": 1,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 1008,
+    "y": -236,
+    "z": -96
+   },
+   "victim_pos": {
+    "x": 919,
+    "y": -1061,
+    "z": 72
+   },
+   "killer_health": 56,
+   "distance": 846,
+   "src": "livex"
+  },
+  {
+   "seq": 2602,
+   "type": "REVIVE",
+   "level_ms": 5599625,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809596.1920183,
+   "slots": "3 1",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2604,
+   "type": "KILL",
+   "level_ms": 5603000,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809600.362492,
+   "killer_slot": 5,
+   "victim_slot": 1,
+   "killer": "wiseBoy",
+   "victim": "vid",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2605,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809592154,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809600.362492,
+   "killer_slot": 5,
+   "victim_slot": 1,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 975,
+    "y": -688,
+    "z": 36
+   },
+   "victim_pos": {
+    "x": 1102,
+    "y": -865,
+    "z": 72
+   },
+   "killer_health": 53,
+   "distance": 220,
+   "src": "livex"
+  },
+  {
+   "seq": 2607,
+   "type": "KILL",
+   "level_ms": 5603600,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809600.362492,
+   "killer_slot": 3,
+   "victim_slot": 3,
+   "killer": "KaNii",
+   "victim": "KaNii",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2608,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809592742,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809600.362492,
+   "killer_slot": 3,
+   "victim_slot": 3,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 859,
+    "y": -1235,
+    "z": 72
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2615,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809601000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809602.4477718,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2616,
+   "type": "SUPPLY",
+   "level_ms": 5605375,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809602.4477718,
+   "slots": "4 2",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2617,
+   "type": "SUPPLY",
+   "level_ms": 5606150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809602.4477718,
+   "slots": "3 6",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2620,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5610650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809606.6026297,
+   "slot": 2,
+   "name": ".lgz",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2626,
+   "type": "KILL",
+   "level_ms": 5620925,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809617.02769,
+   "killer_slot": 4,
+   "victim_slot": 6,
+   "killer": "qmr",
+   "victim": ".olz",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2627,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809610081,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809617.02769,
+   "killer_slot": 4,
+   "victim_slot": 6,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 443,
+    "y": -345,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": -291,
+    "y": -227,
+    "z": 72
+   },
+   "killer_health": 29,
+   "distance": 743,
+   "src": "livex"
+  },
+  {
+   "seq": 2629,
+   "type": "KILL",
+   "level_ms": 5622375,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809619.1130452,
+   "killer_slot": 2,
+   "victim_slot": 4,
+   "killer": ".lgz",
+   "victim": "qmr",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2630,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809611529,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809619.1130452,
+   "killer_slot": 2,
+   "victim_slot": 4,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 337,
+    "y": -331,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": 289,
+    "y": -295,
+    "z": 72
+   },
+   "killer_health": 42,
+   "distance": 59,
+   "src": "livex"
+  },
+  {
+   "seq": 2632,
+   "type": "KILL",
+   "level_ms": 5624825,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809621.2085645,
+   "killer_slot": 2,
+   "victim_slot": 2,
+   "killer": ".lgz",
+   "victim": ".lgz",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2633,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809613981,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809621.2085645,
+   "killer_slot": 2,
+   "victim_slot": 2,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": -241,
+    "y": -143,
+    "z": 72
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2634,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5625200,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809621.2085645,
+   "slot": 2,
+   "name": ".lgz",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2646,
+   "type": "KILL",
+   "level_ms": 5643575,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809639.9762018,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "killer": "vid",
+   "victim": ".lgz",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2647,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809632721,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809639.9762018,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": -23,
+    "y": 1626,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": 247,
+    "y": 1668,
+    "z": -72
+   },
+   "killer_health": 122,
+   "distance": 308,
+   "src": "livex"
+  },
+  {
+   "seq": 2653,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5645900,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809642.0596514,
+   "slot": 1,
+   "name": "vid",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2655,
+   "type": "KILL",
+   "level_ms": 5664525,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809660.8120668,
+   "killer_slot": 6,
+   "victim_slot": 6,
+   "killer": ".olz",
+   "victim": ".olz",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2656,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809653675,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809660.8120668,
+   "killer_slot": 6,
+   "victim_slot": 6,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": -269,
+    "y": -1885,
+    "z": 88
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2657,
+   "type": "KILL",
+   "level_ms": 5664700,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809660.8120668,
+   "killer_slot": 1,
+   "victim_slot": 1,
+   "killer": "vid",
+   "victim": "vid",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2658,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809653855,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809660.8120668,
+   "killer_slot": 1,
+   "victim_slot": 1,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 434,
+    "y": -1303,
+    "z": 72
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2659,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5665200,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809662.8941145,
+   "slot": 1,
+   "name": "vid",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2664,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809661000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809662.8941145,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2669,
+   "type": "KILL",
+   "level_ms": 5674550,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809671.245999,
+   "killer_slot": 5,
+   "victim_slot": 6,
+   "killer": "wiseBoy",
+   "victim": ".olz",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2670,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809663693,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809671.245999,
+   "killer_slot": 5,
+   "victim_slot": 6,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 278,
+    "y": -307,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": -374,
+    "y": -88,
+    "z": 73
+   },
+   "killer_health": 140,
+   "distance": 687,
+   "src": "livex"
+  },
+  {
+   "seq": 2680,
+   "type": "KILL",
+   "level_ms": 5680200,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809677.5513062,
+   "killer_slot": 3,
+   "victim_slot": 3,
+   "killer": "KaNii",
+   "victim": "KaNii",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2681,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809669339,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809677.5513062,
+   "killer_slot": 3,
+   "victim_slot": 3,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": -43,
+    "y": 458,
+    "z": 72
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2684,
+   "type": "FLAG_PICKUP",
+   "level_ms": 5683650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809679.6385114,
+   "slot": 2,
+   "flag": "team_CTF_redflag",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2685,
+   "type": "POPUP",
+   "level_ms": 5683650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809679.6385114,
+   "team": "allies",
+   "verb": "stole",
+   "objective": "the documents",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2686,
+   "type": "KILL",
+   "level_ms": 5684050,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809681.7300904,
+   "killer_slot": 1,
+   "victim_slot": 5,
+   "killer": "vid",
+   "victim": "wiseBoy",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2687,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809673202,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809681.7300904,
+   "killer_slot": 1,
+   "victim_slot": 5,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": -495,
+    "y": 184,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": -184,
+    "y": 847,
+    "z": 72
+   },
+   "killer_health": 122,
+   "distance": 732,
+   "src": "livex"
+  },
+  {
+   "seq": 2696,
+   "type": "KILL",
+   "level_ms": 5687900,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809683.807181,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "killer": "vid",
+   "victim": ".lgz",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2697,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809677051,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809683.807181,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": -1140,
+    "y": 330,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": -1021,
+    "y": 849,
+    "z": 72
+   },
+   "killer_health": 78,
+   "distance": 533,
+   "src": "livex"
+  },
+  {
+   "seq": 2705,
+   "type": "INIT_GAME",
+   "level_ms": 5710650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2706,
+   "type": "MAP",
+   "level_ms": 5710650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "map_name": "etl_adlernest",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2707,
+   "type": "GAMETYPE",
+   "level_ms": 5710650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "gametype": "Stopwatch",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2708,
+   "type": "GAMETIME",
+   "level_ms": 5710650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "wallclock": "Mon Sep 07 21:35:06 2026",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2709,
+   "type": "CONNECT",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2710,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 1,
+   "name": "vid",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2711,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 1,
+   "name": "vid",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2712,
+   "type": "BEGIN",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2713,
+   "type": "CONNECT",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2714,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 2,
+   "name": ".lgz",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2715,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 2,
+   "name": ".lgz",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2716,
+   "type": "BEGIN",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2717,
+   "type": "CONNECT",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 3,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2718,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 3,
+   "name": "KaNii",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2719,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 3,
+   "name": "KaNii",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2720,
+   "type": "BEGIN",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 3,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2721,
+   "type": "CONNECT",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 4,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2722,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 4,
+   "name": "qmr",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2723,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 4,
+   "name": "qmr",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2724,
+   "type": "BEGIN",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 4,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2725,
+   "type": "CONNECT",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 5,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2726,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 5,
+   "name": "wiseBoy",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2727,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 5,
+   "name": "wiseBoy",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2728,
+   "type": "BEGIN",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 5,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2729,
+   "type": "CONNECT",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 6,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2730,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 6,
+   "name": ".olz",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2731,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 6,
+   "name": ".olz",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2732,
+   "type": "BEGIN",
+   "level_ms": 5711150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "slot": 6,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2733,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809706000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809706.7449143,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2736,
+   "type": "CALLVOTE",
+   "level_ms": 5715650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809710.9602594,
+   "slot": 4,
+   "vote": "Match Reset",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2738,
+   "type": "INIT_GAME",
+   "level_ms": 5717825,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809713.0392222,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2739,
+   "type": "MAP",
+   "level_ms": 5717825,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809713.0392222,
+   "map_name": "etl_adlernest",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2740,
+   "type": "GAMETYPE",
+   "level_ms": 5717825,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809713.0392222,
+   "gametype": "Stopwatch",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2741,
+   "type": "GAMETIME",
+   "level_ms": 5717825,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809713.0392222,
+   "wallclock": "Mon Sep 07 21:35:12 2026",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2742,
+   "type": "CONNECT",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2743,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 1,
+   "name": "vid",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2744,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 1,
+   "name": "vid",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2745,
+   "type": "BEGIN",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2746,
+   "type": "CONNECT",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2747,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 2,
+   "name": ".lgz",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2748,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 2,
+   "name": ".lgz",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2749,
+   "type": "BEGIN",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2750,
+   "type": "CONNECT",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 3,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2751,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 3,
+   "name": "KaNii",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2752,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 3,
+   "name": "KaNii",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2753,
+   "type": "BEGIN",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 3,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2754,
+   "type": "CONNECT",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 4,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2755,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 4,
+   "name": "qmr",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2756,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 4,
+   "name": "qmr",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2757,
+   "type": "BEGIN",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 4,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2758,
+   "type": "CONNECT",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 5,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2759,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 5,
+   "name": "wiseBoy",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2760,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 5,
+   "name": "wiseBoy",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2761,
+   "type": "BEGIN",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 5,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2762,
+   "type": "CONNECT",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 6,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2763,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 6,
+   "name": ".olz",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2764,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 6,
+   "name": ".olz",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2765,
+   "type": "BEGIN",
+   "level_ms": 5718325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "slot": 6,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2766,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809712000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809715.2607331,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2771,
+   "type": "KILL",
+   "level_ms": 5766025,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809761.206086,
+   "killer_slot": 2,
+   "victim_slot": 3,
+   "killer": ".lgz",
+   "victim": "KaNii",
+   "mod": "MOD_GRENADE_PINEAPPLE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2773,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809751382,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809761.206086,
+   "killer_slot": 2,
+   "victim_slot": 3,
+   "mod_id": 18,
+   "killer_pos": {
+    "x": 380,
+    "y": -1042,
+    "z": -242
+   },
+   "victim_pos": {
+    "x": 265,
+    "y": -1115,
+    "z": -336
+   },
+   "killer_health": 15,
+   "distance": 165,
+   "src": "livex"
+  },
+  {
+   "seq": 2782,
+   "type": "KILL",
+   "level_ms": 5771650,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809765.3788178,
+   "killer_slot": 6,
+   "victim_slot": 2,
+   "killer": ".olz",
+   "victim": ".lgz",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2783,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809757031,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809765.3788178,
+   "killer_slot": 6,
+   "victim_slot": 2,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": 333,
+    "y": -1163,
+    "z": -328
+   },
+   "victim_pos": {
+    "x": 430,
+    "y": -1060,
+    "z": -328
+   },
+   "killer_health": 7,
+   "distance": 141,
+   "src": "livex"
+  },
+  {
+   "seq": 2785,
+   "type": "KILL",
+   "level_ms": 5772075,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809767.4588459,
+   "killer_slot": 4,
+   "victim_slot": 4,
+   "killer": "qmr",
+   "victim": "qmr",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2786,
+   "type": "KILL",
+   "level_ms": 5772125,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809767.4588459,
+   "killer_slot": 6,
+   "victim_slot": 6,
+   "killer": ".olz",
+   "victim": ".olz",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2787,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809757452,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809767.4588459,
+   "killer_slot": 4,
+   "victim_slot": 4,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 619,
+    "y": -2145,
+    "z": -336
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2788,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809757494,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809767.4588459,
+   "killer_slot": 6,
+   "victim_slot": 6,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 358,
+    "y": -1066,
+    "z": -328
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2789,
+   "type": "KILL",
+   "level_ms": 5772675,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809767.4588459,
+   "killer_slot": 1,
+   "victim_slot": 1,
+   "killer": "vid",
+   "victim": "vid",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2790,
+   "type": "KILL",
+   "level_ms": 5772800,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809767.4588459,
+   "killer_slot": 5,
+   "victim_slot": 5,
+   "killer": "wiseBoy",
+   "victim": "wiseBoy",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2791,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809758032,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809767.4588459,
+   "killer_slot": 1,
+   "victim_slot": 1,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 442,
+    "y": -2244,
+    "z": -336
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2792,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809758172,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809767.4588459,
+   "killer_slot": 5,
+   "victim_slot": 5,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 504,
+    "y": -1795,
+    "z": -336
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2802,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809772000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809771.6126955,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2804,
+   "type": "KILL",
+   "level_ms": 5781300,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809775.7721255,
+   "killer_slot": 4,
+   "victim_slot": 6,
+   "killer": "qmr",
+   "victim": ".olz",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2805,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809766670,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809775.7721255,
+   "killer_slot": 4,
+   "victim_slot": 6,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 651,
+    "y": -2380,
+    "z": -336
+   },
+   "victim_pos": {
+    "x": -406,
+    "y": -1900,
+    "z": -173
+   },
+   "killer_health": 33,
+   "distance": 1172,
+   "src": "livex"
+  },
+  {
+   "seq": 2809,
+   "type": "KILL",
+   "level_ms": 5786300,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809782.0158997,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "killer": "vid",
+   "victim": ".lgz",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2810,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809771674,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809782.0158997,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": 515,
+    "y": -1154,
+    "z": -328
+   },
+   "victim_pos": {
+    "x": 411,
+    "y": -1044,
+    "z": -328
+   },
+   "killer_health": 116,
+   "distance": 150,
+   "src": "livex"
+  },
+  {
+   "seq": 2811,
+   "type": "KILL",
+   "level_ms": 5787275,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809782.0158997,
+   "killer_slot": 4,
+   "victim_slot": 3,
+   "killer": "qmr",
+   "victim": "KaNii",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2812,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809772638,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809782.0158997,
+   "killer_slot": 4,
+   "victim_slot": 3,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": -197,
+    "y": -2394,
+    "z": -336
+   },
+   "victim_pos": {
+    "x": -310,
+    "y": -1405,
+    "z": -296
+   },
+   "killer_health": 53,
+   "distance": 995,
+   "src": "livex"
+  },
+  {
+   "seq": 2820,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5788150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809782.0158997,
+   "slot": 1,
+   "name": "vid",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2822,
+   "type": "KILL",
+   "level_ms": 5790400,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809784.0980713,
+   "killer_slot": 1,
+   "victim_slot": 5,
+   "killer": "vid",
+   "victim": "wiseBoy",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2823,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809775778,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809784.0980713,
+   "killer_slot": 1,
+   "victim_slot": 5,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 431,
+    "y": -991,
+    "z": -328
+   },
+   "victim_pos": {
+    "x": 497,
+    "y": -1157,
+    "z": -328
+   },
+   "killer_health": 54,
+   "distance": 177,
+   "src": "livex"
+  },
+  {
+   "seq": 2824,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5790600,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809786.165532,
+   "slot": 4,
+   "name": "qmr",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2826,
+   "type": "KILL",
+   "level_ms": 5793675,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809788.2405074,
+   "killer_slot": 4,
+   "victim_slot": 1,
+   "killer": "qmr",
+   "victim": "vid",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2827,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809779056,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809788.2405074,
+   "killer_slot": 4,
+   "victim_slot": 1,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": 396,
+    "y": -1660,
+    "z": -336
+   },
+   "victim_pos": {
+    "x": 502,
+    "y": -1097,
+    "z": -328
+   },
+   "killer_health": 71,
+   "distance": 572,
+   "src": "livex"
+  },
+  {
+   "seq": 2838,
+   "type": "POPUP",
+   "level_ms": 5806250,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809800.7057893,
+   "team": "allies",
+   "verb": "planted",
+   "objective": "the Door Controls",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2839,
+   "type": "DYNAMITE",
+   "level_ms": 5806250,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809800.7057893,
+   "action": "plant",
+   "slot": 2,
+   "objective": "the Door Controls",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2841,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809802000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809802.7788334,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2843,
+   "type": "KILL",
+   "level_ms": 5810075,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809804.855266,
+   "killer_slot": 5,
+   "victim_slot": 3,
+   "killer": "wiseBoy",
+   "victim": "KaNii",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2844,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809795456,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809804.855266,
+   "killer_slot": 5,
+   "victim_slot": 3,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": 754,
+    "y": -2171,
+    "z": -336
+   },
+   "victim_pos": {
+    "x": -1305,
+    "y": -1144,
+    "z": -16
+   },
+   "killer_health": 60,
+   "distance": 2323,
+   "src": "livex"
+  },
+  {
+   "seq": 2847,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5814975,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809809.004891,
+   "slot": 3,
+   "name": "KaNii",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2848,
+   "type": "KILL",
+   "level_ms": 5815150,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809809.004891,
+   "killer_slot": 2,
+   "victim_slot": 6,
+   "killer": ".lgz",
+   "victim": ".olz",
+   "mod": "MOD_GRENADE_PINEAPPLE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2849,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809800507,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809809.004891,
+   "killer_slot": 2,
+   "victim_slot": 6,
+   "mod_id": 18,
+   "killer_pos": {
+    "x": -171,
+    "y": -1373,
+    "z": -296
+   },
+   "victim_pos": {
+    "x": -975,
+    "y": -1718,
+    "z": -96
+   },
+   "killer_health": 120,
+   "distance": 897,
+   "src": "livex"
+  },
+  {
+   "seq": 2851,
+   "type": "REVIVE",
+   "level_ms": 5817500,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809813.1798573,
+   "slots": "1 6",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2861,
+   "type": "KILL",
+   "level_ms": 5827875,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809821.5175202,
+   "killer_slot": 1,
+   "victim_slot": 5,
+   "killer": "vid",
+   "victim": "wiseBoy",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2868,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809813245,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809821.5175202,
+   "killer_slot": 1,
+   "victim_slot": 5,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": -727,
+    "y": -1316,
+    "z": -150
+   },
+   "victim_pos": {
+    "x": -554,
+    "y": -1633,
+    "z": -152
+   },
+   "killer_health": 116,
+   "distance": 360,
+   "src": "livex"
+  },
+  {
+   "seq": 2869,
+   "type": "KILL",
+   "level_ms": 5829250,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809823.592689,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "killer": "vid",
+   "victim": ".lgz",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2870,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809814623,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809823.592689,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": -506,
+    "y": -1222,
+    "z": -144
+   },
+   "victim_pos": {
+    "x": 224,
+    "y": -996,
+    "z": -336
+   },
+   "killer_health": 83,
+   "distance": 787,
+   "src": "livex"
+  },
+  {
+   "seq": 2872,
+   "type": "KILL",
+   "level_ms": 5831325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809825.6648438,
+   "killer_slot": 1,
+   "victim_slot": 1,
+   "killer": "vid",
+   "victim": "vid",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2873,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809816697,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809825.6648438,
+   "killer_slot": 1,
+   "victim_slot": 1,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": -414,
+    "y": -1172,
+    "z": -296
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2879,
+   "type": "KILL",
+   "level_ms": 5852000,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809846.4199216,
+   "killer_slot": 4,
+   "victim_slot": 6,
+   "killer": "qmr",
+   "victim": ".olz",
+   "mod": "MOD_COLT",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2881,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809837364,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809846.4199216,
+   "killer_slot": 4,
+   "victim_slot": 6,
+   "mod_id": 7,
+   "killer_pos": {
+    "x": 835,
+    "y": -3077,
+    "z": -152
+   },
+   "victim_pos": {
+    "x": 664,
+    "y": -3032,
+    "z": -152
+   },
+   "killer_health": 57,
+   "distance": 176,
+   "src": "livex"
+  },
+  {
+   "seq": 2882,
+   "type": "KILL",
+   "level_ms": 5852550,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809846.4199216,
+   "killer_slot": 4,
+   "victim_slot": 4,
+   "killer": "qmr",
+   "victim": "qmr",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2883,
+   "type": "FLAG_PICKUP",
+   "level_ms": 5852600,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809846.4199216,
+   "slot": 5,
+   "flag": "team_CTF_redflag",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2884,
+   "type": "POPUP",
+   "level_ms": 5852600,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809846.4199216,
+   "team": "allies",
+   "verb": "stole",
+   "objective": "the documents",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2885,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809837919,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809846.4199216,
+   "killer_slot": 4,
+   "victim_slot": 4,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": 813,
+    "y": -3114,
+    "z": -152
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2886,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5852875,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809848.5355256,
+   "slot": 4,
+   "name": "qmr",
+   "team": 2,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2888,
+   "type": "KILL",
+   "level_ms": 5854175,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809848.5355256,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "killer": "vid",
+   "victim": ".lgz",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2889,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809839556,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809848.5355256,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": 466,
+    "y": -667,
+    "z": 64
+   },
+   "victim_pos": {
+    "x": -288,
+    "y": -195,
+    "z": 72
+   },
+   "killer_health": 64,
+   "distance": 890,
+   "src": "livex"
+  },
+  {
+   "seq": 2897,
+   "type": "FLAG_PICKUP",
+   "level_ms": 5950750,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809946.3987904,
+   "slot": 3,
+   "flag": "team_CTF_redflag",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2898,
+   "type": "POPUP",
+   "level_ms": 5950750,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809946.3987904,
+   "team": "axis",
+   "verb": "returned",
+   "objective": "the documents",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2900,
+   "type": "KILL",
+   "level_ms": 5952450,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809946.3987904,
+   "killer_slot": 4,
+   "victim_slot": 4,
+   "killer": "qmr",
+   "victim": "qmr",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2901,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809937811,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809946.3987904,
+   "killer_slot": 4,
+   "victim_slot": 4,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": -300,
+    "y": 93,
+    "z": 72
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2902,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5952875,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809948.4693382,
+   "slot": 6,
+   "name": ".olz",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2908,
+   "type": "LIVE_MAP",
+   "level_ms": 1788809952000,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809952.6248138,
+   "map_name": "etl_adlernest",
+   "src": "livex"
+  },
+  {
+   "seq": 2927,
+   "type": "KILL",
+   "level_ms": 5979325,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809973.4061701,
+   "killer_slot": 2,
+   "victim_slot": 3,
+   "killer": ".lgz",
+   "victim": "KaNii",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2928,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809964703,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809973.4061701,
+   "killer_slot": 2,
+   "victim_slot": 3,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": -333,
+    "y": 1266,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": 73,
+    "y": 729,
+    "z": 72
+   },
+   "killer_health": 140,
+   "distance": 673,
+   "src": "livex"
+  },
+  {
+   "seq": 2930,
+   "type": "KILL",
+   "level_ms": 5980600,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809975.482304,
+   "killer_slot": 6,
+   "victim_slot": 5,
+   "killer": ".olz",
+   "victim": "wiseBoy",
+   "mod": "MOD_MP40",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2931,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809965958,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809975.482304,
+   "killer_slot": 6,
+   "victim_slot": 5,
+   "mod_id": 8,
+   "killer_pos": {
+    "x": 86,
+    "y": 119,
+    "z": -40
+   },
+   "victim_pos": {
+    "x": 314,
+    "y": 274,
+    "z": -96
+   },
+   "killer_health": 104,
+   "distance": 281,
+   "src": "livex"
+  },
+  {
+   "seq": 2933,
+   "type": "KILL",
+   "level_ms": 5982500,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809977.5551493,
+   "killer_slot": 6,
+   "victim_slot": 6,
+   "killer": ".olz",
+   "victim": ".olz",
+   "mod": "MOD_SUICIDE",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2934,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809967866,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809977.5551493,
+   "killer_slot": 6,
+   "victim_slot": 6,
+   "mod_id": 33,
+   "killer_pos": {
+    "x": 0,
+    "y": 0,
+    "z": 0
+   },
+   "victim_pos": {
+    "x": -46,
+    "y": 440,
+    "z": 72
+   },
+   "killer_health": -1,
+   "distance": -1,
+   "src": "livex"
+  },
+  {
+   "seq": 2935,
+   "type": "TEAM_CHANGE",
+   "level_ms": 5982875,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809977.5551493,
+   "slot": 3,
+   "name": "KaNii",
+   "team": 1,
+   "src": "legacy3"
+  },
+  {
+   "seq": 2936,
+   "type": "KILL",
+   "level_ms": 5983750,
+   "clock": "level",
+   "source": "tailer",
+   "received_at": 1788809977.5551493,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "killer": "vid",
+   "victim": ".lgz",
+   "mod": "MOD_THOMPSON",
+   "src": "legacy3"
+  },
+  {
+   "seq": 2937,
+   "type": "LIVE_KILL",
+   "level_ms": 1788809969127,
+   "clock": "epoch",
+   "source": "tailer",
+   "received_at": 1788809977.5551493,
+   "killer_slot": 1,
+   "victim_slot": 2,
+   "mod_id": 9,
+   "killer_pos": {
+    "x": -930,
+    "y": 1059,
+    "z": 72
+   },
+   "victim_pos": {
+    "x": -578,
+    "y": 458,
+    "z": 120
+   },
+   "killer_health": 133,
+   "distance": 698,
+   "src": "livex"
+  }
+ ]
+}

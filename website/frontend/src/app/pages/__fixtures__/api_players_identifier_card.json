@@ -1,0 +1,69 @@
+{
+    "status": "ok",
+    "guid": "D8423F90",
+    "name": "vid",
+    "rating": {
+        "value": 0.764,
+        "tier": "veteran",
+        "games_rated": 1816,
+        "trend": "up"
+    },
+    "archetype": "pressure_engine",
+    "window_days": 90,
+    "small_sample": false,
+    "form": {
+        "rounds": 394,
+        "kills": 4117,
+        "deaths": 3194,
+        "kd": 1.29,
+        "dpm": 331.5,
+        "revives": 748,
+        "headshot_pct": 25.7,
+        "time_dead_pct": 17.1
+    },
+    "percentiles": {
+        "dpm": 86,
+        "kd": 79,
+        "revives": 64,
+        "survival": 86
+    },
+    "sparkline_dpm": [
+        328.4,
+        286.5,
+        307.5,
+        335.8,
+        313.3,
+        367.9,
+        317.9,
+        327.1,
+        370.2,
+        357.2
+    ],
+    "badges": [
+        {
+            "type": "kills",
+            "threshold": 10000,
+            "emoji": "\ud83d\udc51",
+            "title": "Legendary Slayer",
+            "color": "#F39C12"
+        },
+        {
+            "type": "kills",
+            "threshold": 5000,
+            "emoji": "\u2620\ufe0f",
+            "title": "Death Incarnate",
+            "color": "#C0392B"
+        },
+        {
+            "type": "kills",
+            "threshold": 2500,
+            "emoji": "\u2694\ufe0f",
+            "title": "Elite Warrior",
+            "color": "#E74C3C"
+        }
+    ],
+    "career": {
+        "kills": 18593,
+        "sessions": 124
+    }
+}

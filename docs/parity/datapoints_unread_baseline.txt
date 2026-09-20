@@ -1,0 +1,6 @@
+/api/proximity/event/{event_id} attacker_guid
+/api/proximity/vehicle-progress vehicles.end_z
+/api/proximity/vehicle-progress vehicles.start_z
+/api/stats/session/{gaming_session_id}/detail team_matrix.rounds_detail
+/api/uploads/resumable/{session_id}/finalize file_size_bytes
+/api/uploads/resumable/{session_id}/finalize share_url

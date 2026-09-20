@@ -10,7 +10,67 @@
 
 ---
 
+
 ## Open — data pipeline
+
+### Profile `aim` / `advanced`: a cache nobody warms, on a table nobody can read cold — Medium (researched 2026-09-08, deferred)
+
+**Symptom.** `/api/players/{guid}/profile?sections=aim` costs 9–46 s cold per player (three
+players measured 2026-09-08: 8.9 / 22.2 / 45.9 s), `advanced` 1–9 s; both ~0 s warm. The new SPA
+therefore never requests them (`lib/queries.ts`), and the legacy page fetched them deferred.
+
+**Cause (EXPLAIN ANALYZE on dev).** The flick/spread query reads every shot of the player —
+124 186 rows scattered over 17 212 heap pages (≈130 MB from disk) of a 370 MB table, then an
+external sort at `work_mem` 4 MB; 9.6 s, all I/O. `shared_buffers` is 128 MB against 2 GB of
+tables on a 1.8 GB box, so "warm" is the OS page cache the next import evicts. `advanced` has two
+`LEFT(col, 8) = $1` predicates that no index can serve (parallel seq scan of all 155 167
+`combat_engagement` rows, 1.6 s). The `player_aim_summary` cache (migration 077) has exactly one
+writer — the lazy read of `sections=aim` that the new site never issues — and its fingerprint
+(`COUNT/MAX(event_time)/SUM(round_id)`) dies at every import; it held 5 rows.
+
+**Paths, not chosen yet** (owner: researched, deferred): A `CLUSTER proximity_shot_fired USING
+idx_psf_canonical` as an ops experiment measured before/after; B expression indexes on
+`LEFT(target_guid, 8)` / `LEFT(original_victim_guid, 8)` (a numbered migration with the
+`website_app` grant); C a producer for 077 after import/relink (the KIS warm pattern in
+`voice_session_service.py`, or a `weapon_stats_mv_refresh_loop`-shaped loop in the web app); D
+UTRO from the `storytelling_kill_impact` aggregate instead of raw spawn-timing rows; E
+`SET LOCAL work_mem` for the sort; F a lazy "compute aim" button (rejected: 46 s waits).
+Recommendation when picked up: B + E first, A measured, C only if A leaves cold above ~2 s. Full
+RCA with the plans and timings: `docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md` (local).
+Note for the dataset register: `cost_ms_cold` is recorded, `warmed_by` is not — that gap is how a
+cache ends up with no producer.
+
+### R0 summary rows counted again — a class, not one handler (2026-09-07, Fable)
+
+**Symptom.** `/api/stats/player/{name}/form` and `/rounds` (players_router) and
+`skill_router._form_rows` (feeds `/api/skill/player/{}/form`: profile header,
+FormPage, Home form movers) summed `player_comprehensive_stats` with no
+`round_number IN (1, 2)`. The importer still writes a round 0 row per map whose
+damage is the halves added again (docs/CLAUDE.md), and R0 *rounds* are
+`is_valid = TRUE` (249 of 257 since June 2026), so a join on valid rounds does
+not filter them. Measured for one regular (rows > 60 s): R0 26 rows / 96,970
+damage vs R1+R2 56 rows / 99,536; per-session DPM 366.9 → 263.9, 406.5 → 295.5,
+396.2 → 250.8 (≈ 30 % lower once the halves alone are counted).
+
+**Fixed** in #970 (players_router, guard `tests/unit/test_player_series_skip_r0.py`)
+and the skill form follow-up (skill_router `_form_rows`, same guard).
+
+**Open — the rest of the class.** A file-level count on 2026-09-07 (`FROM
+player_comprehensive_stats` occurrences vs any of `round_number IN (1, 2)`,
+`round_number > 0`, `counts_toward_totals`, `player_match_stats` in the same
+file) shows files with reads and **no** filter of any kind:
+`api_helpers.py` 5, `season_awards_service.py` 3, `greatshot_crossref.py` 3,
+`auth.py` 2, `session_matrix_service.py` 1; and files where reads outnumber
+filters: `players_router.py` 27 vs 16, `records_awards.py` 10 vs 4 + 3 view
+reads, `skill_rating_service.py` 5 vs 6 `> 0`. A file count is not a query
+count — some reads are lookups by guid where R0 does not matter — so the next
+step is a per-query audit with a ratchet (`tests/data/pcs_unfiltered_reads.txt`,
+seeded from an AST walk that pairs each `FROM player_comprehensive_stats`
+literal with the presence of a round filter in the same literal), then fixes
+one router per PR with a before/after measurement each. Do not "fix" blindly:
+Stats 2.0 uses `counts_toward_totals`, older routers use the halves filter,
+and the two gates disagree on a few rounds (see the graphs note in
+`tests/data/endpoint_gap.txt`).
 
 ### Dead-hours orphan mechanism (deterministic permanent orphans) — High
 
@@ -126,7 +186,24 @@ FROM proximity_vehicle_progress; -- both counts equal (94|94 on 2026-08-11)
 
 ## Open — Lua / game server
 
-### Lua drift repo ↔ puran (deploy owner-gated) — High
+### Lua drift repo ↔ puran — RESOLVED for the live modules (measured 2026-09-07)
+
+Read-only `sha1sum` on puran at 21:35 CEST against the repo at main: the
+modules the engine loads — `proximity_tracker.lua` 6.14 (basepath
+`luascripts/`), `live_events.lua`, `team-lock.lua`, `c0rnp0rn8.lua` and
+`endstats.lua` (`legacy/`), `stats_discord_webhook.lua` (homepath copy, which
+wins) — are byte-identical to the repo; `frame_health.log` shows
+`FH init … version=6.13` for the webhook/live modules and `FH watcher …
+version=6.14` at the last map load. The only difference is
+`dots_arena_1v1.lua` (puran 2026-09-05, repo has #912 merged 2026-09-07), and
+that module arms on the arena map only. Stale copies still sit beside the
+live ones (`luascripts/stats_discord_webhook.lua` 2026-08-15,
+`luascripts/c0rnp0rn8.lua` 2026-08-18): harmless, but a `sha1sum` that reads
+the wrong copy will report drift that is not there — compare the path the
+engine loads (`docs/GAMESERVER_LIVE_LUA_MAP.md`), never the first match.
+The paragraph below is kept as history of the 2026-08 state.
+
+#### (historical) Lua drift repo ↔ puran (deploy owner-gated) — High
 
 **Re-measured by sha256 on 2026-08-15 (`scripts/system_status.sh`): 2 of 5
 scripts differ, not 4.** `c0rnp0rn8.lua` and `stats_discord_webhook.lua` are
@@ -392,6 +469,39 @@ print(len(names), 'archetypes' in names)"   # → 23 False
 ```
 
 ---
+
+## Open — round_awards holds duplicate rows (found 2026-09-06)
+
+Found while building the per-round award panel (#955): 1472 `(round_id,
+award_name)` groups hold more than one row. They are **two different faults
+wearing one shape**, and only the first is fixed.
+
+| kind | groups | what it is |
+|---|---|---|
+| identical, same second | **929** | the same player and value written twice — pure duplication |
+| different players, minutes apart | **282** | two imports that reached different answers |
+| identical, minutes apart | 3 | |
+| different players, same second | 258 | possibly deliberate (a per-team award?) — unverified |
+
+**Fixed:** `/api/rounds/{round_id}/awards` now selects `DISTINCT`, which
+removes the 929 identical rows. A visitor was otherwise reading the same
+award twice and concluding the page was broken.
+
+⛔ **Not fixed, deliberately:** the 282 groups where two imports disagree.
+Round 9831 carries "Most damage given → bronze 4953" and "Most damage given
+→ SuperBoyy 3910", written 21:34:28 and 21:45:37 on 2026-02-11. `DISTINCT`
+leaves both, because collapsing them would hide a real disagreement about
+the data behind a display fix — and nothing here establishes which import
+was right.
+
+⚠️ The session-level award view aggregates the same table, so it carries the
+same duplication. It was not touched by #955.
+
+**Open questions for whoever picks this up:** what re-ran those imports 11
+minutes apart; whether the 258 same-second/different-player groups are a
+per-team award (in which case they are correct and the UI should label them
+as such); and whether the historical rows should be de-duplicated at rest or
+only at read time.
 
 ## Note — errors.log line counts changed on 2026-09-06
 
