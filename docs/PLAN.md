@@ -20,6 +20,24 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04s read-only completion recovery — 2026-09-20
+
+On #1073: inspect_completion_manifest distinguishes missing_manifest,
+missing_content, content_conflict and match. Unsafe/malformed receipts and I/O
+failures raise instead of masquerading as absence. Private0700 directory and
+owned0600 regular manifest, nofollow/nonblock, at most4097bytes read, descriptor/
+named identity checks; strict schema/version/identity, duplicate keys rejected,
+then bounded SHA/size inspection of immutable captured bytes. No writes/repair,
+source acknowledgement or provenance/durability claim. Caller retains immutable
+directory/files through use; reads are byte-bounded, not time-bounded.
+177 combined tests pass0skips. Actual filesystem recovery covers repeated reads,
+missing states, corruption, unsafe FIFO/symlink/permissions, replaced entry and
+complete manifest left after directory sync failure. Disabling identity guard
+fails replaced-file test DID NOT RAISE RuntimeError; restored/cmp. Ruff clean.
+#1073 cb9ba634 reported checks green. Next durable retry policy and collision-safe
+source reservation before producer wiring; original runtime/new-site/dev order
+retained. No merge authority inferred, no service/SSH/DB/deployment changes.
+
 ### R04r durable completion manifest — 2026-09-20
 
 Review4057411193 fixed: manifest basename limit now matches producer240 ASCII

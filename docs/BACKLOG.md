@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) R04s read-only manifest recovery implemented with explicit
+  missing/conflict/match states; malformed/unsafe/I/O remains an error.177 tests
+  pass, replaced-entry mutation fails/restores. #1073 refreshed checks green.
+  Next retry policy and collision-safe source reservation; no source activation.
+
 - (Astra, 2026-09-20) #1073 review4057411193 corrected manifest name cap200->240
   to match Lua producer. Real-file boundary tests and old-limit mutation verified;
   157 combined tests pass. #1072 verification-alias CI succeeded at exactcba88132.
