@@ -1,5 +1,6 @@
 """Caller-driven import step for an immutable, fully downloaded stats spool."""
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -25,12 +26,16 @@ async def import_ready_file(manager, file_path: Path) -> ImportStepResult:
     is not a filesystem lock or a guard against concurrent spool mutation.
     """
     file_path = file_path.absolute()
-    if file_path.name.lower().endswith('-round-2.txt'):
+    if re.fullmatch(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-2\.txt',
+                    file_path.name, re.ASCII):
         dependency = manager.parser.find_corresponding_round_1_file(str(file_path))
         if dependency is None:
             if await manager.is_file_processed(file_path.name):
                 return ImportStepResult('imported', 'Already processed')
-            return ImportStepResult('waiting_for_r1', 'Matching R1 file is not available')
+            duplicate = await manager.find_processed_duplicate(file_path)
+            if not duplicate or duplicate == file_path.name:
+                return ImportStepResult('waiting_for_r1', 'Matching R1 file is not available')
+            # Let the canonical path record the renamed duplicate's marker.
     result = await manager.process_file(file_path)
     success, message = result
     if success:

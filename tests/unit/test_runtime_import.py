@@ -17,6 +17,7 @@ def manager(dependency=None, result=(True, 'ok')):
         parser=SimpleNamespace(find_corresponding_round_1_file=Mock(return_value=dependency)),
         process_file=AsyncMock(return_value=result),
         is_file_processed=AsyncMock(return_value=False),
+        find_processed_duplicate=AsyncMock(return_value=None),
     )
 
 
@@ -35,7 +36,7 @@ async def test_completed_r2_does_not_wait_for_pruned_dependency():
     """Successful processing remains successful after R1 retention expires."""
     subject = manager()
     subject.is_file_processed.return_value = True
-    result = await import_ready_file(subject, Path('fixture-round-2.txt'))
+    result = await import_ready_file(subject, Path('2026-09-20-121000-fixture-round-2.txt'))
     assert result.status == 'imported' and result.message == 'Already processed'
     subject.process_file.assert_not_awaited()
 
@@ -44,7 +45,7 @@ async def test_bare_relative_file_uses_same_absolute_path_for_lookup_and_import(
     """A parser lookup must not receive an empty directory for a bare filename."""
     monkeypatch.chdir(tmp_path)
     subject = manager(dependency='fixture-round-1.txt')
-    path = Path('fixture-round-2.txt')
+    path = Path('2026-09-20-121000-fixture-round-2.txt')
     await import_ready_file(subject, path)
     subject.parser.find_corresponding_round_1_file.assert_called_once_with(str(tmp_path / path))
     subject.process_file.assert_awaited_once_with(tmp_path / path)
@@ -69,3 +70,24 @@ async def test_cancellation_propagates():
     subject.process_file.side_effect = asyncio.CancelledError()
     with pytest.raises(asyncio.CancelledError):
         await import_ready_file(subject, Path('fixture-round-1.txt'))
+
+
+async def test_renamed_duplicate_reaches_canonical_marker_path():
+    """Content deduplication remains reachable after R1 retention expires."""
+    subject = manager(result=(True, 'Duplicate payload of original'))
+    subject.find_processed_duplicate.return_value = 'original'
+    path = Path('2026-09-20-121000-mirror-round-2.txt')
+    result = await import_ready_file(subject, path)
+    assert result.status == 'imported' and result.message == 'Duplicate payload of original'
+    subject.find_processed_duplicate.assert_awaited_once_with(path.absolute())
+    subject.process_file.assert_awaited_once_with(path.absolute())
+
+
+async def test_malformed_round_two_uses_canonical_failure():
+    """Invalid names must not be mistaken for a temporarily missing dependency."""
+    subject = manager(result=(False, 'Parse error: invalid filename'))
+    path = Path('bad-round-2.txt')
+    result = await import_ready_file(subject, path)
+    assert result.status == 'failed'
+    subject.parser.find_corresponding_round_1_file.assert_not_called()
+    subject.process_file.assert_awaited_once_with(path.absolute())

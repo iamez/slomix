@@ -1512,6 +1512,15 @@ class PostgreSQLDatabaseManager:
                 file_hash,
             )
 
+    async def find_processed_duplicate(self, file_path: Path) -> str | None:
+        """Read successful payload identity without parsing or writing markers.
+
+        The caller must supply an immutable completed file. File/DB failures
+        propagate; they are not evidence that no duplicate exists.
+        """
+        _, payload_hash = self._compute_file_hashes(file_path)
+        return await self.find_processed_by_hash(payload_hash)
+
     def _compute_file_hashes(self, file_path: Path) -> tuple[str, str]:
         """
         Compute full-file hash and payload hash.

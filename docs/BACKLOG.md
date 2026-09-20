@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) Review detour after opening integrity PR #1062:
+  #1060 now preserves renamed payload deduplication after R1 removal and routes
+  malformed R2 names to canonical failure.14 unit/PG cases pass; mutations fail
+  and restore/cmp. Disposable PG stopped. Resume bounded capture after review.
+
 - (Astra, 2026-09-20) R04e caller-driven dependency guard implemented: missing
   R1 defers R2 without terminal marker;69 combined tests including actual PG
   pass; guard mutation observed/restored. Immutable spool is a precondition,

@@ -117,6 +117,20 @@ async def main():
                 r1.rename(r1.with_suffix('.retired'))
                 processed = await import_ready_file(manager, Path(r2.name))
                 assert processed.status == 'imported' and processed.message == 'Already processed'
+                mirror = r2.with_name('2026-09-20-121500-goldrush-round-2.txt')
+                mirror.write_bytes(r2.read_bytes())
+                duplicate = await import_ready_file(manager, mirror)
+                assert duplicate.status == 'imported' and 'Duplicate payload' in duplicate.message
+                assert await manager.is_file_processed(mirror.name)
+                malformed = r2.with_name('bad-round-2.txt')
+                malformed.write_text('invalid fixture')
+                invalid = await import_ready_file(manager, malformed)
+                assert invalid.status == 'failed', invalid
+                assert await admin.fetchval(
+                    'SELECT success FROM processed_files WHERE filename=$1', malformed.name
+                ) is False
+                assert await admin.fetchval('SELECT count(*) FROM runtime_events') == 2
+                assert await admin.fetchval('SELECT count(*) FROM rounds') == len(rows)
             async with pool.acquire() as conn:
                 assert await conn.fetchval('SELECT 1') == 1
             print('Neutral PG proof: ' + scenario + '; rows=' + str(expected) + '; retry unchanged')

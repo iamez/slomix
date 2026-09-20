@@ -31,6 +31,14 @@ cutover. Production remains frozen. Build/test success is not a website audit.
 
 ### R04e dependency-aware import step — 2026-09-20
 
+Review4056294780/4056294781: preserve canonical renamed-payload deduplication
+when R1 is gone, via a public read-only manager preflight; malformed R2 names
+use canonical import/failure instead of waiting.14 unit/actual-PG cases pass:
+mirror gets a success marker without new rounds/events, malformed fixture gets
+a failed marker. Both guard mutations fail, restored/cmp. New modules lint
+clean; manager retains exactly its previous20 code/message diagnostics. Isolated
+PG stopped after proof; no application DB/service changes. Fresh CI required.
+
 Review4056275060/4056275062 fixed: completed R2 remains imported after R1
 retention, and bare paths normalize before both lookups.12 unit/actual-PG cases
 pass; actual deferred scenario uses relative paths and then retires R1 before
