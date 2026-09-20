@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Transport close timeout can follow successful publication.**
+  A real disposable child with an offline SSH seam published verified bytes then
+  blocked in file close. Supervisor reaped it as timed_out while final bytes and
+  independent sha256sum remained correct. Treat worker status and spool state as
+  separate facts; retain source and reconcile, never delete/overwrite on failure.
+
 - **2026-09-20 · Forced child termination skips application cleanup.**
   A disposable spawned capture task can be terminated and reaped after a deadline,
   including SIGTERM refusal. This boundary is not appropriate for shared locks,

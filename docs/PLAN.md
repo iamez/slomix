@@ -20,6 +20,25 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04n concrete SSH capture task — 2026-09-20
+
+On #1068: picklable SSHCaptureTask carries only explicit configuration into the
+spawned worker. Opens SFTP/file there, streams through existing size/SHA/EOF
+publication, closes file before session, never deletes/acknowledges the source.
+Absolute canonical remote path and absolute local spool required. Caller still
+supplies trusted immutable source metadata; no remote discovery/hash guarantee.
+97 combined tests pass, including real spawned-task/filesystem proofs with an
+offline connection seam: successful bytes independently checked by sha256sum,
+corruption rejected, blocked read terminated leaving only a .part, blocked close
+terminated with a complete final retained. Both terminated children confirmed
+absent by procfs and active_children. No actual SSH/network proof is claimed.
+Removing the absolute remote path guard fails DID NOT RAISE; restored/cmp.
+Next compose retry reconciliation with supervised capture and verified import;
+trusted source identity, bounded discovery/retention, single-writer handoff and
+owner-approved dev failure matrix remain activation gates. Original sequence:
+runtime first, then new-site/design/security audit, then reversible dev cutover.
+No merge permission inferred, no service/live database/production changes.
+
 ### R04m disposable capture worker supervision — 2026-09-20
 
 Contract: explicitly spawned capture-only child, monotonic operation deadline,
