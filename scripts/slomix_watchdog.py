@@ -247,8 +247,8 @@ def collect_disk(path: str = "/") -> dict[str, Any]:
     # `usage.free` is the space this user can really use, so used/(used+free)
     # matches df. `total_pct` keeps the old figure for anyone who wants it.
     denominator = usage.used + usage.free
-    return {"used_pct": round(usage.used / denominator * 100, 1) if denominator else 0.0,
-            "used_pct_of_total": round(usage.used / usage.total * 100, 1) if usage.total else 0.0,
+    return {"used_pct": round(usage.used / denominator * 100, 1) if denominator else None,
+            "used_pct_of_total": round(usage.used / usage.total * 100, 1) if usage.total else None,
             "free_gb": round(usage.free / 2**30, 2),
             "journal_bytes": journal_bytes}
 
@@ -409,6 +409,8 @@ def check_lua(fh: dict[str, Any] | None) -> Finding:
 
 
 def check_disk(d: dict[str, Any]) -> Finding:
+    if d["used_pct"] is None:
+        return Finding("disk", "unknown", value=d, reason="disk capacity is not measurable")
     if d["used_pct"] >= 92:
         return Finding("disk", "fail", value=d["used_pct"], threshold=92, reason=f"root disk {d['used_pct']} % full",
                        suggest="sudo journalctl --vacuum-size=500M ; du -sh /home/samba/share/*/logs")

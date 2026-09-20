@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) Owner-approved consolidation side quest: preserve all nine
+  older proposals; no NEVER MERGE changes, no merges without PR-specific approval.
+  Runtime paused after #1077 c015270b, resume completion delivery/snapshot sealing.
+  Refreshed #962 with main; added unknown-capacity guard and real-full-disk proof.
+  31 tests pass, mutation fails/restores, live read-only disk ratio matches df
+  twice (96.9%, displayed97%). No heavy builds/install/cleanup under disk pressure.
+  Next #962 fresh CI/review, #965 combined watchdog verification; older work order
+  and preservation criteria are recorded in PLAN, not replaced by this detour.
+
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
   wrong-export mutation observed/restored. Resume manager startup discovery

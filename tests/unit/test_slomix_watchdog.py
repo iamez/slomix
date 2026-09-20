@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+from types import SimpleNamespace
 from unittest import mock
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
@@ -179,9 +180,8 @@ def test_used_pct_matches_df_not_shutil_total():
     assert wd.check_disk(d).level == "warn", "89.5% is over the 85% threshold"
 
 
-def test_a_full_filesystem_does_not_divide_by_zero():
-    """⛔ used + free is 0 on an unreadable or empty mount; that must not
-    raise inside a monitor whose job is to still report."""
+def test_unmeasurable_capacity_is_unknown_not_healthy():
+    """A zero denominator is unavailable capacity, not a healthy empty disk."""
     class _Zero:
         total = 0
         used = 0
@@ -191,8 +191,19 @@ def test_a_full_filesystem_does_not_divide_by_zero():
          mock.patch.object(wd.subprocess, "run", side_effect=OSError):
         d = wd.collect_disk("/")
 
-    assert d["used_pct"] == 0.0
-    assert d["used_pct_of_total"] == 0.0
+    assert d["used_pct"] is None
+    assert d["used_pct_of_total"] is None
+    assert wd.check_disk(d).level == "unknown"
+
+
+def test_full_filesystem_is_a_failure_not_unknown():
+    """No available bytes with positive used space is a measured full disk."""
+    usage = SimpleNamespace(total=100, used=95, free=0)
+    with mock.patch.object(wd.shutil, "disk_usage", return_value=usage), \
+         mock.patch.object(wd.subprocess, "run", side_effect=OSError):
+        data = wd.collect_disk("/")
+    assert data["used_pct"] == 100.0
+    assert wd.check_disk(data).level == "fail"
 
 
 def test_lua_webhook_fails_only_when_rounds_land_without_lua_rows():
