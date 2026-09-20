@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · A complete-length transfer is not an integrity proof.**
+  Runtime spool publication can now validate an expected SHA-256 before linking
+  the final name. Obtain that expectation from a trusted immutable source
+  snapshot, not from the just-received bytes. Without it the API remains
+  size-only; the optional parameter is not evidence of transport integration.
+  Test equal-length corruption and compare successful output by another tool.
+
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
   Include every changed Python path in local lint. Module-attribute aliases

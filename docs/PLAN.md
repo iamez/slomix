@@ -20,6 +20,21 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04g capture integrity contract — 2026-09-20
+
+Stacked on #1061: add an optional expected SHA-256 to completed-file publication.
+Validate canonical lowercase 64-hex metadata before consuming the stream; hash
+incrementally and reject mismatch before fsync/link, cleaning only our temporary
+file. Existing destinations remain untouched. Omission preserves the size-only
+API, not integrity assurance. The future transport must supply a trusted digest
+of its immutable source snapshot; hashing received bytes alone proves nothing
+about source identity. No SSH/service/DB activation. All 35 filesystem cases pass,
+including independent sha256sum against the abc known-answer vector. Disabling
+the digest mismatch guard caused DID NOT RAISE on equal-length corruption;
+restored with apply_patch and cmp. Changed Python files pass Ruff. #1061 has all
+reported CI checks green at 28009e87; individual merge permission still required.
+Next: bounded transport, trusted source metadata and explicit retry reconciliation.
+
 ### R04f immutable spool publication — 2026-09-20
 
 Review4056287646: aligned map alphabet with existing transport (dots/pluses),
