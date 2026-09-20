@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) #979 consolidation review: fixed stale default source ref,
+  wrong-checkout verifier and hidden-index input flags, with four failing/restored
+  regressions and23passing fixture tests. No real deploy. Branch refresh/CI and
+  PR-specific permission remain gates. Runtime resume remains #1077 after detour.
+
 - (Fable 5.1, 2026-09-07, 22:05) Owner: »poglej live mode kot obiskovalec«
   — pregledano med živo igro na produkciji (legacy `#/live`, v1.39.0):
   deset vrzeli (L1–L10) in osem rezin v LOKALNEM

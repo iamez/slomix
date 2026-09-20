@@ -66,14 +66,16 @@ def build(source, check=True):
     return result
 
 
-def preflight(source, run, target="HEAD", extra=None):
+def preflight(source, run, target="HEAD", extra=None, allow_source_fetch=False):
     # A real git wrapper records any forbidden preflight mutation before failing.
     mocks = source.parent / "mocks"
     mocks.mkdir(exist_ok=True)
     git_executable = shutil.which("git")
     log = source.parent / "mutations"
     wrapper = mocks / "git"
-    wrapper.write_text(f'#!/bin/bash\nfor x in "$@"; do case "$x" in fetch|checkout) '
+    allowed = (f'if [ "$1" = "-C" ] && [ "$2" = "{source}" ] && [ "$3" = "fetch" ]; '
+               f'then exec "{git_executable}" "$@"; fi\n') if allow_source_fetch else ''
+    wrapper.write_text(f'#!/bin/bash\n{allowed}for x in "$@"; do case "$x" in fetch|checkout) '
                        f'echo "$x" >> "{log}"; exit 88;; esac; done\nexec "{git_executable}" "$@"\n')
     wrapper.chmod(0o755)
     for name in ["sudo", "systemctl"]:
@@ -89,6 +91,41 @@ def preflight(source, run, target="HEAD", extra=None):
     assert before == (git(run, "rev-parse", "HEAD"), (run / "website/static/app/app.html").read_bytes())
     assert not list(source.parent.glob(".slomix-artifact.*"))
     return result
+
+
+def test_default_target_refreshes_source_remote_before_validation(fixture):
+    """A stale tracking ref must not select yesterday's otherwise valid artifact."""
+    source, run = fixture
+    remote = source.parent / "remote.git"
+    git(source, "clone", "--bare", str(source), str(remote))
+    git(source, "remote", "add", "origin", str(remote))
+    git(source, "fetch", "origin")
+    build(source)
+    peer = source.parent / "peer"
+    git(source, "clone", str(remote), str(peer))
+    git(peer, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid",
+        "commit", "--allow-empty", "-m", "new remote target")
+    git(peer, "push", "origin", "main")
+    new_target = git(peer, "rev-parse", "HEAD")
+    assert git(source, "rev-parse", "origin/main") != new_target
+    result = preflight(source, run, target="origin/main", allow_source_fetch=True)
+    assert result.returncode != 0, "Stale default target was deployed"
+    assert git(source, "rev-parse", "origin/main") == new_target
+    assert "exact deployment target" in result.stderr
+
+
+def test_preflight_uses_source_verifier_not_launcher_checkout(fixture, monkeypatch):
+    """A script launched elsewhere must execute the verifier whose input is hashed."""
+    source, run = fixture
+    build(source)
+    launcher = source.parent / "launcher"
+    launcher.mkdir()
+    script = launcher / "dev_deploy.sh"
+    script.write_text(DEPLOY.read_text())
+    (launcher / "spa_artifact.py").write_text("raise SystemExit('wrong checkout verifier')\n")
+    monkeypatch.setattr(sys.modules[__name__], "DEPLOY", script)
+    result = preflight(source, run)
+    assert result.returncode == 0, result.stderr
 
 
 def test_valid_build_workflow_and_safe_preflight(fixture):
@@ -145,6 +182,20 @@ def test_failed_build_invalidates_previous_proof(fixture):
     vite = source / "website/frontend/node_modules/vite/bin/vite.js"
     vite.write_text("process.exit(7);\n")
     assert build(source, check=False).returncode != 0
+    assert not (source / "website/static/app/.slomix-build.json").exists()
+
+
+@pytest.mark.parametrize("flag", ["--assume-unchanged", "--skip-worktree"])
+def test_hidden_tracked_changes_cannot_certify_build(fixture, flag):
+    """Index flags must not turn uncommitted input bytes into commit provenance."""
+    source, _ = fixture
+    relative = "website/frontend/src/app/main.ts"
+    git(source, "update-index", flag, relative)
+    (source / relative).write_text("console.log('uncommitted hidden input');\n")
+    assert git(source, "status", "--porcelain", "--untracked-files=no") == ""
+    result = build(source, check=False)
+    assert result.returncode != 0, "Hidden input was falsely certified as committed"
+    assert "index flags" in result.stderr
     assert not (source / "website/static/app/.slomix-build.json").exists()
 
 

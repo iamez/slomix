@@ -6,6 +6,15 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Clean Git status does not prove committed build inputs.**
+  assume-unchanged and skip-worktree can hide changed tracked bytes. Reject these
+  flags on provenance inputs or compare exact committed blobs before certification.
+
+- **2026-09-20 · Deployment provenance must identify the executed verifier.**
+  A script launched from another checkout must use the verifier in its configured
+  source, and resolve a default remote target only after refreshing its ref.
+  Keep source-ref refresh distinct from modifying the running clone.
+
 - **2026-09-08 · A non-symlink file can have a symlink parent.** Checking
   only static/app missed static/ pointing outside the checkout; build cleanup
   could delete external provenance before rejecting the dirty source. Apply:

@@ -49,6 +49,9 @@ def identity(root):
     commit = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
     if git(root, "status", "--porcelain", "--untracked-files=no"):
         raise ValueError("tracked source is dirty; commit changes before npm run build:app")
+    flagged = git(root, "ls-files", "-v", "-z", "--", *INPUTS).split(b"\0")
+    if any(entry[:1].islower() or entry.startswith(b"S ") for entry in flagged if entry):
+        raise ValueError("unsupported index flags on build inputs; clear assume-unchanged/skip-worktree")
     extras = git(root, "ls-files", "--others", "--exclude-standard", "--", str(FRONTEND))
     if extras:
         raise ValueError("untracked frontend inputs exist; track or remove them before building")

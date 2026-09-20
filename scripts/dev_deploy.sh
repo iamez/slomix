@@ -28,9 +28,12 @@ REF="${1:-origin/main}"
 [ "$(realpath "$RUN")" != "$(realpath "$SRC")" ] || { echo "source and run clone must differ" >&2; exit 2; }
 [ ! -L "$RUN/website" ] && [ ! -L "$RUN/website/static" ] && [ ! -L "$RUN/website/static/app" ] || { echo "symlinked run artifacts are unsupported" >&2; exit 3; }
 [ -z "$(git -C "$RUN" status --porcelain --untracked-files=no)" ] || { echo "run clone has tracked changes; refusing deploy" >&2; exit 3; }
-# Resolve the requested source once. Fetch source refs explicitly BEFORE building.
+# Refresh the default source ref before pinning it; explicit commits stay offline.
+if [ "$REF" = "origin/main" ]; then
+  git -C "$SRC" fetch -q origin refs/heads/main:refs/remotes/origin/main
+fi
 target=$(git -C "$SRC" rev-parse --verify "$REF^{commit}")
-helper="$(cd "$(dirname "$0")" && pwd)/spa_artifact.py"
+helper="$SRC/scripts/spa_artifact.py"
 # Same filesystem as RUN, but outside its active tree; no stale .new directory reuse.
 stage=$(mktemp -d "$(dirname "$RUN")/.slomix-artifact.XXXXXXXX")
 cleanup() {
@@ -43,7 +46,7 @@ if [ "${DEV_PREFLIGHT_ONLY:-0}" = "1" ]; then
   exit 0
 fi
 
-# No fetch, checkout or service action occurs before artifact staging succeeds.
+# No run-clone fetch, checkout or service action precedes successful staging.
 git -C "$RUN" fetch -q "$SRC" "$target"
 python3 "$helper" verify --source "$SRC" --target "$target" --stage "$stage/app"
 before=$(git -C "$RUN" rev-parse --short HEAD)

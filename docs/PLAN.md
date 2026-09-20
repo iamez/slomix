@@ -18,6 +18,22 @@
 
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
+## Consolidation follow-up: artifact review #979 — 2026-09-20
+
+Preserve this older preflight proposal and fix three reviewed provenance gaps:
+refresh source origin/main before default target resolution (explicit commits
+remain offline); run the verifier from DEV_SRC_DIR rather than launcher checkout;
+reject assume-unchanged/skip-worktree flags on tracked build inputs. All four
+new regressions failed before fixes and when guards were deliberately reverted,
+then restored/cmp.23 disposable-clone build/preflight tests pass, Ruff/bash syntax
+clean. Only Vite is a tiny fixture executable; no actual app build, browser,
+real run-clone operation, service or network deployment. Source-ref fetch is
+now allowed before staging; RUN fetch/checkout/services still require validation.
+This branch still needs current-main integration and fresh CI before merge;
+no owner permission for #979. Approved batch is #1076/#1057/#962 only. Original
+runtime completion delivery/sealing resumes after consolidation, then new-site
+audit and owner-approved reversible DEV transition. NEVER MERGE remains untouched.
+
 ## Proga: nova stran (Fable)
 
 ### Kje smo
