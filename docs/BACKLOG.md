@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-20) While #1059/#1060 await CI/review, independent R04f
+  implements atomic no-clobber completed-file publication. No SSH integration
+  or services. #1060 plan-staleness finding4056273674 fixed in1f636253 and replied.
+
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
   wrong-export mutation observed/restored. Resume manager startup discovery

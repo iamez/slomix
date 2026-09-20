@@ -20,6 +20,21 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04f immutable spool publication — 2026-09-20
+
+Independent main-based primitive publishes only completed stats streams into an
+existing private0700 owner directory. Strict basename allowlist; positive bounded
+expected size; temporary0600 .part file; file fsync then same-directory atomic
+no-clobber hard link and directory fsync. Existing files/symlinks never replaced.
+Transfer/type/size failures clean temporary file; post-link sync failure can leave
+complete final file visible and must be reconciled, not overwritten. No startup,
+SSH calls, retention cleanup or importer wiring. Caller must bound source chunks
+and timeouts and guarantee immutable remote snapshot: length is not integrity.
+Runtime filesystem proof and size-guard mutation included; next integrate with
+bounded capture and explicit retry/reconciliation, preserving original plan.
+New-site/design/functionality/security audit remains after runtime completion,
+then owner-approved reversible dev transition; production unchanged.
+
 ### R04c neutral database logging helpers — 2026-09-19
 
 239775fc received all22successful checks, Codex no-major-issues review and
