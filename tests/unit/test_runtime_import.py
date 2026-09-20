@@ -16,6 +16,7 @@ def manager(dependency=None, result=(True, 'ok')):
     return SimpleNamespace(
         parser=SimpleNamespace(find_corresponding_round_1_file=Mock(return_value=dependency)),
         process_file=AsyncMock(return_value=result),
+        is_file_processed=AsyncMock(return_value=False),
     )
 
 
@@ -27,7 +28,26 @@ async def test_missing_r1_waits_then_imports_when_available():
     subject.process_file.assert_not_awaited()
     subject.parser.find_corresponding_round_1_file.return_value = 'matching-round-1.txt'
     assert (await import_ready_file(subject, path)).status == 'imported'
-    subject.process_file.assert_awaited_once_with(path)
+    subject.process_file.assert_awaited_once_with(path.absolute())
+
+
+async def test_completed_r2_does_not_wait_for_pruned_dependency():
+    """Successful processing remains successful after R1 retention expires."""
+    subject = manager()
+    subject.is_file_processed.return_value = True
+    result = await import_ready_file(subject, Path('fixture-round-2.txt'))
+    assert result.status == 'imported' and result.message == 'Already processed'
+    subject.process_file.assert_not_awaited()
+
+
+async def test_bare_relative_file_uses_same_absolute_path_for_lookup_and_import(monkeypatch, tmp_path):
+    """A parser lookup must not receive an empty directory for a bare filename."""
+    monkeypatch.chdir(tmp_path)
+    subject = manager(dependency='fixture-round-1.txt')
+    path = Path('fixture-round-2.txt')
+    await import_ready_file(subject, path)
+    subject.parser.find_corresponding_round_1_file.assert_called_once_with(str(tmp_path / path))
+    subject.process_file.assert_awaited_once_with(tmp_path / path)
 
 
 @pytest.mark.parametrize('result,status', [

@@ -31,6 +31,12 @@ cutover. Production remains frozen. Build/test success is not a website audit.
 
 ### R04e dependency-aware import step — 2026-09-20
 
+Review4056275060/4056275062 fixed: completed R2 remains imported after R1
+retention, and bare paths normalize before both lookups.12 unit/actual-PG cases
+pass; actual deferred scenario uses relative paths and then retires R1 before
+retry. Both removed guards fail their tests, restored/cmp. PG stopped. Lookup
+failure is not waiting/absence: processed-state errors propagate to caller.
+
 Verified:69 combined cases pass,0skips,2existingwarnings. Actual-PG deferred-R1
 scenario has zero rounds/markers/events before R1 arrives, then R1=3/R2=5/R0=8
 and exactly2half-events with duplicate retry unchanged. Disabling dependency
@@ -38,7 +44,9 @@ guard imports an orphan and fails waiting-state assertion; restored/cmp.
 Changed Python files lint clean; disposable PG stopped. Pending review/CI.
 
 Caller-driven step reuses canonical parser R1 lookup and process_file; missing
-R1 returns explicit waiting_for_r1 without DB/marker calls. No scheduler,
+R1 returns explicit waiting_for_r1 after a read-only processed-state check,
+without marker writes. Already-processed R2 remains successful if R1 was pruned.
+Bare relative paths normalize to absolute for both lookup and import. No scheduler,
 connection ownership change, automatic orphan repair or activation. Caller must
 provide immutable completed spool and retain R1 during parsing; dependency check
 does not solve concurrent file deletion/replacement or bound filesystem scans.

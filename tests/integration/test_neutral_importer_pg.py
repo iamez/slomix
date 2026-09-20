@@ -86,7 +86,7 @@ async def main():
                 if scenario == 'late_r1' and path == r1:
                     r1.with_suffix('.pending').rename(r1)
                 if scenario == 'deferred_r1':
-                    result = await import_ready_file(manager, path)
+                    result = await import_ready_file(manager, Path(path.name))
                     assert result.status == 'imported', result
                 else:
                     result = await manager.process_file(path)
@@ -113,6 +113,10 @@ async def main():
             assert rows == after
             assert await admin.fetchval('SELECT count(*) FROM runtime_events') == 2
             assert await admin.fetchval('SELECT count(*) FROM rounds') == len(rows)
+            if scenario == 'deferred_r1':
+                r1.rename(r1.with_suffix('.retired'))
+                processed = await import_ready_file(manager, Path(r2.name))
+                assert processed.status == 'imported' and processed.message == 'Already processed'
             async with pool.acquire() as conn:
                 assert await conn.fetchval('SELECT 1') == 1
             print('Neutral PG proof: ' + scenario + '; rows=' + str(expected) + '; retry unchanged')
