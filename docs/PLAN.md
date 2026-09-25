@@ -20,6 +20,22 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### Local #1059 main refresh — 2026-09-25
+
+Prepared fix/db-runtime-startup-main-refresh from921af249 plus main89a2fd38.
+Preserved both documentation tracks; sole importer conflict was constructor
+docstring. Production parser/importer/startup files remain byte-identical to
+921af249. Fresh checkout exposed test ambient SSH_ENABLED dependence; legacy
+logging fixture now explicitly disables SSH/automation and tests inherited
+true/false.26 startup/parser/pool/logging tests pass; removing isolation fails
+the existing SSH dev guard, restored/cmp. Eager Discord mutation also fails,
+restored/cmp. Targeted lint clean; manager's20 existing Ruff diagnostics unchanged.
+Remote #1059 remains open on old base with merge conflict; old SHA has9successful
+check runs and0review threads. This LOCAL refresh is not published, remotely
+reviewed or merge-approved. main is ancestor after this merge; diff10files.
+Earlier progress/approval notes below are historical. Integrated runtime work
+continues separately; SQL batch/lock gates still await owner-started test PG.
+
 ### R04d neutral importer startup — 2026-09-20
 
 R1/R2 characterization: ordered imports and R2-first with both files retained
@@ -73,6 +89,57 @@ No services/DB touched. This is construction/startup, NOT full independent inges
 Next: reviews and canonical process_file proof with owned/injected pool, followed
 by capture cadence, source retention, single-writer cutover and failure matrix.
 
+### Side quest: preserve and consolidate open PRs — 2026-09-20
+
+Execution update: owner explicitly approved #1076/#1057/#962. First two merged
+via cycle.sh as1a78b713 and249f7b8e; #962 now integrates both and waits fresh gates.
+Older proposals preserved/refreshed: #965c8fa8e41, #969884b1baf, #966a05bbf39,
+#97994cf8e3d (three provenance gaps fixed), #9631a743945 (historical corrections),
+#964be53dbf4 (ledger reconciliation), #1027f0d263c2 (normal branch update).
+Each still needs exact-head checks/review/current-main readiness and its own
+merge permission. No NEVER MERGE changes, no release/deploy activation.
+
+Owner requested consolidation, including older fixes, without losing the original
+plan. Pause new runtime slices while preparing existing PRs. No per-PR merge
+permission was granted by this request. NEVER MERGE #924–#943 and #967 remain
+untouched; release #956 stays a separate decision. At audit: 56 open PRs, confirmed
+by REST and GraphQL: 21 review snapshots, 26 runtime slices, 9 older proposals.
+
+Older work preservation/order:
+- #962 disk measurement then #965 notification acknowledgement: both mechanisms
+  are still absent from main; keep both, refresh/test separately and together.
+- #969 Node pin then #1027 lockfile update then #979 artifact preflight: preserve
+  each purpose; current main still has old Node pin/mocker/build command. Refresh
+  and verify narrow diffs. #979 has three outstanding substantive review findings.
+- #966 immutable review tooling: refresh/test without touching review snapshot refs.
+- #964 execution ledger and #963 historical handoff: reconcile together, retain
+  unique lessons, correct stale operational instructions, distinguish historical
+  measurements from current facts. Do not discard merely because they conflict.
+- #956 release: hold, never equate merge permission with deploy permission.
+
+Runtime dependency order remains #1076; #1057→#1059→#1060;
+#1061→#1062→#1064→#1065→#1066 (also needs #1060);
+#1063→#1067→#1068→#1069→#1070→#1071→#1072 (also needs #1062/#1064);
+#1073→#1074→#1075, and #1077 after #1076/#1072. Backport #1077 worker fixes
+before merging #1068. Cache lane #1051→#1052→#1053→#1054→#1055→#1056 needs
+main conflict resolution and investigation of #1056 Docker failure. Each PR gets
+current-main integration, exact-head checks, substantive review-thread handling,
+functional/runtime/mutation proofs and explicit owner permission before cycle.sh.
+No child PR merges into another feature branch; retarget to main after prerequisites.
+
+Started #962: normal merge of current main retained the original two-file fix.
+Found zero-capacity fixture returned false healthy zero usage; now None/unknown,
+while positive used space with no available space remains measured 100%/fail.
+31 targeted tests pass; guard mutation raises TypeError, restored/cmp. Actual
+read-only collect_disk and df byte ratio agree twice at96.9%, df displays97%.
+This is current host measurement, not deployed watchdog proof. Disk pressure
+blocks heavy build/install work pending safe capacity planning; no deletion.
+Next finish refreshed #962 CI/review, then #965 integration and older lanes above.
+
+Resume point: runtime #1077 c015270b completed worker review fixes; trusted
+completion delivery and immutable snapshot sealing remain next development.
+Then full new-site design/functionality/security audit, then owner-approved
+reversible DEV cutover. Production v1.39.0 remains frozen. No service activation.
 
 2026-09-20 checkpoint: owner-approved #1058 merged as b5e20c9d after prescribed
 cycle (0 red/threads/behind, unchanged SHA). Squash tree equals da1a5136.
@@ -131,6 +198,27 @@ at import, parser still imports Discord on this independent main-based branch
 effects. Next separate explicit startup/logging ownership while preserving legacy
 behavior; then R04 source/cadence/metadata/single-writer acceptance proofs. No
 activation, service operation, production changes or new merge permission.
+
+### R04u exclusive source-generation reservation — 2026-09-20
+
+Independent main-based primitive, not a reset of the runtime plan. Existing
+capture/producer/manifest chain remains in #1059–#1075; latest #1075 checks green
+at966f829d. Its branch touches24paths vs main, so this independently testable
+reservation slice avoids exceeding25path hook without bypass or premature merge.
+reserve_source_generation creates a caller-chosen32lowerhex directory with atomic
+mkdir beneath an existing private0700owner root; child then parent fsync before
+success. Any existing entry refuses reuse, including empty directories/symlinks.
+Post-mkdir failure preserves reservation; no cleanup or automatic new token.
+Caller retains stable root, hands reservation to one producer and prevents later
+rewrites. This is namespace reservation, not a lease, snapshot completion or
+producer wiring. Returned Path is not a capability; no source/DB/service action.
+16 focused actual-filesystem tests pass0skips: sync order/mode, two concurrent
+attempts have one winner, all existing types preserved, failed sync blocks reuse.
+Swallowing FileExistsError fails two existing-directory proofs DID NOT RAISE;
+restored/cmp, Ruff clean. No broader capture tests claimed on this independent
+branch. Next explicit producer handoff and trusted completion delivery, keeping
+reservation/data/receipt identities aligned. Runtime first, then new-site full
+audit, then owner-approved reversible dev transition; production unchanged.
 
 ### R04c neutral database logging helpers — 2026-09-19
 

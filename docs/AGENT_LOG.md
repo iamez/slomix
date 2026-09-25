@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
+
 - **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
   A neutral real-PG fixture supplied32 hex characters but the canonical regular
   stats parser stored8 via short_guid. The first test's32-character assertion
@@ -19,6 +25,16 @@ data here.
   fresh processes with forbidden imports; also pin unchanged sys.path and root
   handlers. Import-only callers intentionally no longer initialize logging.
 
+- **2026-09-20 · Undefined disk capacity is not zero usage.**
+  A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
+  is instead measurable 100%/fail. Compare collector ratios with df used/available
+  bytes, not exact displayed integers: df rounds its displayed percentage upward.
+
+- **2026-09-20 · A failed reservation may still own its namespace.**
+  Atomic mkdir prevents two same-token writers from reserving one generation.
+  A later fsync failure can leave that directory; retry must refuse reuse even
+  when empty. Never infer an empty directory is free. Keep source reservation,
+  immutable payload completion and durable receipt delivery as separate states.
 
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.

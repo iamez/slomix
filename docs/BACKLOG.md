@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-25) Prepared local #1059 main refresh, preserving source bytes
+  and both documentation histories. Fixed ambient-SSH dependency in test only;
+  26targeted tests pass, isolation and eager-import mutations fail/restored/cmp.
+  No push/retarget/merge permission or fresh remote CI implied. Runtime integration
+  and pending SQL proofs remain on their separate local branches.
+
 - (Astra, 2026-09-20) Real PG R1/R2 ordering characterized;63 tests pass.
   Activation gap confirmed: late R1 does not repair already-marked orphan R2.
   Next priority dependency-aware capture scheduling, not more unrelated refactors.
@@ -26,6 +32,20 @@
   default setup proven in subprocesses;78 regressions pass; mutation restored.
   No full-ingestion claim or activation. Next process_file/pool ownership proof.
 
+- (Astra, 2026-09-20) Approved queue: #1076 and #1057 merged through cycle.sh;
+  #962 now integrates both, pending fresh checks. Older proposals refreshed on
+  their own branches, including artifact and historical-handoff review fixes.
+  Those have no merge approval. Original runtime resume remains #1077 delivery/
+  sealing after consolidation; NEVER MERGE/release/services remain untouched.
+
+- (Astra, 2026-09-20) Owner-approved consolidation side quest: preserve all nine
+  older proposals; no NEVER MERGE changes, no merges without PR-specific approval.
+  Runtime paused after #1077 c015270b, resume completion delivery/snapshot sealing.
+  Refreshed #962 with main; added unknown-capacity guard and real-full-disk proof.
+  31 tests pass, mutation fails/restores, live read-only disk ratio matches df
+  twice (96.9%, displayed97%). No heavy builds/install/cleanup under disk pressure.
+  Next #962 fresh CI/review, #965 combined watchdog verification; older work order
+  and preservation criteria are recorded in PLAN, not replaced by this detour.
 
 - (Astra, 2026-09-19) Independent R04b constructor-config prerequisite over
   main2518735f;154 cases pass, actual subprocess and falsey-config mutation proof.
@@ -45,6 +65,11 @@
   #1054 nine exact-head checks green and both external reviews no findings.
   No merge approval for #1050 or later; no service/production activation.
 
+- (Astra, 2026-09-20) R04u independent main-based source generation reservation:
+  16 focused cases pass, same-token concurrency has one winner, existing entries
+  never reused, sync-error reservations retained. Mutation fails/restores. Prior
+  capture/manifest work stays in #1075 chain (24paths), not discarded. Next
+  producer handoff/identity delivery, no service or source activation.
 
 - (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
   and explicit re-exports. All changed Python files lint clean, 25 tests pass;
