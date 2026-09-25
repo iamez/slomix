@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Startup prerequisite #1059 update (2026-09-26): published refresh65f5dc60 by
+> ordinary fast-forward and retargeted to main89a2fd38. Ten-file diff self-reviewed;
+> 26targeted tests pass3.86s and four neutral SQL subprocess scenarios previously
+> passed on that exact code. Independent read-only review found no concrete
+> regression,12tests passed plus8-thread/one-logging-init probe. CI36197446590
+> all8jobs passed; CodeRabbit status success; review threads empty. Required
+> repo-hygiene and CodeQL checks did not start on base-edit alone (their workflows
+> lack edited/dispatch triggers). This real documentation checkpoint also gives
+> the now-main-targeted PR a synchronize event; re-check ALL gates on its new SHA.
+> No merge/deploy performed or approved. Older LOCAL/unpublished notes below are
+> historical. Production bytes remain unchanged from921af249.
+
 > Pravilo: ta datoteka se posodobi ob VSAKEM koraku. Nič se ne »dogovori«
 > samo v pogovoru. Bereta jo obe seji (in vsak prihodnji model).
 > Podrobne raziskovalne zapiske drži lokalno (docs/REPO_BOUNDARY.md);
@@ -19,6 +31,75 @@
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
 ## Track: runtime v2 R01 (Astra)
+
+### Local #1059 main refresh — 2026-09-25
+
+Prepared fix/db-runtime-startup-main-refresh from921af249 plus main89a2fd38.
+Preserved both documentation tracks; sole importer conflict was constructor
+docstring. Production parser/importer/startup files remain byte-identical to
+921af249. Fresh checkout exposed test ambient SSH_ENABLED dependence; legacy
+logging fixture now explicitly disables SSH/automation and tests inherited
+true/false.26 startup/parser/pool/logging tests pass; removing isolation fails
+the existing SSH dev guard, restored/cmp. Eager Discord mutation also fails,
+restored/cmp. Targeted lint clean; manager's20 existing Ruff diagnostics unchanged.
+Remote #1059 remains open on old base with merge conflict; old SHA has9successful
+check runs and0review threads. This LOCAL refresh is not published, remotely
+reviewed or merge-approved. main is ancestor after this merge; diff10files.
+Earlier progress/approval notes below are historical. Integrated runtime work
+continues separately; SQL batch/lock gates still await owner-started test PG.
+
+### R04d neutral importer startup — 2026-09-20
+
+R1/R2 characterization: ordered imports and R2-first with both files retained
+produce R1=3,R2=5,R0=8 kills; journal contains only rounds1/2. If R1 file arrives
+after R2 was imported, R2 stays orphan_r2 with raw8 kills and successful marker;
+ordinary retry returns Already processed even after R1 arrives. Confirmed with
+real isolated PG and observer rows, not a proposed policy. This is an activation
+gap: next capture layer must defer R2 until dependency is available or implement
+an explicitly designed repair; do not silently change parser semantics here.
+63 combined cases pass0skips2existingwarnings. Removing orphan flag fails status
+assertion; restored/cmp. Temporary PG stopped. Test quoting collection error
+was corrected before evidence runs. No production code changes in follow-up.
+
+Actual-PG follow-up: fresh subprocess with Discord/config/logging imports blocked
+ran canonical parser and process_file, with no mocked persistence methods.
+Private disposable PG schema bootstrapped explicitly by test only; observer
+connection confirmed one R1 round/player (3 kills), event and successful marker.
+COUNT and fetched rows agree; repeated file adds no player/event, borrowed pool
+remains usable. Synthetic single-player fixture, NOT R2/capture/cutover proof.
+Initial assertion expected32-char GUID; canonical parser short_guid proved8,
+so corrected test, not code. Disabling event emission caused actual-PG assertion
+failure; restored/cmp, combined60 cases pass0skips2existingwarnings. Test PG
+stopped, shutdown log/status agree; random schemas removed. No live DB changes.
+
+Follow-up preflight lifecycle proof: three fresh subprocesses invoke real
+process_file with a caller-owned protocol-test pool: duplicate, query outage,
+and cancellation. They assert lease release, retained pool identity, retryable
+outage and propagated cancellation, with setup/presentation imports forbidden.
+36 focused cases pass. Adding disconnect to the duplicate branch fails the
+success contract (borrowed pool close raises); restored/cmp. This is NOT a real
+PostgreSQL commit proof and does not cover the full successful write path yet.
+
+Branch feat/db-runtime-import-startup-r04d builds on #1057 at908d238e and
+cherry-picks #1056 parser-only slice65f5cbac as aaee6c52 (not its cache stack).
+Parser/test contents unchanged; progress notes from both sides preserved.
+Manager import no longer mutates sys.path, loads dotenv or configures logging.
+Explicit configuration uses neutral emitters; default constructor's load_config
+seam delegates to lazy legacy startup, dotenv before log-path selection and
+logging setup once under a lock. Configuration reloads on each default call.
+Import/logging failures now propagate rather than selecting a silent no-op
+logging fallback. This intentionally changes import-only side effects; callers
+needing legacy setup must construct with defaults, not merely import the module.
+
+78 selected regression cases pass, no skips, two existing websockets warnings.
+Fresh subprocess proves neutral parsing/validation, no config/Discord imports,
+environment/path/cwd/root-handler changes, log files or connections. Another
+process verifies legacy dotenv-before-file-logging and stable repeat handlers.
+Forbidden bot.config import mutation failed, restored/cmp. Initial legacy proof
+failed missing BOT_ENVIRONMENT; fixed test setup with explicit dev, not the guard.
+No services/DB touched. This is construction/startup, NOT full independent ingest.
+Next: reviews and canonical process_file proof with owned/injected pool, followed
+by capture cadence, source retention, single-writer cutover and failure matrix.
 
 ### Side quest: preserve and consolidate open PRs — 2026-09-20
 
@@ -78,6 +159,32 @@ Fresh14 logging/retry cases passed before merge. R04b synced main normally;
 both progress sections retained in documentation conflicts, no constructor
 changes. Older approval/CI notes below are historical. #1057 not approved.
 Next startup contract: /tmp/slomix-r04d-startup-contract-2026-09-20.md (local).
+
+### R04a parser presentation boundary — 2026-09-19
+
+Branch feat/db-runtime-parser-boundary-r04a, parent #1055 at5b0d305f.
+Move Discord import into create_stylish_round_embed only; parsing and R2 logic
+unchanged. Separate subprocesses compare full parser/differential output with
+Discord preloaded versus forbidden (also forbid bot.config/dotenv/website).
+Clock frozen in proof to avoid comparing two generation timestamps. Existing
+committed sample files produce zero parsed players; explicitly recorded, not
+treated as player coverage. Valid synthetic player lines separately prove one
+player and differential kills8-3=5; real Discord Embed rendering remains covered.
+
+151 parser/helper/R2/import-journal/retry/replay cases passed, zero skips, two
+existing warnings. Ruff clean. Restoring eager import as a mutation caused
+ModuleNotFoundError: Presentation/config dependency forbidden: discord; restored
+apply_patch/cmp, then full151 passed. No network, database or service activation.
+
+Discovery correction: manager load_config constructs BotConfig but does NOT
+call its token validator. Importing bot.config still loads dotenv, and the
+manager initializes logging at module import. Neutral config extraction must
+preserve explicit legacy logging/config behavior; deferred to its own slice.
+This prerequisite does not make the canonical importer or ingestion independent.
+Original R04 capture/cadence/metadata/single-writer acceptance gates remain open.
+
+### R03d independent cache-consumer process — 2026-09-19
+
 
 ### R04b explicit importer constructor configuration — 2026-09-19
 

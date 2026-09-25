@@ -34,48 +34,26 @@ from pathlib import Path
 
 import asyncpg
 
-# Add parent directory to path for imports
-sys.path.insert(0, str(Path(__file__).parent))
-
 from bot.community_stats_parser import C0RNP0RN3StatsParser
-from bot.config import load_config
 from bot.stats import StatsCalculator
+from shared import database_logging
+from shared.database_logging import (
+    log_performance_warning,
+    log_stats_import,
+)
 from shared.import_result import RetryableImportFailure
 from shared.round_status_events import mark_round_restart, status_events_enabled
 from shared.runtime_events import emit_round_stats_imported, event_stream_enabled
 
-# Import comprehensive logging system
-try:
-    from bot.logging_config import (
-        get_logger,
-        log_database_operation,
-        log_performance_warning,
-        log_stats_import,
-        setup_logging,
-    )
-    # Setup comprehensive logging
-    setup_logging(logging.INFO)
-    logger = get_logger('bot.database.manager')
-except ImportError:
-    # Fallback to basic logging if logging_config not available
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler('postgresql_manager.log', encoding='utf-8'),
-            logging.StreamHandler()
-        ]
-    )
-    logger = logging.getLogger('PostgreSQLManager')
+logger = logging.getLogger('bot.database.manager')
+log_database_operation = database_logging.log_database_operation
 
-    def log_database_operation(*args, **kwargs):
-        pass
 
-    def log_stats_import(*args, **kwargs):
-        pass
+def load_config():
+    """Retain the legacy loader seam without setup during module import."""
+    from shared.importer_startup import load_legacy_config
 
-    def log_performance_warning(*args, **kwargs):
-        pass
+    return load_legacy_config()
 
 
 class PostgreSQLDatabaseManager:
@@ -89,8 +67,8 @@ class PostgreSQLDatabaseManager:
         """Accept caller-owned configuration, or preserve legacy loading by default.
 
         The object uses the existing database_type/postgres_* / excluded_maps
-        attribute contract. This only separates construction: module-level
-        dotenv/logging initialization and environment event flags are unchanged.
+        attribute contract. Explicit configuration bypasses legacy dotenv and
+        logging setup; default construction performs that setup lazily.
         Construction does not connect, migrate, validate Discord credentials or create a pool.
         """
         self.config = load_config() if config is None else config
