@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Startup prerequisite #1059 update (2026-09-26): published refresh65f5dc60 by
+> ordinary fast-forward and retargeted to main89a2fd38. Ten-file diff self-reviewed;
+> 26targeted tests pass3.86s and four neutral SQL subprocess scenarios previously
+> passed on that exact code. Independent read-only review found no concrete
+> regression,12tests passed plus8-thread/one-logging-init probe. CI36197446590
+> all8jobs passed; CodeRabbit status success; review threads empty. Required
+> repo-hygiene and CodeQL checks did not start on base-edit alone (their workflows
+> lack edited/dispatch triggers). This real documentation checkpoint also gives
+> the now-main-targeted PR a synchronize event; re-check ALL gates on its new SHA.
+> No merge/deploy performed or approved. Older LOCAL/unpublished notes below are
+> historical. Production bytes remain unchanged from921af249.
+
 > Pravilo: ta datoteka se posodobi ob VSAKEM koraku. Nič se ne »dogovori«
 > samo v pogovoru. Bereta jo obe seji (in vsak prihodnji model).
 > Podrobne raziskovalne zapiske drži lokalno (docs/REPO_BOUNDARY.md);
