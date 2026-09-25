@@ -85,8 +85,15 @@ class PostgreSQLDatabaseManager:
     Handles all database operations from creation to disaster recovery.
     """
 
-    def __init__(self, stats_dir: str = "local_stats"):
-        self.config = load_config()
+    def __init__(self, stats_dir: str = "local_stats", *, config=None):
+        """Accept caller-owned configuration, or preserve legacy loading by default.
+
+        The object uses the existing database_type/postgres_* / excluded_maps
+        attribute contract. This only separates construction: module-level
+        dotenv/logging initialization and environment event flags are unchanged.
+        Construction does not connect, migrate, validate Discord credentials or create a pool.
+        """
+        self.config = load_config() if config is None else config
         self.event_stream_enabled = event_stream_enabled()
 
         if self.config.database_type != 'postgresql':

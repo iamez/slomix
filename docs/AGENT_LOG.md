@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-25 · Review triggers can have a billing consequence.**
+  An owner request to avoid additional charges applies to manual AI review
+  requests and potentially automatic reviews after PR creation or pushes.
+  Local tests/review can proceed without those triggers. Repository settings
+  do not prove account billing is disabled; verify separately, and do not
+  mistake a budget notification for an enforced usage stop.
+
 - **2026-09-07 · Measurement is not delivery acknowledgement.** Watchdog
   observations/failure streaks must persist even when the notification fails,
   but alert timestamps, recovery reset and daily heartbeat dedup advance only
@@ -15,6 +22,17 @@ data here.
   across reloaded state. A crash between POST and acknowledgement can duplicate
   delivery; do not claim exactly-once. Dry-run must skip both state and report
   writes, including when output directories do not yet exist.
+
+- **2026-09-20 · Undefined disk capacity is not zero usage.**
+  A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
+  is instead measurable 100%/fail. Compare collector ratios with df used/available
+  bytes, not exact displayed integers: df rounds its displayed percentage upward.
+
+- **2026-09-20 · A failed reservation may still own its namespace.**
+  Atomic mkdir prevents two same-token writers from reserving one generation.
+  A later fsync failure can leave that directory; retry must refuse reuse even
+  when empty. Never infer an empty directory is free. Keep source reservation,
+  immutable payload completion and durable receipt delivery as separate states.
 
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
