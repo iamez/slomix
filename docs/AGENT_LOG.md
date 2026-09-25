@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-25 · A descendant fix does not protect an unmerged prerequisite.**
+  Worker cancellation fixes present on #1077 were absent from #1068. Before
+  merging a stacked prerequisite, backport its applicable fixes with regression
+  proofs, without importing unrelated descendant features. Compare the resulting
+  files against the reviewed descendant and retain exact PR merge authorization.
+
 - **2026-09-20 · Forced child termination skips application cleanup.**
   A disposable spawned capture task can be terminated and reaped after a deadline,
   including SIGTERM refusal. This boundary is not appropriate for shared locks,

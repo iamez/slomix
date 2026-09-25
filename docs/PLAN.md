@@ -20,6 +20,24 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04m consolidation safety backport — 2026-09-25
+
+Locally backported the exact worker and regression-test changes from #1077
+c015270b into #1068 before its eventual merge. Five regression cases fail the
+old implementation: late observation misclassifies a finished child, and cleanup
+interruptions can abandon a child or replace the original parent interruption.
+94 worker/SSH/spool/integrity/capture/plan tests now pass; Ruff/whitespace clean.
+Real spawned children checked against procfs and active_children; Process objects
+closed. SIGTERM/SIGKILL timeout cases measured 2.003s/2.205s including cold spawn
+with a 2s deadline and 0.2s grace. No hard OS scheduling bound is claimed.
+Late-clock mutation fails both finished-child cases, restored with cmp proof.
+No network, DB, services or production changes. Owner reported unwanted GitHub
+review charges: keep this commit local, no push or automated review request.
+#1068 still requires PR-specific merge approval and fresh merge-base/CI review.
+Do not merge the whole #1077 descendant into this prerequisite. Original plan
+continues with trusted completion delivery/immutable sealing at #1077, then the
+new-site audit and separately approved reversible DEV cutover.
+
 ### R04m disposable capture worker supervision — 2026-09-20
 
 Contract: explicitly spawned capture-only child, monotonic operation deadline,

@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-25) Consolidation side quest: backported exact #1077 worker
+  fixes/tests into #1068 locally; five old-code regressions fail, 94 combined
+  tests now pass. Late-clock mutation fails/restores/cmp. No GitHub writes or
+  AI review requests because owner requires no additional review charges.
+  #1076/#1057/#962 already merged; #965 local integration saved at2e035917.
+  Runtime resume remains #1077 completion delivery/sealing. No services changed.
+
 - (Astra, 2026-09-20) R04m adds isolated capture-task deadline supervision on
   #1067. 86 combined tests pass, real owned children reaped even after SIGTERM
   refusal/parent interruption; timeout-status mutation fails/restores. #1066
