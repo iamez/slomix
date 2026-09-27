@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1053 second review follow-up fixes ON reactivation and
+  separate website env template.151local tests pass;12HTTP roundtrip variants,
+  7observed mutation failures/restored/cmp. Both modes now worker-local; no
+  fresh SQL/Redis proof. Publish then recheck exact-head review/CI.
+
 - (Astra, 2026-09-27)1053 refreshed parent and fixed both open review findings:
   missing092 activation prerequisite and stale OFF rollback cache reuse.
  82local tests pass;2HTTP reproductions and2guard-mutation failures observed,
