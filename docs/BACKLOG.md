@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1064 preserved/refreshed through parent1062 at21e6c999;
+  normal merge4c119978 retained both doc histories and original runtime plan.
+ 49real filesystem tests pass; mutation of wrong-size identity handling fails,
+  restored/cmp. Existing two review threads resolved; no new finding in this pass.
+  Wait actual1062 main merge, final sync and fresh review/CI; no1064 permission
+  inferred, no push/retarget/service/database/snapshot action.
+
 - (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
   49 cases pass, early-return mutation fails/restored. Next compose a single
   caller-driven retry step; no scheduling, source deletion or service activation.

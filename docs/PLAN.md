@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1064 refresh checkpoint2026-09-27: normally integrated reviewed parent1062
+>21e6c999 as4c119978, preserving both documentation histories. Reconciliation
+>implementation/test bytes equal5264909e; both existing review threads resolved,
+>including wrong-sized inode replacement detection before conflict.49actual
+>filesystem tests pass0.56s, including private publication, independent SHA-256,
+>missing/match/conflict, read failures and inode replacement. Reinstating the old
+>wrong-size early return fails DID NOT RAISE RuntimeError; restored/cmp. Ruff
+>clean. Wait for approved1062 merge, then sync actual main and refresh exact-head
+>CI/review before any1064 merge decision. No push, service, DB or snapshot changes.
+>Original runtime roadmap remains unchanged; this is existing-PR consolidation.
+
 > Current1062 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
 >0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
 >branch integrates that main normally; implementation/test bytes preserved.
