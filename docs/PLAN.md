@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>Current1065 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1065-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
 >1065 refresh checkpoint2026-09-27: integrated reviewed1064 parent3422cd3e
 >normally as ab5b17e4. Source/test bytes equal0e3d100a; both doc histories retained.
 >55real filesystem cases pass0.63s/0.66s, including partial failure, publication
