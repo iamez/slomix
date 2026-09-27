@@ -1,5 +1,12 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current966 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
+>matches reviewed0e66f238. This branch now normally integrates that main,
+>preserving source/test bytes and both documentation histories. 7focused
+>tests rerun after sync. Publish for fresh exact-head CI/review; no966 merge
+>approval, service activation or NEVER MERGE changes. Earlier waiting notes
+>below are historical; original runtime roadmap remains unchanged.
+
 >966 preservation checkpoint2026-09-27: normally integrated current main as
 >30dbcfa3, retaining both documentation histories. Source/test bytes unchanged
 >from a05bbf39. Seven real-CLI tests pass2.60s in disposable repositories/local
