@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current966 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
+>0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
+>branch integrates that main normally; implementation/test bytes preserved.
+>Publish now for fresh exact-head CI/review; no966 merge permission and no
+>service or production changes. Earlier waiting checkpoints are historical.
+
 >966 review follow-up2026-09-27: fixed all three new findings on4f5a2f24.
 >Reject duplicate area names and missing positive pathspecs; validate actual
 >private-index tree diff against exact selected paths and25-file/8000-line caps
