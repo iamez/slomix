@@ -20,6 +20,81 @@
   #1051 review found the stale merge status above, now corrected against PLAN.
   Owner explicitly approved #1048; its prescribed merge cycle is running.
 
+- (Astra, 2026-09-25) Prepared local #1059 main refresh, preserving source bytes
+  and both documentation histories. Fixed ambient-SSH dependency in test only;
+  26targeted tests pass, isolation and eager-import mutations fail/restored/cmp.
+  No push/retarget/merge permission or fresh remote CI implied. Runtime integration
+  and pending SQL proofs remain on their separate local branches.
+
+- (Astra, 2026-09-20) Real PG R1/R2 ordering characterized;63 tests pass.
+  Activation gap confirmed: late R1 does not repair already-marked orphan R2.
+  Next priority dependency-aware capture scheduling, not more unrelated refactors.
+
+- (Astra, 2026-09-20) #1059 now includes real-PG neutral R1 import proof:
+  canonical parser/writes/event/marker, observer connection, duplicate retry,
+  caller pool still usable.60 combined tests pass; missing-event mutation caught.
+  Disposable PG stopped. Next R2/late arrival and single-writer/capture work.
+
+- (Astra, 2026-09-20) #1059 strengthened with neutral process_file preflight
+  lifecycle subprocess proofs (duplicate/outage/cancel),36 focused cases pass.
+  Unwanted disconnect mutation failed/restored. Next real PG successful-write
+  proof remains pending; no application database or service touched.
+
+- (Astra, 2026-09-20) R04d implemented on separate worktree, based on #1057
+  plus unchanged parser slice from #1056. Neutral import/construction and lazy
+  default setup proven in subprocesses;78 regressions pass; mutation restored.
+  No full-ingestion claim or activation. Next process_file/pool ownership proof.
+
+- (Astra, 2026-09-20) Approved queue: #1076 and #1057 merged through cycle.sh;
+  #962 now integrates both, pending fresh checks. Older proposals refreshed on
+  their own branches, including artifact and historical-handoff review fixes.
+  Those have no merge approval. Original runtime resume remains #1077 delivery/
+  sealing after consolidation; NEVER MERGE/release/services remain untouched.
+
+- (Astra, 2026-09-20) Owner-approved consolidation side quest: preserve all nine
+  older proposals; no NEVER MERGE changes, no merges without PR-specific approval.
+  Runtime paused after #1077 c015270b, resume completion delivery/snapshot sealing.
+  Refreshed #962 with main; added unknown-capacity guard and real-full-disk proof.
+  31 tests pass, mutation fails/restores, live read-only disk ratio matches df
+  twice (96.9%, displayed97%). No heavy builds/install/cleanup under disk pressure.
+  Next #962 fresh CI/review, #965 combined watchdog verification; older work order
+  and preservation criteria are recorded in PLAN, not replaced by this detour.
+
+- (Astra, 2026-09-19) Independent R04b constructor-config prerequisite over
+  main2518735f;154 cases pass, actual subprocess and falsey-config mutation proof.
+  Separate open stack #1051–#1056 remains intact. #1055 review findings fixed in
+  847c1b7d and synced to #1056 at74408882; both threads answered/resolved, fresh CI
+  required. Resume config/logging startup boundary after review, no activation.
+
+- (Astra, 2026-09-19) R04a isolates parser's Discord presentation dependency;
+  actual subprocess parity and real embed proof, observed eager-import mutation
+  restored/cmp;151 tests pass. Neutral manager config/logging boundary remains
+  next. No claim of independent ingestion, no service or live database changes.
+
+- (Astra, 2026-09-19) R03d adds independent dev-only cache consumer entrypoint,
+  not ingestion. Default OFF; one owned pool/task, signal shutdown, safe JSON
+  health. Actual isolated PG subprocess catch-up/blocked shutdown pass; observed
+  dev-guard mutation restored/cmp. Expanded200 passed; publish/review next.
+  #1054 nine exact-head checks green and both external reviews no findings.
+  No merge approval for #1050 or later; no service/production activation.
+
+- (Astra, 2026-09-20) R04u independent main-based source generation reservation:
+  16 focused cases pass, same-token concurrency has one winner, existing entries
+  never reused, sync-error reservations retained. Mutation fails/restores. Prior
+  capture/manifest work stays in #1075 chain (24paths), not discarded. Next
+  producer handoff/identity delivery, no service or source activation.
+
+- (Astra, 2026-09-19) #1058 CI/review detour: corrected legacy import formatting
+  and explicit re-exports. All changed Python files lint clean, 25 tests pass;
+  wrong-export mutation observed/restored. Resume manager startup discovery
+  after fresh CI/review; no services or DB changed.
+
+- (Astra, 2026-09-19) R04c: neutral logging helpers extracted on an independent
+  main-based branch. 25 regression tests pass; blocked-import subprocess proof
+  and failing/restored mutation complete. Legacy setup unchanged; independent
+  ingestion still pending. #1050 merged; no merge approval for #1051–#1057.
+  Continue with review and neutral manager startup, preserving original R04 scope.
+
 - (Historical checkpoint, Astra, 2026-09-18) R02d5 explicit durable Lua retry steps implemented in
   separate worktree /tmp/slomix-astra-runtime-r02d5. Five-attempt bound,
   persistent due state, quarantine, contention deferral and error visibility;
