@@ -1,5 +1,14 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1055 refresh checkpoint2026-09-27: normally integrated reviewed1054 head
+>6d06c58b as e0d6c699; retained both documentation histories.54focused cases
+>pass18.54s including5real isolated-PG cases and actual process shutdown/replay.
+>Entry module unchanged from847c1b7d. Disabling explicit dev guard fails2cases
+>with DID NOT RAISE ValueError; restored/cmp and26entry tests pass0.36s.
+>Ruff/whitespace clean; schema count0 and independent list empty. Await approved
+>1054 merge, then sync actual main, retarget before push and repeat exact-head
+>CI/review.1055 itself is NOT approved. No service/deployment/app-data changes.
+
 >1054 review follow-up2026-09-27: stopped state now clears current error_type,
 > while failed retains diagnostics. Stop-event and task-cancellation cases both
 > reproduced OSError in stopped before fix and with cleanup removed; restored/cmp.
