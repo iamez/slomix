@@ -102,7 +102,7 @@ class RuntimeCacheWorker:
         finally:
             self._running = False
             if self.state.status not in ("disabled", "failed"):
-                self.state = replace(self.state, status="stopped")
+                self.state = replace(self.state, status="stopped", error_type=None)
 
     async def _wait(self, stop):
         try:

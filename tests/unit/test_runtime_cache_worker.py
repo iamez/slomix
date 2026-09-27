@@ -66,6 +66,36 @@ async def test_poll_without_notifications_recovers_from_db_failure(monkeypatch):
     assert worker.state.error_type is None
 
 
+@pytest.mark.parametrize('cancel', [False, True])
+async def test_stopping_after_error_clears_current_error(monkeypatch, cancel):
+    worker = module.RuntimeCacheWorker(poll_seconds=60)
+    stop, waiting = asyncio.Event(), asyncio.Event()
+    monkeypatch.setattr(module, 'consume_http_cache_events', AsyncMock(side_effect=OSError('synthetic')))
+    original_wait = worker._wait  # noqa: SLF001 -- synchronize the real backoff before stopping.
+
+    async def wait(event):
+        waiting.set()
+        await original_wait(event)
+
+    monkeypatch.setattr(worker, '_wait', wait)
+    task = asyncio.create_task(worker.run(connection, stop))
+    try:
+        await asyncio.wait_for(waiting.wait(), 1)
+        assert worker.state.error_type == 'OSError'
+        if cancel:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            stop.set()
+            await asyncio.wait_for(task, 1)
+        assert worker.state.status == 'stopped'
+        assert worker.state.error_type is None
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
 async def test_full_batches_yield_and_release_each_connection(monkeypatch):
     stop = asyncio.Event()
     worker = module.RuntimeCacheWorker(batch_size=1, poll_seconds=60)

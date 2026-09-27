@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1054 review follow-up2026-09-27: stopped state now clears current error_type,
+> while failed retains diagnostics. Stop-event and task-cancellation cases both
+> reproduced OSError in stopped before fix and with cleanup removed; restored/cmp.
+>26tests incl3isolated PG pass2.08s before proof service timeout at16:09CEST.
+> Fresh exact-head CI/review required after push; no1054 merge approval.
+
 > Latest1054 checkpoint2026-09-27: approved1053 merged75a359f6 at13:28:51Z,
 > prescribed420s cycle0failed/0threads/0behind/unchanged head, squash tree equals
 > reviewed ccd23e81.1054 integrates main without changing worker implementation;
