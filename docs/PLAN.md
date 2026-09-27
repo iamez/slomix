@@ -1,5 +1,103 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1054 review follow-up2026-09-27: stopped state now clears current error_type,
+> while failed retains diagnostics. Stop-event and task-cancellation cases both
+> reproduced OSError in stopped before fix and with cleanup removed; restored/cmp.
+>26tests incl3isolated PG pass2.08s before proof service timeout at16:09CEST.
+> Fresh exact-head CI/review required after push; no1054 merge approval.
+
+> Latest1054 checkpoint2026-09-27: approved1053 merged75a359f6 at13:28:51Z,
+> prescribed420s cycle0failed/0threads/0behind/unchanged head, squash tree equals
+> reviewed ccd23e81.1054 integrates main without changing worker implementation;
+> retained its default-OFF flag and documentation. Retarget before final push;
+> fresh exact-head review/CI and explicit1054 approval still required.
+
+>1054 refresh2026-09-27: merged reviewed parent ccd23e81 normally. Clear stale
+> error_type on both disabled transitions while retaining confirmed generation,
+> unsupported count and last-success time. Four async worker reproductions fail
+> before fix and with the fix removed, restored/cmp.161local cases previously
+> passed; fresh21worker unit+3realPG lifecycle cases pass4.36s on refreshed parent.
+> Actual polling catches late lower IDs, receipt failure rolls back/retries and
+> closed connections reacquire. Fresh exact-head CI/review and owner merge
+> permission remain required; parent1053 is reviewed but not merged.
+>1053 follow-up2026-09-27: fresh review found ON reactivation could revive an
+> old generation when events were disabled during writes. Both ON/OFF namespaces
+> now include the captured middleware-lifetime/mode-transition token. All cache
+> reuse is worker-local, including Redis-backed ON mode; generation changes still
+> invalidate independently in each worker. This trades cross-worker reuse for
+> safe reactivation/restart, not a measured performance improvement. Website
+> env example now declares all three flags default OFF with091/092 prerequisites.
+>151local cases pass,12ASGI mode-roundtrip combinations;7reproduction/mutation
+> failures observed, restored/cmp. Fresh CI/review required; no1053 approval.
+
+> Current1053 refresh (2026-09-27): parent1052 refreshed by ordinary merge,
+> preserving both documentation histories. Two open review findings addressed:
+> activation comment requires091/092; OFF cache namespaces are unique per
+> middleware lifetime and observed mode transition, captured before awaits.
+> This prevents rollback from reviving pre-activation entries; OFF workers no
+> longer share cached responses, trading cache reuse for safe restart boundaries.
+>82local cache tests pass; two real ASGI rollback cases fail before the fix and
+> when its namespace guard is removed, restored/cmp. Backend retained across
+> app lifetimes is simulated with memory, not a new Redis/PG integration proof.
+> Fresh exact-head CI/review pending; no1053 merge permission or activation.
+
+> Current1052 refresh (2026-09-27): local87eec905 normally merges refreshed1051
+> eed90b28, preserving both documentation histories. Memory backend/test files
+> remain byte-identical to original3d9da0e0.58cache regression cases pass1.29s;
+> standalone in-process ASGI proof returns200 with MISS/HIT/MISS/MISS, correct
+> bodies, handler calls1/2/1 and one retained entry. Removing count eviction fails
+> 4<=3 and HIT!=MISS; restored/cmp. No listener, browser, database or service.
+> Owner-approved1051 merged as2b310cb3 at06:42:21Z after the prescribed cycle;
+> squash tree equals reviewed eed90b28.1052 now integrates that main, is retargeted
+> to main before final push, and requires fresh CI/review and its own approval.
+> Original independent-runtime/recovery then new-site audit remains
+> the plan; earlier checkpoints below are historical.
+
+> PR1060 merged with explicit owner approval on2026-09-27 at06:25:44Z as197feaf7.
+> Required cycle ended0red/0threads/0behind/unchanged head; squash tree equals
+> ec40a03f. Main workflows are running, not yet all confirmed green. PR1051 now
+> integrates this main as well; fresh exact-head CI/review and its own merge
+> permission still required. No service action, deployment or migration applied.
+
+> Historical local cache refresh checkpoint (2026-09-27): PR1051 refreshed from
+> c4770f5a by normal merge of main c9de5a3d (a6048926). Both documentation tracks
+> retained; consumer/migration/SQL proof files are byte-identical to c4770f5a.
+> 10 portable cache contract cases and48 journal/startup regression cases pass.
+> Fresh local SQL is pending owner restart of the isolated proof service; old
+> SQL results below are historical, not a fresh run. Wait for approved1060 merge,
+> then refresh once more and publish for exact-head CI/review. No1051 merge
+> permission, service action or deployment. Runtime identity/recovery work remains
+> on its separate integration branch; earlier checkpoints below are historical.
+
+> PR1060 review4114242030, 2026-09-27: waiting admission now uses the canonical
+> 2020-2035 year range, avoiding year0001 previous-day underflow. Invalid years
+> go to canonical processing, not dependency lookup. Added outside/boundary unit
+> cases and real PG failed-marker proof for0001.50tests passed46.46s, including
+> six PG subprocess cases; disabling the year guard fails3tests, restored/cmp.
+> Ruff/whitespace clean; neutral schema count0 and independent list empty.
+> Fresh exact-head CI/review required after this fix; no merge approval inferred.
+
+> PR1060 refresh, 2026-09-27: parent1059 merged as c9de5a3d. This branch now
+> integrates that main without changing the1060 importer/runtime implementation.
+> Preserved both documentation histories, all six SQL scenarios, and main's
+> ambient-SSH startup-test fix.45 targeted unit/real-PG tests passed53.55s;
+> changed small Python files lint clean. Six previously addressed review threads
+> revalidated and resolved before refresh. Fresh exact-head CI/review required;
+> no merge permission for1060 or service activation. Current broader runtime
+> work remains in the separate integration worktree; historical notes follow.
+
+> Startup prerequisite #1059 update (2026-09-26): published refresh65f5dc60 by
+> ordinary fast-forward and retargeted to main89a2fd38. Ten-file diff self-reviewed;
+> 26targeted tests pass3.86s and four neutral SQL subprocess scenarios previously
+> passed on that exact code. Independent read-only review found no concrete
+> regression,12tests passed plus8-thread/one-logging-init probe. CI36197446590
+> all8jobs passed; CodeRabbit status success; review threads empty. Required
+> repo-hygiene and CodeQL checks did not start on base-edit alone (their workflows
+> lack edited/dispatch triggers). This real documentation checkpoint also gives
+> the now-main-targeted PR a synchronize event; re-check ALL gates on its new SHA.
+> No merge/deploy performed or approved. Older LOCAL/unpublished notes below are
+> historical. Production bytes remain unchanged from921af249.
+
 > Pravilo: ta datoteka se posodobi ob VSAKEM koraku. Nič se ne »dogovori«
 > samo v pogovoru. Bereta jo obe seji (in vsak prihodnji model).
 > Podrobne raziskovalne zapiske drži lokalno (docs/REPO_BOUNDARY.md);
@@ -28,6 +126,410 @@ fixture remotes only; actual NEVER MERGE refs/PRs remain untouched. No merge
 permission for #966. Current authorized batch is #1076/#1057/#962 only. Original
 runtime resume remains #1077 completion delivery/snapshot sealing after this
 consolidation detour, then new-site audit and approved reversible DEV transition.
+
+### R03c caller-owned durable cache polling — 2026-09-18
+
+2026-09-19 original-plan/Mandelbrot/RCA audit: design21 section7 direction
+preserved (shared domain, separate processes, PostgreSQL, cache first). Its
+section7a claim that readers are already independent is historical overstatement:
+source retention enables replay, but endstats/proximity still await Discord
+readiness and STATS_READY still enters through Discord. R04 must remove those
+writer/transport dependencies. Endstats voice/dead-hour cadence is not the same
+gate as proximity. Shared config is a bot-config reexport whose validate requires
+a Discord token: neutral entrypoint validation is an explicit extraction gate.
+Initial-import events are not final round completion; count by event semantics,
+not all journal rows. Coarse HTTP generation and periodic polling are deliberate
+first steps; per-session invalidation/NOTIFY latency optimization remain later.
+Added three worker edge proofs: acquisition cancellation cleanup, nonclosed
+InterfaceError propagates, unsupported events visible while valid work succeeds.
+17 worker unit cases pass; expanded combined rerun172 passed, zero skips, two
+existing warnings. Owner-approved #1049 merged90eae0f8 with full tree equal to
+964630e8, after fresh112 repair/inbox/override/coverage/bootstrap cases passed.
+Normal sync through #1050/#1051/#1052/#1053/R03c changed only seven PLAN lines.
+No activation. Local full audit kept outside tracked research.
+
+Local branch feat/db-runtime-cache-poll-r03c, parent #1053 at 1e36a993.
+Reusable shared driver only: caller awaits run and owns cancellation/connection
+factory. No service/startup wiring or process activation. Three opt-in flags,
+including new RUNTIME_HTTP_CACHE_WORKER_ENABLED, default OFF with no acquisition.
+Initial/periodic receipt-based scan, bounded batches and connection release per
+batch; yield under full backlog, interruptible idle/error waits, attempt timeout.
+Explicit state separates last confirmed generation/success from current failure;
+unsupported events remain counted. No NOTIFY dependency or MAX-ID cursor.
+Known DB/I/O/timeout failures retry; programming failures propagate visibly.
+Closed native connections are retried only when InterfaceError and is_closed
+agree; other interface errors remain failures. Restart relies on DB receipts.
+
+Independent review found the closed-connection case; fixed with real PG proof.
+17 new lifecycle/PG cases passed; expanded cache/HTTP/bootstrap/release suite
+169 passed, zero skips, two existing warnings; Ruff clean. Real PG proves late
+lower-ID catch-up without notifications, restart idempotency, receipt-error
+rollback/recovery and closed-connection replacement. Unit timeout releases
+connection before retry, cancellation drains, idle stop interrupts long wait.
+Removing periodic timeout caused observed TimeoutError; restored apply_patch/cmp.
+PG stopped and confirmed by pg_ctl/log. No live DB, dev service or prod changes.
+
+Publication originally waited for stack reduction (28files against hook limit25).
+After approved #1049 merge the measured diff is23files; no hook bypass required.
+#1050 is retargeted main with fresh CI required and no merge approval inferred.
+Next: publish R03c/external review, then independent
+runtime entrypoint/ownership plus activation gates. R04 ingestion extraction
+is not completed by this driver; Discord/website-off ingestion is still future.
+
+### R03b2 committed-generation HTTP namespace — 2026-09-18
+
+Owner scope clarification: all runtime work targets dev only. Production stays
+untouched on its existing release; deployment/restarts are separate approvals.
+Branch feat/db-runtime-http-generation-r03b2, parent #1052 at 30a1cd7f.
+Default OFF behind EVENT_STREAM_ENABLED, RUNTIME_HTTP_CACHE_EVENTS_ENABLED and
+new RUNTIME_HTTP_CACHE_NAMESPACE_ENABLED. Cacheable anonymous GETs verify the
+committed DB generation through the current shared adapter with a one-second
+read timeout. Missing/invalid/unavailable generation bypasses cache get/set and
+returns no-store plus BYPASS-GENERATION. Cancellation propagates. Namespace
+combines generation and existing backend namespace, captured for the request.
+No consumer loop, no live flag changes, no deployment. The dev-only restriction
+is operational scope, not an environment-name guard in the helper.
+
+92 focused unit/actual-PG/HTTP cases passed, zero skips, two existing warnings.
+Real PG rollback/uncommitted generation stays invisible; receipt failure rolls
+generation back; committed consumer effect invalidates two HTTP worker caches.
+Missing schema bypasses a warm cache. Redis startup fallback, old in-flight
+response, absent flags, bad values, cancellation and timeout are covered.
+Pinning namespace to generation0 failed both worker and actual-PG tests with
+HIT != MISS; restored apply_patch/cmp, full 92-case rerun passed. Ruff clean.
+Disposable PG stopped. Review initially requested the PG proof, now included.
+
+Limitations before activation: consumer lag still serves the prior namespace;
+R03c must schedule durable catch-up. HTTP/browser TTL and independent inner
+caches are unchanged. Benchmark cold/hot lookup cost and load, check website
+role grants, and define cache purge on administrative generation reset/restore.
+New middleware log omits DB error text; existing adapter logging is unchanged.
+Next: publish/review R03b2, then lifecycle/polling and explicit health semantics.
+Published draft #1053. Final independent review found no blocker after adding
+the PG proof. Post-push review clarified the reader docstring: it never creates
+schema or writes rows, but the shared adapter owns connection-pool behavior.
+External review found missing website_app SELECT privileges. Added migration092
+(091 unchanged), conditional SELECT-only grant, bootstrap mirror and release
+registration. Actual restricted-role reader succeeds after migration, cannot
+UPDATE generation or read receipts; role creation/grants rolled back in isolated
+PG. Role-absent/idempotent paths covered. Removing GRANT failed with permission
+denied, restored/cmp. Expanded 152-case suite passed, no skips, two existing
+warnings; Ruff clean, PG stopped. No live role or migration changes.
+
+### R03b1 bounded memory cache prerequisite — 2026-09-18
+
+Branch feat/db-runtime-cache-memory-r03b1, parent #1051 at 112f2524.
+Before adding DB-generation namespaces, bound abandoned namespaces and late
+old-request writes. Memory backend now defaults to 256 retained entries and
+8 MiB of retained key/JSON string objects per worker; FIFO eviction on writes,
+expired-entry sweep on writes, and uncacheable replacements remove old values.
+These are conservative storage budgets, not measured optimal capacity or RSS
+limits; dictionary/tuple overhead and transient serialization are not included.
+No runtime-generation namespace integration yet, no activation or deployment.
+
+48 focused cache/middleware tests passed, including in-process HTTP MISS/HIT/
+eviction/recomputation, concurrent writes, Unicode byte budget, abandoned epochs,
+late writes and replacement at capacity. Removing eviction failed `assert 4 <= 3`;
+restored with apply_patch and verified cmp. Independent review found no blocker;
+its concurrent mutation-time run also observed byte/count failures (not a failure
+of restored code). Ruff clean. Next: publish for review, then generation reads
+with fail-closed cache bypass and multi-worker/in-flight proofs in R03b2.
+
+### R03a transactional HTTP-cache generation receipts — 2026-09-18
+
+2026-09-19 checkpoint: owner-approved #1050 merged as 2518735f after all22
+checks, resolved reviews and fresh79 isolated-PG/retry/bootstrap/release cases.
+Prescribed cycle ended with zero red checks/threads/behind and unchanged head;
+squash tree equals approved00e061ec. #1051 retargeted main; normal merge77f8ed47
+resolved squash-history conflicts and preserved its entire pre-sync44914a22 tree.
+Descendant sync follows; fresh exact-head CI required. #1051+ not merge-approved.
+No deployment, service operation or live database change. Temporary PG stopped.
+
+Branch feat/db-runtime-cache-receipts-r03a, parent #1050 at 0f0c8e73.
+Migration 091 adds consumer/event receipts and shared DB cache generation.
+Explicit default-OFF primitive serializes on the generation row, consumes bounded
+known event/schema batches without a MAX-ID cursor, and commits generation plus
+receipts atomically. Caller-held transactions are rejected. Unsupported pairs
+remain unacknowledged and explicitly counted; they cannot occupy the valid batch.
+No HTTP namespace integration, listener, background task, activation or deploy.
+Receipt means DB generation advanced, not every worker/browser cache invalidated.
+Batch bound limits processed events, not SQL scan cost; benchmark before rollout.
+Website role permissions and independent inner caches remain integration gates.
+
+Read-only review found no concrete blocker. Real PG proofs include concurrent
+consumers, late lower-ID commit, rollback at receipt/generation/COMMIT failure,
+idempotent empty retry, source consumer isolation, unknown schema visibility,
+bounded remainder and OFF behavior. Transaction mutation failed 1 != 0; removing
+the early row lock failed the observed pg_stat_activity lock-location assertion.
+Both restored via apply_patch/cmp. Initial focused run 62 passed, no skips;
+extra observed-lock regression passed. Full cross-stack regression: 280 passed,
+zero skips, two existing warnings; Ruff/whitespace clean. Disposable PG stopped,
+verified by pg_ctl and shutdown log. Next: external review and exact-head CI.
+Published draft #1051. #1046 merged as 64488de1 with approved tree verified;
+#1048 now ready/main, and ancestry sync through #1049/#1050/#1051 preserved
+all implementation content. Fresh CI required after these pushes. No activation.
+Review follow-up: corrected BACKLOG's stale #1046 status to merged 64488de1
+and labelled older checkpoints historical. Owner explicitly approved #1048;
+its prescribed merge cycle is running. Further PRs still require specific approval.
+
+### Accepted delivery sequence — 2026-09-20
+
+Owner explicitly includes the new website/design in the final dev transition.
+First prove independent runtime capture/import/recovery; then audit new-site
+implementation against original design, functional journeys/data parity, auth
+and permissions/API security, mobile/accessibility/performance and absent/error
+states. Fix findings, integrate runtime+site, then owner-approved reversible dev
+cutover. Production remains frozen. Build/test success is not a website audit.
+
+### R04e dependency-aware import step — 2026-09-20
+
+Review4056385615 RCA: payload hash omits the header, so unchanged cumulative
+R2 equals R1. Scope canonical duplicate queries to the same filename round suffix
+in BOTH the neutral preflight and process_file; waiting bypass additionally
+requires a valid R2 source. Preserve legacy unscoped lookup for callers omitting
+filename. Actual PG zero-delta case: R1 retired => waiting/no R2 marker; restored
+=> R0=3/R1=3/R2=0 and two half events. Removing SQL half filter reproduces
+Skipped duplicate payload file and missing R2; restored/cmp. Same-half identity
+across different matches remains legacy payload-based behavior, not a complete
+source-identity guarantee. No historical data repair or application DB changes.
+66 combined unit/actual-PG tests pass; two waiting-gate mutations fail as well,
+restored/cmp. Changed small modules Ruff clean; manager diagnostics identical
+to parent20-code/message multiset. Disposable PG stopped; fresh CI required.
+
+Review4056323000: validate actual calendar/time before dependency waiting,
+not only regex shape.23 unit/PG cases pass, including impossible timestamp
+through canonical failure, leap-day and midnight boundaries. Skipping calendar
+validation fails7 cases; restored/cmp. Ruff clean; disposable PG stopped.
+
+Review4056294780/4056294781: preserve canonical renamed-payload deduplication
+when R1 is gone, via a public read-only manager preflight; malformed R2 names
+use canonical import/failure instead of waiting.14 unit/actual-PG cases pass:
+mirror gets a success marker without new rounds/events, malformed fixture gets
+a failed marker. Both guard mutations fail, restored/cmp. New modules lint
+clean; manager retains exactly its previous20 code/message diagnostics. Isolated
+PG stopped after proof; no application DB/service changes. Fresh CI required.
+
+Review4056275060/4056275062 fixed: completed R2 remains imported after R1
+retention, and bare paths normalize before both lookups.12 unit/actual-PG cases
+pass; actual deferred scenario uses relative paths and then retires R1 before
+retry. Both removed guards fail their tests, restored/cmp. PG stopped. Lookup
+failure is not waiting/absence: processed-state errors propagate to caller.
+
+Verified:69 combined cases pass,0skips,2existingwarnings. Actual-PG deferred-R1
+scenario has zero rounds/markers/events before R1 arrives, then R1=3/R2=5/R0=8
+and exactly2half-events with duplicate retry unchanged. Disabling dependency
+guard imports an orphan and fails waiting-state assertion; restored/cmp.
+Changed Python files lint clean; disposable PG stopped. Pending review/CI.
+
+Caller-driven step reuses canonical parser R1 lookup and process_file; missing
+R1 returns explicit waiting_for_r1 after a read-only processed-state check,
+without marker writes. Already-processed R2 remains successful if R1 was pruned.
+Bare relative paths normalize to absolute for both lookup and import. No scheduler,
+connection ownership change, automatic orphan repair or activation. Caller must
+provide immutable completed spool and retain R1 during parsing; dependency check
+does not solve concurrent file deletion/replacement or bound filesystem scans.
+Capture publication/retention and bounded-scan behavior remain separate gates
+before live use.
+
+### Local #1059 main refresh — 2026-09-25
+
+Prepared fix/db-runtime-startup-main-refresh from921af249 plus main89a2fd38.
+Preserved both documentation tracks; sole importer conflict was constructor
+docstring. Production parser/importer/startup files remain byte-identical to
+921af249. Fresh checkout exposed test ambient SSH_ENABLED dependence; legacy
+logging fixture now explicitly disables SSH/automation and tests inherited
+true/false.26 startup/parser/pool/logging tests pass; removing isolation fails
+the existing SSH dev guard, restored/cmp. Eager Discord mutation also fails,
+restored/cmp. Targeted lint clean; manager's20 existing Ruff diagnostics unchanged.
+Remote #1059 remains open on old base with merge conflict; old SHA has9successful
+check runs and0review threads. This LOCAL refresh is not published, remotely
+reviewed or merge-approved. main is ancestor after this merge; diff10files.
+Earlier progress/approval notes below are historical. Integrated runtime work
+continues separately; SQL batch/lock gates still await owner-started test PG.
+
+### R04d neutral importer startup — 2026-09-20
+
+R1/R2 characterization: ordered imports and R2-first with both files retained
+produce R1=3,R2=5,R0=8 kills; journal contains only rounds1/2. If R1 file arrives
+after R2 was imported, R2 stays orphan_r2 with raw8 kills and successful marker;
+ordinary retry returns Already processed even after R1 arrives. Confirmed with
+real isolated PG and observer rows, not a proposed policy. This is an activation
+gap: next capture layer must defer R2 until dependency is available or implement
+an explicitly designed repair; do not silently change parser semantics here.
+63 combined cases pass0skips2existingwarnings. Removing orphan flag fails status
+assertion; restored/cmp. Temporary PG stopped. Test quoting collection error
+was corrected before evidence runs. No production code changes in follow-up.
+
+Actual-PG follow-up: fresh subprocess with Discord/config/logging imports blocked
+ran canonical parser and process_file, with no mocked persistence methods.
+Private disposable PG schema bootstrapped explicitly by test only; observer
+connection confirmed one R1 round/player (3 kills), event and successful marker.
+COUNT and fetched rows agree; repeated file adds no player/event, borrowed pool
+remains usable. Synthetic single-player fixture, NOT R2/capture/cutover proof.
+Initial assertion expected32-char GUID; canonical parser short_guid proved8,
+so corrected test, not code. Disabling event emission caused actual-PG assertion
+failure; restored/cmp, combined60 cases pass0skips2existingwarnings. Test PG
+stopped, shutdown log/status agree; random schemas removed. No live DB changes.
+
+Follow-up preflight lifecycle proof: three fresh subprocesses invoke real
+process_file with a caller-owned protocol-test pool: duplicate, query outage,
+and cancellation. They assert lease release, retained pool identity, retryable
+outage and propagated cancellation, with setup/presentation imports forbidden.
+36 focused cases pass. Adding disconnect to the duplicate branch fails the
+success contract (borrowed pool close raises); restored/cmp. This is NOT a real
+PostgreSQL commit proof and does not cover the full successful write path yet.
+
+Branch feat/db-runtime-import-startup-r04d builds on #1057 at908d238e and
+cherry-picks #1056 parser-only slice65f5cbac as aaee6c52 (not its cache stack).
+Parser/test contents unchanged; progress notes from both sides preserved.
+Manager import no longer mutates sys.path, loads dotenv or configures logging.
+Explicit configuration uses neutral emitters; default constructor's load_config
+seam delegates to lazy legacy startup, dotenv before log-path selection and
+logging setup once under a lock. Configuration reloads on each default call.
+Import/logging failures now propagate rather than selecting a silent no-op
+logging fallback. This intentionally changes import-only side effects; callers
+needing legacy setup must construct with defaults, not merely import the module.
+
+78 selected regression cases pass, no skips, two existing websockets warnings.
+Fresh subprocess proves neutral parsing/validation, no config/Discord imports,
+environment/path/cwd/root-handler changes, log files or connections. Another
+process verifies legacy dotenv-before-file-logging and stable repeat handlers.
+Forbidden bot.config import mutation failed, restored/cmp. Initial legacy proof
+failed missing BOT_ENVIRONMENT; fixed test setup with explicit dev, not the guard.
+No services/DB touched. This is construction/startup, NOT full independent ingest.
+Next: reviews and canonical process_file proof with owned/injected pool, followed
+by capture cadence, source retention, single-writer cutover and failure matrix.
+
+### Side quest: preserve and consolidate open PRs — 2026-09-20
+
+Execution update: owner explicitly approved #1076/#1057/#962. First two merged
+via cycle.sh as1a78b713 and249f7b8e; #962 now integrates both and waits fresh gates.
+Older proposals preserved/refreshed: #965c8fa8e41, #969884b1baf, #966a05bbf39,
+#97994cf8e3d (three provenance gaps fixed), #9631a743945 (historical corrections),
+#964be53dbf4 (ledger reconciliation), #1027f0d263c2 (normal branch update).
+Each still needs exact-head checks/review/current-main readiness and its own
+merge permission. No NEVER MERGE changes, no release/deploy activation.
+
+Owner requested consolidation, including older fixes, without losing the original
+plan. Pause new runtime slices while preparing existing PRs. No per-PR merge
+permission was granted by this request. NEVER MERGE #924–#943 and #967 remain
+untouched; release #956 stays a separate decision. At audit: 56 open PRs, confirmed
+by REST and GraphQL: 21 review snapshots, 26 runtime slices, 9 older proposals.
+
+Older work preservation/order:
+- #962 disk measurement then #965 notification acknowledgement: both mechanisms
+  are still absent from main; keep both, refresh/test separately and together.
+- #969 Node pin then #1027 lockfile update then #979 artifact preflight: preserve
+  each purpose; current main still has old Node pin/mocker/build command. Refresh
+  and verify narrow diffs. #979 has three outstanding substantive review findings.
+- #966 immutable review tooling: refresh/test without touching review snapshot refs.
+- #964 execution ledger and #963 historical handoff: reconcile together, retain
+  unique lessons, correct stale operational instructions, distinguish historical
+  measurements from current facts. Do not discard merely because they conflict.
+- #956 release: hold, never equate merge permission with deploy permission.
+
+Runtime dependency order remains #1076; #1057→#1059→#1060;
+#1061→#1062→#1064→#1065→#1066 (also needs #1060);
+#1063→#1067→#1068→#1069→#1070→#1071→#1072 (also needs #1062/#1064);
+#1073→#1074→#1075, and #1077 after #1076/#1072. Backport #1077 worker fixes
+before merging #1068. Cache lane #1051→#1052→#1053→#1054→#1055→#1056 needs
+main conflict resolution and investigation of #1056 Docker failure. Each PR gets
+current-main integration, exact-head checks, substantive review-thread handling,
+functional/runtime/mutation proofs and explicit owner permission before cycle.sh.
+No child PR merges into another feature branch; retarget to main after prerequisites.
+
+Started #962: normal merge of current main retained the original two-file fix.
+Found zero-capacity fixture returned false healthy zero usage; now None/unknown,
+while positive used space with no available space remains measured 100%/fail.
+31 targeted tests pass; guard mutation raises TypeError, restored/cmp. Actual
+read-only collect_disk and df byte ratio agree twice at96.9%, df displays97%.
+This is current host measurement, not deployed watchdog proof. Disk pressure
+blocks heavy build/install work pending safe capacity planning; no deletion.
+Next finish refreshed #962 CI/review, then #965 integration and older lanes above.
+
+Resume point: runtime #1077 c015270b completed worker review fixes; trusted
+completion delivery and immutable snapshot sealing remain next development.
+Then full new-site design/functionality/security audit, then owner-approved
+reversible DEV cutover. Production v1.39.0 remains frozen. No service activation.
+
+2026-09-20 checkpoint: owner-approved #1058 merged as b5e20c9d after prescribed
+cycle (0 red/threads/behind, unchanged SHA). Squash tree equals da1a5136.
+Fresh14 logging/retry cases passed before merge. R04b synced main normally;
+both progress sections retained in documentation conflicts, no constructor
+changes. Older approval/CI notes below are historical. #1057 not approved.
+Next startup contract: /tmp/slomix-r04d-startup-contract-2026-09-20.md (local).
+
+### R04a parser presentation boundary — 2026-09-19
+
+Branch feat/db-runtime-parser-boundary-r04a, parent #1055 at5b0d305f.
+Move Discord import into create_stylish_round_embed only; parsing and R2 logic
+unchanged. Separate subprocesses compare full parser/differential output with
+Discord preloaded versus forbidden (also forbid bot.config/dotenv/website).
+Clock frozen in proof to avoid comparing two generation timestamps. Existing
+committed sample files produce zero parsed players; explicitly recorded, not
+treated as player coverage. Valid synthetic player lines separately prove one
+player and differential kills8-3=5; real Discord Embed rendering remains covered.
+
+151 parser/helper/R2/import-journal/retry/replay cases passed, zero skips, two
+existing warnings. Ruff clean. Restoring eager import as a mutation caused
+ModuleNotFoundError: Presentation/config dependency forbidden: discord; restored
+apply_patch/cmp, then full151 passed. No network, database or service activation.
+
+Discovery correction: manager load_config constructs BotConfig but does NOT
+call its token validator. Importing bot.config still loads dotenv, and the
+manager initializes logging at module import. Neutral config extraction must
+preserve explicit legacy logging/config behavior; deferred to its own slice.
+This prerequisite does not make the canonical importer or ingestion independent.
+Original R04 capture/cadence/metadata/single-writer acceptance gates remain open.
+
+### R03d independent cache-consumer process — 2026-09-19
+
+
+### R04b explicit importer constructor configuration — 2026-09-19
+
+Independent branch feat/db-runtime-import-config-r04b based on main2518735f;
+does not depend on R03 cache consumers or R04a parser import changes. Add a
+keyword-only config argument to the canonical PostgreSQLDatabaseManager. Only
+None invokes the existing loader; explicit configuration retains object identity,
+including falsey objects, and the PostgreSQL-only check remains. Existing callers
+and load/config/logging order are unchanged. No pool/connect/migrate on creation.
+
+Seven boundary cases and expanded154 parser/journal/retry/replay cases passed,
+zero skips, two existing warnings. Actual subprocess supplies configuration while
+ambient loader and pool creation are forbidden, then exercises canonical player
+validation. Mutation config-or-loader rejected a falsey supplied config and
+failed; restored apply_patch/cmp, expanded154 rerun passed. New tests lint clean;
+manager's20 pre-existing Ruff diagnostics match baseline by code/message.
+Unit harness probes the stopped disposable PG socket (FileNotFoundError); no
+live-DB fallback, no PG restarted for this slice and no DB-ingestion claim.
+
+Limits: bot.config module still loads dotenv; manager still initializes logging
+at import, parser still imports Discord on this independent main-based branch
+(separately addressed by #1056). This isolates construction, not all module side
+effects. Next separate explicit startup/logging ownership while preserving legacy
+behavior; then R04 source/cadence/metadata/single-writer acceptance proofs. No
+activation, service operation, production changes or new merge permission.
+
+### R04u exclusive source-generation reservation — 2026-09-20
+
+Independent main-based primitive, not a reset of the runtime plan. Existing
+capture/producer/manifest chain remains in #1059–#1075; latest #1075 checks green
+at966f829d. Its branch touches24paths vs main, so this independently testable
+reservation slice avoids exceeding25path hook without bypass or premature merge.
+reserve_source_generation creates a caller-chosen32lowerhex directory with atomic
+mkdir beneath an existing private0700owner root; child then parent fsync before
+success. Any existing entry refuses reuse, including empty directories/symlinks.
+Post-mkdir failure preserves reservation; no cleanup or automatic new token.
+Caller retains stable root, hands reservation to one producer and prevents later
+rewrites. This is namespace reservation, not a lease, snapshot completion or
+producer wiring. Returned Path is not a capability; no source/DB/service action.
+16 focused actual-filesystem tests pass0skips: sync order/mode, two concurrent
+attempts have one winner, all existing types preserved, failed sync blocks reuse.
+Swallowing FileExistsError fails two existing-directory proofs DID NOT RAISE;
+restored/cmp, Ruff clean. No broader capture tests claimed on this independent
+branch. Next explicit producer handoff and trusted completion delivery, keeping
+reservation/data/receipt identities aligned. Runtime first, then new-site full
+audit, then owner-approved reversible dev transition; production unchanged.
 
 ### R04c neutral database logging helpers — 2026-09-19
 
@@ -69,7 +571,8 @@ bootstrap cases passed before merge. #1050 retargeted main; normal ancestry sync
 preserved the full tree. Fresh checks required; no approval for #1050 inferred.
 No service/deployment changes. Older progress notes below are historical.
 
-Latest checkpoint: #1044 and #1045 merged through prescribed cycles with
+Historical R02d5 checkpoint (current position is in R03a above):
+#1044 and #1045 merged through prescribed cycles with
 review dispositions and verified squash trees. #1046 is ready/main at a58277f9;
 fresh CI pending. #1050 external Codex found no major issues at 51505e84 and
 all nine branch checks passed there. Subsequent ancestry sync changed no code.
