@@ -1,10 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
->1054 local refresh2026-09-27: merged parent25f293b8 normally. Clear stale
+>1054 refresh2026-09-27: merged reviewed parent ccd23e81 normally. Clear stale
 > error_type on both disabled transitions while retaining confirmed generation,
 > unsupported count and last-success time. Four async worker reproductions fail
-> before fix and with the fix removed, restored/cmp.161local cases pass; no new
-> SQL proof. Parent1053 has new review findings; do not publish/merge as ready.
+> before fix and with the fix removed, restored/cmp.161local cases previously
+> passed; fresh21worker unit+3realPG lifecycle cases pass4.36s on refreshed parent.
+> Actual polling catches late lower IDs, receipt failure rolls back/retries and
+> closed connections reacquire. Fresh exact-head CI/review and owner merge
+> permission remain required; parent1053 is reviewed but not merged.
 >1053 follow-up2026-09-27: fresh review found ON reactivation could revive an
 > old generation when events were disabled during writes. Both ON/OFF namespaces
 > now include the captured middleware-lifetime/mode-transition token. All cache

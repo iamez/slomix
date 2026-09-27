@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1054 refreshed from reviewed1053 ccd23e81;24worker tests
+  pass4.36s including3fresh isolated-PG recovery cases. Publishing disabled-state
+  correction for review; no merge permission. Owner started proof cluster;
+  application services/data unchanged. Parent1053 still needs owner approval.
+
 - (Astra, 2026-09-27)1054 disabled-state review fix saved locally after parent
   refresh.161tests pass;4reproductions/mutation failures, restored/cmp. Parent
  1053 requires another review-fix refresh first. No merge/service approval.
