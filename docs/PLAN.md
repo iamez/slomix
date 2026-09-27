@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1054 merged with owner approval as0d43b3da at15:06:08Z on2026-09-27;
+>0failed/0threads/0behind/unchanged head, squash tree matches6d06c58b.
+>1055 now integrates that main normally; only seven PR paths remain. Retarget
+>to main before publishing this checkpoint. Fresh exact-head CI/review required;
+>no1055 merge permission. Earlier waiting notes are historical.
+
 >1055 refresh checkpoint2026-09-27: normally integrated reviewed1054 head
 >6d06c58b as e0d6c699; retained both documentation histories.54focused cases
 >pass18.54s including5real isolated-PG cases and actual process shutdown/replay.
