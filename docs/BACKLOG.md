@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1054 disabled-state review fix saved locally after parent
+  refresh.161tests pass;4reproductions/mutation failures, restored/cmp. Parent
+ 1053 requires another review-fix refresh first. No merge/service approval.
+
 - (Astra, 2026-09-19) #1049 merged90eae0f8 after approved review/cycle;
   squash tree matches964630e8. Descendant stack synced with code unchanged.
   R03c expanded combined proof172passed; stack23files now within publication

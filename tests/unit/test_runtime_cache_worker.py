@@ -91,6 +91,35 @@ async def test_full_batches_yield_and_release_each_connection(monkeypatch):
     assert worker.state.generation == 3
 
 
+@pytest.mark.parametrize("disable_at", [*FLAGS, "consumer"])
+async def test_disable_after_failure_clears_error_preserving_last_success(monkeypatch, disable_at):
+    worker = module.RuntimeCacheWorker(poll_seconds=0.001)
+    observations = []
+
+    async def consume(conn, **kwargs):
+        observations.append(worker.state)
+        if len(observations) == 1:
+            return CacheConsumption("idle", 0, 7, 2)
+        if len(observations) == 2:
+            if disable_at != "consumer":
+                monkeypatch.setenv(disable_at, "false")
+            raise OSError("synthetic unavailable")
+        return CacheConsumption("disabled", 0, None, None)
+
+    monkeypatch.setattr(module, "consume_http_cache_events", consume)
+    await asyncio.wait_for(worker.run(connection, asyncio.Event()), timeout=1)
+    assert worker.state.status == "disabled"
+    assert worker.state.error_type is None
+    assert worker.state.generation == 7
+    assert worker.state.unsupported_pending == 2
+    assert worker.state.last_success_monotonic == observations[1].last_success_monotonic
+    assert worker.state.last_success_monotonic is not None
+    assert len(observations) == (3 if disable_at == "consumer" else 2)
+    if disable_at == "consumer":
+        assert observations[2].status == "unavailable"
+        assert observations[2].error_type == "OSError"
+
+
 async def test_idle_stop_interrupts_long_wait(monkeypatch):
     stop, consumed = asyncio.Event(), asyncio.Event()
     worker = module.RuntimeCacheWorker(poll_seconds=3600)

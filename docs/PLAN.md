@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1054 local refresh2026-09-27: merged parent25f293b8 normally. Clear stale
+> error_type on both disabled transitions while retaining confirmed generation,
+> unsupported count and last-success time. Four async worker reproductions fail
+> before fix and with the fix removed, restored/cmp.161local cases pass; no new
+> SQL proof. Parent1053 has new review findings; do not publish/merge as ready.
+
 > Current1053 refresh (2026-09-27): parent1052 refreshed by ordinary merge,
 > preserving both documentation histories. Two open review findings addressed:
 > activation comment requires091/092; OFF cache namespaces are unique per
