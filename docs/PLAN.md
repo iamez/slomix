@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>Current1067 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1067-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
 > PR1067 key-only authentication correction, 2026-09-27: installed/pinned
 > Paramiko5 legacy authentication can call auth_interactive_dumb after partial
 > public-key authentication even with agent/discovery disabled. Three new
