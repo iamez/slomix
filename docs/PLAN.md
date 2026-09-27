@@ -10,6 +10,7 @@
 >no1065 merge approval, no network, services or application DB changes.
 >Original runtime plan preserved; dependency consolidation only.
 
+
 >1064 restrictive-umask review2026-09-27: reproduced publication under0277
 >creating0400 successfully while reconciliation rejected its own output. Inspector
 >now accepts exact0400/0600 owner-readable private regular files without chmod;
@@ -246,6 +247,7 @@ fails two tests with Source must not be consumed; restored/cmp. Real filesystem
 proof preserves inode/bytes on repeat and leaves one winning file after a race.
 Ruff and whitespace clean; external review/CI required. This composes publication
 and reconciliation, not the SSH connection owner or automatic retry scheduler.
+
 
 ### R04i read-only spool reconciliation — 2026-09-20
 

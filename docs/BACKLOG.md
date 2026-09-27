@@ -12,6 +12,7 @@
   Match/conflict skip input; missing publishes; every exception remains visible.
   No source acknowledgement/deletion, scheduler, SSH or service activation.
 
+
 - (Astra, 2026-09-27)1064 Codex4116756259 verified/fixed: umask0277 produces
  0400; inspector now permits0400/0600 without broadening permissions.75real
   filesystem/local socket tests pass; oldmodeguard mutation fails then restored
