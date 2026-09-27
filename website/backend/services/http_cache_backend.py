@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sys
 import time
 from typing import Any, Protocol
 
@@ -46,7 +47,18 @@ class CacheBackend(Protocol):
 
 
 class MemoryCacheBackend:
-    def __init__(self) -> None:
+    """FIFO-bounded cache; budgets cover retained strings, not whole-process RSS.
+
+    Expired entries in abandoned namespaces are pruned on writes. Late requests
+    may still write their old namespace, but cannot grow storage without bound.
+    """
+
+    def __init__(self, *, max_entries: int = 256, max_bytes: int = 8 * 1024 * 1024) -> None:
+        for limit in (max_entries, max_bytes):
+            if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+                raise ValueError("Memory cache limits must be positive integers")
+        self.max_entries = max_entries
+        self.max_bytes = max_bytes
         self._namespace = "1"
         self._entries: dict[str, tuple[float, str]] = {}
         self._lock = asyncio.Lock()
@@ -79,6 +91,21 @@ class MemoryCacheBackend:
         expires_at = time.time() + ttl
         payload = json.dumps(value)
         async with self._lock:
+            now = time.time()
+            expired = [key for key, (expiry, _) in self._entries.items() if expiry <= now]
+            for key in expired:
+                del self._entries[key]
+            # A non-cacheable replacement must not leave an older value behind.
+            self._entries.pop(full_key, None)
+            size = sys.getsizeof(full_key) + sys.getsizeof(payload)
+            if expires_at <= now or size > self.max_bytes:
+                return
+            retained = sum(sys.getsizeof(key) + sys.getsizeof(item[1])
+                           for key, item in self._entries.items())
+            while len(self._entries) >= self.max_entries or retained + size > self.max_bytes:
+                oldest = next(iter(self._entries))
+                _, removed = self._entries.pop(oldest)
+                retained -= sys.getsizeof(oldest) + sys.getsizeof(removed)
             self._entries[full_key] = (expires_at, payload)
 
     async def invalidate_all(self) -> None:
