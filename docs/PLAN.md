@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>Current1064 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
+>squash tree equals435268ef. Actual main now integrated normally, documentation
+>histories and implementation bytes preserved. Repeat local gates then publish
+>for fresh exact-head CI/review. No service, network or application DB action;
+>no1064-specific approval recorded yet. Earlier checkpoints below are history.
+
 > Current 1064 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
 >squash tree equals reviewed21e6c999. Actual main now merged normally here.
 >Documentation histories preserved; source/test bytes unchanged from5264909e.
