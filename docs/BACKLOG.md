@@ -27,6 +27,11 @@
   No real network. End-to-end handshake bound and source identity still block
   activation. #1066 capture/import integration CI/review remains in parallel.
 
+- (Astra, 2026-09-20) R04j adds one caller-driven capture attempt on #1064.
+  55 filesystem tests pass; source-consumption guard mutation fails/restored.
+  Match/conflict skip input; missing publishes; every exception remains visible.
+  No source acknowledgement/deletion, scheduler, SSH or service activation.
+
 
 - (Astra, 2026-09-27)1064 Codex4116756259 verified/fixed: umask0277 produces
  0400; inspector now permits0400/0600 without broadening permissions.75real
