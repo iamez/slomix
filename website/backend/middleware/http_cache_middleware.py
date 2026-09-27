@@ -32,7 +32,7 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         self.cache_backend = cache_backend
         self.generation_reader = generation_reader
         self._runtime_cache_mode = None
-        self._disabled_epoch = uuid4().hex
+        self._mode_epoch = uuid4().hex
         self.default_ttl = getenv_int("CACHE_DEFAULT_TTL_SECONDS", 120)
         self.live_ttl = getenv_int("CACHE_LIVE_TTL_SECONDS", 15)
         self.leaderboard_ttl = getenv_int("CACHE_LEADERBOARD_TTL_SECONDS", 300)
@@ -106,11 +106,12 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         enabled = runtime_http_cache_enabled()
         if enabled != self._runtime_cache_mode:
             # Rollback must not revive pre-activation entries, including after
-            # restart with a persistent backend. OFF caches are worker-local.
-            self._disabled_epoch = uuid4().hex
+            # restart with a persistent backend. Both modes are worker-local;
+            # writes while events are OFF may not advance the DB generation.
+            self._mode_epoch = uuid4().hex
             self._runtime_cache_mode = enabled
         # Capture before any await so an old response cannot fill a new epoch.
-        disabled_epoch = self._disabled_epoch
+        mode_epoch = self._mode_epoch
         generation = None
         if enabled:
             try:
@@ -127,9 +128,9 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         namespace = await self.cache_backend.get_namespace()
         if generation is not None:
             # Capture once: late responses must never populate a newer epoch.
-            namespace = f"runtime-v1:{generation}:{namespace}"
+            namespace = f"runtime-v2:{mode_epoch}:{generation}:{namespace}"
         else:
-            namespace = f"runtime-off-v1:{disabled_epoch}:{namespace}"
+            namespace = f"runtime-off-v1:{mode_epoch}:{namespace}"
         cached = await self.cache_backend.get(namespace, cache_key)
 
         if cached is not None:

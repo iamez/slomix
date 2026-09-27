@@ -5,6 +5,15 @@
 > unsupported count and last-success time. Four async worker reproductions fail
 > before fix and with the fix removed, restored/cmp.161local cases pass; no new
 > SQL proof. Parent1053 has new review findings; do not publish/merge as ready.
+>1053 follow-up2026-09-27: fresh review found ON reactivation could revive an
+> old generation when events were disabled during writes. Both ON/OFF namespaces
+> now include the captured middleware-lifetime/mode-transition token. All cache
+> reuse is worker-local, including Redis-backed ON mode; generation changes still
+> invalidate independently in each worker. This trades cross-worker reuse for
+> safe reactivation/restart, not a measured performance improvement. Website
+> env example now declares all three flags default OFF with091/092 prerequisites.
+>151local cases pass,12ASGI mode-roundtrip combinations;7reproduction/mutation
+> failures observed, restored/cmp. Fresh CI/review required; no1053 approval.
 
 > Current1053 refresh (2026-09-27): parent1052 refreshed by ordinary merge,
 > preserving both documentation histories. Two open review findings addressed:

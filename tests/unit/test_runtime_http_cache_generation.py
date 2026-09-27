@@ -1,10 +1,12 @@
 """HTTP runtime-generation behavior without starting a server or live DB."""
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from dotenv import dotenv_values
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request
@@ -68,7 +70,9 @@ async def test_unverified_generation_bypasses_get_and_set(bad, caplog):
 
 
 @pytest.mark.parametrize("restart", [False, True])
-async def test_rollback_never_revives_pre_activation_response(monkeypatch, restart):
+@pytest.mark.parametrize("initial_enabled", [False, True])
+@pytest.mark.parametrize("flag", FLAGS)
+async def test_rollback_never_revives_pre_activation_response(monkeypatch, restart, initial_enabled, flag):
     cache = MemoryCacheBackend()  # Keep backend contents across app restarts.
     state = {"value": "before"}
     reader = AsyncMock(return_value=1)
@@ -76,13 +80,13 @@ async def test_rollback_never_revives_pre_activation_response(monkeypatch, resta
     async def endpoint():
         return dict(state)
 
-    monkeypatch.setenv(FLAGS[-1], "false")
+    monkeypatch.setenv(flag, str(initial_enabled).lower())
     async with client_for(cache, reader, endpoint) as client:
         assert (await client.get(PATH)).json() == {"value": "before"}
-        monkeypatch.setenv(FLAGS[-1], "true")
+        monkeypatch.setenv(flag, str(not initial_enabled).lower())
         state["value"] = "after"
         assert (await client.get(PATH)).json() == {"value": "after"}
-        monkeypatch.setenv(FLAGS[-1], "false")
+        monkeypatch.setenv(flag, str(initial_enabled).lower())
         if not restart:
             response = await client.get(PATH)
             assert response.json() == {"value": "after"}
@@ -94,6 +98,17 @@ async def test_rollback_never_revives_pre_activation_response(monkeypatch, resta
             assert response.json() == {"value": "after"}
             assert response.headers["X-Cache"] == "MISS"
             assert (await client.get(PATH)).headers["X-Cache"] == "HIT"
+
+
+def test_website_template_declares_all_namespace_flags_default_off(monkeypatch):
+    values = dotenv_values(Path(__file__).resolve().parents[2] / "website/.env.example")
+    for flag in FLAGS:
+        assert values[flag] == "false"
+        monkeypatch.setenv(flag, values[flag])
+    assert not generation_service.runtime_http_cache_enabled()
+    for flag in FLAGS:
+        monkeypatch.setenv(flag, "true")
+    assert generation_service.runtime_http_cache_enabled()
 
 
 async def test_two_workers_and_redis_startup_fallback_observe_shared_epoch():
