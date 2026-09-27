@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1070 refreshed locally through8501f7b9 (merge5d2971f7),
+  preserving worker/auth/0400 fixes and both documentation histories.141offline
+  tests pass23.35s; real child/retry proofs and failing guard mutation restored/cmp.
+  New1067 implicit certificate-sidecar finding still requires propagated repair
+  before publication; do not call auth fully reviewed. No push/retarget/service/DB.
+
 - (Astra, 2026-09-20) R04o combines #1069/#1064 and keeps observed spool content
   separate from supervised child outcome. 117 cases pass; actual spawned offline
   retries recover missing content and skip already-complete/conflicting content.

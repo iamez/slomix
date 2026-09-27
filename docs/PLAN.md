@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1070 local refresh2026-09-27: live sourcef4d11cb6/base1069 normally merged
+>prepared1069 at8501f7b9 as5d2971f7. Both documentation histories retained;
+>spool conflicts preserve0400 inspection fix; worker/auth/source tests match
+>parent.141offline tests pass23.35s, including actual child/filesystem retries:
+>failed/missing and timed_out/missing retry once; timed_out/match skips recapture.
+>Independent sha256sum confirms retained final bytes; procfs and active_children
+>confirm reaping. Disabling existing-content guard fails2cases with forbidden
+>spawn assertion; restored/cmp, Ruff clean. No live network/service/DB changes.
+>BLOCK publication until the newly reported1067 implicit key certificate-sidecar
+>loading fix propagates through1068/1069, followed by actual main sync and fresh
+>exact-head review/CI. No1070 merge permission inferred. Original plan preserved.
+
 >1069 local refresh2026-09-27: live source87f9fa72 normally merged prepared
 >1068 parent3244843d as4020bb69. Three doc conflicts retained both histories;
 >worker cleanup and SSH explicit-key authentication source/tests equal parent.
