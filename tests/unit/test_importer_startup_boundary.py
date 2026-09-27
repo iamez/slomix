@@ -79,8 +79,10 @@ def test_legacy_setup_once_and_failure_propagates(monkeypatch, failure):
     assert config_module.load_config.call_count == 2
 
 
-def test_legacy_dotenv_precedes_log_directory_selection(tmp_path):
+@pytest.mark.parametrize('ambient_ssh', ['true', 'false'])
+def test_legacy_dotenv_precedes_log_directory_selection(tmp_path, monkeypatch, ambient_ssh):
     """Real imports select the dotenv-provided log directory before setup."""
+    monkeypatch.setenv('SSH_ENABLED', ambient_ssh)
     script = r'''
 import os
 import sys
@@ -95,7 +97,8 @@ def load_dotenv(*args, **kwargs):
 dotenv.load_dotenv = load_dotenv
 sys.modules['dotenv'] = dotenv
 from shared.importer_startup import load_legacy_config
-load_legacy_config()
+config = load_legacy_config()
+assert config.ssh_enabled is False and config.automation_enabled is False
 handlers = tuple(logging.getLogger().handlers)
 load_legacy_config()
 assert tuple(logging.getLogger().handlers) == handlers
@@ -108,7 +111,8 @@ print('Legacy startup proof: dotenv before file logging, handlers stable')
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(
         [sys.executable, '-c', script], cwd=tmp_path,
-        env={**os.environ, 'PYTHONPATH': str(root), 'BOT_ENVIRONMENT': 'dev'},
+        env={**os.environ, 'PYTHONPATH': str(root), 'BOT_ENVIRONMENT': 'dev',
+             'SSH_ENABLED': 'false', 'AUTOMATION_ENABLED': 'false'},
         capture_output=True, text=True, timeout=15,
     )
     assert result.returncode == 0, result.stdout + result.stderr
