@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1060 merged as197feaf7 after explicit owner approval and
+  prescribed cycle; tree equals approved ec40a03f. Main workflows running.
+ 1051 now also integrates this main, preserving both histories; fresh exact-head
+  gates and separate owner permission required. No activation or deployment.
+
 - (Astra, 2026-09-27)1051 local refresh a6048926 integrates main c9de5a3d,
   preserving both doc tracks and unchanged cache consumer/migration/SQL tests.
   10 portable cache cases +48 journal/startup cases pass. Fresh SQL pending
@@ -25,6 +30,37 @@
   280 passed, PG stopped. #1046 merged as 64488de1; no application services changed.
   #1051 review found the stale merge status above, now corrected against PLAN.
   Owner explicitly approved #1048; its prescribed merge cycle is running.
+
+- (Astra, 2026-09-27) Fixed1060 review4114242030: reject dependency waiting
+  outside2020-2035, preserving canonical handling.50tests incl6PG pass46.46s,
+  mutation3fail/restored/cmp, schemas cleared. New push needs fresh CI/review.
+
+- (Astra, 2026-09-27) PR1060 now targets main after approved1059 merge c9de5a3d.
+  Normal refresh77b66d9c preserves existing production bytes, both doc histories
+  and main's startup fixture fix.45tests including6realPG cases pass53.55s;
+  lint/whitespace clean. Six old findings revalidated/resolved. Publishing this
+  post-retarget checkpoint triggers synchronize checks on the main-based PR;
+  verify fresh exact-head CI/review. No1060 merge or deployment permission.
+
+- (Astra, 2026-09-20) #1060 cross-half dedupe review: canonical hash lookup
+  now scopes R1/R2 separately, not only the runtime waiting guard. Actual-PG
+  zero-delta R2 proof and failing/restored SQL mutation verify the root fix.
+  Historical repairs and full source identity are separate, not silently done.
+
+- (Astra, 2026-09-20) #1060 calendar review fixed: impossible R2 timestamps no
+  longer wait for R1.23 unit/PG cases pass,7 calendar mutations fail/restored.
+  Resume bounded stream capture on the #1062 stack; no live activation.
+
+- (Astra, 2026-09-20) Review detour after opening integrity PR #1062:
+  #1060 now preserves renamed payload deduplication after R1 removal and routes
+  malformed R2 names to canonical failure.14 unit/PG cases pass; mutations fail
+  and restore/cmp. Disposable PG stopped. Resume bounded capture after review.
+
+- (Astra, 2026-09-20) R04e caller-driven dependency guard implemented: missing
+  R1 defers R2 without terminal marker;69 combined tests including actual PG
+  pass; guard mutation observed/restored. Immutable spool is a precondition,
+  not implemented transport/retention. Next bounded capture/publication design.
+  Owner-approved overall scope now includes full new-site audit after runtime.
 
 - (Astra, 2026-09-25) Prepared local #1059 main refresh, preserving source bytes
   and both documentation histories. Fixed ambient-SSH dependency in test only;
