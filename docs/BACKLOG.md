@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27) PR1060 now targets main after approved1059 merge c9de5a3d.
+  Normal refresh77b66d9c preserves existing production bytes, both doc histories
+  and main's startup fixture fix.45tests including6realPG cases pass53.55s;
+  lint/whitespace clean. Six old findings revalidated/resolved. Publishing this
+  post-retarget checkpoint triggers synchronize checks on the main-based PR;
+  verify fresh exact-head CI/review. No1060 merge or deployment permission.
+
 - (Astra, 2026-09-20) #1060 cross-half dedupe review: canonical hash lookup
   now scopes R1/R2 separately, not only the runtime waiting guard. Actual-PG
   zero-delta R2 proof and failing/restored SQL mutation verify the root fix.
