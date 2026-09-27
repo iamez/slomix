@@ -1,10 +1,36 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
+  #1059 base changed from a feature branch to main. Its push CI passed, but the
+  default pull_request triggers did not include edited, leaving required hygiene
+  and CodeQL contexts absent. Publish the real follow-up checkpoint normally and
+  verify all required checks on the NEW head; never bypass rules or credit old
+  head checks to the new SHA. No workflow/settings changes are needed here.
+
 One entry per fact. Format: date · fact · why it matters · how to apply.
 Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
+
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
+
+- **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
+  A neutral real-PG fixture supplied32 hex characters but the canonical regular
+  stats parser stored8 via short_guid. The first test's32-character assertion
+  was wrong; corrected after inspecting the actual parser and observing DB rows.
+  Do not change persistence semantics to satisfy a mistaken test expectation.
+
+- **2026-09-20 · Explicit configuration is not enough if imports initialize the process.**
+  The manager previously imported dotenv and configured root logging before its
+  constructor could inspect supplied config. R04d moves legacy setup behind
+  the default loader while preserving dotenv-before-log-path selection. Test in
+  fresh processes with forbidden imports; also pin unchanged sys.path and root
+  handlers. Import-only callers intentionally no longer initialize logging.
 
 - **2026-09-20 · Undefined disk capacity is not zero usage.**
   A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
@@ -22,6 +48,21 @@ data here.
   Include every changed Python path in local lint. Module-attribute aliases
   retain the legacy function identities without unused-import ambiguity;
   mutation-test the export identity rather than assuming an alias is correct.
+
+- **2026-09-19 · Parser parity needs nonempty players and a controlled clock.**
+  The committed legacy sample_stats_files parse headers but zero player rows.
+  Header parity alone cannot certify R2 player calculations. Supply valid player
+  lines with a known differential and freeze the parser's generated timestamp
+  when comparing subprocess outputs. A blocked-import subprocess proves absence
+  of Discord/config dependencies more strongly than checking imports in pytest.
+
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
 
 - **2026-09-19 · Logging emission is separate from process setup.**
   Importing bot.logging_config creates its log directory. Runtime-only callers
