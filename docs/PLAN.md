@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current1053 refresh (2026-09-27): parent1052 refreshed by ordinary merge,
+> preserving both documentation histories. Two open review findings addressed:
+> activation comment requires091/092; OFF cache namespaces are unique per
+> middleware lifetime and observed mode transition, captured before awaits.
+> This prevents rollback from reviving pre-activation entries; OFF workers no
+> longer share cached responses, trading cache reuse for safe restart boundaries.
+>82local cache tests pass; two real ASGI rollback cases fail before the fix and
+> when its namespace guard is removed, restored/cmp. Backend retained across
+> app lifetimes is simulated with memory, not a new Redis/PG integration proof.
+> Fresh exact-head CI/review pending; no1053 merge permission or activation.
+
 > Current1052 refresh (2026-09-27): local87eec905 normally merges refreshed1051
 > eed90b28, preserving both documentation histories. Memory backend/test files
 > remain byte-identical to original3d9da0e0.58cache regression cases pass1.29s;

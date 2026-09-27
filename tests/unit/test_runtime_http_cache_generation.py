@@ -67,6 +67,35 @@ async def test_unverified_generation_bypasses_get_and_set(bad, caplog):
     assert "private diagnostic" not in caplog.text
 
 
+@pytest.mark.parametrize("restart", [False, True])
+async def test_rollback_never_revives_pre_activation_response(monkeypatch, restart):
+    cache = MemoryCacheBackend()  # Keep backend contents across app restarts.
+    state = {"value": "before"}
+    reader = AsyncMock(return_value=1)
+
+    async def endpoint():
+        return dict(state)
+
+    monkeypatch.setenv(FLAGS[-1], "false")
+    async with client_for(cache, reader, endpoint) as client:
+        assert (await client.get(PATH)).json() == {"value": "before"}
+        monkeypatch.setenv(FLAGS[-1], "true")
+        state["value"] = "after"
+        assert (await client.get(PATH)).json() == {"value": "after"}
+        monkeypatch.setenv(FLAGS[-1], "false")
+        if not restart:
+            response = await client.get(PATH)
+            assert response.json() == {"value": "after"}
+            assert response.headers["X-Cache"] == "MISS"
+            assert (await client.get(PATH)).headers["X-Cache"] == "HIT"
+    if restart:
+        async with client_for(cache, reader, endpoint) as client:
+            response = await client.get(PATH)
+            assert response.json() == {"value": "after"}
+            assert response.headers["X-Cache"] == "MISS"
+            assert (await client.get(PATH)).headers["X-Cache"] == "HIT"
+
+
 async def test_two_workers_and_redis_startup_fallback_observe_shared_epoch():
     state = {"generation": 0, "value": "old"}
 

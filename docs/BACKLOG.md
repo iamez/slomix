@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1053 refreshed parent and fixed both open review findings:
+  missing092 activation prerequisite and stale OFF rollback cache reuse.
+ 82local tests pass;2HTTP reproductions and2guard-mutation failures observed,
+  restored/cmp. First wider command named a nonexistent304 test; ran0tests,
+  corrected command passed82. Await1052 merge/main refresh and fresh CI/review.
+  Local proof PG is still stopped; no services or application data changed.
+
 - (Astra, 2026-09-18) #1053 review P1 addressed: migration092 grants website_app
   SELECT only on runtime_cache_generations. Real restricted-role proof and
   observed missing-GRANT mutation restored/cmp; 152 cases pass, PG stopped.
