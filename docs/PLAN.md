@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>Current1066 checkpoint2026-09-27: approved1065 merged9ef42671; actualmain now
+>normally integrated with source fixes/doc histories preserved.135local unit/
+>filesystem cases are the repeat gate. FullSQLproof still waits owner-started
+>isolated PostgreSQL; do not treat old PG proof as newhead evidence. No1066
+>push/merge permission or service action. Original runtime plan preserved.
+
 >1066 refresh checkpoint2026-09-27: normal merge of prepared1065 parent4f1c4a2b
 >as5e8b769d. Explicit conflict resolution preserves BOTH spool-only legacy-R1
 >isolation and already-merged2020-2035 calendar admission, including0001 terminal
