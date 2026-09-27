@@ -98,6 +98,8 @@ async def test_only_confirmed_round_two_duplicate_can_bypass_waiting(duplicate):
     '2026-02-29-120000-goldrush-round-2.txt', '2026-04-31-120000-map-round-2.txt',
     '2026-09-20-240000-map-round-2.txt', '2026-09-20-126000-map-round-2.txt',
     '2026-09-20-120060-map-round-2.txt', '0000-01-01-120000-map-round-2.txt',
+    '0001-01-01-000000-map-round-2.txt', '2019-12-31-235959-map-round-2.txt',
+    '2036-01-01-000000-map-round-2.txt',
 ])
 async def test_malformed_round_two_uses_canonical_failure(name):
     """Invalid names must not be mistaken for a temporarily missing dependency."""
@@ -109,7 +111,7 @@ async def test_malformed_round_two_uses_canonical_failure(name):
     subject.process_file.assert_awaited_once_with(path.absolute())
 
 
-@pytest.mark.parametrize('stamp', ['2024-02-29-235959', '2026-01-01-000000'])
+@pytest.mark.parametrize('stamp', ['2020-01-01-000000', '2024-02-29-235959', '2026-01-01-000000', '2035-12-31-235959'])
 async def test_valid_calendar_boundaries_can_wait(stamp):
     """Leap-day and midnight inputs retain the dependency-waiting contract."""
     subject = manager()

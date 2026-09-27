@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> PR1060 review4114242030, 2026-09-27: waiting admission now uses the canonical
+> 2020-2035 year range, avoiding year0001 previous-day underflow. Invalid years
+> go to canonical processing, not dependency lookup. Added outside/boundary unit
+> cases and real PG failed-marker proof for0001.50tests passed46.46s, including
+> six PG subprocess cases; disabling the year guard fails3tests, restored/cmp.
+> Ruff/whitespace clean; neutral schema count0 and independent list empty.
+> Fresh exact-head CI/review required after this fix; no merge approval inferred.
+
 > PR1060 refresh, 2026-09-27: parent1059 merged as c9de5a3d. This branch now
 > integrates that main without changing the1060 importer/runtime implementation.
 > Preserved both documentation histories, all six SQL scenarios, and main's

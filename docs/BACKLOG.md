@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27) Fixed1060 review4114242030: reject dependency waiting
+  outside2020-2035, preserving canonical handling.50tests incl6PG pass46.46s,
+  mutation3fail/restored/cmp, schemas cleared. New push needs fresh CI/review.
+
 - (Astra, 2026-09-27) PR1060 now targets main after approved1059 merge c9de5a3d.
   Normal refresh77b66d9c preserves existing production bytes, both doc histories
   and main's startup fixture fix.45tests including6realPG cases pass53.55s;

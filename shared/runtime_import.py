@@ -21,10 +21,12 @@ def _can_wait_for_r1(filename: str) -> bool:
                         filename, re.ASCII):
         return False
     try:
-        datetime.strptime(filename[:17] + '+0000', '%Y-%m-%d-%H%M%S%z')
+        stamp = datetime.strptime(filename[:17] + '+0000', '%Y-%m-%d-%H%M%S%z')
     except ValueError:
         return False
-    return True
+    # Match the canonical filename year range without importing bot presentation.
+    # In particular year 0001 can underflow the parser's previous-day lookup.
+    return 2020 <= stamp.year <= 2035
 
 
 async def import_ready_file(manager, file_path: Path) -> ImportStepResult:

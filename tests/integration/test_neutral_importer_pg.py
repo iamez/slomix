@@ -139,10 +139,17 @@ async def main():
                 malformed.write_text('invalid fixture')
                 invalid = await import_ready_file(manager, malformed)
                 assert invalid.status == 'failed', invalid
-                invalid_time = r2.with_name('2026-13-32-999999-goldrush-round-2.txt')
-                invalid_time.write_text('invalid fixture')
-                invalid = await import_ready_file(manager, invalid_time)
-                assert invalid.status == 'failed', invalid
+                for invalid_name in (
+                    '2026-13-32-999999-goldrush-round-2.txt',
+                    '0001-01-01-000000-goldrush-round-2.txt',
+                ):
+                    invalid_time = r2.with_name(invalid_name)
+                    invalid_time.write_text('invalid fixture')
+                    invalid = await import_ready_file(manager, invalid_time)
+                    assert invalid.status == 'failed', invalid
+                    assert await admin.fetchval(
+                        'SELECT success FROM processed_files WHERE filename=$1', invalid_time.name
+                    ) is False
                 assert await admin.fetchval(
                     'SELECT success FROM processed_files WHERE filename=$1', malformed.name
                 ) is False

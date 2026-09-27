@@ -1,5 +1,12 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
+  Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
+  dependency admission now matches the canonical2020-2035 year range without
+  importing presentation/configuration. Tests cover outside years, both accepted
+  bounds, and a real PG terminal failed marker for0001. Do not treat calendar
+  parsing alone as proof that downstream date arithmetic is safe.
+
 - **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
   #1059 base changed from a feature branch to main. Its push CI passed, but the
   default pull_request triggers did not include edited, leaving required hygiene
