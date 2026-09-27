@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1052 local parent refresh87eec905 preserves source/test
+  bytes and both doc histories.58cache cases pass; actual in-process ASGI proof
+  matches200/body/MISS-HIT-MISS-MISS with1retained entry. Count-guard mutation
+  fails2cases/restored/cmp. Initial test command referenced nonexistent
+  test_http_cache_middleware.py and ran0tests; corrected files above passed.
+  Await approved1051 merge, then main refresh/retarget/push. No1052 permission.
+
 - (Astra, 2026-09-18) R03b1 bounded memory-cache prerequisite implemented in
   /tmp/slomix-astra-runtime-r03b1. 48 tests pass, HTTP eviction proof and observed
   failed capacity mutation restored/cmp; independent review no blocker.

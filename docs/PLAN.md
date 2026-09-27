@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current1052 refresh (2026-09-27): local87eec905 normally merges refreshed1051
+> eed90b28, preserving both documentation histories. Memory backend/test files
+> remain byte-identical to original3d9da0e0.58cache regression cases pass1.29s;
+> standalone in-process ASGI proof returns200 with MISS/HIT/MISS/MISS, correct
+> bodies, handler calls1/2/1 and one retained entry. Removing count eviction fails
+> 4<=3 and HIT!=MISS; restored/cmp. No listener, browser, database or service.
+> Owner approved1051 only; its merge cycle is running. After it merges, refresh
+>1052 to main, retarget before final push, then require fresh CI/review and its
+> own approval. Original independent-runtime/recovery then new-site audit remains
+> the plan; earlier checkpoints below are historical.
+
 > PR1060 merged with explicit owner approval on2026-09-27 at06:25:44Z as197feaf7.
 > Required cycle ended0red/0threads/0behind/unchanged head; squash tree equals
 > ec40a03f. Main workflows are running, not yet all confirmed green. PR1051 now
