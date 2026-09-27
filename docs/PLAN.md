@@ -1,5 +1,12 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current965 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
+>matches reviewed0e66f238. This branch now normally integrates that main,
+>preserving source/test bytes and both documentation histories. 43focused
+>tests rerun after sync. Publish for fresh exact-head CI/review; no965 merge
+>approval, service activation or NEVER MERGE changes. Earlier waiting notes
+>below are historical; original runtime roadmap remains unchanged.
+
 >965 preservation checkpoint2026-09-27: start from local2e035917, not older
 >remote c8fa8e41; normally integrate main as44df616a, preserve both doc histories.
 >Watchdog source/tests byte-identical to2e035917.43focused cases pass0.43s,
