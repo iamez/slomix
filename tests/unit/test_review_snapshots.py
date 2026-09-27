@@ -170,3 +170,76 @@ def test_genuine_hook_refuses_unsplit_26_file_push(repo):
     assert result.returncode != 0
     assert "26 files (limit 25)" in result.stderr
     assert "too-wide" not in git(repo, "ls-remote", "origin")
+
+
+@pytest.mark.parametrize("area", ["oops|", "oops|   ", "oops|:!a", "oops|:^a",
+                                   "oops|:(exclude)a", "oops|:(top,exclude)a"])
+def test_missing_positive_area_blocks_before_refs(repo, area):
+    commit(repo, {"a.py": "a\n", "b.py": "b\n"})
+    result = run(repo, "cut", "--push", area=area, check=False)
+    assert result.returncode != 0
+    assert "positive pathspec" in result.stderr
+    assert snapshots(repo) == ""
+    assert "review" not in git(repo, "ls-remote", "origin")
+    assert not (repo.parent / "hook-calls").exists()
+
+
+def test_duplicate_area_blocks_before_refs(repo):
+    commit(repo, {"a.py": "a\n", "b.py": "b\n"})
+    result = run(repo, "--area", "same|b.py", "cut", "--push",
+                 area="same|a.py", check=False)
+    assert result.returncode != 0
+    assert "duplicate area name" in result.stderr
+    assert snapshots(repo) == ""
+    assert "review" not in git(repo, "ls-remote", "origin")
+    assert not (repo.parent / "hook-calls").exists()
+
+
+@pytest.mark.parametrize("limit", ["files", "lines", "scope"])
+def test_directory_file_collateral_blocks_before_refs(repo, limit):
+    commit(repo, {"z": "old\n"})
+    baseline = git(repo, "rev-parse", "HEAD")
+    (repo / "z").unlink()
+    files = {"z/child.py": "new\n" * (8000 if limit == "lines" else 1)}
+    if limit == "files":
+        files.update({f"a{n:02}.py": "a\n" for n in range(24)})
+    commit(repo, files)
+    result = run(repo, "--base", baseline, "cut", "--push",
+                 area="area|z :!z/*" if limit == "scope" else "area|.", check=False)
+    assert result.returncode != 0
+    assert "actual snapshot" in result.stderr
+    assert snapshots(repo) == ""
+    assert "review" not in git(repo, "ls-remote", "origin")
+    assert not (repo.parent / "hook-calls").exists()
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_complete_directory_file_pair_keeps_exact_scope(repo, reverse):
+    original, replacement = ("z/child.py", "z") if reverse else ("z", "z/child.py")
+    commit(repo, {original: "old\n"})
+    baseline = git(repo, "rev-parse", "HEAD")
+    (repo / original).unlink()
+    if reverse:
+        (repo / "z").rmdir()
+    git(repo, "add", "--", original)
+    commit(repo, {replacement: "new\n"})
+    result = run(repo, "--base", baseline, "cut", "--push")
+    assert "files=2 lines=2" in result.stdout
+    head = next(row.split()[1] for row in snapshots(repo).splitlines()
+                if row.startswith("refs/heads/review/"))
+    assert set(git(repo, "diff", "--no-renames", "--name-only", f"{head}^", head).splitlines()) == {original, replacement}
+    assert len(git(repo, "diff", "--no-renames", "--numstat", f"{head}^", head).splitlines()) == 2
+
+
+def test_reverse_directory_file_exclusion_keeps_exact_selected_path(repo):
+    commit(repo, {"z/child.py": "old\n"})
+    baseline = git(repo, "rev-parse", "HEAD")
+    (repo / "z/child.py").unlink()
+    (repo / "z").rmdir()
+    git(repo, "add", "--", "z/child.py")
+    commit(repo, {"z": "new\n"})
+    result = run(repo, "--base", baseline, "cut", "--push", area="area|z :!z/*")
+    assert "files=1 lines=1" in result.stdout
+    head = next(row.split()[1] for row in snapshots(repo).splitlines()
+                if row.startswith("refs/heads/review/"))
+    assert git(repo, "diff", "--no-renames", "--name-only", f"{head}^", head) == "z"

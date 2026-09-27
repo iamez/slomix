@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)966 follow-up: three review findings fixed locally;20real
+  disposable Git CLI tests pass. Duplicate/missing-positive areas fail preflight;
+  generated tree diff catches D/F collateral and actual bounds before ref writes.
+  Both bounded transition directions proven;10regressions fail under mutation,
+  restored/cmp. No real review refs or services touched, no push/merge. Original
+  runtime continuation remains preserved while parent consolidates existing PRs.
+
 - (Astra, 2026-09-20) #966 refreshed against main;9snapshot/plan tests pass,
   Ruff clean. Actual review-snapshot refs and NEVER MERGE PRs unchanged. Keep
   this older tooling proposal for review, not authorized for merge. Runtime

@@ -30,12 +30,19 @@ def oid(ref):
 def partition(base, source, areas, exclusions):
     """Split at file boundaries; unsupported/oversize files block all writes."""
     result = []
+    names = set()
     for area in areas:
         name, specs = area.split("|", 1)
         if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9-]*", name):
             raise ValueError("invalid area name")
+        if name in names:
+            raise ValueError("duplicate area name")
+        names.add(name)
+        specs = specs.split()
+        if not any(positive_pathspec(spec) for spec in specs):
+            raise ValueError("area requires a positive pathspec")
         records = git("diff", "--no-ext-diff", "--no-textconv", "--no-renames",
-                      "--numstat", "-z", base, source, "--", *specs.split(),
+                      "--numstat", "-z", base, source, "--", *specs,
                       *exclusions).split(b"\0")
         chunks, current, total = [], [], 0
         for record in filter(None, records):
@@ -58,6 +65,36 @@ def partition(base, source, areas, exclusions):
     return result
 
 
+def positive_pathspec(spec):
+    """Recognize Git's long/short exclusion magic, not its pattern text."""
+    if spec == ":":  # Git's special no-pathspec spelling selects everything.
+        return False
+    if spec.startswith(":("):
+        magic, separator, pattern = spec[2:].partition(")")
+        return bool(separator and pattern) and "exclude" not in magic.split(",")
+    if spec.startswith(":"):
+        magic = re.match(r"[:/!^]*", spec).group()
+        return "!" not in magic and "^" not in magic and len(spec) > len(magic)
+    return bool(spec)
+
+
+def validate_snapshot(tree, source, paths):
+    """Index D/F replacement can change unselected paths: verify actual trees."""
+    records = git("diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+                  "--numstat", "-z", tree, source).split(b"\0")
+    actual, lines = set(), 0
+    for record in filter(None, records):
+        added, removed, path = record.split(b"\t", 2)
+        if added == b"-" or removed == b"-":
+            raise ValueError("actual snapshot contains a binary change")
+        actual.add(path)
+        lines += int(added) + int(removed)
+    if (actual != set(paths) or len(actual) > min(MAX_FILES, REVIEWER_FILES)
+            or lines > MAX_LINES):
+        raise ValueError("actual snapshot exceeds selected paths or review bounds; "
+                         "regroup directory/file transitions into one bounded area")
+
+
 def snapshot(base, source, paths, name):
     # No working tree is created or changed. Missing private index is intentional.
     with tempfile.TemporaryDirectory(prefix="slomix-review-index-") as directory:
@@ -71,10 +108,13 @@ def snapshot(base, source, paths, name):
             entry = git("ls-tree", "-z", base, "--", literal)
             if entry:
                 mode_type_oid, recorded = entry.rstrip(b"\0").split(b"\t", 1)
-                mode, _, blob = mode_type_oid.split()
+                mode, kind, blob = mode_type_oid.split()
+                if kind == b"tree":
+                    continue  # D/F transition: restore its selected leaves instead.
                 update = mode + b" " + blob + b"\t" + recorded + b"\0"
                 git("update-index", "-z", "--index-info", data=update, env=env)
         tree = git("write-tree", env=env).decode().strip()
+    validate_snapshot(tree, source, paths)
     date = git("show", "-s", "--format=%cI", source).decode().strip()
     env = dict(os.environ, GIT_AUTHOR_NAME="Review snapshot",
                GIT_AUTHOR_EMAIL="review@invalid", GIT_COMMITTER_NAME="Review snapshot",

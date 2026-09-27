@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>966 review follow-up2026-09-27: fixed all three new findings on4f5a2f24.
+>Reject duplicate area names and missing positive pathspecs; validate actual
+>private-index tree diff against exact selected paths and25-file/8000-line caps
+>before any refs are written. Unsafe D/F splits fail closed; complete bounded
+>pairs work in both directions (tree entries are not restored as index leaves).
+>20 disposable Git CLI tests pass4.84s, including real local pushes/hooks; ten
+>regressions failed before fixes and under deliberate guard removal, restored/cmp.
+>Ruff and whitespace clean. One exploratory reverse-exclusion rejection assertion
+>was incorrect: its actual one-file diff is safe; replaced with exact-scope proof.
+>No real review refs, service actions, pushes or merges. Runtime roadmap preserved;
+>parent continues numbered PR consolidation, then returns to original runtime work.
+
 > Current966 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
 >matches reviewed0e66f238. This branch now normally integrates that main,
 >preserving source/test bytes and both documentation histories. 7focused

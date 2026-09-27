@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-27 · Planned Git path slices are not actual tree differences.**
+  Restoring a file over a source directory can implicitly remove unselected
+  children. Validate generated trees against the exact selected path set and
+  line/file limits before publishing refs; reject unsafe D/F splits. A baseline
+  tree entry is not an index leaf: restore selected descendant blobs instead.
+  Reject duplicate area identities and empty/exclusion-only pathspecs before
+  Git's implicit whole-tree selection or dictionary replacement loses scope.
+
 - **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
   Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
   dependency admission now matches the canonical2020-2035 year range without
