@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
+  certificate discovery. Public typed file-object private-key loaders preserve
+  five tested key encodings; certificate paths unsupported, no ambient cert or
+  passphrase fallback. Real temporary ssh-keygen cert + malformed neighbor fail
+  old code;108 combined tests pass fixed code; mutation2 failures, restored/cmp.
+  Publish for fresh CI/review next. Original runtime plan/activation gates stay.
+
 - (Astra, 2026-09-27) PR1067 fresh P2 fixed locally: bypass Paramiko legacy
   interactive fallback using explicit-key AuthStrategy and reject partial auth.
   Three old-code regressions and three guard-mutation failures observed;

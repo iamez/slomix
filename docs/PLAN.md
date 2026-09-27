@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> PR1067 explicit-identity correction, 2026-09-27: follow-up review proved that
+> PKey.from_path silently loads key_path-cert.pub. A real temporary ssh-keygen
+> certificate changed the offered identity; a malformed neighbor broke auth.
+> Both regressions failed on old code. Load the named private-key contents once
+> through public typed from_private_key file-object APIs instead; no sidecar
+> lookup, certificate-path substitution or passphrase prompt. Five existing
+> RSA/ECDSA/Ed25519 encoding proofs still pass. Certificate paths explicitly
+> fail closed. All108 SSH/capture/spool/reconcile tests pass. Reintroducing
+> from_path failed both sidecar guards; restored/cmp. Earlier from_path claims
+> below are superseded by this correction. No live handshake/network/services
+> or DB actions; next fresh exact-head CI/review. Original plan remains intact.
+
 >Current1067 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
 >squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
 >all doc histories and source fixes preserved. Publish after repeated local gates

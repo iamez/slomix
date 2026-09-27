@@ -190,3 +190,51 @@ def test_unusable_explicit_key_fails_without_fallback(config, monkeypatch, kind)
     transport.auth_password.assert_not_called()
     client.open_sftp.assert_not_called()
     client.close.assert_called_once()
+
+
+@pytest.mark.parametrize('sidecar', ['valid', 'malformed', 'explicit_certificate'])
+def test_adjacent_certificate_never_changes_explicit_identity(config, monkeypatch, sidecar):
+    """Real OpenSSH sidecar must not be discovered by private-key-only auth."""
+    import shutil
+    import subprocess
+
+    executable = shutil.which('ssh-keygen')
+    if executable is None:
+        pytest.fail('ssh-keygen is required for the offline certificate boundary proof')
+    ca = config.key_path.parent / 'fixture-ca'
+    for path in (config.key_path, ca):
+        subprocess.run([executable, '-q', '-t', 'ed25519', '-N', '', '-f', str(path)],
+                       check=True, capture_output=True, timeout=10)
+    subprocess.run([executable, '-q', '-s', str(ca), '-I', 'offline-fixture',
+                    '-n', 'fixture', str(config.key_path) + '.pub'],
+                   check=True, capture_output=True, timeout=10)
+    certificate = config.key_path.with_name(config.key_path.name + '-cert.pub')
+    assert certificate.read_text().startswith('ssh-ed25519-cert-v01@openssh.com ')
+    if sidecar == 'malformed':
+        certificate.write_text('invalid adjacent certificate')
+    original = certificate.read_bytes()
+    client = Mock()
+    transport = Mock()
+    transport.auth_publickey.return_value = []
+    transport.is_authenticated.return_value = True
+    def authenticate(user, key):
+        assert user == 'fixture'
+        assert key.can_sign()
+        assert key.public_blob is None, 'Ambient certificate changed explicit private-key identity'
+        return []
+    transport.auth_publickey.side_effect = authenticate
+    client.connect.side_effect = lambda **kwargs: kwargs['auth_strategy'].authenticate(transport)
+    monkeypatch.setattr(paramiko, 'SSHClient', lambda: client)
+    if sidecar == 'explicit_certificate':
+        with pytest.raises(paramiko.SSHException), open_runtime_sftp(replace(config, key_path=certificate)):
+            pytest.fail('Certificate pathname implicitly selected its private-key sibling')
+        transport.auth_publickey.assert_not_called()
+        client.open_sftp.assert_not_called()
+        client.close.assert_called_once()
+        return
+    with open_runtime_sftp(config):
+        pass
+    transport.auth_publickey.assert_called_once()
+    client.open_sftp.assert_called_once()
+    client.close.assert_called_once()
+    assert certificate.read_bytes() == original
