@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>Current1067 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
+>squash tree equals435268ef. Actual main now integrated normally, documentation
+>histories and implementation bytes preserved. Repeat local gates then publish
+>for fresh exact-head CI/review. No service, network or application DB action;
+>no1067-specific approval recorded yet. Earlier checkpoints below are history.
+
 >1067 refresh checkpoint2026-09-27: integrated reviewed1063 parent435268ef
 >normally as eb72ec88; retained documentation histories and source/test bytes
 >from9f86bd69.73combined cases pass, including real Paramiko RejectPolicy against
