@@ -1,5 +1,21 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1054 merged with owner approval as0d43b3da at15:06:08Z on2026-09-27;
+>0failed/0threads/0behind/unchanged head, squash tree matches6d06c58b.
+>1055 now integrates that main normally; only seven PR paths remain. Retarget
+>to main before publishing this checkpoint. Fresh exact-head CI/review required;
+>no1055 merge permission. Earlier waiting notes are historical.
+
+>1055 refresh checkpoint2026-09-27: normally integrated reviewed1054 head
+>6d06c58b as e0d6c699; retained both documentation histories.54focused cases
+>pass18.54s including5real isolated-PG cases and actual process shutdown/replay.
+>Entry module unchanged from847c1b7d. Disabling explicit dev guard fails2cases
+>with DID NOT RAISE ValueError; restored/cmp and26entry tests pass0.36s.
+>Ruff/whitespace clean; schema count0 and independent list empty. Await approved
+>1054 merge, then sync actual main, retarget before push and repeat exact-head
+>CI/review.1055 itself is NOT approved. No service/deployment/app-data changes.
+
+
 >1054 review follow-up2026-09-27: stopped state now clears current error_type,
 > while failed retains diagnostics. Stop-event and task-cancellation cases both
 > reproduced OSError in stopped before fix and with cleanup removed; restored/cmp.
@@ -117,6 +133,50 @@
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
 ## Track: runtime v2 R01 (Astra)
+
+### R03d independent cache-consumer process — 2026-09-19
+
+Review follow-up: #1055 reports shutting_down before an active worker drains;
+the worker's confirmed generation/error fields are preserved. Unit observation
+asserts the report precedes cleanup; actual PG blocked-process signal output
+includes shutting_down then stopped. Missing-report mutation failed, restored
+apply_patch/cmp; expanded200 passed, zero skips, two existing warnings. Example
+now explicitly requires overriding POSTGRES_HOST=localhost. PG stopped; no live
+activation. Both review findings addressed; fresh exact-head checks required.
+
+Branch feat/db-runtime-cache-entry-r03d, stacked on #1054 at78be6156.
+Module entrypoint `python -m shared.runtime_cache_main` has no Discord/BotConfig
+or website dependency. This hosts only the cache consumer, NOT source ingestion.
+Original design21 direction retained; R04 still must extract source capture,
+cadence and non-Discord metadata delivery. No deployment or service changes.
+
+Default OFF exits before config, signal handlers or pool. Enabled requires all
+three consumer flags, exact BOT_ENVIRONMENT=dev, explicit POSTGRES_HOST/PORT/
+DATABASE/USER and TCP password. Host is loopback IP or absolute Unix socket;
+no DNS/remote fallback, dotenv loading or guessed database credentials. Optional
+RUNTIME_CACHE_DB_SCHEMA defaults public, one validated identifier. This guards
+configuration, NOT database identity: reviewed dev credentials/target remain an
+owner activation requirement. Do not run it against the application DB yet.
+
+One empty native pool (max1) reconnects through the existing worker; connect5s,
+query/attempt10s, stop drains11s before cancellation, pool close5s then terminate.
+SIGTERM/SIGINT clean owned tasks/pool; unexpected errors exit1 with class only.
+JSON health every5s describes this consumer only, including last success age,
+unsupported count and last confirmed generation. Missing schema/grants are
+unavailable, not idle; the process never creates/migrates schema. Health is not
+proof of ingestion continuity, cache freshness or system-wide availability.
+
+26 entrypoint unit cases; disposable PG subprocess proofs cover catch-up and
+SIGTERM idle / SIGINT while blocked on a table lock, receipts counted by SQL
+COUNT and fetched rows, no remaining process connections. Dev-guard mutation
+failed both rejection cases (DID NOT RAISE ValueError), restored apply_patch/cmp.
+Expanded200 passed, zero skips, two existing websockets warnings; Ruff clean.
+Disposable PG stopped after proof; publication/review still pending. Parent #1054
+exact78be6156 has nine successful checks, Codex/CodeRabbit completed no findings.
+First push rejected by credential hook on a dummy unit-test password literal;
+replaced with a generated ephemeral fixture value, without hook bypass.
+Next: finish review/publication; then R04 extraction contract, not activation.
+
 
 ### R03c caller-owned durable cache polling — 2026-09-18
 
