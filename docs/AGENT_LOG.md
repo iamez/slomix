@@ -27,6 +27,7 @@ data here.
   by actual subprocess imports, catch-up and signals, not just a coroutine test.
   A dev label/local host is not attestation that the chosen database is dev.
 
+
 - **2026-09-19 · Source retention does not prove independent ingestion.**
   Design21 section7a overstates bot/web independence. Files waiting on the source
   can be replayed later while the writer still stops with Discord readiness.
