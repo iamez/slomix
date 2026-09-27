@@ -7,6 +7,29 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1053 second review follow-up fixes ON reactivation and
+  separate website env template.151local tests pass;12HTTP roundtrip variants,
+  7observed mutation failures/restored/cmp. Both modes now worker-local; no
+  fresh SQL/Redis proof. Publish then recheck exact-head review/CI.
+
+- (Astra, 2026-09-27)1053 refreshed parent and fixed both open review findings:
+  missing092 activation prerequisite and stale OFF rollback cache reuse.
+ 82local tests pass;2HTTP reproductions and2guard-mutation failures observed,
+  restored/cmp. First wider command named a nonexistent304 test; ran0tests,
+  corrected command passed82. Await1052 merge/main refresh and fresh CI/review.
+  Local proof PG is still stopped; no services or application data changed.
+
+- (Astra, 2026-09-18) #1053 review P1 addressed: migration092 grants website_app
+  SELECT only on runtime_cache_generations. Real restricted-role proof and
+  observed missing-GRANT mutation restored/cmp; 152 cases pass, PG stopped.
+  Bootstrap/release registration updated; no live schema/role changes.
+
+- (Astra, 2026-09-18) R03b2 HTTP generation integration implemented, default OFF;
+  92 unit/PG/HTTP proofs pass, namespace mutation observed failing/restored/cmp.
+  Dev-only work; production remains untouched per owner's explicit clarification.
+  #1049 all22 checks green but awaits individual approval; no merge loop running.
+  #1052 new exact-head nine checks pass. Earlier React failure is recorded, not
+  diagnosed or waived; new run passed unchanged frontend. No app services touched.
 - (Astra, 2026-09-27)1051 merged2b310cb3 with approval and exact-tree equality.
  1052 now integrates main and is retargeted before final push; only doc conflicts,
   source/test bytes unchanged. Fresh exact-head gates and1052 approval required.

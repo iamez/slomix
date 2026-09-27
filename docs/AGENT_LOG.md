@@ -321,3 +321,18 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+# 2026-09-27: Cache rollback is an invalidation boundary
+
+Follow-up: isolating only OFF is insufficient. ON/OFF/ON can retain the same
+database generation if writes occurred while events were disabled. Both modes
+need lifetime/transition isolation; worker-local response reuse also in ON mode
+is the explicit tradeoff. Root env examples do not configure website/.env:
+mirror required flags there and test their parsed defaults.
+
+Reusing an unversioned OFF namespace can revive pre-activation responses after
+an ON generation change. Keep OFF entries unique per middleware lifetime and
+observed mode transition, and capture the token before awaiting. This also
+isolates OFF workers; do not claim shared OFF cache reuse. Two ASGI proofs retain
+the backend across both same-app toggles and app recreation. Both fail without
+the namespace guard; source restored and cmp verified. Full cached HTTP/browser
+TTL behavior and actual Redis restart behavior remain separate activation checks.
