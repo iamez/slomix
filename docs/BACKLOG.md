@@ -26,6 +26,14 @@
   latest exact-head CI all green. Next transport-specific task and source identity;
   no services activated and no DB transactions allowed in force-stopped workers.
 
+- (Astra, 2026-09-27) PR1067 fresh P2 fixed locally: bypass Paramiko legacy
+  interactive fallback using explicit-key AuthStrategy and reject partial auth.
+  Three old-code regressions and three guard-mutation failures observed;
+  restored/cmp,84 SSH/capture/spool tests pass. Installed connect/key parsing
+  proved offline across five supported key encodings; real handshake untested.
+  Original runtime/activation work unchanged. Publish then fresh CI/review;
+  no service changes, network connections or1067 merge permission.
+
 - (Astra, 2026-09-20) R04l neutral SSH session ownership on #1063; 73 combined
   cases pass, strict-policy offline proof and cleanup mutation/restoration done.
   No real network. End-to-end handshake bound and source identity still block
