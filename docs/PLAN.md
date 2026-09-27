@@ -1,5 +1,14 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1061 refresh checkpoint2026-09-27: merged main normally as761fff59, retained
+>both documentation histories. Production/test files byte-identical to28009e87.
+>24actual filesystem tests pass0.23s; restoring the restrictive map regex fails
+>the dot/plus cases with Invalid stats filename, restored/cmp. Ruff clean.
+>Verified the old finding's implementation and resolved its thread. This is
+>no-clobber publication only, not trusted transport or automatic ingestion.
+>Refresh once more after approved1054 lands, then publish for fresh exact-head
+>CI/review. No1061 merge approval and no service/deployment changes.
+
 >1053 follow-up2026-09-27: fresh review found ON reactivation could revive an
 > old generation when events were disabled during writes. Both ON/OFF namespaces
 > now include the captured middleware-lifetime/mode-transition token. All cache
