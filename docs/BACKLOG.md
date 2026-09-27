@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1069 locally refreshed from87f9fa72 through prepared
+  parent3244843d, merge4020bb69 preserves both doc histories and worker/auth fixes.
+ 114offline tests pass17.95s including actual child/spool lifecycle evidence;
+  absolute-path mutation fails then restored/cmp. No active owned child remains
+  in lifecycle assertions. No push/retarget/liveSSH/service/DB changes; original
+  runtime sequence and parent final sync/review gates unchanged.
+
 - (Astra, 2026-09-20) R04n composes SSH session/file ownership and verified stream
   publication inside a picklable capture-only task on #1068. 97 combined cases
   pass; offline transport with actual child/filesystem demonstrates timeout can

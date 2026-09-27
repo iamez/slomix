@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1069 local refresh2026-09-27: live source87f9fa72 normally merged prepared
+>1068 parent3244843d as4020bb69. Three doc conflicts retained both histories;
+>worker cleanup and SSH explicit-key authentication source/tests equal parent.
+>114 offline worker/SSH/capture/spool cases pass17.95s, including actual child
+>completion/corruption/read-timeout/close-timeout and independent sha256sum.
+>Every owned lifecycle child absent from procfs and active_children after reaping;
+>close timeout can retain a complete final file, so status is not spool state.
+>Absolute remote path guard removal fails DID NOT RAISE ValueError; restored/cmp.
+>Ruff clean. No live network, service/DB/snapshot operations, push or retarget.
+>Await actual parent/main synchronization and fresh exact-head CI/review plus
+>individual approval; original runtime roadmap preserved after consolidation.
+
 >1068 refresh checkpoint2026-09-27: started from preserved local86c69e39,
 >NOT obsolete remote69a0ef29; normally merged reviewed parent1067 db7f3888
 >as99f2161c. Both doc histories retained, worker/source test bytes unchanged.
