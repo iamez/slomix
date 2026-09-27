@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1064 now includes actual merged1062 main4454d6c5.
+  Preserved source/tests and both documentation histories; publish only after
+  repeating local gates. Fresh exact-head CI/review and individual permission
+  still required before merge. No deployment or production changes.
+
 - (Astra, 2026-09-27)1064 preserved/refreshed through parent1062 at21e6c999;
   normal merge4c119978 retained both doc histories and original runtime plan.
  49real filesystem tests pass; mutation of wrong-size identity handling fails,

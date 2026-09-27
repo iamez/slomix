@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current 1064 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
+>squash tree equals reviewed21e6c999. Actual main now merged normally here.
+>Documentation histories preserved; source/test bytes unchanged from5264909e.
+>49 filesystem/stream tests are the local gate; prior failed/restored guard
+>mutation retained. Retarget to main and publish for fresh exact-head CI/review;
+>no 1064 merge approval, service activation or application database writes.
+>Original Runtime v2 plan remains intact; this is dependency consolidation.
+
 >1064 refresh checkpoint2026-09-27: normally integrated reviewed parent1062
 >21e6c999 as4c119978, preserving both documentation histories. Reconciliation
 >implementation/test bytes equal5264909e; both existing review threads resolved,
