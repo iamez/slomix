@@ -1,5 +1,21 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current1062 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
+>0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
+>branch integrates that main normally; implementation/test bytes preserved.
+>Publish now for fresh exact-head CI/review; no1062 merge permission and no
+>service or production changes. Earlier waiting checkpoints are historical.
+
+>1062 refresh checkpoint2026-09-27: normally integrated reviewed1061 d00f5de2
+>as7f72ccc7; source/integrity test bytes unchanged from1a024ce4.35filesystem
+>cases pass0.33s; independent sha256sum agrees with exact bytes/stat length.
+>Removing digest mismatch guard fails equal-length-corruption test with DID NOT
+>RAISE ValueError; restored/cmp. Ruff clean. Await approved1061 merge, sync
+>actual main, retarget before final push, then fresh exact-head review/CI.
+>No1062 merge permission. Optional digest is content verification, not source
+>authentication, scheduler wiring or a production activation guarantee.
+
+
 > Current1061 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
 >matches reviewed0e66f238. This branch now normally integrates that main,
 >preserving source/test bytes and both documentation histories. 24focused
@@ -154,6 +170,22 @@
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
 ## Track: runtime v2 R01 (Astra)
+
+### R04g capture integrity contract — 2026-09-20
+
+Stacked on #1061: add an optional expected SHA-256 to completed-file publication.
+Validate canonical lowercase 64-hex metadata before consuming the stream; hash
+incrementally and reject mismatch before fsync/link, cleaning only our temporary
+file. Existing destinations remain untouched. Omission preserves the size-only
+API, not integrity assurance. The future transport must supply a trusted digest
+of its immutable source snapshot; hashing received bytes alone proves nothing
+about source identity. No SSH/service/DB activation. All 35 filesystem cases pass,
+including independent sha256sum against the abc known-answer vector. Disabling
+the digest mismatch guard caused DID NOT RAISE on equal-length corruption;
+restored with apply_patch and cmp. Changed Python files pass Ruff. #1061 has all
+reported CI checks green at 28009e87; individual merge permission still required.
+Next: bounded transport, trusted source metadata and explicit retry reconciliation.
+
 
 ### R04f immutable spool publication — 2026-09-20
 
