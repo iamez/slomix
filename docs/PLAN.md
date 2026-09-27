@@ -1,5 +1,15 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1065 refresh checkpoint2026-09-27: integrated reviewed1064 parent3422cd3e
+>normally as ab5b17e4. Source/test bytes equal0e3d100a; both doc histories retained.
+>55real filesystem cases pass0.63s/0.66s, including partial failure, publication
+>race and failed directory fsync followed by content inspection without reread.
+>Mutation forcing a source read on match fails AssertionError: Source must not
+>be consumed; restored/cmp, Ruff clean. Content presence is not a durability or
+>import acknowledgement. Await1064 actual main merge before final sync/publish;
+>no1065 merge approval, no network, services or application DB changes.
+>Original runtime plan preserved; dependency consolidation only.
+
 > Current 1064 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
 >squash tree equals reviewed21e6c999. Actual main now merged normally here.
 >Documentation histories preserved; source/test bytes unchanged from5264909e.
