@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Latest1054 checkpoint2026-09-27: approved1053 merged75a359f6 at13:28:51Z,
+> prescribed420s cycle0failed/0threads/0behind/unchanged head, squash tree equals
+> reviewed ccd23e81.1054 integrates main without changing worker implementation;
+> retained its default-OFF flag and documentation. Retarget before final push;
+> fresh exact-head review/CI and explicit1054 approval still required.
+
 >1054 refresh2026-09-27: merged reviewed parent ccd23e81 normally. Clear stale
 > error_type on both disabled transitions while retaining confirmed generation,
 > unsupported count and last-success time. Four async worker reproductions fail

@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1053 merged75a359f6 with explicit approval and reviewed
+  tree equality.1054 refreshed against actual main, retaining its worker flag;
+  retarget before push. New exact-head gates and own merge permission required.
+
 - (Astra, 2026-09-27)1054 refreshed from reviewed1053 ccd23e81;24worker tests
   pass4.36s including3fresh isolated-PG recovery cases. Publishing disabled-state
   correction for review; no merge permission. Owner started proof cluster;
