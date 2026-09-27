@@ -1,5 +1,12 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
+  Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
+  dependency admission now matches the canonical2020-2035 year range without
+  importing presentation/configuration. Tests cover outside years, both accepted
+  bounds, and a real PG terminal failed marker for0001. Do not treat calendar
+  parsing alone as proof that downstream date arithmetic is safe.
+
 - **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
   #1059 base changed from a feature branch to main. Its push CI passed, but the
   default pull_request triggers did not include edited, leaving required hygiene
@@ -32,6 +39,13 @@ data here.
   fresh processes with forbidden imports; also pin unchanged sys.path and root
   handlers. Import-only callers intentionally no longer initialize logging.
 
+
+- **2026-09-20 · Header-free payload equality is not cross-half identity.**
+  An unchanged cumulative R2 has the same payload hash as R1. Canonical import
+  and neutral duplicate preflight must scope successful hashes by half before
+  treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
+  removing the SQL half filter loses that half. Same-half cross-match identity
+  still needs a stronger source contract; do not infer it from this narrow fix.
 - **2026-09-20 · Undefined disk capacity is not zero usage.**
   A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
   is instead measurable 100%/fail. Compare collector ratios with df used/available
