@@ -1,5 +1,15 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>966 preservation checkpoint2026-09-27: normally integrated current main as
+>30dbcfa3, retaining both documentation histories. Source/test bytes unchanged
+>from a05bbf39. Seven real-CLI tests pass2.60s in disposable repositories/local
+>remotes, exercising actual pre-push hook and immutable conflict refusal.
+>Disabling conflict guard fails remote-conflict test (exit0 instead of refusal),
+>restored/cmp. Ruff/whitespace clean. Actual Slomix review/review-base ref digest
+>unchanged before/after; no snapshot operation ran against this repository.
+>Await1055 merge and final sync before publishing for fresh review/CI; no966
+>merge approval. Original runtime work and all NEVER MERGE snapshots preserved.
+
 >1054 review follow-up2026-09-27: stopped state now clears current error_type,
 > while failed retains diagnostics. Stop-event and task-cancellation cases both
 > reproduced OSError in stopped before fix and with cleanup removed; restored/cmp.
