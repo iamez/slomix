@@ -1,10 +1,23 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
+  #1059 base changed from a feature branch to main. Its push CI passed, but the
+  default pull_request triggers did not include edited, leaving required hygiene
+  and CodeQL contexts absent. Publish the real follow-up checkpoint normally and
+  verify all required checks on the NEW head; never bypass rules or credit old
+  head checks to the new SHA. No workflow/settings changes are needed here.
+
 One entry per fact. Format: date · fact · why it matters · how to apply.
 Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
+
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
 
 - **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
   A neutral real-PG fixture supplied32 hex characters but the canonical regular
@@ -26,6 +39,16 @@ data here.
   treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
   removing the SQL half filter loses that half. Same-half cross-match identity
   still needs a stronger source contract; do not infer it from this narrow fix.
+- **2026-09-20 · Undefined disk capacity is not zero usage.**
+  A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
+  is instead measurable 100%/fail. Compare collector ratios with df used/available
+  bytes, not exact displayed integers: df rounds its displayed percentage upward.
+
+- **2026-09-20 · A failed reservation may still own its namespace.**
+  Atomic mkdir prevents two same-token writers from reserving one generation.
+  A later fsync failure can leave that directory; retry must refuse reuse even
+  when empty. Never infer an empty directory is free. Keep source reservation,
+  immutable payload completion and durable receipt delivery as separate states.
 
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
