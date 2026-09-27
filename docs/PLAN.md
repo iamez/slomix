@@ -1,5 +1,15 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>965 preservation checkpoint2026-09-27: start from local2e035917, not older
+>remote c8fa8e41; normally integrate main as44df616a, preserve both doc histories.
+>Watchdog source/tests byte-identical to2e035917.43focused cases pass0.43s,
+>Ruff clean. Inverting delivery-success guard advances an unconfirmed timestamp
+>and fails the retry test; restored/cmp. Separate in-process synthetic transport
+>with actual persisted files proves failed pending1/ACK0, success pending0,
+>two delivery attempts and no third-cycle duplicate. No Discord request, live
+>collector/service action or production data. Await1055 merge then final refresh
+>and publish for fresh exact-head review; no965 merge approval.
+
 >1054 review follow-up2026-09-27: stopped state now clears current error_type,
 > while failed retains diagnostics. Stop-event and task-cancellation cases both
 > reproduced OSError in stopped before fix and with cleanup removed; restored/cmp.
