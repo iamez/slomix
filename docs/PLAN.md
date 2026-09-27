@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1066 refresh checkpoint2026-09-27: normal merge of prepared1065 parent4f1c4a2b
+>as5e8b769d. Explicit conflict resolution preserves BOTH spool-only legacy-R1
+>isolation and already-merged2020-2035 calendar admission, including0001 terminal
+>failure proof. Startup test retains ambient SSH isolation; no old test restored.
+>54unit/filesystem/import-boundary cases pass3.70s and2.79s, Ruff clean.
+>Disabling spool-only manager guard fails DID NOT RAISE ValueError; restored/cmp.
+>Live PostgreSQL proof NOT repeated: owner-started isolated proof service reports
+>ActiveState=failed/SubState=failed with RuntimeMaxUSec=1h. Requested owner start;
+>no application DB fallback or service action taken. Do not call this full import
+>proof yet. Await1065 actual merge, final main sync and real PG proof before
+>publishing/fresh review. Original runtime roadmap preserved, no1066 approval.
+
 >1065 refresh checkpoint2026-09-27: integrated reviewed1064 parent3422cd3e
 >normally as ab5b17e4. Source/test bytes equal0e3d100a; both doc histories retained.
 >55real filesystem cases pass0.63s/0.66s, including partial failure, publication

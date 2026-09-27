@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1066 local preparation5e8b769d retains both calendar and
+  spool-only R1 guards across parent1065 merge.54local cases pass, guard mutation
+  fails/restored/cmp. Full PostgreSQL proof waits owner-started disposable service;
+  never substitute application DB. No push/retarget/merge; wait1065 actual main.
+
 - (Astra, 2026-09-20) Priority #1066 review detour: verified import now requires
   spool-only parser; legacy cwd/local_stats fallback and R1 symlinks cannot supply
   runtime differential. 153 tests pass, actual-PG fallback mutation fails/restored.
