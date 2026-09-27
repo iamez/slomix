@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current1052 refresh (2026-09-27): local87eec905 normally merges refreshed1051
+> eed90b28, preserving both documentation histories. Memory backend/test files
+> remain byte-identical to original3d9da0e0.58cache regression cases pass1.29s;
+> standalone in-process ASGI proof returns200 with MISS/HIT/MISS/MISS, correct
+> bodies, handler calls1/2/1 and one retained entry. Removing count eviction fails
+> 4<=3 and HIT!=MISS; restored/cmp. No listener, browser, database or service.
+> Owner-approved1051 merged as2b310cb3 at06:42:21Z after the prescribed cycle;
+> squash tree equals reviewed eed90b28.1052 now integrates that main, is retargeted
+> to main before final push, and requires fresh CI/review and its own approval.
+> Original independent-runtime/recovery then new-site audit remains
+> the plan; earlier checkpoints below are historical.
+
 > PR1060 merged with explicit owner approval on2026-09-27 at06:25:44Z as197feaf7.
 > Required cycle ended0red/0threads/0behind/unchanged head; squash tree equals
 > ec40a03f. Main workflows are running, not yet all confirmed green. PR1051 now
@@ -64,6 +76,25 @@
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
 ## Track: runtime v2 R01 (Astra)
+
+### R03b1 bounded memory cache prerequisite — 2026-09-18
+
+Branch feat/db-runtime-cache-memory-r03b1, parent #1051 at 112f2524.
+Before adding DB-generation namespaces, bound abandoned namespaces and late
+old-request writes. Memory backend now defaults to 256 retained entries and
+8 MiB of retained key/JSON string objects per worker; FIFO eviction on writes,
+expired-entry sweep on writes, and uncacheable replacements remove old values.
+These are conservative storage budgets, not measured optimal capacity or RSS
+limits; dictionary/tuple overhead and transient serialization are not included.
+No runtime-generation namespace integration yet, no activation or deployment.
+
+48 focused cache/middleware tests passed, including in-process HTTP MISS/HIT/
+eviction/recomputation, concurrent writes, Unicode byte budget, abandoned epochs,
+late writes and replacement at capacity. Removing eviction failed `assert 4 <= 3`;
+restored with apply_patch and verified cmp. Independent review found no blocker;
+its concurrent mutation-time run also observed byte/count failures (not a failure
+of restored code). Ruff clean. Next: publish for review, then generation reads
+with fail-closed cache bypass and multi-worker/in-flight proofs in R03b2.
 
 ### R03a transactional HTTP-cache generation receipts — 2026-09-18
 

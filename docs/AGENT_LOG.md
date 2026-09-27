@@ -20,6 +20,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-18 · Generation keys need a bounded memory backend.**
+  Reading only the current namespace never touches expired older keys; lazy
+  deletion of the requested key cannot reclaim them. Clear-on-generation-change
+  alone also allows late old requests to insert again. Bound count and retained
+  string bytes, prune expired entries on writes, and test late old-epoch writes.
+  State per-worker storage limits separately from RSS and serialization peaks.
+
 - **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
   A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
   Explicitly disable SSH and automation in the child; test true/false parent
