@@ -12,6 +12,12 @@
 >proof yet. Await1065 actual merge, final main sync and real PG proof before
 >publishing/fresh review. Original runtime roadmap preserved, no1066 approval.
 
+>Current1065 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1065-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
 >1065 refresh checkpoint2026-09-27: integrated reviewed1064 parent3422cd3e
 >normally as ab5b17e4. Source/test bytes equal0e3d100a; both doc histories retained.
 >55real filesystem cases pass0.63s/0.66s, including partial failure, publication
@@ -21,6 +27,8 @@
 >import acknowledgement. Await1064 actual main merge before final sync/publish;
 >no1065 merge approval, no network, services or application DB changes.
 >Original runtime plan preserved; dependency consolidation only.
+
+
 
 >1064 restrictive-umask review2026-09-27: reproduced publication under0277
 >creating0400 successfully while reconciliation rejected its own output. Inspector
@@ -282,6 +290,7 @@ Ruff clean. Imported foundation code byte-identical to both parent branches;
 only new composition/tests/docs added. Disposable PG stopped; no application
 DB/service or source transport activation. Fresh CI/review required.
 
+
 ### R04j single-attempt capture reconciliation — 2026-09-20
 
 Contract: inspect before source iteration; content_present skips input but is
@@ -297,6 +306,8 @@ fails two tests with Source must not be consumed; restored/cmp. Real filesystem
 proof preserves inode/bytes on repeat and leaves one winning file after a race.
 Ruff and whitespace clean; external review/CI required. This composes publication
 and reconciliation, not the SSH connection owner or automatic retry scheduler.
+
+
 
 ### R04i read-only spool reconciliation — 2026-09-20
 

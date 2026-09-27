@@ -32,6 +32,7 @@ data here.
   symlink R1 entries. Retained immutable R1 remains a caller precondition.
   Actual-PG proof must include a plausible external R1, not merely an empty cwd.
 
+
 - **2026-09-20 · Content reconciliation is not durability or import completion.**
   A link can succeed before directory fsync fails. Inspecting size and SHA-256
   can recognize the existing complete file without overwrite, but cannot prove
