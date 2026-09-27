@@ -1,5 +1,19 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
+  Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
+  dependency admission now matches the canonical2020-2035 year range without
+  importing presentation/configuration. Tests cover outside years, both accepted
+  bounds, and a real PG terminal failed marker for0001. Do not treat calendar
+  parsing alone as proof that downstream date arithmetic is safe.
+
+- **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
+  #1059 base changed from a feature branch to main. Its push CI passed, but the
+  default pull_request triggers did not include edited, leaving required hygiene
+  and CodeQL contexts absent. Publish the real follow-up checkpoint normally and
+  verify all required checks on the NEW head; never bypass rules or credit old
+  head checks to the new SHA. No workflow/settings changes are needed here.
+
 One entry per fact. Format: date · fact · why it matters · how to apply.
 Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
@@ -12,6 +26,72 @@ data here.
   alone also allows late old requests to insert again. Bound count and retained
   string bytes, prune expired entries on writes, and test late old-epoch writes.
   State per-worker storage limits separately from RSS and serialization peaks.
+
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
+
+- **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
+  A neutral real-PG fixture supplied32 hex characters but the canonical regular
+  stats parser stored8 via short_guid. The first test's32-character assertion
+  was wrong; corrected after inspecting the actual parser and observing DB rows.
+  Do not change persistence semantics to satisfy a mistaken test expectation.
+
+- **2026-09-20 · Explicit configuration is not enough if imports initialize the process.**
+  The manager previously imported dotenv and configured root logging before its
+  constructor could inspect supplied config. R04d moves legacy setup behind
+  the default loader while preserving dotenv-before-log-path selection. Test in
+  fresh processes with forbidden imports; also pin unchanged sys.path and root
+  handlers. Import-only callers intentionally no longer initialize logging.
+
+
+- **2026-09-20 · Header-free payload equality is not cross-half identity.**
+  An unchanged cumulative R2 has the same payload hash as R1. Canonical import
+  and neutral duplicate preflight must scope successful hashes by half before
+  treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
+  removing the SQL half filter loses that half. Same-half cross-match identity
+  still needs a stronger source contract; do not infer it from this narrow fix.
+- **2026-09-20 · Undefined disk capacity is not zero usage.**
+  A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
+  is instead measurable 100%/fail. Compare collector ratios with df used/available
+  bytes, not exact displayed integers: df rounds its displayed percentage upward.
+
+- **2026-09-20 · A failed reservation may still own its namespace.**
+  Atomic mkdir prevents two same-token writers from reserving one generation.
+  A later fsync failure can leave that directory; retry must refuse reuse even
+  when empty. Never infer an empty directory is free. Keep source reservation,
+  immutable payload completion and durable receipt delivery as separate states.
+
+- **2026-09-19 · Lint modified legacy files as well as new modules.**
+  R04c's new files passed Ruff but its legacy re-export block failed CI I001.
+  Include every changed Python path in local lint. Module-attribute aliases
+  retain the legacy function identities without unused-import ambiguity;
+  mutation-test the export identity rather than assuming an alias is correct.
+
+- **2026-09-19 · Parser parity needs nonempty players and a controlled clock.**
+  The committed legacy sample_stats_files parse headers but zero player rows.
+  Header parity alone cannot certify R2 player calculations. Supply valid player
+  lines with a known differential and freeze the parser's generated timestamp
+  when comparing subprocess outputs. A blocked-import subprocess proves absence
+  of Discord/config dependencies more strongly than checking imports in pytest.
+
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
+
+- **2026-09-19 · Logging emission is separate from process setup.**
+  Importing bot.logging_config creates its log directory. Runtime-only callers
+  can use shared.database_logging without that side effect; legacy exports stay
+  compatible. Prove the boundary in a fresh subprocess with forbidden-import
+  hooks, then mutate an import after definitions so a circular-import collection
+  error does not masquerade as an executed boundary guard. Manager startup still
+  needs its own extraction; moving dotenv imports can change log-directory order.
 
 - **2026-09-18 · Verify release registration from the evaluated array.**
   A migration filename appearing somewhere in a shell config does not prove
