@@ -1,5 +1,12 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current1061 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
+>matches reviewed0e66f238. This branch now normally integrates that main,
+>preserving source/test bytes and both documentation histories. 24focused
+>tests rerun after sync. Publish for fresh exact-head CI/review; no1061 merge
+>approval, service activation or NEVER MERGE changes. Earlier waiting notes
+>below are historical; original runtime roadmap remains unchanged.
+
 >1061 now integrates main0d43b3da (approved1054 squash) as c994b186. Source
 >and tests remain unchanged from28009e87;24filesystem cases pass0.22s after
 >sync. Publish this four-file slice for fresh exact-head CI/review; no1061
