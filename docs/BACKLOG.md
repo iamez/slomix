@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1064 Codex4116756259 verified/fixed: umask0277 produces
+ 0400; inspector now permits0400/0600 without broadening permissions.75real
+  filesystem/local socket tests pass; oldmodeguard mutation fails then restored
+  and cmp verified. Unsafepermission regressions retained. No push/service/DB.
+
 - (Astra, 2026-09-27)1063 and1064 both included merged1062 main4454d6c5.
   Preserved source/tests and both documentation histories; publish only after
   repeating local gates. Fresh exact-head CI/review and individual permission

@@ -1,5 +1,10 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-27 · Publication modes are filtered by the process umask.**
+  open(mode=0600) under umask0277 creates0400, still readable by its owner.
+  Reconciliation must accept that safe publisher output without chmod widening;
+  exact0400/0600 admission preserves group/other/execute/special-bit rejection.
+
 - **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
   Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
   dependency admission now matches the canonical2020-2035 year range without

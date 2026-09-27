@@ -1,5 +1,14 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1064 restrictive-umask review2026-09-27: reproduced publication under0277
+>creating0400 successfully while reconciliation rejected its own output. Inspector
+>now accepts exact0400/0600 owner-readable private regular files without chmod;
+>group/other/execute/special permissions remain rejected.75actual filesystem and
+>local socket cases pass0.71s. Real0400 file matches expectedabc, stat length3,
+>mode unchanged. Reinstating strict0600 guard fails regression; restored/cmp;
+>Ruff clean. No permission widening, service/DB changes, push or merge. Original
+>runtime plan preserved; fresh review/CI remains required after publication.
+
 >Current1064 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
 >squash tree equals435268ef. Actual main now integrated normally, documentation
 >histories and implementation bytes preserved. Repeat local gates then publish
