@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1051 merged2b310cb3 with approval and exact-tree equality.
+ 1052 now integrates main and is retargeted before final push; only doc conflicts,
+  source/test bytes unchanged. Fresh exact-head gates and1052 approval required.
+
 - (Astra, 2026-09-27)1052 local parent refresh87eec905 preserves source/test
   bytes and both doc histories.58cache cases pass; actual in-process ASGI proof
   matches200/body/MISS-HIT-MISS-MISS with1retained entry. Count-guard mutation

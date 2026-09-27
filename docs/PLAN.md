@@ -6,9 +6,10 @@
 > standalone in-process ASGI proof returns200 with MISS/HIT/MISS/MISS, correct
 > bodies, handler calls1/2/1 and one retained entry. Removing count eviction fails
 > 4<=3 and HIT!=MISS; restored/cmp. No listener, browser, database or service.
-> Owner approved1051 only; its merge cycle is running. After it merges, refresh
->1052 to main, retarget before final push, then require fresh CI/review and its
-> own approval. Original independent-runtime/recovery then new-site audit remains
+> Owner-approved1051 merged as2b310cb3 at06:42:21Z after the prescribed cycle;
+> squash tree equals reviewed eed90b28.1052 now integrates that main, is retargeted
+> to main before final push, and requires fresh CI/review and its own approval.
+> Original independent-runtime/recovery then new-site audit remains
 > the plan; earlier checkpoints below are historical.
 
 > PR1060 merged with explicit owner approval on2026-09-27 at06:25:44Z as197feaf7.
