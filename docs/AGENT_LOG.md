@@ -1,5 +1,10 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-27 · Publication modes are filtered by the process umask.**
+  open(mode=0600) under umask0277 creates0400, still readable by its owner.
+  Reconciliation must accept that safe publisher output without chmod widening;
+  exact0400/0600 admission preserves group/other/execute/special-bit rejection.
+
 - **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
   Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
   dependency admission now matches the canonical2020-2035 year range without
@@ -37,6 +42,13 @@ data here.
   queues or DB transactions. Reconcile any partial/final spool state and retain
   source; child exit is not a durability or import acknowledgement. Supervise
   only the exact child Process object created by this caller, never services.
+
+- **2026-09-20 · Content reconciliation is not durability or import completion.**
+  A link can succeed before directory fsync fails. Inspecting size and SHA-256
+  can recognize the existing complete file without overwrite, but cannot prove
+  the directory entry will survive a crash or that PostgreSQL imported it.
+  Keep those acknowledgements separate; never delete the retained source merely
+  because inspection returned match. Operational read errors are not absence.
 
 - **2026-09-20 · A timeout around a worker is not a stopped transfer.**
   Legacy SSH listing awaits an executor future under wait_for; cancelling that

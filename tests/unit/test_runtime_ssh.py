@@ -1,6 +1,7 @@
 """SSH ownership proofs without any network access or real credentials."""
 
 from dataclasses import replace
+from secrets import token_urlsafe
 from unittest.mock import Mock
 
 import paramiko
@@ -175,7 +176,9 @@ def test_unusable_explicit_key_fails_without_fallback(config, monkeypatch, kind)
     if kind == 'malformed':
         config.key_path.write_text('not a private key')
     elif kind == 'encrypted':
-        paramiko.RSAKey.generate(2048).write_private_key_file(str(config.key_path), password='fixture-only')
+        paramiko.RSAKey.generate(2048).write_private_key_file(
+            str(config.key_path), password=token_urlsafe(32),
+        )
     client = Mock()
     transport = Mock()
     client.connect.side_effect = lambda **kwargs: kwargs['auth_strategy'].authenticate(transport)
