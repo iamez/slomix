@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1063 now includes actual merged1062 main4454d6c5.
+  Preserved source/tests and both documentation histories; publish only after
+  repeating local gates. Fresh exact-head CI/review and individual permission
+  still required before merge. No deployment or production changes.
+
 - (Astra, 2026-09-20) #1063 review: read deadline starts after spool setup;
   54 cases pass, old-placement mutation fails/restored. Investigating #1060
   cross-half payload identity before resuming transport/reconciliation.

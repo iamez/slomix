@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current 1063 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
+>squash tree equals reviewed21e6c999. Actual main now merged normally here.
+>Documentation histories preserved; source/test bytes unchanged froma570431c.
+>54 filesystem/stream tests are the local gate; prior failed/restored guard
+>mutation retained. Retarget to main and publish for fresh exact-head CI/review;
+>no 1063 merge approval, service activation or application database writes.
+>Original Runtime v2 plan remains intact; this is dependency consolidation.
+
 >1063 refresh checkpoint2026-09-27: normally merged reviewed1062 head21e6c999
 >as6c1579b6. Capture source/tests byte-identical to a570431c.54socket/filesystem
 >cases pass0.54s; real socket EOF publishes exact3bytes, missing EOF times out
