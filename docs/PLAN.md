@@ -1,5 +1,21 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> PR1060 merged with explicit owner approval on2026-09-27 at06:25:44Z as197feaf7.
+> Required cycle ended0red/0threads/0behind/unchanged head; squash tree equals
+> ec40a03f. Main workflows are running, not yet all confirmed green. PR1051 now
+> integrates this main as well; fresh exact-head CI/review and its own merge
+> permission still required. No service action, deployment or migration applied.
+
+> Historical local cache refresh checkpoint (2026-09-27): PR1051 refreshed from
+> c4770f5a by normal merge of main c9de5a3d (a6048926). Both documentation tracks
+> retained; consumer/migration/SQL proof files are byte-identical to c4770f5a.
+> 10 portable cache contract cases and48 journal/startup regression cases pass.
+> Fresh local SQL is pending owner restart of the isolated proof service; old
+> SQL results below are historical, not a fresh run. Wait for approved1060 merge,
+> then refresh once more and publish for exact-head CI/review. No1051 merge
+> permission, service action or deployment. Runtime identity/recovery work remains
+> on its separate integration branch; earlier checkpoints below are historical.
+
 > PR1060 review4114242030, 2026-09-27: waiting admission now uses the canonical
 > 2020-2035 year range, avoiding year0001 previous-day underflow. Invalid years
 > go to canonical processing, not dependency lookup. Added outside/boundary unit
@@ -48,6 +64,43 @@
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
 ## Track: runtime v2 R01 (Astra)
+
+### R03a transactional HTTP-cache generation receipts — 2026-09-18
+
+2026-09-19 checkpoint: owner-approved #1050 merged as 2518735f after all22
+checks, resolved reviews and fresh79 isolated-PG/retry/bootstrap/release cases.
+Prescribed cycle ended with zero red checks/threads/behind and unchanged head;
+squash tree equals approved00e061ec. #1051 retargeted main; normal merge77f8ed47
+resolved squash-history conflicts and preserved its entire pre-sync44914a22 tree.
+Descendant sync follows; fresh exact-head CI required. #1051+ not merge-approved.
+No deployment, service operation or live database change. Temporary PG stopped.
+
+Branch feat/db-runtime-cache-receipts-r03a, parent #1050 at 0f0c8e73.
+Migration 091 adds consumer/event receipts and shared DB cache generation.
+Explicit default-OFF primitive serializes on the generation row, consumes bounded
+known event/schema batches without a MAX-ID cursor, and commits generation plus
+receipts atomically. Caller-held transactions are rejected. Unsupported pairs
+remain unacknowledged and explicitly counted; they cannot occupy the valid batch.
+No HTTP namespace integration, listener, background task, activation or deploy.
+Receipt means DB generation advanced, not every worker/browser cache invalidated.
+Batch bound limits processed events, not SQL scan cost; benchmark before rollout.
+Website role permissions and independent inner caches remain integration gates.
+
+Read-only review found no concrete blocker. Real PG proofs include concurrent
+consumers, late lower-ID commit, rollback at receipt/generation/COMMIT failure,
+idempotent empty retry, source consumer isolation, unknown schema visibility,
+bounded remainder and OFF behavior. Transaction mutation failed 1 != 0; removing
+the early row lock failed the observed pg_stat_activity lock-location assertion.
+Both restored via apply_patch/cmp. Initial focused run 62 passed, no skips;
+extra observed-lock regression passed. Full cross-stack regression: 280 passed,
+zero skips, two existing warnings; Ruff/whitespace clean. Disposable PG stopped,
+verified by pg_ctl and shutdown log. Next: external review and exact-head CI.
+Published draft #1051. #1046 merged as 64488de1 with approved tree verified;
+#1048 now ready/main, and ancestry sync through #1049/#1050/#1051 preserved
+all implementation content. Fresh CI required after these pushes. No activation.
+Review follow-up: corrected BACKLOG's stale #1046 status to merged 64488de1
+and labelled older checkpoints historical. Owner explicitly approved #1048;
+its prescribed merge cycle is running. Further PRs still require specific approval.
 
 ### Accepted delivery sequence — 2026-09-20
 
@@ -107,6 +160,7 @@ provide immutable completed spool and retain R1 during parsing; dependency check
 does not solve concurrent file deletion/replacement or bound filesystem scans.
 Capture publication/retention and bounded-scan behavior remain separate gates
 before live use.
+
 ### Local #1059 main refresh — 2026-09-25
 
 Prepared fix/db-runtime-startup-main-refresh from921af249 plus main89a2fd38.
@@ -347,7 +401,8 @@ bootstrap cases passed before merge. #1050 retargeted main; normal ancestry sync
 preserved the full tree. Fresh checks required; no approval for #1050 inferred.
 No service/deployment changes. Older progress notes below are historical.
 
-Latest checkpoint: #1044 and #1045 merged through prescribed cycles with
+Historical R02d5 checkpoint (current position is in R03a above):
+#1044 and #1045 merged through prescribed cycles with
 review dispositions and verified squash trees. #1046 is ready/main at a58277f9;
 fresh CI pending. #1050 external Codex found no major issues at 51505e84 and
 all nine branch checks passed there. Subsequent ancestry sync changed no code.
