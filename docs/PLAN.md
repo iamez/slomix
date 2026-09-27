@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current1062 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
+>0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
+>branch integrates that main normally; implementation/test bytes preserved.
+>Publish now for fresh exact-head CI/review; no1062 merge permission and no
+>service or production changes. Earlier waiting checkpoints are historical.
+
 >1062 refresh checkpoint2026-09-27: normally integrated reviewed1061 d00f5de2
 >as7f72ccc7; source/integrity test bytes unchanged from1a024ce4.35filesystem
 >cases pass0.33s; independent sha256sum agrees with exact bytes/stat length.
