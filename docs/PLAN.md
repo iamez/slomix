@@ -1,5 +1,25 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1054 review follow-up2026-09-27: stopped state now clears current error_type,
+> while failed retains diagnostics. Stop-event and task-cancellation cases both
+> reproduced OSError in stopped before fix and with cleanup removed; restored/cmp.
+>26tests incl3isolated PG pass2.08s before proof service timeout at16:09CEST.
+> Fresh exact-head CI/review required after push; no1054 merge approval.
+
+> Latest1054 checkpoint2026-09-27: approved1053 merged75a359f6 at13:28:51Z,
+> prescribed420s cycle0failed/0threads/0behind/unchanged head, squash tree equals
+> reviewed ccd23e81.1054 integrates main without changing worker implementation;
+> retained its default-OFF flag and documentation. Retarget before final push;
+> fresh exact-head review/CI and explicit1054 approval still required.
+
+>1054 refresh2026-09-27: merged reviewed parent ccd23e81 normally. Clear stale
+> error_type on both disabled transitions while retaining confirmed generation,
+> unsupported count and last-success time. Four async worker reproductions fail
+> before fix and with the fix removed, restored/cmp.161local cases previously
+> passed; fresh21worker unit+3realPG lifecycle cases pass4.36s on refreshed parent.
+> Actual polling catches late lower IDs, receipt failure rolls back/retries and
+> closed connections reacquire. Fresh exact-head CI/review and owner merge
+> permission remain required; parent1053 is reviewed but not merged.
 >1053 follow-up2026-09-27: fresh review found ON reactivation could revive an
 > old generation when events were disabled during writes. Both ON/OFF namespaces
 > now include the captured middleware-lifetime/mode-transition token. All cache
@@ -97,6 +117,55 @@
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
 ## Track: runtime v2 R01 (Astra)
+
+### R03c caller-owned durable cache polling — 2026-09-18
+
+2026-09-19 original-plan/Mandelbrot/RCA audit: design21 section7 direction
+preserved (shared domain, separate processes, PostgreSQL, cache first). Its
+section7a claim that readers are already independent is historical overstatement:
+source retention enables replay, but endstats/proximity still await Discord
+readiness and STATS_READY still enters through Discord. R04 must remove those
+writer/transport dependencies. Endstats voice/dead-hour cadence is not the same
+gate as proximity. Shared config is a bot-config reexport whose validate requires
+a Discord token: neutral entrypoint validation is an explicit extraction gate.
+Initial-import events are not final round completion; count by event semantics,
+not all journal rows. Coarse HTTP generation and periodic polling are deliberate
+first steps; per-session invalidation/NOTIFY latency optimization remain later.
+Added three worker edge proofs: acquisition cancellation cleanup, nonclosed
+InterfaceError propagates, unsupported events visible while valid work succeeds.
+17 worker unit cases pass; expanded combined rerun172 passed, zero skips, two
+existing warnings. Owner-approved #1049 merged90eae0f8 with full tree equal to
+964630e8, after fresh112 repair/inbox/override/coverage/bootstrap cases passed.
+Normal sync through #1050/#1051/#1052/#1053/R03c changed only seven PLAN lines.
+No activation. Local full audit kept outside tracked research.
+
+Local branch feat/db-runtime-cache-poll-r03c, parent #1053 at 1e36a993.
+Reusable shared driver only: caller awaits run and owns cancellation/connection
+factory. No service/startup wiring or process activation. Three opt-in flags,
+including new RUNTIME_HTTP_CACHE_WORKER_ENABLED, default OFF with no acquisition.
+Initial/periodic receipt-based scan, bounded batches and connection release per
+batch; yield under full backlog, interruptible idle/error waits, attempt timeout.
+Explicit state separates last confirmed generation/success from current failure;
+unsupported events remain counted. No NOTIFY dependency or MAX-ID cursor.
+Known DB/I/O/timeout failures retry; programming failures propagate visibly.
+Closed native connections are retried only when InterfaceError and is_closed
+agree; other interface errors remain failures. Restart relies on DB receipts.
+
+Independent review found the closed-connection case; fixed with real PG proof.
+17 new lifecycle/PG cases passed; expanded cache/HTTP/bootstrap/release suite
+169 passed, zero skips, two existing warnings; Ruff clean. Real PG proves late
+lower-ID catch-up without notifications, restart idempotency, receipt-error
+rollback/recovery and closed-connection replacement. Unit timeout releases
+connection before retry, cancellation drains, idle stop interrupts long wait.
+Removing periodic timeout caused observed TimeoutError; restored apply_patch/cmp.
+PG stopped and confirmed by pg_ctl/log. No live DB, dev service or prod changes.
+
+Publication originally waited for stack reduction (28files against hook limit25).
+After approved #1049 merge the measured diff is23files; no hook bypass required.
+#1050 is retargeted main with fresh CI required and no merge approval inferred.
+Next: publish R03c/external review, then independent
+runtime entrypoint/ownership plus activation gates. R04 ingestion extraction
+is not completed by this driver; Discord/website-off ingestion is still future.
 
 ### R03b2 committed-generation HTTP namespace — 2026-09-18
 
