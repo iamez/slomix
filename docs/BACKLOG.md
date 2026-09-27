@@ -12,6 +12,7 @@
   No real network. End-to-end handshake bound and source identity still block
   activation. #1066 capture/import integration CI/review remains in parallel.
 
+
 - (Astra, 2026-09-27)1063 now includes actual merged1062 main4454d6c5.
   Preserved source/tests and both documentation histories; publish only after
   repeating local gates. Fresh exact-head CI/review and individual permission
