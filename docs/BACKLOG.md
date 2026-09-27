@@ -40,10 +40,31 @@
   activation. #1066 capture/import integration CI/review remains in parallel.
 
 
-- (Astra, 2026-09-27)1063 now includes actual merged1062 main4454d6c5.
+- (Astra, 2026-09-27)1064 Codex4116756259 verified/fixed: umask0277 produces
+ 0400; inspector now permits0400/0600 without broadening permissions.75real
+  filesystem/local socket tests pass; oldmodeguard mutation fails then restored
+  and cmp verified. Unsafepermission regressions retained. No push/service/DB.
+
+- (Astra, 2026-09-27)1063 and1064 both included merged1062 main4454d6c5.
   Preserved source/tests and both documentation histories; publish only after
   repeating local gates. Fresh exact-head CI/review and individual permission
   still required before merge. No deployment or production changes.
+
+- (Astra, 2026-09-27)1064 preserved/refreshed through parent1062 at21e6c999;
+  normal merge4c119978 retained both doc histories and original runtime plan.
+ 49real filesystem tests pass; mutation of wrong-size identity handling fails,
+  restored/cmp. Existing two review threads resolved; no new finding in this pass.
+  Wait actual1062 main merge, final sync and fresh review/CI; no1064 permission
+  inferred, no push/retarget/service/database/snapshot action.
+
+- (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
+  49 cases pass, early-return mutation fails/restored. Next compose a single
+  caller-driven retry step; no scheduling, source deletion or service activation.
+
+- (Astra, 2026-09-20) R04i on #1062: read-only spool reconciliation implemented,
+  48 filesystem cases pass with failed/restored digest and identity mutations.
+  No automatic cleanup, overwrite, retry loop, DB or service changes. Next wire
+  explicit reconciliation policy with connection ownership and immutable source.
 
 - (Astra, 2026-09-20) #1063 review: read deadline starts after spool setup;
   54 cases pass, old-placement mutation fails/restored. Investigating #1060

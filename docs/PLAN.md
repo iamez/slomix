@@ -12,6 +12,12 @@
 >live SSH, DB or snapshot operations. Await parent approval/actual main sync and
 >fresh exact-head CI/review. Original runtime plan preserved after consolidation.
 
+>Current1067 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1067-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
 > PR1067 key-only authentication correction, 2026-09-27: installed/pinned
 > Paramiko5 legacy authentication can call auth_interactive_dumb after partial
 > public-key authentication even with agent/discovery disabled. Three new
@@ -43,6 +49,40 @@
 >or service changes. Phase timeouts do not bound DNS/handshake/cleanup as a whole;
 >the later dedicated worker remains an activation gate. Original plan preserved.
 
+
+>1064 restrictive-umask review2026-09-27: reproduced publication under0277
+>creating0400 successfully while reconciliation rejected its own output. Inspector
+>now accepts exact0400/0600 owner-readable private regular files without chmod;
+>group/other/execute/special permissions remain rejected.75actual filesystem and
+>local socket cases pass0.71s. Real0400 file matches expectedabc, stat length3,
+>mode unchanged. Reinstating strict0600 guard fails regression; restored/cmp;
+>Ruff clean. No permission widening, service/DB changes, push or merge. Original
+>runtime plan preserved; fresh review/CI remains required after publication.
+
+>Current1064 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
+>squash tree equals435268ef. Actual main now integrated normally, documentation
+>histories and implementation bytes preserved. Repeat local gates then publish
+>for fresh exact-head CI/review. No service, network or application DB action;
+>no1064-specific approval recorded yet. Earlier checkpoints below are history.
+
+> Current 1064 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
+>squash tree equals reviewed21e6c999. Actual main now merged normally here.
+>Documentation histories preserved; source/test bytes unchanged from5264909e.
+>49 filesystem/stream tests are the local gate; prior failed/restored guard
+>mutation retained. Retarget to main and publish for fresh exact-head CI/review;
+>no 1064 merge approval, service activation or application database writes.
+>Original Runtime v2 plan remains intact; this is dependency consolidation.
+
+>1064 refresh checkpoint2026-09-27: normally integrated reviewed parent1062
+>21e6c999 as4c119978, preserving both documentation histories. Reconciliation
+>implementation/test bytes equal5264909e; both existing review threads resolved,
+>including wrong-sized inode replacement detection before conflict.49actual
+>filesystem tests pass0.56s, including private publication, independent SHA-256,
+>missing/match/conflict, read failures and inode replacement. Reinstating the old
+>wrong-size early return fails DID NOT RAISE RuntimeError; restored/cmp. Ruff
+>clean. Wait for approved1062 merge, then sync actual main and refresh exact-head
+>CI/review before any1064 merge decision. No push, service, DB or snapshot changes.
+>Original runtime roadmap remains unchanged; this is existing-PR consolidation.
 
 > Current 1063 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
 >squash tree equals reviewed21e6c999. Actual main now merged normally here.
@@ -288,6 +328,27 @@ transport; fixed the fixture only. Cleanup mutation fails, restored/cmp; Ruff
 clean. No real SSH connection/server, credentials, service or DB changes.
 Not an activated source transport or end-to-end network proof.
 
+
+### R04i read-only spool reconciliation — 2026-09-20
+
+Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
+name stability checks before conflict. All 49 filesystem tests pass. Restoring
+the early return fails replacement-after-open regression; restored/cmp. Ruff
+clean. Review 4056550740 case-count spacing corrected. Fresh CI required.
+
+Contract: inspect a caller-retained immutable private spool entry against required
+size and SHA-256, returning missing/match/conflict. Missing is only final-entry
+ENOENT; directory/access/I/O failures propagate. Never delete/replace files or
+write DB markers. Open no-follow/nonblocking, require owned regular0600 file,
+bound reads and compare descriptor/name identity before certifying content.
+Match does not certify durability after failed fsync or import completion.
+This is a primitive, not automatic retry policy, full source identity or transport
+activation. Verify actual post-link-fsync failure, conflicts and replacement race.
+Verified 48 combined filesystem cases pass: actual directory-fsync failure still
+permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
+entries rejected and I/O errors propagate. Removing digest and identity guards
+fails 2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
+retry scheduling or make ambiguous durability safe for source deletion.
 
 ### R04h bounded stream capture — 2026-09-20
 
