@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1063 refresh checkpoint2026-09-27: normally merged reviewed1062 head21e6c999
+>as6c1579b6. Capture source/tests byte-identical to a570431c.54socket/filesystem
+>cases pass0.54s; real socket EOF publishes exact3bytes, missing EOF times out
+>without publication. Moving deadline before file setup reproduces TimeoutError
+>Capture deadline exceeded; restored/cmp. Ruff clean. Existing reviewed fix is
+>retained, not reimplemented. Await approved1062 merge, then sync/retarget/push
+>for fresh exact-head CI/review. No1063 merge approval or service activation.
+
 > Current1062 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
 >0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
 >branch integrates that main normally; implementation/test bytes preserved.
