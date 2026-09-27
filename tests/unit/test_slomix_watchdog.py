@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+from types import SimpleNamespace
+from unittest import mock
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
@@ -146,6 +148,62 @@ def test_disk_thresholds():
     assert wd.check_disk({"used_pct": 86.0, "free_gb": 3, "journal_bytes": 10}).level == "warn"
     assert wd.check_disk({"used_pct": 50.0, "free_gb": 10, "journal_bytes": 3 * 2**30}).level == "warn"
     assert wd.check_disk({"used_pct": 93.0, "free_gb": 1, "journal_bytes": 10}).level == "fail"
+
+
+def test_used_pct_matches_df_not_shutil_total():
+    """⛔⛔ The percentage must be the one `df` prints.
+
+    `shutil.disk_usage` gives used/total; `df` gives used/(used+available),
+    and ext4 reserves ~5% of the filesystem for root, so the two disagree.
+    Measured on the dev box 2026-09-07: shutil 84.9%, df 89.5% — 4.6 points
+    apart, same disk, same second.
+
+    That gap sat exactly on the threshold: the 85% warn fired only once df
+    read ~89.6%. An operator running `df -h`, seeing 90% and finding the
+    watchdog `ok` cannot tell which one is wrong. Neither is — they answer
+    different questions — but a monitor that disagrees with the command the
+    operator types is worth less than no monitor.
+    """
+    class _Usage:
+        # 100 GiB filesystem, 5 GiB reserved for root: 85 used, 10 free.
+        total = 100 * 2**30
+        used = 85 * 2**30
+        free = 10 * 2**30
+
+    with mock.patch.object(wd.shutil, "disk_usage", return_value=_Usage()), \
+         mock.patch.object(wd.subprocess, "run", side_effect=OSError):
+        d = wd.collect_disk("/")
+
+    # df: 85 / (85 + 10) = 89.5 %, NOT 85 / 100 = 85.0 %
+    assert d["used_pct"] == 89.5
+    assert d["used_pct_of_total"] == 85.0
+    assert wd.check_disk(d).level == "warn", "89.5% is over the 85% threshold"
+
+
+def test_unmeasurable_capacity_is_unknown_not_healthy():
+    """A zero denominator is unavailable capacity, not a healthy empty disk."""
+    class _Zero:
+        total = 0
+        used = 0
+        free = 0
+
+    with mock.patch.object(wd.shutil, "disk_usage", return_value=_Zero()), \
+         mock.patch.object(wd.subprocess, "run", side_effect=OSError):
+        d = wd.collect_disk("/")
+
+    assert d["used_pct"] is None
+    assert d["used_pct_of_total"] is None
+    assert wd.check_disk(d).level == "unknown"
+
+
+def test_full_filesystem_is_a_failure_not_unknown():
+    """No available bytes with positive used space is a measured full disk."""
+    usage = SimpleNamespace(total=100, used=95, free=0)
+    with mock.patch.object(wd.shutil, "disk_usage", return_value=usage), \
+         mock.patch.object(wd.subprocess, "run", side_effect=OSError):
+        data = wd.collect_disk("/")
+    assert data["used_pct"] == 100.0
+    assert wd.check_disk(data).level == "fail"
 
 
 def test_lua_webhook_fails_only_when_rounds_land_without_lua_rows():

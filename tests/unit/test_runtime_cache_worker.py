@@ -66,6 +66,36 @@ async def test_poll_without_notifications_recovers_from_db_failure(monkeypatch):
     assert worker.state.error_type is None
 
 
+@pytest.mark.parametrize('cancel', [False, True])
+async def test_stopping_after_error_clears_current_error(monkeypatch, cancel):
+    worker = module.RuntimeCacheWorker(poll_seconds=60)
+    stop, waiting = asyncio.Event(), asyncio.Event()
+    monkeypatch.setattr(module, 'consume_http_cache_events', AsyncMock(side_effect=OSError('synthetic')))
+    original_wait = worker._wait  # noqa: SLF001 -- synchronize the real backoff before stopping.
+
+    async def wait(event):
+        waiting.set()
+        await original_wait(event)
+
+    monkeypatch.setattr(worker, '_wait', wait)
+    task = asyncio.create_task(worker.run(connection, stop))
+    try:
+        await asyncio.wait_for(waiting.wait(), 1)
+        assert worker.state.error_type == 'OSError'
+        if cancel:
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            stop.set()
+            await asyncio.wait_for(task, 1)
+        assert worker.state.status == 'stopped'
+        assert worker.state.error_type is None
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
 async def test_full_batches_yield_and_release_each_connection(monkeypatch):
     stop = asyncio.Event()
     worker = module.RuntimeCacheWorker(batch_size=1, poll_seconds=60)
@@ -89,6 +119,35 @@ async def test_full_batches_yield_and_release_each_connection(monkeypatch):
     assert counts == {"entered": 3, "released": 3}
     assert worker.state.unsupported_pending == 2
     assert worker.state.generation == 3
+
+
+@pytest.mark.parametrize("disable_at", [*FLAGS, "consumer"])
+async def test_disable_after_failure_clears_error_preserving_last_success(monkeypatch, disable_at):
+    worker = module.RuntimeCacheWorker(poll_seconds=0.001)
+    observations = []
+
+    async def consume(conn, **kwargs):
+        observations.append(worker.state)
+        if len(observations) == 1:
+            return CacheConsumption("idle", 0, 7, 2)
+        if len(observations) == 2:
+            if disable_at != "consumer":
+                monkeypatch.setenv(disable_at, "false")
+            raise OSError("synthetic unavailable")
+        return CacheConsumption("disabled", 0, None, None)
+
+    monkeypatch.setattr(module, "consume_http_cache_events", consume)
+    await asyncio.wait_for(worker.run(connection, asyncio.Event()), timeout=1)
+    assert worker.state.status == "disabled"
+    assert worker.state.error_type is None
+    assert worker.state.generation == 7
+    assert worker.state.unsupported_pending == 2
+    assert worker.state.last_success_monotonic == observations[1].last_success_monotonic
+    assert worker.state.last_success_monotonic is not None
+    assert len(observations) == (3 if disable_at == "consumer" else 2)
+    if disable_at == "consumer":
+        assert observations[2].status == "unavailable"
+        assert observations[2].error_type == "OSError"
 
 
 async def test_idle_stop_interrupts_long_wait(monkeypatch):

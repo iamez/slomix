@@ -10,6 +10,14 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+from shared import database_logging
+from shared.database_logging import _exc_info_for
+
+# Preserve the legacy public API without configuring logging in shared helpers.
+log_database_operation = database_logging.log_database_operation
+log_performance_warning = database_logging.log_performance_warning
+log_stats_import = database_logging.log_stats_import
+
 # Create logs directory if it doesn't exist.
 #
 # BOT_LOG_DIR mirrors WEB_LOG_DIR on the website side
@@ -276,18 +284,6 @@ def setup_logging(log_level=logging.INFO):
     return root_logger
 
 
-def _exc_info_for(error):
-    """Return a value safe to pass as ``exc_info=`` to logger.error.
-
-    Callers sometimes pass an exception instance, sometimes a pre-formatted
-    error string (e.g. ``str(e)`` or a parser error message). ``logger.error``
-    only treats a BaseException as a traceback source — strings fall through
-    to ``sys.exc_info()``, which is ``(None, None, None)`` outside an active
-    ``except``, silently dropping the traceback.
-    """
-    return error if isinstance(error, BaseException) else False
-
-
 def _is_channel_decline(error) -> bool:
     """True when a command was declined for being in the wrong channel.
 
@@ -354,65 +350,6 @@ def log_command_execution(ctx, command_name, start_time=None, end_time=None, err
         logger.info(
             f"✓ SUCCESS: {command_name}{duration} | User: {user} | Guild: {guild} | Channel: {channel}"
         )
-
-
-def log_database_operation(operation, details, duration=None, error=None):
-    """
-    Log database operations
-
-    Args:
-        operation: Type of operation (SELECT, INSERT, UPDATE, etc.)
-        details: Description of the operation
-        duration: How long it took in seconds (optional)
-        error: Exception if operation failed (optional)
-    """
-    logger = logging.getLogger('bot.database')
-
-    duration_str = f" [{duration:.3f}s]" if duration else ""
-
-    if error:
-        logger.error(f"❌ DB {operation} FAILED{duration_str}: {details} | Error: {error}", exc_info=_exc_info_for(error))
-    else:
-        logger.debug(f"✓ DB {operation}{duration_str}: {details}")
-
-
-def log_stats_import(filename, round_count=0, player_count=0, weapon_count=0, duration=None, error=None):
-    """
-    Log stats file import
-
-    Args:
-        filename: Name of the stats file
-        round_count: Number of rounds imported
-        player_count: Number of player stats imported
-        weapon_count: Number of weapon stats imported
-        duration: How long import took (optional)
-        error: Exception if import failed (optional)
-    """
-    logger = logging.getLogger('bot.database')
-
-    duration_str = f" [{duration:.2f}s]" if duration else ""
-
-    if error:
-        logger.error(f"❌ IMPORT FAILED{duration_str}: {filename} | Error: {error}", exc_info=_exc_info_for(error))
-    else:
-        logger.info(
-            f"✓ IMPORTED{duration_str}: {filename} | "
-            f"Rounds: {round_count}, Players: {player_count}, Weapons: {weapon_count}"
-        )
-
-
-def log_performance_warning(operation, duration, threshold=1.0):
-    """
-    Log slow operations that exceed threshold
-
-    Args:
-        operation: Description of the operation
-        duration: How long it took in seconds
-        threshold: Threshold in seconds (default 1.0)
-    """
-    if duration > threshold:
-        logger = logging.getLogger('bot.performance')
-        logger.warning(f"⚠️ SLOW OPERATION [{duration:.2f}s]: {operation}")
 
 
 def log_automation_event(event_type, details, success=True, error=None):

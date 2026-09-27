@@ -63,7 +63,7 @@ class RuntimeCacheWorker:
         try:
             while not stop.is_set():
                 if not cache_worker_enabled():
-                    self.state = replace(self.state, status="disabled")
+                    self.state = replace(self.state, status="disabled", error_type=None)
                     return
                 try:
                     async with asyncio.timeout(self.attempt_timeout):
@@ -82,7 +82,7 @@ class RuntimeCacheWorker:
                     await self._wait(stop)
                     continue
                 if result.status == "disabled":
-                    self.state = replace(self.state, status="disabled")
+                    self.state = replace(self.state, status="disabled", error_type=None)
                     return
                 status = "unsupported" if result.unsupported_pending else (
                     "catching_up" if result.processed == self.batch_size else "idle"
@@ -102,7 +102,7 @@ class RuntimeCacheWorker:
         finally:
             self._running = False
             if self.state.status not in ("disabled", "failed"):
-                self.state = replace(self.state, status="stopped")
+                self.state = replace(self.state, status="stopped", error_type=None)
 
     async def _wait(self, stop):
         try:

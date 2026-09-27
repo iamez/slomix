@@ -7,6 +7,7 @@ import hashlib
 import logging
 import os
 from typing import Callable
+from uuid import uuid4
 
 logger = logging.getLogger('website.middleware.cache')
 from urllib.parse import urlencode
@@ -30,6 +31,8 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.cache_backend = cache_backend
         self.generation_reader = generation_reader
+        self._runtime_cache_mode = None
+        self._mode_epoch = uuid4().hex
         self.default_ttl = getenv_int("CACHE_DEFAULT_TTL_SECONDS", 120)
         self.live_ttl = getenv_int("CACHE_LIVE_TTL_SECONDS", 15)
         self.leaderboard_ttl = getenv_int("CACHE_LEADERBOARD_TTL_SECONDS", 300)
@@ -100,8 +103,17 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         cache_key = self._build_cache_key(request)
+        enabled = runtime_http_cache_enabled()
+        if enabled != self._runtime_cache_mode:
+            # Rollback must not revive pre-activation entries, including after
+            # restart with a persistent backend. Both modes are worker-local;
+            # writes while events are OFF may not advance the DB generation.
+            self._mode_epoch = uuid4().hex
+            self._runtime_cache_mode = enabled
+        # Capture before any await so an old response cannot fill a new epoch.
+        mode_epoch = self._mode_epoch
         generation = None
-        if runtime_http_cache_enabled():
+        if enabled:
             try:
                 generation = await self.generation_reader()
                 if type(generation) is not int or generation < 0:
@@ -116,7 +128,9 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         namespace = await self.cache_backend.get_namespace()
         if generation is not None:
             # Capture once: late responses must never populate a newer epoch.
-            namespace = f"runtime-v1:{generation}:{namespace}"
+            namespace = f"runtime-v2:{mode_epoch}:{generation}:{namespace}"
+        else:
+            namespace = f"runtime-off-v1:{mode_epoch}:{namespace}"
         cached = await self.cache_backend.get(namespace, cache_key)
 
         if cached is not None:
