@@ -51,6 +51,18 @@ def open_runtime_sftp(config: RuntimeSSHConfig):
     """
     import paramiko
 
+    class KeyOnlyAuth(paramiko.auth_strategy.AuthStrategy):
+        """One explicit key, rejecting partial auth without any interactive fallback."""
+
+        def authenticate(self, transport):
+            # Paramiko's legacy SSHClient auth can prompt after partial key auth.
+            # The modern hook bypasses it; its default strategy also does not
+            # itself require transport authentication after a partial response.
+            key = paramiko.PKey.from_path(config.key_path)
+            remaining = transport.auth_publickey(config.user, key)
+            if remaining or not transport.is_authenticated():
+                raise paramiko.AuthenticationException('Complete public-key authentication required')
+
     with ExitStack() as stack:
         client = paramiko.SSHClient()
         stack.callback(client.close)
@@ -58,7 +70,7 @@ def open_runtime_sftp(config: RuntimeSSHConfig):
         client.load_host_keys(str(config.known_hosts))
         client.connect(
             hostname=config.host, port=config.port, username=config.user,
-            key_filename=str(config.key_path), allow_agent=False, look_for_keys=False,
+            auth_strategy=KeyOnlyAuth(ssh_config=None),
             timeout=config.connect_timeout, banner_timeout=config.banner_timeout,
             auth_timeout=config.auth_timeout, channel_timeout=config.channel_timeout,
         )

@@ -1,5 +1,19 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> PR1067 key-only authentication correction, 2026-09-27: installed/pinned
+> Paramiko5 legacy authentication can call auth_interactive_dumb after partial
+> public-key authentication even with agent/discovery disabled. Three new
+> regression cases failed on old code. The modern AuthStrategy hook now loads
+> exactly the explicit key with PKey.from_path and requires complete public-key
+> authentication; partial responses never reach SFTP, password or interactive
+> fallback. Actual installed SSHClient.connect exercised offline with synthetic
+> transport and real RSA PEM/OpenSSH, ECDSA PEM/OpenSSH and Ed25519 OpenSSH keys.
+> Missing/malformed/encrypted keys fail closed; no passphrase prompt. Guard
+> removal failed all three cases; restored/cmp. Combined SSH/capture/spool gate:
+> 84 passed. No real SSH handshake, external connection, service or DB action.
+> Next: publish for new exact-head CI/review; no1067 merge permission. Original
+> runtime plan and activation gates below remain intact.
+
 >Current1067 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
 >squash tree equals435268ef. Actual main now integrated normally, documentation
 >histories and implementation bytes preserved. Repeat local gates then publish
