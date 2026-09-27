@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>Current1067 checkpoint2026-09-27: approved1065 merged9ef42671 at20:36:29Z;
+>squash tree equals reviewed1f6562f0. Actualmain normally integrated; explicit
+>private-key-only sidecar repair preserved fromc63f8ac5. Repeat combined gate,
+>publish/reply and request fresh exact-head review. No1067 merge permission,
+>network/service/applicationDB action. Original runtime roadmap preserved.
+
 > PR1067 explicit-identity correction, 2026-09-27: follow-up review proved that
 > PKey.from_path silently loads key_path-cert.pub. A real temporary ssh-keygen
 > certificate changed the offered identity; a malformed neighbor broke auth.
