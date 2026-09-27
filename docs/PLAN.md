@@ -19,6 +19,22 @@
 >CI/review before any1064 merge decision. No push, service, DB or snapshot changes.
 >Original runtime roadmap remains unchanged; this is existing-PR consolidation.
 
+> Current 1063 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
+>squash tree equals reviewed21e6c999. Actual main now merged normally here.
+>Documentation histories preserved; source/test bytes unchanged froma570431c.
+>54 filesystem/stream tests are the local gate; prior failed/restored guard
+>mutation retained. Retarget to main and publish for fresh exact-head CI/review;
+>no 1063 merge approval, service activation or application database writes.
+>Original Runtime v2 plan remains intact; this is dependency consolidation.
+
+>1063 refresh checkpoint2026-09-27: normally merged reviewed1062 head21e6c999
+>as6c1579b6. Capture source/tests byte-identical to a570431c.54socket/filesystem
+>cases pass0.54s; real socket EOF publishes exact3bytes, missing EOF times out
+>without publication. Moving deadline before file setup reproduces TimeoutError
+>Capture deadline exceeded; restored/cmp. Ruff clean. Existing reviewed fix is
+>retained, not reimplemented. Await approved1062 merge, then sync/retarget/push
+>for fresh exact-head CI/review. No1063 merge approval or service activation.
+
 > Current1062 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
 >0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
 >branch integrates that main normally; implementation/test bytes preserved.
@@ -210,6 +226,24 @@ permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
 entries rejected and I/O errors propagate. Removing digest and identity guards
 fails 2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
 retry scheduling or make ambiguous durability safe for source deletion.
+
+### R04h bounded stream capture — 2026-09-20
+
+Review4056389676/4056392696: start the read deadline inside the generator,
+after spool setup.54 combined tests pass; advancing the clock during real file
+opens preserves the full read budget. Old placement fails Capture deadline
+exceeded, restored/cmp. Ruff clean; no service/DB changes. Fresh CI required.
+
+Contract: caller-owned synchronous reader honours bounded read and settimeout;
+capture sets per-read timeout capped by remaining monotonic deadline, verifies
+size and required source SHA-256, requires EOF, then publishes via R04f/g.
+No connection/authentication, executor, scheduling or source close ownership.
+Deadline covers stream consumption, not filesystem durability or SSH handshake;
+blocking readers which ignore timeouts cannot be forcibly cancelled here.
+Verified53 combined capture/spool/integrity cases pass. Real local sockets prove
+success and stalled-EOF cleanup. Disabling post-read deadline fails DID NOT RAISE;
+restored/cmp. Ruff clean. No remote SSH, database or service changes. Next integrate
+connection lifecycle and explicit source identity/reconciliation before activation.
 
 ### R04g capture integrity contract — 2026-09-20
 

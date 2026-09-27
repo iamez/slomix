@@ -27,6 +27,14 @@ data here.
   Keep those acknowledgements separate; never delete the retained source merely
   because inspection returned match. Operational read errors are not absence.
 
+- **2026-09-20 · A timeout around a worker is not a stopped transfer.**
+  Legacy SSH listing awaits an executor future under wait_for; cancelling that
+  wait does not forcibly stop its synchronous work. Runtime capture instead
+  requires a timeout-aware reader, caps each read by remaining monotonic budget,
+  and checks again after read before publication. This still does not bound
+  SSH setup or filesystem fsync, or interrupt a reader which ignores timeouts.
+  Preserve these distinctions when integrating the connection owner.
+
 - **2026-09-20 · A complete-length transfer is not an integrity proof.**
   Runtime spool publication can now validate an expected SHA-256 before linking
   the final name. Obtain that expectation from a trusted immutable source
