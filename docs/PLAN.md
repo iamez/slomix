@@ -9,6 +9,7 @@
 >No1062 merge permission. Optional digest is content verification, not source
 >authentication, scheduler wiring or a production activation guarantee.
 
+
 > Current1061 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
 >matches reviewed0e66f238. This branch now normally integrates that main,
 >preserving source/test bytes and both documentation histories. 24focused
@@ -178,6 +179,7 @@ the digest mismatch guard caused DID NOT RAISE on equal-length corruption;
 restored with apply_patch and cmp. Changed Python files pass Ruff. #1061 has all
 reported CI checks green at 28009e87; individual merge permission still required.
 Next: bounded transport, trusted source metadata and explicit retry reconciliation.
+
 
 ### R04f immutable spool publication — 2026-09-20
 
