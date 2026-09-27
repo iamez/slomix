@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1068 local refresh preserved86c69e39 worker backports,
+  merged reviewed1067 db7f3888 normally as99f2161c.92offline cases pass12.33s;
+  real child cleanup verified by procfs and active_children, interrupted cleanup
+  retains original errors. Timeout mutation fails2cases, restored/cmp. No push,
+  service/liveSSH/DB changes; parent owns final sync/review and original plan.
+
 - (Astra, 2026-09-25) Consolidation side quest: backported exact #1077 worker
   fixes/tests into #1068 locally; five old-code regressions fail, 94 combined
   tests now pass. Late-clock mutation fails/restores/cmp. No GitHub writes or

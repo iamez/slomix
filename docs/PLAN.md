@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1068 refresh checkpoint2026-09-27: started from preserved local86c69e39,
+>NOT obsolete remote69a0ef29; normally merged reviewed parent1067 db7f3888
+>as99f2161c. Both doc histories retained, worker/source test bytes unchanged.
+>92 offline worker/SSH/capture/spool/integrity cases pass12.33s. Actual spawned
+>children complete/fail/time out and are absent from both procfs and active_children;
+>SIGTERM-resistant children are killed/reaped even when cleanup joins raise.
+>Actual Paramiko RejectPolicy test opens no network connection; capture proof
+>uses a local socket pair. Restoring late-observer timeout bug fails two cases
+>(timed_out instead of completed/failed); restored/cmp. No remote pushes, services,
+>live SSH, DB or snapshot operations. Await parent approval/actual main sync and
+>fresh exact-head CI/review. Original runtime plan preserved after consolidation.
+
 >Current1067 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
 >squash tree equals435268ef. Actual main now integrated normally, documentation
 >histories and implementation bytes preserved. Repeat local gates then publish
