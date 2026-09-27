@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27)1051 local refresh a6048926 integrates main c9de5a3d,
+  preserving both doc tracks and unchanged cache consumer/migration/SQL tests.
+  10 portable cache cases +48 journal/startup cases pass. Fresh SQL pending
+  owner-started proof service. Await1060 merge, then refresh/publish for fresh
+  exact-head review/CI; no1051 merge approval or activation.
+
 - (Astra, 2026-09-19) #1050 merged as2518735f with explicit approval and
   prescribed cycle; approved tree verified equal. #1051 retargeted main and
   synced without content loss. Propagate ancestry/checkpoint through #1055;

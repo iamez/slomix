@@ -1,5 +1,15 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current cache prerequisite refresh (2026-09-27): PR1051 refreshed locally from
+> c4770f5a by normal merge of main c9de5a3d (a6048926). Both documentation tracks
+> retained; consumer/migration/SQL proof files are byte-identical to c4770f5a.
+> 10 portable cache contract cases and48 journal/startup regression cases pass.
+> Fresh local SQL is pending owner restart of the isolated proof service; old
+> SQL results below are historical, not a fresh run. Wait for approved1060 merge,
+> then refresh once more and publish for exact-head CI/review. No1051 merge
+> permission, service action or deployment. Runtime identity/recovery work remains
+> on its separate integration branch; earlier checkpoints below are historical.
+
 > Startup prerequisite #1059 update (2026-09-26): published refresh65f5dc60 by
 > ordinary fast-forward and retargeted to main89a2fd38. Ten-file diff self-reviewed;
 > 26targeted tests pass3.86s and four neutral SQL subprocess scenarios previously
@@ -68,6 +78,7 @@ all implementation content. Fresh CI required after these pushes. No activation.
 Review follow-up: corrected BACKLOG's stale #1046 status to merged 64488de1
 and labelled older checkpoints historical. Owner explicitly approved #1048;
 its prescribed merge cycle is running. Further PRs still require specific approval.
+
 ### Local #1059 main refresh — 2026-09-25
 
 Prepared fix/db-runtime-startup-main-refresh from921af249 plus main89a2fd38.
