@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1067 refresh checkpoint2026-09-27: integrated reviewed1063 parent435268ef
+>normally as eb72ec88; retained documentation histories and source/test bytes
+>from9f86bd69.73combined cases pass, including real Paramiko RejectPolicy against
+>a generated unknown key offline (no network) and real local socket publication.
+>Omitting SSH close registration fails cleanup-after-SFTP-close-error assertion:
+>['sftp-close'] != ['sftp-close', 'ssh-close']; restored/cmp and all73 pass again.
+>Existing review threads empty. Await1063 actual main merge before final sync,
+>retarget/push and fresh exact-head CI/review. No1067 permission, no connections
+>or service changes. Phase timeouts do not bound DNS/handshake/cleanup as a whole;
+>the later dedicated worker remains an activation gate. Original plan preserved.
+
 > Current 1063 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
 >squash tree equals reviewed21e6c999. Actual main now merged normally here.
 >Documentation histories preserved; source/test bytes unchanged froma570431c.
