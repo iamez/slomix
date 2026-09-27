@@ -1,14 +1,14 @@
 """HTTP runtime-generation behavior without starting a server or live DB."""
 
 import asyncio
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from pathlib import Path
 
 import pytest
+from dotenv import dotenv_values
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-from dotenv import dotenv_values
 from starlette.requests import Request
 
 from website.backend.middleware.http_cache_middleware import HTTPCacheMiddleware
