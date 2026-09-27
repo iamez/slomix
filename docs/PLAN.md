@@ -1,5 +1,10 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1061 now integrates main0d43b3da (approved1054 squash) as c994b186. Source
+>and tests remain unchanged from28009e87;24filesystem cases pass0.22s after
+>sync. Publish this four-file slice for fresh exact-head CI/review; no1061
+>merge permission. Earlier waiting notes below are historical.
+
 >1061 refresh checkpoint2026-09-27: merged main normally as761fff59, retained
 >both documentation histories. Production/test files byte-identical to28009e87.
 >24actual filesystem tests pass0.23s; restoring the restrictive map regex fails
