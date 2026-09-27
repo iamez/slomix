@@ -12,7 +12,12 @@
   Match/conflict skip input; missing publishes; every exception remains visible.
   No source acknowledgement/deletion, scheduler, SSH or service activation.
 
-- (Astra, 2026-09-27)1064 now includes actual merged1062 main4454d6c5.
+- (Astra, 2026-09-27)1064 Codex4116756259 verified/fixed: umask0277 produces
+ 0400; inspector now permits0400/0600 without broadening permissions.75real
+  filesystem/local socket tests pass; oldmodeguard mutation fails then restored
+  and cmp verified. Unsafepermission regressions retained. No push/service/DB.
+
+- (Astra, 2026-09-27)1063 and1064 both included merged1062 main4454d6c5.
   Preserved source/tests and both documentation histories; publish only after
   repeating local gates. Fresh exact-head CI/review and individual permission
   still required before merge. No deployment or production changes.
@@ -32,6 +37,15 @@
   48 filesystem cases pass with failed/restored digest and identity mutations.
   No automatic cleanup, overwrite, retry loop, DB or service changes. Next wire
   explicit reconciliation policy with connection ownership and immutable source.
+
+- (Astra, 2026-09-20) #1063 review: read deadline starts after spool setup;
+  54 cases pass, old-placement mutation fails/restored. Investigating #1060
+  cross-half payload identity before resuming transport/reconciliation.
+
+- (Astra, 2026-09-20) R04h adds caller-owned timed stream capture on #1062.
+  53 combined cases pass; real socket success/timeout cleanup and failing/restored
+  deadline mutation verified. No SSH connections or live activation. Separately
+  #1060 calendar review fixed in742504ee with23 unit/PG cases passing.
 
 - (Astra, 2026-09-20) R04g extends #1061 with opt-in source SHA-256 validation
   before publication. 35 filesystem cases pass; independent sha256sum agrees;
