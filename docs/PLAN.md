@@ -1,5 +1,26 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current1061 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
+>matches reviewed0e66f238. This branch now normally integrates that main,
+>preserving source/test bytes and both documentation histories. 24focused
+>tests rerun after sync. Publish for fresh exact-head CI/review; no1061 merge
+>approval, service activation or NEVER MERGE changes. Earlier waiting notes
+>below are historical; original runtime roadmap remains unchanged.
+
+>1061 now integrates main0d43b3da (approved1054 squash) as c994b186. Source
+>and tests remain unchanged from28009e87;24filesystem cases pass0.22s after
+>sync. Publish this four-file slice for fresh exact-head CI/review; no1061
+>merge permission. Earlier waiting notes below are historical.
+
+>1061 refresh checkpoint2026-09-27: merged main normally as761fff59, retained
+>both documentation histories. Production/test files byte-identical to28009e87.
+>24actual filesystem tests pass0.23s; restoring the restrictive map regex fails
+>the dot/plus cases with Invalid stats filename, restored/cmp. Ruff clean.
+>Verified the old finding's implementation and resolved its thread. This is
+>no-clobber publication only, not trusted transport or automatic ingestion.
+>Refresh once more after approved1054 lands, then publish for fresh exact-head
+>CI/review. No1061 merge approval and no service/deployment changes.
+
 >1054 merged with owner approval as0d43b3da at15:06:08Z on2026-09-27;
 >0failed/0threads/0behind/unchanged head, squash tree matches6d06c58b.
 >1055 now integrates that main normally; only seven PR paths remain. Retarget
@@ -133,6 +154,29 @@
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
 ## Track: runtime v2 R01 (Astra)
+
+### R04f immutable spool publication — 2026-09-20
+
+Review4056287646: aligned map alphabet with existing transport (dots/pluses),
+retaining explicit rejection of '..'.24 filesystem tests pass; old regex
+mutation fails both supported-name cases, restored/cmp. No service/DB changes.
+Owner requested non-draft review workflow: runtime #1052–#1057/#1059–#1061
+marked ready; research NEVER MERGE drafts untouched. Explicit Copilot request
+on #1061 returned quota-limit message, not a substantive review. Do not count
+COMMENTED status alone as review completion. Continue Codex/CodeRabbit triage.
+
+Independent main-based primitive publishes only completed stats streams into an
+existing private0700 owner directory. Strict basename allowlist; positive bounded
+expected size; temporary0600 .part file; file fsync then same-directory atomic
+no-clobber hard link and directory fsync. Existing files/symlinks never replaced.
+Transfer/type/size failures clean temporary file; post-link sync failure can leave
+complete final file visible and must be reconciled, not overwritten. No startup,
+SSH calls, retention cleanup or importer wiring. Caller must bound source chunks
+and timeouts and guarantee immutable remote snapshot: length is not integrity.
+Runtime filesystem proof and size-guard mutation included; next integrate with
+bounded capture and explicit retry/reconciliation, preserving original plan.
+New-site/design/functionality/security audit remains after runtime completion,
+then owner-approved reversible dev transition; production unchanged.
 
 ### R03d independent cache-consumer process — 2026-09-19
 
