@@ -1,5 +1,14 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>1062 refresh checkpoint2026-09-27: normally integrated reviewed1061 d00f5de2
+>as7f72ccc7; source/integrity test bytes unchanged from1a024ce4.35filesystem
+>cases pass0.33s; independent sha256sum agrees with exact bytes/stat length.
+>Removing digest mismatch guard fails equal-length-corruption test with DID NOT
+>RAISE ValueError; restored/cmp. Ruff clean. Await approved1061 merge, sync
+>actual main, retarget before final push, then fresh exact-head review/CI.
+>No1062 merge permission. Optional digest is content verification, not source
+>authentication, scheduler wiring or a production activation guarantee.
+
 > Current1061 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
 >matches reviewed0e66f238. This branch now normally integrates that main,
 >preserving source/test bytes and both documentation histories. 24focused
