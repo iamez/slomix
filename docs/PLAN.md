@@ -1,5 +1,35 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current #969 checkpoint 2026-09-28: normal integration of actual worker
+> main4de6f07e preserves both document histories and exact Node/PyYAML/CI
+> bytes6f423762; worker source/tests equal main. Root99node/watchdog/plan/
+> real-child worker cases pass34.80s. Prior actual binary and restored failing
+> pin mutation apply to unchanged files. Fresh exact-head CI/review required.
+> Runtime resume1986d671 and bounded queue authorization remain unchanged;
+> NEVER MERGE, held release956, services and production remain excluded.
+
+> Current #969 checkpoint 2026-09-28 after watchdog merge ec8ec7ed: normal
+> integration preserves both documentation histories and exact Node/PyYAML/CI
+> source and test bytes from ea5f2ab3. Root54node/watchdog/plan cases pass1.33s.
+> Earlier actual22.23.2 two-path proof and restored failing old-pin mutation
+> apply to identical files. Publish for new exact-head review/CI, then owner-
+> authorized current-queue merge gates. No service/install/production action.
+> Original runtime1986d671 retained; NEVER MERGE and held release956 excluded.
+
+> Current #969 checkpoint 2026-09-28: normal integration of main 1f4a388d
+> preserves both histories and the exact Node pin/PyYAML declaration. Six
+> node/plan contracts pass in 0.30s. Actual isolated binary reports v22.23.2
+> via --version and 22.23.2 via process.versions.node. Restoring old22.13.1
+> fails the frontend engine-floor guard; restored/cmp. No npm installation,
+> build, browser, system toolchain, dependency lock or service change. Root
+> owns publication and final review/merge gates. Runtime resume1986d671 and
+> dependency consolidation remain current; older checkpoints are historical.
+
+> Node pin slice follow-up (Astra, 2026-09-08): PR #969 review identified
+> PyYAML as an undeclared direct test dependency despite green CI. Declared
+> PyYAML==6.0.3 in requirements-dev and added a declaration contract. Validate
+> with the isolated agent venv; no service environment changes.
+
 > Current #1068 checkpoint 2026-09-28: #965 merged ec8ec7ed; normal main sync
 > 9fb9d3db retains both document histories and worker/source test bytes90026032.
 > Root independently passed159cases37.50s before sync and207worker/SSH/spool/
@@ -474,6 +504,16 @@ Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
 both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
+
+### Consolidation: preserve Node pin #969 — 2026-09-20
+
+Normal merge of current main retains shared exact .nvmrc CI inputs and explicit
+PyYAML development dependency. Four pin-contract and two plan-contract tests pass.
+This refresh preserves the reviewed version; it does not claim a current security
+release audit, frontend build or system toolchain upgrade. Fresh CI/review required.
+No merge permission for #969; only #1076/#1057/#962 currently authorized. Original
+runtime resumes after this consolidation detour at #1077 completion delivery and
+snapshot sealing, followed by new-site audit and approved reversible DEV cutover.
 
 ### R04m consolidation safety backport — 2026-09-25
 
@@ -2316,3 +2356,20 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
 - hosting ticket, če watcher potrdi populacijo B (host stall).
+
+## Proga: Astra shared Node 22 pin
+
+Zadnja posodobitev: 2026-09-07 (Astra). Implemented; local contract verified.
+Pin local development and both CI Node setup jobs to `.nvmrc`, version 22.23.2.
+Verified against the official release index and archive (latest 22, Jod LTS),
+and the security release announcement:
+https://nodejs.org/en/blog/release/v22.23.2
+Contract tests parse package engines and workflow YAML, rejecting a pin below
+the frontend floor or an inline CI override. No local installation, dependencies,
+build, browser, global environment or service changes in this slice.
+Proof: three tests and targeted Ruff pass. Mutations to old Node 22.13.1 and
+inline CI `22.x` both failed the respective contract; restored files match
+pre-mutation snapshots by `cmp`. Independent Node JSON comparison confirms the
+pin meets the floor; parsed YAML resolves both jobs to 22.23.2. That is config
+proof, not execution under the selected Node: host Node remains v20.20.0.
+Next: root review/PR, then isolated portable runtime validation and actual CI.
