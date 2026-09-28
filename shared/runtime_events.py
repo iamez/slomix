@@ -1,6 +1,6 @@
 """Initial import journal; NOTIFY is a wake-up, never the durable source.
 
-No consumers or update events yet. Sequence IDs do not imply commit order.
+This helper emits initial imports only. Sequence IDs do not imply commit order.
 The caller owns the transaction and must propagate failures to roll it back.
 """
 
