@@ -7,6 +7,26 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
+  certificate discovery. Public typed file-object private-key loaders preserve
+  five tested key encodings; certificate paths unsupported, no ambient cert or
+  passphrase fallback. Real temporary ssh-keygen cert + malformed neighbor fail
+  old code;108 combined tests pass fixed code; mutation2 failures, restored/cmp.
+  Publish for fresh CI/review next. Original runtime plan/activation gates stay.
+
+- (Astra, 2026-09-27) PR1067 fresh P2 fixed locally: bypass Paramiko legacy
+  interactive fallback using explicit-key AuthStrategy and reject partial auth.
+  Three old-code regressions and three guard-mutation failures observed;
+  restored/cmp,84 SSH/capture/spool tests pass. Installed connect/key parsing
+  proved offline across five supported key encodings; real handshake untested.
+  Original runtime/activation work unchanged. Publish then fresh CI/review;
+  no service changes, network connections or1067 merge permission.
+
+- (Astra, 2026-09-20) R04l neutral SSH session ownership on #1063; 73 combined
+  cases pass, strict-policy offline proof and cleanup mutation/restoration done.
+  No real network. End-to-end handshake bound and source identity still block
+  activation. #1066 capture/import integration CI/review remains in parallel.
+
 - (Astra, 2026-09-20) R04j adds one caller-driven capture attempt on #1064.
   55 filesystem tests pass; source-consumption guard mutation fails/restored.
   Match/conflict skip input; missing publishes; every exception remains visible.
