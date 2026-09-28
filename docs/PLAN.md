@@ -1,5 +1,20 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1027 dependency preparation, 2026-09-28: Node22.23.2/npm10.9.8 targeted
+> lock-only/ignore-scripts update advances @redocly/openapi-core1.34.19->1.34.20
+> and js-yaml4.3.1->4.3.2 without overrides. openapi-typescript7.13.0 already
+> permits core^1.34.6; registry metadata shows unchanged engine/dependency
+> requirements except the YAML patch, and upstream core has no source changes.
+> npm10 stripped18 unrelated libc selectors; restored those exactly from HEAD.
+> Structural lock comparison proves only the two intended package entries differ;
+> package.json and Vitest/mocker4.1.11 retained. No node_modules installation.
+> Sources: https://redocly.com/docs/cli/v1/changelog and
+> https://github.com/nodeca/js-yaml/security/advisories/GHSA-2883-xcg3-v3hh .
+> Fresh npm audit removes those YAML/Vitest findings but reports one remaining
+> high nanoid<3.3.18 advisory GHSA-2v37-7h3g-55p8; audit is NOT clean. No blanket
+> audit fix applied. Next owner/root decision on narrow additional patch, then
+> npm ci, generator output comparison, typecheck/test/build:app and fresh CI.
+
 > Pravilo: ta datoteka se posodobi ob VSAKEM koraku. Nič se ne »dogovori«
 > samo v pogovoru. Bereta jo obe seji (in vsak prihodnji model).
 > Podrobne raziskovalne zapiske drži lokalno (docs/REPO_BOUNDARY.md);

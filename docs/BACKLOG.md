@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1027 lock-only upstream security patch prepared:
+  core1.34.20/YAML4.3.2 only; unrelated npm10 libc metadata loss restored.
+  Existing Vitest4.1.11 preserved. npm audit still finds high nanoid<3.3.18,
+  so no clean-audit/readiness claim. No npm ci or runtime validation yet;
+  next controlled dependency decision and frontend validation, no deployment.
+
 - (Astra, 2026-09-20) R04u independent main-based source generation reservation:
   16 focused cases pass, same-token concurrency has one winner, existing entries
   never reused, sync-error reservations retained. Mutation fails/restores. Prior
