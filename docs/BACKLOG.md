@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
+  and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual
+  child lifecycle and independent file/hash/reaping evidence. EOF guard mutation
+  fails all three drift scenarios; restored/cmp and three passes. No remote
+  writes or activation; trusted completion remains a gate. Ready for parent-led
+  publication/review, not a claim of operational runtime completion.
+
 - (Astra, 2026-09-20) Source-completion investigation: round notification can
   precede file write; generic saved log and delayed file-created notifier are not
   exact durable receipts. Local runtime counterexample confirms equal metadata

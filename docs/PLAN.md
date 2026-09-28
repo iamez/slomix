@@ -329,6 +329,22 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04p source stability parent refresh — 2026-09-28
+
+Local normal merge of reviewed capture parent bda56937 into #1071 preserves
+both documentation histories, worker interruption/late-exit fixes, strict SSH
+authentication and explicit-key-only loading (no certificate sidecars).
+160 focused offline cases pass in 25.71s, including actual spawned children,
+filesystem publication and installed Paramiko transport seams. Growth, handle
+mtime drift and named-path drift fail before publication; procfs and active
+children independently confirm reaping. Successful bytes agree with sha256sum.
+Disabling EOF metadata verification makes all three drift cases publish and
+fail; restored file compares byte-for-byte with its backup and all three pass.
+Ruff and whitespace checks pass. No real SSH, service, DB or remote PR changes.
+Equal metadata still does not prove producer closure; trusted completion and
+immutable digest remain activation gates. Next: publish/review this refreshed
+slice after its parent merges, then continue the original runtime plan.
+
 ### R04p remote metadata stability guard — 2026-09-20
 
 Completion investigation: STATS_READY is emitted on intermission (default send
