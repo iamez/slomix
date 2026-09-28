@@ -1,5 +1,12 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1069 actual-main checkpoint 2026-09-28: #1068 merged4de6f07e;
+> normal merge retains both histories and exact shared/test code from4007e597.
+> Thirteen real owned-child SSH capture/plan cases pass4.74s after sync; prior
+> 220-case42.00s gate covers unchanged worker/SSH/spool/watchdog code. Original
+> runtime1986d671 retained. Root may retarget/publish for fresh exact-head review;
+> this local proof is not CI or merge readiness. No remote/network/DB/services.
+
 > #1069 published-parent refresh 2026-09-28: normal merge e8f05dbd preserves
 > both doc histories and exact final worker/source-test bytes. All 220 offline
 > worker/SSH/task/capture/spool/watchdog/plan cases pass42.00s, including real
