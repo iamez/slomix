@@ -326,6 +326,53 @@
 > No merge/deploy performed or approved. Older LOCAL/unpublished notes below are
 > historical. Production bytes remain unchanged from921af249.
 
+> #1027 completed local dependency proof, 2026-09-28: Node22.23.2/npm10.9.8,
+> npm ci --ignore-scripts, typecheck and 70 files/845 Vitest tests pass (single
+> worker, 273.39s). build:app succeeds in 2.33s; offline HTML validation resolves
+> all six referenced local assets as nonempty files. This is not a browser/live
+> deployment proof. Existing Vite future-native-loader and Tailwind sourcemap
+> warnings remain; jsdom emitted canvas/navigation warnings, no failed tests.
+> npm audit JSON twice reports zero vulnerabilities; npm ls/explain independently
+> confirms core1.34.20, YAML4.3.2, nanoid3.3.19 and Vitest/mocker4.1.11.
+> Original-lock API generation equals patched output byte-for-byte. Actual
+> installed-package guard mutations reproduce missing YAML budget exception and
+> nanoid zero-size subprocess timeout (1s, child reaped); both restored with cmp,
+> then both bounded probes pass. No tracked generated artifacts or service changes.
+> Local proof script: /tmp/slomix-deps-security-proof-20260928.cjs; baseline install
+> /tmp/slomix-deps-baseline-5lbaDz. Next actual-main synchronization and fresh
+> exact-head review/CI; original runtime plan follows queue consolidation.
+
+> #1027 follow-up, 2026-09-28: upstream nanoid3.3.19 is compatible with
+> postcss8.5.25's existing ^3.3.16 range, removing the remaining high advisory
+> https://github.com/advisories/GHSA-2v37-7h3g-55p8 . Targeted lock-only update
+> and restored unrelated libc metadata leave exactly three changed lock entries
+> against original f0d263c2: core, YAML and nanoid; package.json remains identical.
+> Node22.23.2/npm10.9.8 clean install and audit report zero vulnerabilities;
+> npm explain independently confirms the expected installed dependency paths.
+> Same committed OpenAPI JSON generates byte-identical types with original and
+> patched locks (cmp and SHA25661f4c4a5b04489b01fe4913df6ac43ef1474a262f0dc873076acea0463ade05d).
+> Temporary no-save downgrade failed with npm's `Cannot read properties of null
+> (reading 'edgesOut')`; no concurrent/partial-install comparison is credited.
+> Reinstalled patched lock, then used separate original-lock npm ci for the
+> comparison. Bounded original-package probes reproduce YAML merge-budget bypass
+> and nanoid zero-size timeout; patched probes pass. Typecheck passes. Full tests
+> and SPA build remain pending at this checkpoint; no server/browser/deployment.
+
+> #1027 dependency preparation, 2026-09-28: Node22.23.2/npm10.9.8 targeted
+> lock-only/ignore-scripts update advances @redocly/openapi-core1.34.19->1.34.20
+> and js-yaml4.3.1->4.3.2 without overrides. openapi-typescript7.13.0 already
+> permits core^1.34.6; registry metadata shows unchanged engine/dependency
+> requirements except the YAML patch, and upstream core has no source changes.
+> npm10 stripped18 unrelated libc selectors; restored those exactly from HEAD.
+> Structural lock comparison proves only the two intended package entries differ;
+> package.json and Vitest/mocker4.1.11 retained. No node_modules installation.
+> Sources: https://redocly.com/docs/cli/v1/changelog and
+> https://github.com/nodeca/js-yaml/security/advisories/GHSA-2883-xcg3-v3hh .
+> Fresh npm audit removes those YAML/Vitest findings but reports one remaining
+> high nanoid<3.3.18 advisory GHSA-2v37-7h3g-55p8; audit is NOT clean. No blanket
+> audit fix applied. Next owner/root decision on narrow additional patch, then
+> npm ci, generator output comparison, typecheck/test/build:app and fresh CI.
+
 > Pravilo: ta datoteka se posodobi ob VSAKEM koraku. Nič se ne »dogovori«
 > samo v pogovoru. Bereta jo obe seji (in vsak prihodnji model).
 > Podrobne raziskovalne zapiske drži lokalno (docs/REPO_BOUNDARY.md);

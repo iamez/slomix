@@ -316,6 +316,24 @@
   #1054 nine exact-head checks green and both external reviews no findings.
   No merge approval for #1050 or later; no service/production activation.
 
+- (Astra, 2026-09-28) #1027 local dependency proof complete: zero audit findings,
+  identical original/patched generated API types, typecheck, 845 tests/70 files
+  and SPA build succeed. Six built HTML asset references resolve offline.
+  Actual YAML/nanoid guard mutations fail, restored/cmp and probes pass; no
+  browser/server/deploy. Ready for parent-led main sync, publication and review.
+
+- (Astra, 2026-09-28) #1027 compatible nanoid3.3.19 lock patch removes last
+  audit finding; original/patched OpenAPI output identical and typecheck passes.
+  Bounded old dependency probes fail, patched probes pass. Full single-worker
+  Vitest run in progress; SPA build next. Only three package entries changed
+  versus original PR lock; no runtime server or production action.
+
+- (Astra, 2026-09-28) #1027 lock-only upstream security patch prepared:
+  core1.34.20/YAML4.3.2 only; unrelated npm10 libc metadata loss restored.
+  Existing Vitest4.1.11 preserved. npm audit still finds high nanoid<3.3.18,
+  so no clean-audit/readiness claim. No npm ci or runtime validation yet;
+  next controlled dependency decision and frontend validation, no deployment.
+
 - (Astra, 2026-09-20) R04u independent main-based source generation reservation:
   16 focused cases pass, same-token concurrency has one winner, existing entries
   never reused, sync-error reservations retained. Mutation fails/restores. Prior
