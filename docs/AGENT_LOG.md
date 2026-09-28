@@ -1,5 +1,31 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Build cwd is not necessarily deployment source.**
+  dev_deploy.sh defaults SRC to the primary checkout, even when invoked from
+  a feature worktree. Pass DEV_SRC_DIR="$PWD" from that worktree's root in
+  an owner-approved recipe. Execute the documented recipe against disposable
+  build/deploy probes to prove both paths match; do not deploy to test prose.
+
+- **2026-09-28 · Cleanup ownership includes loop control and handle close.**
+  Guarding process calls alone leaves SIGINT windows in the supervising clock
+  and loop. Correction after follow-up review: installing cleanup deferral itself
+  leaves an ownership window. Install once before spawn through handle close;
+  restore/replay even when the operation failed, preserving its exception over
+  a handler error. Observe death independently of elapsed time. Tiny positive
+  grace is now rejected below0.01s, and every phase attempts its stopping signal.
+  SIGINT can wait until timeout+cleanup; document that latency, never promise
+  immediate cancellation or successful reaping after an OS-level cleanup failure.
+
+- **2026-09-28 · Spawn ownership and the whole escalation path need interruption guards.**
+  CPython creates the OS child before Process._popen is assigned: real SIGINT
+  there can leave a child invisible to Process.pid and active_children. Defer
+  main-thread callable SIGINT handlers through the entire child lifetime (not
+  only until ownership exists), restore before delivery, and never pass a blocked
+  signal mask into the child. Protect status,
+  terminate, kill and join together with finite cleanup phases, not join alone.
+  Actual child/procfs tests reproduce both gaps; synthetic persistent operation
+  failures must raise an unreaped error rather than claim successful cleanup.
+
 - **2026-09-28 · Observation transitions need pending state separate from ACK history.**
   A delivered warning followed by unknown and another warning cannot use the old
   notified_level alone. An observed-level OR fixes only the first attempt: it
@@ -32,12 +58,18 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
-- **2026-09-20 · Squash merge status is not an ancestry predicate.**
-  The historical handoff in docs/HANDOFF-opus5-2026-09-07.md reported seven
-  false negatives from ancestry-only checks. Verify the PR's merged state and
-  main's actual content before declaring old work missing. Artifact identity,
-  cold-cache sampling, directory mtime and shared stash ownership each retain
-  their separate dated entries below; do not combine them into one lesson.
+- **2026-09-25 · A descendant fix does not protect an unmerged prerequisite.**
+  Worker cancellation fixes present on #1077 were absent from #1068. Before
+  merging a stacked prerequisite, backport its applicable fixes with regression
+  proofs, without importing unrelated descendant features. Compare the resulting
+  files against the reviewed descendant and retain exact PR merge authorization.
+
+- **2026-09-20 · Forced child termination skips application cleanup.**
+  A disposable spawned capture task can be terminated and reaped after a deadline,
+  including SIGTERM refusal. This boundary is not appropriate for shared locks,
+  queues or DB transactions. Reconcile any partial/final spool state and retain
+  source; child exit is not a durability or import acknowledgement. Supervise
+  only the exact child Process object created by this caller, never services.
 
 - **2026-09-25 · Review triggers can have a billing consequence.**
   An owner request to avoid additional charges applies to manual AI review
@@ -45,6 +77,19 @@ data here.
   Local tests/review can proceed without those triggers. Repository settings
   do not prove account billing is disabled; verify separately, and do not
   mistake a budget notification for an enforced usage stop.
+
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
+
+- **2026-09-20 · Squash merge status is not an ancestry predicate.**
+  The historical handoff in docs/HANDOFF-opus5-2026-09-07.md reported seven
+  false negatives from ancestry-only checks. Verify the PR's merged state and
+  main's actual content before declaring old work missing. Artifact identity,
+  cold-cache sampling, directory mtime and shared stash ownership each retain
+  their separate dated entries below; do not combine them into one lesson.
 
 - **2026-09-07 · Measurement is not delivery acknowledgement.** Watchdog
   observations/failure streaks must persist even when the notification fails,
@@ -103,12 +148,6 @@ data here.
   alone also allows late old requests to insert again. Bound count and retained
   string bytes, prune expired entries on writes, and test late old-epoch writes.
   State per-worker storage limits separately from RSS and serialization peaks.
-
-- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
-  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
-  Explicitly disable SSH and automation in the child; test true/false parent
-  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
-  Removing child isolation reproduces the guard failure. Production code unchanged.
 
 - **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
   A neutral real-PG fixture supplied32 hex characters but the canonical regular

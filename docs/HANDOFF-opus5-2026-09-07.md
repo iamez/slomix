@@ -156,7 +156,7 @@ Vsi rabijo ownerjeve roke (sudo) ali njegovo odločitev.
   200, 0 konzolnih napak). Celoten (4 viewporti × anon/owner) ni tekel — RAM.
 - ⛔ **Bundle ni zgrajen**: nobena SPA sprememba od `09-06 11:03` ni vidna na
   `:8000`. Corrected repository-root recipe before a future approved sweep:
-  `(cd website/frontend && npm run build:app) && scripts/dev_deploy.sh`
+  `(cd website/frontend && npm run build:app) && DEV_SRC_DIR="$PWD" scripts/dev_deploy.sh`
   (this restarts services → **ownerjev DA**, not executed by this correction).
 - Dev servisi tečejo iz `/home/samba/share/slomix-dev-run` (ne več iz
   agentovega drevesa). Watchdog: 11 preverb, vse `ok`, vključno z

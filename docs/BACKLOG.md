@@ -14,6 +14,54 @@
   integration queue remain unchanged; no deployment or historical-data claims.
   Ten document/plan contracts pass; both actual timer-recipe mutations fail,
   restored/cmp. Build/deploy command paths checked without running either.
+- (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
+  installed before spawn through close; custom side effects replay even with
+  original error; 0.01s minimum grace rejects unsupported tiny budgets. Every
+  cleanup phase attempts its stop signal. Explicit delayed-SIGINT contract.
+  159cases pass37.24s including45workers; broad-catch narrowing fails3 actual
+  SystemExit cases, disabled lifetime guard leaks spawnwindow child in fixture,
+  restored/cmp and fixture cleanup verified. Removed unused cleanup_complete;
+  retained intentional BaseException deferred-rethrow semantics with proof.
+  No remote/services/DB/network. Runtime1986d671 preserved; root owns gates.
+
+- (Astra, 2026-09-28) Root-review worker follow-up: tiny-grace finished-child
+  false error and cleanup-clock SIGINT leak reproduced, repaired and mutation
+  verified/restored/cmp. Whole cleanup now defers callable SIGINT through close;
+  prior handler behavior and original parent error preserved. 146 combined cases
+  pass in 20.51s, Ruff clean. Parent handles publication/descendant propagation.
+
+- (Astra, 2026-09-28) #1068 fresh review exposed real escalation/startup SIGINT
+  child leaks. Three actual-spawn regressions failed before repair and again with
+  mutations; fixtures always cleaned leaked children. Bounded operation-wide
+  escalation retries and ownership-window SIGINT deferral preserve original
+  errors, custom/ignored handlers and child masks. Restored/cmp; no remote or
+  service actions. Root owns publication/review and descendant propagation.
+
+- (Astra, 2026-09-28) #1068 retains original worker fixes 86c69e39 and final
+  SSH e22ae27c after normal merge eed58f6c. 133 combined cases pass in 14.44s,
+  actual spawned children reaped by two observations; Ruff clean. Await #1067
+  actual main, final sync and fresh review. No runtime activation or deployment.
+
+- (Astra, 2026-09-27)1068 local refresh preserved86c69e39 worker backports,
+  merged reviewed1067 db7f3888 normally as99f2161c.92offline cases pass12.33s;
+  real child cleanup verified by procfs and active_children, interrupted cleanup
+  retains original errors. Timeout mutation fails2cases, restored/cmp. No push,
+  service/liveSSH/DB changes; parent owns final sync/review and original plan.
+
+- (Astra, 2026-09-25) Consolidation side quest: backported exact #1077 worker
+  fixes/tests into #1068 locally; five old-code regressions fail, 94 combined
+  tests now pass. Late-clock mutation fails/restores/cmp. No GitHub writes or
+  AI review requests because owner requires no additional review charges.
+  #1076/#1057/#962 already merged; #965 local integration saved at2e035917.
+  Runtime resume remains #1077 completion delivery/sealing. No services changed.
+
+- (Astra, 2026-09-20) R04m adds isolated capture-task deadline supervision on
+  #1067. 86 combined tests pass, real owned children reaped even after SIGTERM
+  refusal/parent interruption; timeout-status mutation fails/restores. #1066
+  latest exact-head CI all green. Next transport-specific task and source identity;
+  no services activated and no DB transactions allowed in force-stopped workers.
+
+
 - (Astra, 2026-09-28) #965 fresh review warning transition regression repaired
   with bounded per-key pending_warn state. Real isolated JSON/run proof covers
   cooldown, failed delivery/retry and latest-condition supersession. Old code
@@ -693,7 +741,7 @@
   84,9 % diska, `df` 90 % — prag 85 % se je sprožil šele pri `df` ~89,6 %).
   ⛔ **Bundle ni zgrajen**: nobena SPA sprememba od 09-06 11:03 ni vidna na
   `:8000`; corrected repository-root recipe for owner-approved build/deploy:
-  `(cd website/frontend && npm run build:app) && scripts/dev_deploy.sh`
+  `(cd website/frontend && npm run build:app) && DEV_SRC_DIR="$PWD" scripts/dev_deploy.sh`
   (restart = ownerjev DA; command not executed here). Prelet faze 7 delen
   (manifest 32 rut + 20 rut, vse 200, 0 konzolnih napak); celoten čaka RAM.
   SSD sproščen 90 % → 80 % (nič izbrisano, vse v

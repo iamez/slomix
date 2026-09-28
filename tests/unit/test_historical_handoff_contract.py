@@ -1,6 +1,8 @@
 """Keep the retained historical handoff distinct from current operating advice."""
 
+import os
 import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -47,7 +49,7 @@ def test_historical_backlog_follows_newer_checkpoints_and_recipe_has_root_paths(
     assert backlog.index("(Astra, 2026-09-20)") < backlog.index("(Opus 5, 2026-09-07")
     assert "historical snapshot, not current instructions" in backlog
     for name in ("BACKLOG.md", "HANDOFF-opus5-2026-09-07.md"):
-        assert "(cd website/frontend && npm run build:app) && scripts/dev_deploy.sh" in (
+        assert '(cd website/frontend && npm run build:app) && DEV_SRC_DIR="$PWD" scripts/dev_deploy.sh' in (
             ROOT / "docs" / name
         ).read_text()
 
@@ -57,3 +59,42 @@ def test_global_plan_date_includes_handoff_review_refresh():
     match = re.search(r"\*\*Zadnja posodobitev:\*\* (\d{4}-\d{2}-\d{2})", plan)
     assert match is not None
     assert match.group(1) >= "2026-09-28"
+
+
+def test_documented_recipe_passes_built_worktree_to_deploy(tmp_path):
+    root = tmp_path / "work tree"
+    (root / "website/frontend").mkdir(parents=True)
+    (root / "scripts").mkdir()
+    commands = tmp_path / "commands"
+    commands.mkdir()
+    npm = commands / "npm"
+    npm.write_text('#!/bin/sh\nprintf "build:%s\\n" "$PWD"\n')
+    npm.chmod(0o755)
+    deploy = root / "scripts/dev_deploy.sh"
+    deploy.write_text('#!/bin/sh\nprintf "source:%s\\n" "${DEV_SRC_DIR:-wrong-primary-checkout}"\n')
+    deploy.chmod(0o755)
+    for name in ("HANDOFF-opus5-2026-09-07.md", "BACKLOG.md"):
+        text = (ROOT / "docs" / name).read_text()
+        recipe = re.search(r'`(\(cd website/frontend && npm run build:app\)[^`]+)`', text).group(1)
+        result = subprocess.run(['bash', '-c', recipe], cwd=root, text=True,
+                                capture_output=True, check=True,
+                                env={**os.environ, 'PATH': f'{commands}:{os.environ["PATH"]}'})
+        assert result.stdout.splitlines() == [f'build:{root}/website/frontend', f'source:{root}']
+
+
+def test_squash_lesson_follows_all_newer_lessons():
+    text = (ROOT / "docs/AGENT_LOG.md").read_text()
+    position = text.index('**2026-09-20 · Squash merge status')
+    for match in re.finditer(r'\*\*(2026-\d\d-\d\d) ·', text):
+        if match.group(1) > '2026-09-20':
+            assert match.start() < position
+
+
+def test_resume_explicitly_identifies_local_only_retrieval():
+    plan = (ROOT / "docs/PLAN.md").read_text()
+    current = plan.split('> Historical checkpoint below', 1)[0]
+    assert 'LOCAL-ONLY runtime resume' in current
+    assert '/home/samba/share/slomix-astra-runtime-integration-20260926' in current
+    assert 'refactor/db-runtime-team-assignment-20260926' in current
+    assert 'git -C' in current and '1986d671^{commit}' in current
+    assert 'not fetchable from GitHub' in current
