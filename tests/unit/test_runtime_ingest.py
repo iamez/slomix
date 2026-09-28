@@ -2,13 +2,13 @@
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
 from shared import runtime_ingest
 from shared.runtime_import import ImportStepResult
-from shared.runtime_ingest import import_verified_file
+from shared.runtime_ingest import ExpectedStatsIdentity, import_verified_file
 from shared.runtime_spool import publish_stats_file
 
 NAME = '2026-09-20-120000-map-round-1.txt'
@@ -43,6 +43,7 @@ async def test_verified_content_preserves_import_outcome(tmp_path, monkeypatch, 
     monkeypatch.setattr(runtime_ingest, 'import_ready_file', importer)
     result = await ingest(tmp_path)
     assert result.capture_status == 'match' and result.import_result is expected
+    assert result.dependency_status == 'not_required'
     importer.assert_awaited_once_with(MANAGER, path.absolute())
 
 
@@ -60,6 +61,44 @@ async def test_unavailable_spool_never_imports(tmp_path, monkeypatch):
     monkeypatch.setattr(runtime_ingest, 'import_ready_file', importer)
     with pytest.raises(FileNotFoundError):
         await ingest(tmp_path / 'absent')
+    importer.assert_not_awaited()
+
+
+@pytest.mark.parametrize('state', ['unverified', 'missing', 'conflict', 'match'])
+async def test_selected_dependency_requires_trusted_matching_identity(tmp_path, monkeypatch, state):
+    r2 = '2026-09-20-121000-map-round-2.txt'
+    publish_stats_file(tmp_path, r2, [b'abc'], expected_size=3)
+    if state != 'missing':
+        publish_stats_file(tmp_path, NAME, [b'xyz' if state == 'conflict' else b'abc'], expected_size=3)
+    manager = SimpleNamespace(parser=SimpleNamespace(
+        allow_legacy_r1_fallback=False,
+        find_corresponding_round_1_file=Mock(return_value=str(tmp_path / NAME)),
+    ))
+    importer = AsyncMock(return_value=ImportStepResult('imported', 'ok'))
+    monkeypatch.setattr(runtime_ingest, 'import_ready_file', importer)
+    result = await import_verified_file(
+        manager, tmp_path, r2, expected_size=3, expected_sha256=DIGEST,
+        expected_r1=None if state == 'unverified' else {NAME: ExpectedStatsIdentity(3, DIGEST)},
+    )
+    assert result.capture_status == 'match' and result.dependency_status == state
+    if state == 'match':
+        importer.assert_awaited_once()
+    else:
+        assert result.import_result is None
+        importer.assert_not_awaited()
+
+
+async def test_selected_dependency_outside_spool_fails_closed(tmp_path, monkeypatch):
+    r2 = '2026-09-20-121000-map-round-2.txt'
+    publish_stats_file(tmp_path, r2, [b'abc'], expected_size=3)
+    manager = SimpleNamespace(parser=SimpleNamespace(
+        allow_legacy_r1_fallback=False,
+        find_corresponding_round_1_file=Mock(return_value=str(tmp_path.parent / NAME)),
+    ))
+    importer = AsyncMock()
+    monkeypatch.setattr(runtime_ingest, 'import_ready_file', importer)
+    with pytest.raises(ValueError, match='inside the verified spool'):
+        await import_verified_file(manager, tmp_path, r2, expected_size=3, expected_sha256=DIGEST)
     importer.assert_not_awaited()
 
 

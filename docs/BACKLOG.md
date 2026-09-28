@@ -7,6 +7,16 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1066 P1/P2 reproduced with real payload/SQL, then fixed:
+  selected R1 needs independent source size/SHA admission; dependency conflict
+  cannot contaminate valid R2. Shared importer calendar/name admission precedes
+  canonical dedup for both halves. Invalid inputs return failed/no marker.
+  Prior malformed-payload calendar proof was insufficient; actual validpayload
+  duplicate bypass reproduced and closed. 163 cases pass73.79s incl9PGcases;
+  three guard mutations fail/restored/cmp, schemas absent by count/list. No
+  production callers need migration; future verified R2 supplies expected_r1.
+  Original runtime1986d671 and immutable-source requirements remain intact.
+
 - (Astra, 2026-09-28) #1066 final main sync 86b83475 after #1067 retains
   verified-import bytes and both doc histories. 175 cases pass in 49.28s with
   all seven isolated PG scenarios and SSH identity tests; schema cleanup proven

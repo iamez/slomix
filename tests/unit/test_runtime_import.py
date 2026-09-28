@@ -59,7 +59,7 @@ async def test_bare_relative_file_uses_same_absolute_path_for_lookup_and_import(
 async def test_r1_preserves_canonical_outcomes(result, status):
     """R1 bypasses dependency lookup and retains failure classification."""
     subject = manager(result=result)
-    actual = await import_ready_file(subject, Path('fixture-round-1.txt'))
+    actual = await import_ready_file(subject, Path('2026-09-20-120000-fixture-round-1.txt'))
     assert actual.status == status and actual.message == result[1]
     subject.parser.find_corresponding_round_1_file.assert_not_called()
 
@@ -69,7 +69,7 @@ async def test_cancellation_propagates():
     subject = manager()
     subject.process_file.side_effect = asyncio.CancelledError()
     with pytest.raises(asyncio.CancelledError):
-        await import_ready_file(subject, Path('fixture-round-1.txt'))
+        await import_ready_file(subject, Path('2026-09-20-120000-fixture-round-1.txt'))
 
 
 async def test_renamed_duplicate_reaches_canonical_marker_path():
@@ -94,28 +94,42 @@ async def test_only_confirmed_round_two_duplicate_can_bypass_waiting(duplicate):
 
 
 @pytest.mark.parametrize('name', [
-    'bad-round-2.txt', '2026-13-32-999999-goldrush-round-2.txt',
-    '2026-09-20-120000-foo..bar-round-2.txt',
+    '2026-13-32-999999-goldrush-round-2.txt',
     '2026-02-29-120000-goldrush-round-2.txt', '2026-04-31-120000-map-round-2.txt',
     '2026-09-20-240000-map-round-2.txt', '2026-09-20-126000-map-round-2.txt',
     '2026-09-20-120060-map-round-2.txt', '0000-01-01-120000-map-round-2.txt',
     '0001-01-01-000000-map-round-2.txt', '2019-12-31-235959-map-round-2.txt',
     '2036-01-01-000000-map-round-2.txt',
 ])
-async def test_malformed_round_two_uses_canonical_failure(name):
+@pytest.mark.parametrize('round_number', [1, 2])
+async def test_invalid_calendar_is_terminal_before_canonical_import(name, round_number):
     """Invalid names must not be mistaken for a temporarily missing dependency."""
-    subject = manager(result=(False, 'Parse error: invalid filename'))
-    path = Path(name)
+    subject = manager(result=(True, 'valid payload would import'))
+    path = Path(name.replace('-round-2.txt', f'-round-{round_number}.txt'))
     result = await import_ready_file(subject, path)
     assert result.status == 'failed'
     subject.parser.find_corresponding_round_1_file.assert_not_called()
-    subject.process_file.assert_awaited_once_with(path.absolute())
+    subject.process_file.assert_not_awaited()
+
+
+@pytest.mark.parametrize('name', ['bad-round-2.txt', '2026-09-20-120000-foo..bar-round-2.txt'])
+async def test_structural_rejection_is_terminal_without_canonical_markers(name):
+    subject = manager(result=(True, 'valid payload would import'))
+    result = await import_ready_file(subject, Path(name))
+    assert result.status == 'failed' and result.message == 'Invalid stats filename'
+    subject.process_file.assert_not_awaited()
+    subject.is_file_processed.assert_not_awaited()
+    subject.find_processed_duplicate.assert_not_awaited()
 
 
 @pytest.mark.parametrize('stamp', ['2020-01-01-000000', '2024-02-29-235959', '2026-01-01-000000', '2035-12-31-235959'])
-async def test_valid_calendar_boundaries_can_wait(stamp):
+@pytest.mark.parametrize('round_number', [1, 2])
+async def test_valid_calendar_boundaries_can_wait(stamp, round_number):
     """Leap-day and midnight inputs retain the dependency-waiting contract."""
     subject = manager()
-    result = await import_ready_file(subject, Path(f'{stamp}-map-round-2.txt'))
-    assert result.status == 'waiting_for_r1'
-    subject.process_file.assert_not_awaited()
+    result = await import_ready_file(subject, Path(f'{stamp}-map-round-{round_number}.txt'))
+    assert result.status == ('waiting_for_r1' if round_number == 2 else 'imported')
+    if round_number == 2:
+        subject.process_file.assert_not_awaited()
+    else:
+        subject.process_file.assert_awaited_once()

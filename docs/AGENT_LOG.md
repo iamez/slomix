@@ -1,5 +1,17 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · A dependency is not admitted by verifying its consumer.**
+  A retained conflicting R1 inside a private spool contaminated verified R2.
+  Why: path isolation does not certify dependency content. Apply: validate the
+  parser-selected R1 against independent trusted source size/SHA metadata before
+  canonical import, and expose dependency state separately from R2 capture.
+
+- **2026-09-28 · Malformed payloads cannot prove filename admission.**
+  Prior calendar tests failed on payload parsing, while valid duplicate content
+  bypassed canonical filename validation and gained a success marker. Apply:
+  validate filename/calendar before dedup for both halves and test actual valid
+  payloads already present in the DB. Terminal admission failure has no marker.
+
 - **2026-09-27 · Publication modes are filtered by the process umask.**
   open(mode=0600) under umask0277 creates0400, still readable by its owner.
   Reconciliation must accept that safe publisher output without chmod widening;
@@ -9,8 +21,10 @@
   Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
   dependency admission now matches the canonical2020-2035 year range without
   importing presentation/configuration. Tests cover outside years, both accepted
-  bounds, and a real PG terminal failed marker for0001. Do not treat calendar
-  parsing alone as proof that downstream date arithmetic is safe.
+  bounds. Correction2026-09-28: the old PG0001 fixture had invalid contents;
+  its failed marker did not prove valid-payload admission. Shared importer
+  admission now rejects0001 before dedup with failed/no marker, proven using
+  valid payloads. Do not treat calendar parsing alone as arithmetic safety.
 
 - **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
   #1059 base changed from a feature branch to main. Its push CI passed, but the

@@ -1,5 +1,30 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1066 review correction 2026-09-28: real PostgreSQL reproduced both retained
+> conflicting R1 import and valid-payload double-dot filename import. R2 now
+> requires trusted frozen ExpectedStatsIdentity metadata for its parser-selected
+> R1, inspected in the same private spool. capture_status remains the R2 state;
+> dependency_status separately reports unverified/missing/match/conflict (None
+> means not inspected, not_required means valid R1). No SQL/markers on blocked
+> dependencies. Directory/files must remain immutable; no authentication claim.
+> Importer-only shared filename/calendar admission precedes canonical dedup for
+> both halves. Publisher structural contract is unchanged. Terminal invalid
+> inputs return failed WITHOUT a processed marker; callers consume that result.
+> Correction to earlier proof: invalid-calendar tests used malformed payloads,
+> so they did not prove filename rejection. Valid duplicate payload actually
+> bypassed canonical validation and returned imported. New SQL proof rejects
+> invalid dates/times/0001/2019/2036 for both halves via direct and verified APIs;
+> supported 2020/2035 bounds remain covered. Retained conflict and invalid-name
+> cases have zero stats/events/markers, independently counted and listed.
+> Final 163 tests pass in 73.79s including nine actual isolated PG scenarios.
+> Dependency, structural and calendar mutations each fail; restored/cmp.
+> Initial corrected-code run had a mismatched success-log prefix only; fixed,
+> and this clean final run supersedes it. Schema cleanup count=0/list empty.
+> Call inventory: no production callers on main or local runtime integration;
+> selected-R1 verified calls must supply expected_r1 or fail closed. Existing
+> integration tests migrate to returned failed/no-marker semantics. Runtime
+> resume1986d671 preserved; root handles publication/review. No service action.
+
 > Final main synchronization 2026-09-28: #1067 merged 1f4a388d; normal merge
 > 86b83475 preserves both histories and verified-import code/test bytes from
 > 2050d487. Repeated expanded gate: 175 passed in 49.28s, including all seven
