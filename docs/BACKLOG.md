@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1066 final main sync 86b83475 after #1067 retains
+  verified-import bytes and both doc histories. 175 cases pass in 49.28s with
+  all seven isolated PG scenarios and SSH identity tests; schema cleanup proven
+  by count and list. Publish for new exact-head review under owner queue approval.
+
 - (Astra, 2026-09-28)1066 missing SQL proof completed on verified isolatedPG:
   clean142cases pass54.89s, all7PGscenarios; guard mutation failed/restored/cmp.
   Initial overlapped run discarded as final evidence; zero temporary schemas

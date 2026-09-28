@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Final main synchronization 2026-09-28: #1067 merged 1f4a388d; normal merge
+> 86b83475 preserves both histories and verified-import code/test bytes from
+> 2050d487. Repeated expanded gate: 175 passed in 49.28s, including all seven
+> actual PostgreSQL scenarios plus offline SSH identity cases. Isolated service
+> identity reconfirmed; schema count zero and independent listing empty after
+> cleanup. Owner authorized autonomous reviewed/green queue merges; publish for
+> fresh exact-head gates. No application DB, service or production operations.
+
 >Current1066 SQL proof, 2026-09-28: owner-started isolated PostgreSQL verified by
 >systemd ExecStart and SQL data_directory; local socket only, no app DB fallback.
 >Clean sequential run:142 cases pass54.89s, including all7actual-PG scenarios.
