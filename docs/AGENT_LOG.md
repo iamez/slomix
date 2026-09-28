@@ -1,5 +1,10 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-27 · Publication modes are filtered by the process umask.**
+  open(mode=0600) under umask0277 creates0400, still readable by its owner.
+  Reconciliation must accept that safe publisher output without chmod widening;
+  exact0400/0600 admission preserves group/other/execute/special-bit rejection.
+
 - **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
   Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
   dependency admission now matches the canonical2020-2035 year range without
@@ -36,6 +41,27 @@ data here.
   across reloaded state. A crash between POST and acknowledgement can duplicate
   delivery; do not claim exactly-once. Dry-run must skip both state and report
   writes, including when output directories do not yet exist.
+- **2026-09-20 · Content reconciliation is not durability or import completion.**
+  A link can succeed before directory fsync fails. Inspecting size and SHA-256
+  can recognize the existing complete file without overwrite, but cannot prove
+  the directory entry will survive a crash or that PostgreSQL imported it.
+  Keep those acknowledgements separate; never delete the retained source merely
+  because inspection returned match. Operational read errors are not absence.
+
+- **2026-09-20 · A timeout around a worker is not a stopped transfer.**
+  Legacy SSH listing awaits an executor future under wait_for; cancelling that
+  wait does not forcibly stop its synchronous work. Runtime capture instead
+  requires a timeout-aware reader, caps each read by remaining monotonic budget,
+  and checks again after read before publication. This still does not bound
+  SSH setup or filesystem fsync, or interrupt a reader which ignores timeouts.
+  Preserve these distinctions when integrating the connection owner.
+
+- **2026-09-20 · A complete-length transfer is not an integrity proof.**
+  Runtime spool publication can now validate an expected SHA-256 before linking
+  the final name. Obtain that expectation from a trusted immutable source
+  snapshot, not from the just-received bytes. Without it the API remains
+  size-only; the optional parameter is not evidence of transport integration.
+  Test equal-length corruption and compare successful output by another tool.
 
 - **2026-09-19 · A neutral process needs neutral configuration.**
   shared.config reexports BotConfig and its validation requires Discord. The
@@ -373,3 +399,25 @@ isolates OFF workers; do not claim shared OFF cache reuse. Two ASGI proofs retai
 the backend across both same-app toggles and app recreation. Both fail without
 the namespace guard; source restored and cmp verified. Full cached HTTP/browser
 TTL behavior and actual Redis restart behavior remain separate activation checks.
+# 2026-09-27 — Explicit key-only SSH must reject partial authentication
+
+Paramiko5 legacy SSHClient authentication can invoke auth_interactive_dumb
+after a public-key result requests another factor, despite allow_agent=False
+and look_for_keys=False. Use the modern AuthStrategy hook with one explicit
+PKey.from_path key and require both an empty remaining-method list and an
+authenticated transport. Default AuthStrategy iteration alone is insufficient:
+it treats a returned partial-method list as success. Regression exercised the
+installed legacy auth; offline installed connect tests cover RSA/ECDSA PEM and
+OpenSSH plus Ed25519 OpenSSH. No real handshake claim. Missing, malformed and
+encrypted keys must fail without prompt/fallback. Keep strict host-key policy.
+# 2026-09-27 — Correction: PKey.from_path discovers adjacent certificates
+
+The earlier key-only SSH note used PKey.from_path; that still discovers a
+neighboring key_path-cert.pub and can offer a different certificate identity.
+Actual generated OpenSSH certificate and malformed-sidecar regression tests
+proved both behaviors. For the explicit private-key-only contract, read that
+file once and use public RSAKey/ECDSAKey/Ed25519Key.from_private_key file-object
+loaders. Do not pass a path-aware loader or certificate path; encrypted keys
+fail without prompting. Existing five key-format proofs and complete-auth guard
+remain; no real handshake was tested. This corrects the earlier implication
+that disabling legacy auth alone removed all ambient identity discovery.
