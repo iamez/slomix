@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1027 compatible nanoid3.3.19 lock patch removes last
+  audit finding; original/patched OpenAPI output identical and typecheck passes.
+  Bounded old dependency probes fail, patched probes pass. Full single-worker
+  Vitest run in progress; SPA build next. Only three package entries changed
+  versus original PR lock; no runtime server or production action.
+
 - (Astra, 2026-09-28) #1027 lock-only upstream security patch prepared:
   core1.34.20/YAML4.3.2 only; unrelated npm10 libc metadata loss restored.
   Existing Vitest4.1.11 preserved. npm audit still finds high nanoid<3.3.18,

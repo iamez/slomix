@@ -1,5 +1,21 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1027 follow-up, 2026-09-28: upstream nanoid3.3.19 is compatible with
+> postcss8.5.25's existing ^3.3.16 range, removing the remaining high advisory
+> https://github.com/advisories/GHSA-2v37-7h3g-55p8 . Targeted lock-only update
+> and restored unrelated libc metadata leave exactly three changed lock entries
+> against original f0d263c2: core, YAML and nanoid; package.json remains identical.
+> Node22.23.2/npm10.9.8 clean install and audit report zero vulnerabilities;
+> npm explain independently confirms the expected installed dependency paths.
+> Same committed OpenAPI JSON generates byte-identical types with original and
+> patched locks (cmp and SHA25661f4c4a5b04489b01fe4913df6ac43ef1474a262f0dc873076acea0463ade05d).
+> Temporary no-save downgrade failed with npm's `Cannot read properties of null
+> (reading 'edgesOut')`; no concurrent/partial-install comparison is credited.
+> Reinstalled patched lock, then used separate original-lock npm ci for the
+> comparison. Bounded original-package probes reproduce YAML merge-budget bypass
+> and nanoid zero-size timeout; patched probes pass. Typecheck passes. Full tests
+> and SPA build remain pending at this checkpoint; no server/browser/deployment.
+
 > #1027 dependency preparation, 2026-09-28: Node22.23.2/npm10.9.8 targeted
 > lock-only/ignore-scripts update advances @redocly/openapi-core1.34.19->1.34.20
 > and js-yaml4.3.1->4.3.2 without overrides. openapi-typescript7.13.0 already
