@@ -2,17 +2,20 @@
 
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
-  and loop. Defer callable SIGINT across the whole cleanup scope, then restore
-  and replay the caller's handler after close; preserve an earlier parent error.
-  Observe process death before checking a cleanup deadline: an accepted tiny
-  positive grace can round to an already-expired floating-point deadline even
-  when the child is already reaped. Never infer liveness from elapsed time alone.
+  and loop. Correction after follow-up review: installing cleanup deferral itself
+  leaves an ownership window. Install once before spawn through handle close;
+  restore/replay even when the operation failed, preserving its exception over
+  a handler error. Observe death independently of elapsed time. Tiny positive
+  grace is now rejected below0.01s, and every phase attempts its stopping signal.
+  SIGINT can wait until timeout+cleanup; document that latency, never promise
+  immediate cancellation or successful reaping after an OS-level cleanup failure.
 
 - **2026-09-28 · Spawn ownership and the whole escalation path need interruption guards.**
   CPython creates the OS child before Process._popen is assigned: real SIGINT
   there can leave a child invisible to Process.pid and active_children. Defer
-  main-thread callable SIGINT handlers until ownership exists, restore before
-  delivery, and never pass a blocked signal mask into the child. Protect status,
+  main-thread callable SIGINT handlers through the entire child lifetime (not
+  only until ownership exists), restore before delivery, and never pass a blocked
+  signal mask into the child. Protect status,
   terminate, kill and join together with finite cleanup phases, not join alone.
   Actual child/procfs tests reproduce both gaps; synthetic persistent operation
   failures must raise an unreaped error rather than claim successful cleanup.
