@@ -1,5 +1,58 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Receipt recovery must accept safe modes its publisher creates.**
+  umask0277 turns a requested0600 manifest into0400. Read-only recovery now
+  admits exactly0400/0600 without chmod, retaining owner/type and drift checks.
+  Actual publish/read proof verifies unchanged mode/inode/bytes; group/other,
+  executable and special-bit modes remain rejected. Apply the publisher/reader
+  boundary check to metadata receipts as well as payload spool entries.
+
+- **2026-09-28 · Cleanup ownership includes loop control and handle close.**
+  Guarding process calls alone leaves SIGINT windows in the supervising clock
+  and loop. Correction after follow-up review: installing cleanup deferral itself
+  leaves an ownership window. Install once before spawn through handle close;
+  restore/replay even when the operation failed, preserving its exception over
+  a handler error. Observe death independently of elapsed time. Tiny positive
+  grace is now rejected below0.01s, and every phase attempts its stopping signal.
+  SIGINT can wait until timeout+cleanup; document that latency, never promise
+  immediate cancellation or successful reaping after an OS-level cleanup failure.
+
+- **2026-09-28 · Spawn ownership and the whole escalation path need interruption guards.**
+  CPython creates the OS child before Process._popen is assigned: real SIGINT
+  there can leave a child invisible to Process.pid and active_children. Defer
+  main-thread callable SIGINT handlers through the entire child lifetime (not
+  only until ownership exists), restore before delivery, and never pass a blocked
+  signal mask into the child. Protect status,
+  terminate, kill and join together with finite cleanup phases, not join alone.
+  Actual child/procfs tests reproduce both gaps; synthetic persistent operation
+  failures must raise an unreaped error rather than claim successful cleanup.
+
+- **2026-09-28 · Observation transitions need pending state separate from ACK history.**
+  A delivered warning followed by unknown and another warning cannot use the old
+  notified_level alone. An observed-level OR fixes only the first attempt: it
+  loses the transition during cooldown or after a failed retry. Persist one
+  pending-warning bit per key until warning ACK or superseding nonwarn data;
+  keep latest payloads and delivery history separate, without a historical queue.
+
+- **2026-09-27 · Publication modes are filtered by the process umask.**
+  open(mode=0600) under umask0277 creates0400, still readable by its owner.
+  Reconciliation must accept that safe publisher output without chmod widening;
+  exact0400/0600 admission preserves group/other/execute/special-bit rejection.
+
+- **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
+  Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
+  dependency admission now matches the canonical2020-2035 year range without
+  importing presentation/configuration. Tests cover outside years, both accepted
+  bounds, and a real PG terminal failed marker for0001. Do not treat calendar
+  parsing alone as proof that downstream date arithmetic is safe.
+
+- **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
+  #1059 base changed from a feature branch to main. Its push CI passed, but the
+  default pull_request triggers did not include edited, leaving required hygiene
+  and CodeQL contexts absent. Publish the real follow-up checkpoint normally and
+  verify all required checks on the NEW head; never bypass rules or credit old
+  head checks to the new SHA. No workflow/settings changes are needed here.
+
 One entry per fact. Format: date · fact · why it matters · how to apply.
 Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
@@ -55,6 +108,11 @@ data here.
   blocked in file close. Supervisor reaped it as timed_out while final bytes and
   independent sha256sum remained correct. Treat worker status and spool state as
   separate facts; retain source and reconcile, never delete/overwrite on failure.
+- **2026-09-25 · A descendant fix does not protect an unmerged prerequisite.**
+  Worker cancellation fixes present on #1077 were absent from #1068. Before
+  merging a stacked prerequisite, backport its applicable fixes with regression
+  proofs, without importing unrelated descendant features. Compare the resulting
+  files against the reviewed descendant and retain exact PR merge authorization.
 
 - **2026-09-20 · Forced child termination skips application cleanup.**
   A disposable spawned capture task can be terminated and reaped after a deadline,
@@ -62,6 +120,29 @@ data here.
   queues or DB transactions. Reconcile any partial/final spool state and retain
   source; child exit is not a durability or import acknowledgement. Supervise
   only the exact child Process object created by this caller, never services.
+
+- **2026-09-25 · Review triggers can have a billing consequence.**
+  An owner request to avoid additional charges applies to manual AI review
+  requests and potentially automatic reviews after PR creation or pushes.
+  Local tests/review can proceed without those triggers. Repository settings
+  do not prove account billing is disabled; verify separately, and do not
+  mistake a budget notification for an enforced usage stop.
+
+- **2026-09-07 · Measurement is not delivery acknowledgement.** Watchdog
+  observations/failure streaks must persist even when the notification fails,
+  but alert timestamps, recovery reset and daily heartbeat dedup advance only
+  after successful POST. Otherwise failed recovery/heartbeat delivery disappears
+  until another transition/day. Apply: persist pending latest-condition alerts,
+  acknowledge each successful batch of at most ten embeds, and test retries
+  across reloaded state. A crash between POST and acknowledgement can duplicate
+  delivery; do not claim exactly-once. Dry-run must skip both state and report
+  writes, including when output directories do not yet exist.
+- **2026-09-20 · Content reconciliation is not durability or import completion.**
+  A link can succeed before directory fsync fails. Inspecting size and SHA-256
+  can recognize the existing complete file without overwrite, but cannot prove
+  the directory entry will survive a crash or that PostgreSQL imported it.
+  Keep those acknowledgements separate; never delete the retained source merely
+  because inspection returned match. Operational read errors are not absence.
 
 - **2026-09-20 · A timeout around a worker is not a stopped transfer.**
   Legacy SSH listing awaits an executor future under wait_for; cancelling that
@@ -85,11 +166,90 @@ data here.
   size-only; the optional parameter is not evidence of transport integration.
   Test equal-length corruption and compare successful output by another tool.
 
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
+
+- **2026-09-19 · Source retention does not prove independent ingestion.**
+  Design21 section7a overstates bot/web independence. Files waiting on the source
+  can be replayed later while the writer still stops with Discord readiness.
+  Trace startup, cadence and metadata transport before claiming bot/web-off DB
+  continuity; keep that R04 acceptance proof separate from durable cache receipts.
+
+- **2026-09-18 · A closed asyncpg connection may raise InterfaceError.**
+  It is not a PostgresError. A polling worker that retries only database-server
+  errors can stop permanently on a closed connection. Retry InterfaceError only
+  when the acquired native connection confirms is_closed; propagate other
+  interface errors to avoid hiding misuse. Prove reacquisition with actual PG.
+
+- **2026-09-18 · Generation keys need a bounded memory backend.**
+  Reading only the current namespace never touches expired older keys; lazy
+  deletion of the requested key cannot reclaim them. Clear-on-generation-change
+  alone also allows late old requests to insert again. Bound count and retained
+  string bytes, prune expired entries on writes, and test late old-epoch writes.
+  State per-worker storage limits separately from RSS and serialization peaks.
+
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
+
+- **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
+  A neutral real-PG fixture supplied32 hex characters but the canonical regular
+  stats parser stored8 via short_guid. The first test's32-character assertion
+  was wrong; corrected after inspecting the actual parser and observing DB rows.
+  Do not change persistence semantics to satisfy a mistaken test expectation.
+
+- **2026-09-20 · Explicit configuration is not enough if imports initialize the process.**
+  The manager previously imported dotenv and configured root logging before its
+  constructor could inspect supplied config. R04d moves legacy setup behind
+  the default loader while preserving dotenv-before-log-path selection. Test in
+  fresh processes with forbidden imports; also pin unchanged sys.path and root
+  handlers. Import-only callers intentionally no longer initialize logging.
+
+
+- **2026-09-20 · Header-free payload equality is not cross-half identity.**
+  An unchanged cumulative R2 has the same payload hash as R1. Canonical import
+  and neutral duplicate preflight must scope successful hashes by half before
+  treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
+  removing the SQL half filter loses that half. Same-half cross-match identity
+  still needs a stronger source contract; do not infer it from this narrow fix.
+- **2026-09-20 · Undefined disk capacity is not zero usage.**
+  A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
+  is instead measurable 100%/fail. Compare collector ratios with df used/available
+  bytes, not exact displayed integers: df rounds its displayed percentage upward.
+
+- **2026-09-20 · A failed reservation may still own its namespace.**
+  Atomic mkdir prevents two same-token writers from reserving one generation.
+  A later fsync failure can leave that directory; retry must refuse reuse even
+  when empty. Never infer an empty directory is free. Keep source reservation,
+  immutable payload completion and durable receipt delivery as separate states.
+
 - **2026-09-19 · Lint modified legacy files as well as new modules.**
   R04c's new files passed Ruff but its legacy re-export block failed CI I001.
   Include every changed Python path in local lint. Module-attribute aliases
   retain the legacy function identities without unused-import ambiguity;
   mutation-test the export identity rather than assuming an alias is correct.
+
+- **2026-09-19 · Parser parity needs nonempty players and a controlled clock.**
+  The committed legacy sample_stats_files parse headers but zero player rows.
+  Header parity alone cannot certify R2 player calculations. Supply valid player
+  lines with a known differential and freeze the parser's generated timestamp
+  when comparing subprocess outputs. A blocked-import subprocess proves absence
+  of Discord/config dependencies more strongly than checking imports in pytest.
+
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
 
 - **2026-09-19 · Logging emission is separate from process setup.**
   Importing bot.logging_config creates its log directory. Runtime-only callers
@@ -327,3 +487,40 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+# 2026-09-27: Cache rollback is an invalidation boundary
+
+Follow-up: isolating only OFF is insufficient. ON/OFF/ON can retain the same
+database generation if writes occurred while events were disabled. Both modes
+need lifetime/transition isolation; worker-local response reuse also in ON mode
+is the explicit tradeoff. Root env examples do not configure website/.env:
+mirror required flags there and test their parsed defaults.
+
+Reusing an unversioned OFF namespace can revive pre-activation responses after
+an ON generation change. Keep OFF entries unique per middleware lifetime and
+observed mode transition, and capture the token before awaiting. This also
+isolates OFF workers; do not claim shared OFF cache reuse. Two ASGI proofs retain
+the backend across both same-app toggles and app recreation. Both fail without
+the namespace guard; source restored and cmp verified. Full cached HTTP/browser
+TTL behavior and actual Redis restart behavior remain separate activation checks.
+# 2026-09-27 — Explicit key-only SSH must reject partial authentication
+
+Paramiko5 legacy SSHClient authentication can invoke auth_interactive_dumb
+after a public-key result requests another factor, despite allow_agent=False
+and look_for_keys=False. Use the modern AuthStrategy hook with one explicit
+PKey.from_path key and require both an empty remaining-method list and an
+authenticated transport. Default AuthStrategy iteration alone is insufficient:
+it treats a returned partial-method list as success. Regression exercised the
+installed legacy auth; offline installed connect tests cover RSA/ECDSA PEM and
+OpenSSH plus Ed25519 OpenSSH. No real handshake claim. Missing, malformed and
+encrypted keys must fail without prompt/fallback. Keep strict host-key policy.
+# 2026-09-27 — Correction: PKey.from_path discovers adjacent certificates
+
+The earlier key-only SSH note used PKey.from_path; that still discovers a
+neighboring key_path-cert.pub and can offer a different certificate identity.
+Actual generated OpenSSH certificate and malformed-sidecar regression tests
+proved both behaviors. For the explicit private-key-only contract, read that
+file once and use public RSAKey/ECDSAKey/Ed25519Key.from_private_key file-object
+loaders. Do not pass a path-aware loader or certificate path; encrypted keys
+fail without prompting. Existing five key-format proofs and complete-auth guard
+remain; no real handshake was tested. This corrects the earlier implication
+that disabling legacy auth alone removed all ambient identity discovery.

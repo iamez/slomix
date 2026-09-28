@@ -98,6 +98,8 @@ def inspect_published_stats_file(
     Caller must retain the immutable directory/file through subsequent use;
     descriptor/name checks detect changes during inspection, not future changes.
     Reading is byte-bounded, not time-bounded (requires a local regular file).
+    Owner-readable private modes 0400/0600 are accepted: publication respects
+    umask, and inspection must not widen deliberately restrictive permissions.
     """
     if expected_sha256 is None:
         raise ValueError('Inspection requires an expected SHA-256')
@@ -115,8 +117,8 @@ def inspect_published_stats_file(
         try:
             before = os.fstat(fd)
             if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
-                    or stat.S_IMODE(before.st_mode) != 0o600):
-                raise ValueError('Published entry must be an owned regular mode 0600 file')
+                    or stat.S_IMODE(before.st_mode) not in (0o400, 0o600)):
+                raise ValueError('Published entry must be an owned owner-readable private regular file (0400/0600)')
             digest = hashlib.sha256()
             remaining = expected_size + 1 if before.st_size == expected_size else 0
             total = 0

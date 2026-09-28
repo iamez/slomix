@@ -59,8 +59,8 @@ def inspect_completion_manifest(directory: Path, filename: str) -> ManifestInspe
         try:
             before = os.fstat(fd)
             if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
-                    or stat.S_IMODE(before.st_mode) != 0o600 or not 0 < before.st_size <= 4096):
-                raise ValueError('Manifest must be an owned mode 0600 regular file of 1..4096 bytes')
+                    or stat.S_IMODE(before.st_mode) not in (0o400, 0o600) or not 0 < before.st_size <= 4096):
+                raise ValueError('Manifest must be an owned mode 0400/0600 regular file of 1..4096 bytes')
             payload = bytearray()
             while len(payload) <= 4096:
                 chunk = os.read(fd, 4097 - len(payload))

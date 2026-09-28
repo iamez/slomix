@@ -30,7 +30,7 @@ way back to ok, and one heartbeat line per day after 09:00 so a dead
 watchdog is not invisible.
 
 Outputs: the Discord webhook (WATCHDOG_WEBHOOK_URL; --dry-run prints), the
-full report to WATCHDOG_LAST_FILE (which /api/diagnostics may expose later),
+full report to WATCHDOG_LAST_FILE (except in dry-run),
 and the exit code: 0 (the run completed; findings are the payload), 1 only
 with --strict and a failing check, 2 when the run itself broke.
 
@@ -38,6 +38,11 @@ Config comes from the ROOT .env via dotenv_values (never website/.env, which
 overrides POSTGRES_USER to the least-privilege role — the admin-tool trap of
 2026-09-03) with the process environment winning; WATCHDOG_DB_USER selects
 the read role explicitly.
+
+Delivery acknowledgements advance only after a successful POST. Failed or
+unconfigured delivery retries on the next measurement, using the latest
+condition (not an unbounded historical queue). A crash after POST but before
+saving acknowledgement can duplicate an alert; delivery is not exactly-once.
 
 Usage: scripts/slomix_watchdog.py [--once] [--dry-run] [--json]
 """
@@ -231,7 +236,25 @@ def collect_disk(path: str = "/") -> dict[str, Any]:
         # journalctl missing or hanging: the journal size stays None, which
         # check_disk renders as "unknown" rather than as zero.
         journal_bytes = None
-    return {"used_pct": round(usage.used / usage.total * 100, 1), "free_gb": round(usage.free / 2**30, 2),
+    # ⛔⛔ `used / total` IS NOT THE NUMBER A HUMAN SEES. `df` reports
+    # `used / (used + available)`, and on ext4 roughly 5% of the filesystem is
+    # reserved for root, so the two diverge. Measured on this box 2026-09-07:
+    # shutil says 84.9%, df says 89.5% — 4.6 points apart, on the same disk at
+    # the same second.
+    #
+    # That gap sits exactly where it hurts: the 85% warn threshold fires only
+    # once df reads ~89.6%, and the 92% fail once df reads ~96.5%. An operator
+    # who runs `df -h`, sees 90% and finds the watchdog reporting `ok` has to
+    # decide which of the two is lying. Neither is — they answer different
+    # questions — but a monitor is worth less than nothing when it disagrees
+    # with the command the operator will actually type.
+    #
+    # `usage.free` is the space this user can really use, so used/(used+free)
+    # matches df. `total_pct` keeps the old figure for anyone who wants it.
+    denominator = usage.used + usage.free
+    return {"used_pct": round(usage.used / denominator * 100, 1) if denominator else None,
+            "used_pct_of_total": round(usage.used / usage.total * 100, 1) if usage.total else None,
+            "free_gb": round(usage.free / 2**30, 2),
             "journal_bytes": journal_bytes}
 
 
@@ -391,6 +414,8 @@ def check_lua(fh: dict[str, Any] | None) -> Finding:
 
 
 def check_disk(d: dict[str, Any]) -> Finding:
+    if d["used_pct"] is None:
+        return Finding("disk", "unknown", value=d, reason="disk capacity is not measurable")
     if d["used_pct"] >= 92:
         return Finding("disk", "fail", value=d["used_pct"], threshold=92, reason=f"root disk {d['used_pct']} % full",
                        suggest="sudo journalctl --vacuum-size=500M ; du -sh /home/samba/share/*/logs")
@@ -430,12 +455,22 @@ def check_bot_streaks(data: dict[str, Any] | None, now: float) -> Finding:
 
 def decide(findings: list[Finding], state: dict[str, Any], now: float,
            heartbeat_hour: int = HEARTBEAT_HOUR) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    """Returns (alerts, new_state). Pure: nothing is sent here."""
+    """Observe and propose notifications; only acknowledge() marks delivery.
+
+    Pending notifications describe the latest measured condition, not an
+    historical queue: an undelivered failure that resolves is superseded.
+    """
     keys = state.setdefault("keys", {})
     alerts: list[dict[str, Any]] = []
     for f in findings:
         k = keys.setdefault(f.key, {"level": "ok", "consecutive_fail": 0, "last_alert_at": 0.0})
-        was = k.get("level", "ok")
+        notified = k.setdefault("notified_level", k.get("level", "ok") if k.get("last_alert_at") else "ok")
+        # Observation transitions and delivery acknowledgements are independent.
+        # One bounded bit survives cooldown/failed POST, never a historical queue.
+        if f.level != "warn":
+            k["pending_warn"] = False
+        elif k.get("level", "ok") in ("ok", "unknown") or notified in ("ok", "unknown"):
+            k["pending_warn"] = True
         if f.level == "fail":
             k["consecutive_fail"] = int(k.get("consecutive_fail", 0)) + 1
         else:
@@ -443,13 +478,10 @@ def decide(findings: list[Finding], state: dict[str, Any], now: float,
         needed = 2 if f.key in CONFIRM_TWICE else 1
         if f.level == "fail" and k["consecutive_fail"] >= needed and now - float(k.get("last_alert_at", 0)) >= ALERT_DEDUP_S:
             alerts.append({"kind": "fail", "key": f.key, "reason": f.reason, "suggest": f.suggest, "value": f.value})
-            k["last_alert_at"] = now
-        elif f.level == "warn" and was in ("ok", "unknown") and now - float(k.get("last_alert_at", 0)) >= ALERT_DEDUP_S:
+        elif f.level == "warn" and k.get("pending_warn", False) and now - float(k.get("last_alert_at", 0)) >= ALERT_DEDUP_S:
             alerts.append({"kind": "warn", "key": f.key, "reason": f.reason, "suggest": f.suggest, "value": f.value})
-            k["last_alert_at"] = now
-        elif f.level == "ok" and was in ("fail", "warn") and float(k.get("last_alert_at", 0)) > 0:
+        elif f.level == "ok" and float(k.get("last_alert_at", 0)) > 0:
             alerts.append({"kind": "recovered", "key": f.key, "reason": f"{f.key} is back to ok"})
-            k["last_alert_at"] = 0.0
         k["level"] = f.level
         k["last_seen_at"] = now
     local = dt.datetime.fromtimestamp(now, tz=dt.timezone.utc).astimezone()
@@ -459,15 +491,42 @@ def decide(findings: list[Finding], state: dict[str, Any], now: float,
         worst = max((LEVEL_ORDER[f.level] for f in findings), default=0)
         summary = ", ".join(f"{f.key}={f.level}" for f in findings if f.level != "ok") or "all ok"
         alerts.append({"kind": "heartbeat", "key": "heartbeat",
-                       "reason": f"daily heartbeat: {summary}", "value": worst})
-        state["last_heartbeat_date"] = today
+                       "reason": f"daily heartbeat: {summary}", "value": worst, "date": today})
+    else:
+        # Scheduling the next daily heartbeat must not erase yesterday's
+        # failed delivery at midnight. Keep one pending heartbeat until ACK;
+        # a newly due heartbeat above supersedes it, so there is no backlog.
+        pending_heartbeat = next((a for a in state.get("pending_alerts", [])
+                                  if a.get("kind") == "heartbeat"
+                                  and a.get("date") != state.get("last_heartbeat_date")), None)
+        if pending_heartbeat is not None:
+            alerts.append(pending_heartbeat)
     # Units the register no longer measures do not linger with a stale level.
     live_keys = {f.key for f in findings}
     for stale in [k for k in keys if k not in live_keys]:
         keys.pop(stale, None)
     state["version"] = STATE_VERSION
     state["last_run_at"] = now
+    state["pending_alerts"] = alerts.copy()
     return alerts, state
+
+
+def acknowledge(state: dict[str, Any], alerts: list[dict[str, Any]], now: float) -> None:
+    """Acknowledge only a successfully delivered batch (at-least-once).
+
+    A crash after POST success but before saving can duplicate a notification;
+    it must never suppress an unconfirmed delivery instead.
+    """
+    for alert in alerts:
+        if alert["kind"] == "heartbeat":
+            state["last_heartbeat_date"] = alert["date"]
+        else:
+            key = state["keys"][alert["key"]]
+            key["last_alert_at"] = 0.0 if alert["kind"] == "recovered" else now
+            key["notified_level"] = "ok" if alert["kind"] == "recovered" else alert["kind"]
+            if alert["kind"] == "warn":
+                key["pending_warn"] = False
+        state["pending_alerts"].remove(alert)
 
 
 # ---------------------------------------------------------------------------
@@ -619,7 +678,7 @@ async def run(cfg: dict[str, str], *, dry_run: bool, now: float | None = None) -
               "alerts": alerts, "dry_run": dry_run}
     if not dry_run:
         save_json(state_path, state)
-    save_json(Path(cfg["WATCHDOG_LAST_FILE"]), report)
+        save_json(Path(cfg["WATCHDOG_LAST_FILE"]), report)
     if alerts:
         url = cfg.get("WATCHDOG_WEBHOOK_URL")
         embeds = [format_alert(a, host) for a in alerts]
@@ -627,9 +686,15 @@ async def run(cfg: dict[str, str], *, dry_run: bool, now: float | None = None) -
             for e in embeds:
                 print(f"[alert{' (dry-run)' if dry_run else ' (no WATCHDOG_WEBHOOK_URL)'}] {e['title']}\n  {e['description']}")
         else:
-            ok = send_webhook(url, embeds)
-            if not ok:
-                print("webhook POST failed", file=sys.stderr)
+            # Discord accepts at most ten embeds: never acknowledge entries
+            # that send_webhook would truncate from an oversized payload.
+            for offset in range(0, len(alerts), 10):
+                batch = alerts[offset:offset + 10]
+                if not send_webhook(url, embeds[offset:offset + 10]):
+                    print("webhook POST failed; notifications remain unacknowledged", file=sys.stderr)
+                    break
+                acknowledge(state, batch, now)
+                save_json(state_path, state)
     return findings, alerts
 
 

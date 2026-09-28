@@ -35,6 +35,22 @@ def test_recovery_matches_without_writes(ready):
     print('Recovery proof: persisted receipt matches actual bytes; repeated read changes nothing')
 
 
+def test_recovery_accepts_read_only_manifest_from_restrictive_umask(ready):
+    """Publisher-created 0400 receipt is private and readable without widening."""
+    manifest = ready / (NAME + '.complete.json')
+    manifest.unlink()
+    previous = os.umask(0o277)
+    try:
+        publish_completion_manifest(ready, RECEIPT, expected_sha256=HASH)
+    finally:
+        os.umask(previous)
+    assert stat.S_IMODE(manifest.stat().st_mode) == 0o400
+    before = manifest.stat(), manifest.read_bytes()
+    assert inspect_completion_manifest(ready, NAME).status == 'match'
+    after = manifest.stat()
+    assert (before[0].st_ino, before[0].st_mode, before[1]) == (after.st_ino, after.st_mode, manifest.read_bytes())
+
+
 @pytest.mark.parametrize('target,status', [('manifest', 'missing_manifest'), ('payload', 'missing_content')])
 def test_missing_states_are_distinct(ready, target, status):
     """Simulate lost entries independently; absence is not malformed data."""
@@ -77,6 +93,13 @@ def test_unsafe_receipt_rejected(ready, kind):
         else:
             os.mkfifo(path, 0o600)
     with pytest.raises((ValueError, OSError)):
+        inspect_completion_manifest(ready, NAME)
+
+
+@pytest.mark.parametrize('mode', [0o440, 0o604, 0o700, 0o1600, 0o4600])
+def test_manifest_mode_admission_remains_exact(ready, mode):
+    (ready / (NAME + '.complete.json')).chmod(mode)
+    with pytest.raises(ValueError, match='0400/0600'):
         inspect_completion_manifest(ready, NAME)
 
 

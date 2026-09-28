@@ -3,6 +3,7 @@
 import math
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
 
 
@@ -44,12 +45,39 @@ def open_runtime_sftp(config: RuntimeSSHConfig):
     Blocking API for a dedicated worker, not an event loop. Caller owns every
     remote file handle opened on the yielded session and must close it first.
     No password, SSH agent, key discovery, dotenv or system known-host fallback.
+    Only the named private-key contents are loaded; neighboring certificates
+    are ignored. Certificate-path authentication is deliberately unsupported.
     Phase budgets are NOT an overall deadline: DNS, SFTP subsystem negotiation
     and cleanup may still block. A hard-bound connection worker is a separate
     activation gate; cancelling an executor future would not supply that bound.
     Exceptions propagate; ExitStack still closes SSH if SFTP cleanup raises.
     """
     import paramiko
+
+    class KeyOnlyAuth(paramiko.auth_strategy.AuthStrategy):
+        """One explicit key, rejecting partial auth without any interactive fallback."""
+
+        def authenticate(self, transport):
+            # Paramiko's legacy SSHClient auth can prompt after partial key auth.
+            # The modern hook bypasses it; its default strategy also does not
+            # itself require transport authentication after a partial response.
+            # File-object loaders do not discover a neighboring -cert.pub file.
+            # Read once: all supported formats see the same explicit contents.
+            payload = config.key_path.read_text(encoding='utf-8')
+            key = None
+            for key_type in (paramiko.RSAKey, paramiko.ECDSAKey, paramiko.Ed25519Key):
+                try:
+                    key = key_type.from_private_key(StringIO(payload))
+                    break
+                except paramiko.PasswordRequiredException:
+                    raise  # Never prompt or attempt another identity.
+                except paramiko.SSHException:
+                    continue  # This private-key format belongs to another type.
+            if key is None:
+                raise paramiko.SSHException('Explicit private key is invalid or unsupported')
+            remaining = transport.auth_publickey(config.user, key)
+            if remaining or not transport.is_authenticated():
+                raise paramiko.AuthenticationException('Complete public-key authentication required')
 
     with ExitStack() as stack:
         client = paramiko.SSHClient()
@@ -58,7 +86,7 @@ def open_runtime_sftp(config: RuntimeSSHConfig):
         client.load_host_keys(str(config.known_hosts))
         client.connect(
             hostname=config.host, port=config.port, username=config.user,
-            key_filename=str(config.key_path), allow_agent=False, look_for_keys=False,
+            auth_strategy=KeyOnlyAuth(ssh_config=None),
             timeout=config.connect_timeout, banner_timeout=config.banner_timeout,
             auth_timeout=config.auth_timeout, channel_timeout=config.channel_timeout,
         )
