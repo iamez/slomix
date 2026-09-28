@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1070 actual-main propagation 2026-09-28: normal parent09a62009 merge
+> incorporates #1068 squash4de6f07e, retaining both doc histories and unchanged
+> runtime source/tests from28271ad8. Prior19case9.80s proof applies to identical
+> code; combined downstream rerun follows. Runtime1986d671 preserved, no remote
+> or service action. Fresh exact-head review remains a separate publication gate.
+
 > #1070 published-parent refresh 2026-09-28: merged #1069 4007e597 with
 > published worker e8f05dbd and both doc histories. Nineteen composed capture/
 > plan cases pass9.80s; worker bytes remain unchanged. No network/DB/services.
@@ -31,6 +37,13 @@
 >BLOCK publication until the newly reported1067 implicit key certificate-sidecar
 >loading fix propagates through1068/1069, followed by actual main sync and fresh
 >exact-head review/CI. No1070 merge permission inferred. Original plan preserved.
+> #1069 actual-main checkpoint 2026-09-28: #1068 merged4de6f07e;
+> normal merge retains both histories and exact shared/test code from4007e597.
+> Thirteen real owned-child SSH capture/plan cases pass4.74s after sync; prior
+> 220-case42.00s gate covers unchanged worker/SSH/spool/watchdog code. Original
+> runtime1986d671 retained. Root may retarget/publish for fresh exact-head review;
+> this local proof is not CI or merge readiness. No remote/network/DB/services.
+
 > #1069 published-parent refresh 2026-09-28: normal merge e8f05dbd preserves
 > both doc histories and exact final worker/source-test bytes. All 220 offline
 > worker/SSH/task/capture/spool/watchdog/plan cases pass42.00s, including real
