@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current #1066 checkpoint 2026-09-28: #965 merged ec8ec7ed after its420-second
+> cycle; normal main sync 58626d92 preserves both document histories and every
+> import implementation/test blob from f8d8e849 (199-case actual-PG proof above).
+> After sync, 110 import/watchdog/plan cases pass1.20s; the actual PostgreSQL
+> invalid-name valid-payload case passes8.41s. Earlier mutation restored/cmp,
+> schema count zero/list empty before final isolated case; its cleanup succeeded.
+> Owner-started proof service subsequently reached its60-minute limit and now
+> reports Result=timeout. No restart or application DB fallback. Fresh exact-head
+> publication/review next; owner current-queue exception applies, all gates remain.
+> Original runtime resume1986d671, NEVER MERGE and held release exclusions hold.
+
 > #1066 follow-up 2026-09-28: fresh review found structural invalid names raised
 > from capture inspection before terminal filename admission. Reproduced with
 > actual PostgreSQL valid-payload fixture (ValueError), plus three unit cases.
