@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current #1069 checkpoint, 2026-09-28: normal parent merge 005e8d83 retains
+> worker fixes 86c69e39 and SSH identity guard e22ae27c byte-for-byte. Combined
+> 144 cases pass in 18.35s, including real child success/corruption/read-block/
+> close-block with independent filesystem digest and process cleanup checks.
+> Initial command used nonexistent test_runtime_ssh_task.py and executed no
+> tests; corrected test_runtime_ssh_capture.py run above is the actual evidence.
+> Local preparation only; wait #1068 actual main and fresh exact-head gates.
+
 >1069 local refresh2026-09-27: live source87f9fa72 normally merged prepared
 >1068 parent3244843d as4020bb69. Three doc conflicts retained both histories;
 >worker cleanup and SSH explicit-key authentication source/tests equal parent.
