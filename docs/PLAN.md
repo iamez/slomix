@@ -1,5 +1,27 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1068 lifetime ownership correction 2026-09-28: fresh review reproduced tiny
+> positive grace leaving an owned child, a second-getsignal cleanup transition,
+> and dropped custom SIGINT side effects when launch also failed. Install one
+> callable-SIGINT deferrer before any child exists and retain it through close;
+> replay the restored handler even after an operation error, preserving that
+> error if the handler also raises. SIGINT cancellation is deliberately delayed
+> up to timeout plus shutdown, coalesced to one callback; no immediate promise.
+> Require shutdown_grace >=0.01 before spawning, and always attempt each phase's
+> stopping signal before its elapsed budget limits waiting. OS inability to reap
+> still raises RuntimeError; no absolute startup/kernel bound or service claim.
+> Final 159 combined cases pass37.24s, including45real-child worker cases and
+> 114offline SSH/capture/spool cases. Real SIGINT during join tests default,
+> custom-return and SystemExit policies with/without original operation errors;
+> procfs/active_children and closed handles prove ownership release. Replacing
+> BaseException cleanup handling with Exception fails3 SystemExit cases; removing
+> lifetime deferral fails actual spawn-window ownership. Restored/cmp each time;
+> deliberate-failure fixture cleanup reaped its own children. CodeQL663's broad
+> catch is intentional deferred cancellation, not suppression; CodeQL662's
+> cleanup_complete variable is removed. No remote/service/network/DB operation.
+> Original runtime1986d671 and previous worker fixes remain preserved. Root
+> owns publication, fresh exact-head review and merge gates.
+
 > #1068 root-review follow-up, 2026-09-28: reproduced false unreaped error for
 > an already-finished real child with accepted grace=1e-20, and real SIGINT in
 > cleanup clock/loop control bypassing reaping. Status is now observed before
