@@ -30,6 +30,61 @@
 >proof yet. Await1065 actual merge, final main sync and real PG proof before
 >publishing/fresh review. Original runtime roadmap preserved, no1066 approval.
 
+>Current1067 checkpoint2026-09-27: approved1065 merged9ef42671 at20:36:29Z;
+>squash tree equals reviewed1f6562f0. Actualmain normally integrated; explicit
+>private-key-only sidecar repair preserved fromc63f8ac5. Repeat combined gate,
+>publish/reply and request fresh exact-head review. No1067 merge permission,
+>network/service/applicationDB action. Original runtime roadmap preserved.
+
+> PR1067 explicit-identity correction, 2026-09-27: follow-up review proved that
+> PKey.from_path silently loads key_path-cert.pub. A real temporary ssh-keygen
+> certificate changed the offered identity; a malformed neighbor broke auth.
+> Both regressions failed on old code. Load the named private-key contents once
+> through public typed from_private_key file-object APIs instead; no sidecar
+> lookup, certificate-path substitution or passphrase prompt. Five existing
+> RSA/ECDSA/Ed25519 encoding proofs still pass. Certificate paths explicitly
+> fail closed. All108 SSH/capture/spool/reconcile tests pass. Reintroducing
+> from_path failed both sidecar guards; restored/cmp. Earlier from_path claims
+> below are superseded by this correction. No live handshake/network/services
+> or DB actions; next fresh exact-head CI/review. Original plan remains intact.
+
+>Current1067 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1067-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
+> PR1067 key-only authentication correction, 2026-09-27: installed/pinned
+> Paramiko5 legacy authentication can call auth_interactive_dumb after partial
+> public-key authentication even with agent/discovery disabled. Three new
+> regression cases failed on old code. The modern AuthStrategy hook now loads
+> exactly the explicit key with PKey.from_path and requires complete public-key
+> authentication; partial responses never reach SFTP, password or interactive
+> fallback. Actual installed SSHClient.connect exercised offline with synthetic
+> transport and real RSA PEM/OpenSSH, ECDSA PEM/OpenSSH and Ed25519 OpenSSH keys.
+> Missing/malformed/encrypted keys fail closed; no passphrase prompt. Guard
+> removal failed all three cases; restored/cmp. Combined SSH/capture/spool gate:
+> 84 passed. No real SSH handshake, external connection, service or DB action.
+> Next: publish for new exact-head CI/review; no1067 merge permission. Original
+> runtime plan and activation gates below remain intact.
+
+>Current1067 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
+>squash tree equals435268ef. Actual main now integrated normally, documentation
+>histories and implementation bytes preserved. Repeat local gates then publish
+>for fresh exact-head CI/review. No service, network or application DB action;
+>no1067-specific approval recorded yet. Earlier checkpoints below are history.
+
+>1067 refresh checkpoint2026-09-27: integrated reviewed1063 parent435268ef
+>normally as eb72ec88; retained documentation histories and source/test bytes
+>from9f86bd69.73combined cases pass, including real Paramiko RejectPolicy against
+>a generated unknown key offline (no network) and real local socket publication.
+>Omitting SSH close registration fails cleanup-after-SFTP-close-error assertion:
+>['sftp-close'] != ['sftp-close', 'ssh-close']; restored/cmp and all73 pass again.
+>Existing review threads empty. Await1063 actual main merge before final sync,
+>retarget/push and fresh exact-head CI/review. No1067 permission, no connections
+>or service changes. Phase timeouts do not bound DNS/handshake/cleanup as a whole;
+>the later dedicated worker remains an activation gate. Original plan preserved.
+
 >Current1065 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
 >squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
 >all doc histories and source fixes preserved. Publish after repeated local gates
@@ -308,6 +363,22 @@ Ruff clean. Imported foundation code byte-identical to both parent branches;
 only new composition/tests/docs added. Disposable PG stopped; no application
 DB/service or source transport activation. Fresh CI/review required.
 
+
+### R04l explicit SSH session ownership — 2026-09-20
+
+On #1063: neutral RuntimeSSHConfig and caller-driven open_runtime_sftp context.
+Explicit host/user/port/absolute key and known-host paths; strict RejectPolicy,
+no agent/key discovery/password or ambient bot config. Close SFTP before SSH,
+including failure during setup/body/cleanup. Caller closes its file handles.
+Phase budgets are NOT an overall deadline: DNS, subsystem negotiation and close
+can block. Hard-bound worker/process design remains an activation gate; do not
+use an executor cancellation as proof of stopping transfer. Paramiko API checked
+against installed signature and https://docs.paramiko.org/en/stable/api/client.html.
+73 combined tests pass: recorded phase failures/cleanup and real offline Paramiko
+unknown-host rejection, no hosts mutation. Initial offline fixture lacked logger
+transport; fixed the fixture only. Cleanup mutation fails, restored/cmp; Ruff
+clean. No real SSH connection/server, credentials, service or DB changes.
+Not an activated source transport or end-to-end network proof.
 
 ### R04j single-attempt capture reconciliation — 2026-09-20
 
