@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+from types import SimpleNamespace
+from unittest import mock
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "scripts"))
@@ -148,6 +150,62 @@ def test_disk_thresholds():
     assert wd.check_disk({"used_pct": 93.0, "free_gb": 1, "journal_bytes": 10}).level == "fail"
 
 
+def test_used_pct_matches_df_not_shutil_total():
+    """⛔⛔ The percentage must be the one `df` prints.
+
+    `shutil.disk_usage` gives used/total; `df` gives used/(used+available),
+    and ext4 reserves ~5% of the filesystem for root, so the two disagree.
+    Measured on the dev box 2026-09-07: shutil 84.9%, df 89.5% — 4.6 points
+    apart, same disk, same second.
+
+    That gap sat exactly on the threshold: the 85% warn fired only once df
+    read ~89.6%. An operator running `df -h`, seeing 90% and finding the
+    watchdog `ok` cannot tell which one is wrong. Neither is — they answer
+    different questions — but a monitor that disagrees with the command the
+    operator types is worth less than no monitor.
+    """
+    class _Usage:
+        # 100 GiB filesystem, 5 GiB reserved for root: 85 used, 10 free.
+        total = 100 * 2**30
+        used = 85 * 2**30
+        free = 10 * 2**30
+
+    with mock.patch.object(wd.shutil, "disk_usage", return_value=_Usage()), \
+         mock.patch.object(wd.subprocess, "run", side_effect=OSError):
+        d = wd.collect_disk("/")
+
+    # df: 85 / (85 + 10) = 89.5 %, NOT 85 / 100 = 85.0 %
+    assert d["used_pct"] == 89.5
+    assert d["used_pct_of_total"] == 85.0
+    assert wd.check_disk(d).level == "warn", "89.5% is over the 85% threshold"
+
+
+def test_unmeasurable_capacity_is_unknown_not_healthy():
+    """A zero denominator is unavailable capacity, not a healthy empty disk."""
+    class _Zero:
+        total = 0
+        used = 0
+        free = 0
+
+    with mock.patch.object(wd.shutil, "disk_usage", return_value=_Zero()), \
+         mock.patch.object(wd.subprocess, "run", side_effect=OSError):
+        d = wd.collect_disk("/")
+
+    assert d["used_pct"] is None
+    assert d["used_pct_of_total"] is None
+    assert wd.check_disk(d).level == "unknown"
+
+
+def test_full_filesystem_is_a_failure_not_unknown():
+    """No available bytes with positive used space is a measured full disk."""
+    usage = SimpleNamespace(total=100, used=95, free=0)
+    with mock.patch.object(wd.shutil, "disk_usage", return_value=usage), \
+         mock.patch.object(wd.subprocess, "run", side_effect=OSError):
+        data = wd.collect_disk("/")
+    assert data["used_pct"] == 100.0
+    assert wd.check_disk(data).level == "fail"
+
+
 def test_lua_webhook_fails_only_when_rounds_land_without_lua_rows():
     r = wd.dt.datetime.fromtimestamp(NOW - 600, wd.dt.timezone.utc).isoformat()
     assert wd.check_lua_webhook({"newest_round": r, "newest_lua_round": r}, NOW).level == "ok"
@@ -171,31 +229,37 @@ def _f(key, level, reason="r"):
     return wd.Finding(key, level, reason=reason)
 
 
+def _delivered_decision(findings, state, now):
+    alerts, state = wd.decide(findings, state, now)
+    wd.acknowledge(state, alerts, now)
+    return alerts, state
+
+
 def test_fail_alerts_once_then_is_silent_for_an_hour_then_recovers_once():
     state = {"version": 1, "keys": {}}
-    a1, state = wd.decide([_f("db", "fail")], state, NOW)
+    a1, state = _delivered_decision([_f("db", "fail")], state, NOW)
     assert [a["kind"] for a in a1] == ["fail"]
-    a2, state = wd.decide([_f("db", "fail")], state, NOW + 600)
+    a2, state = _delivered_decision([_f("db", "fail")], state, NOW + 600)
     assert a2 == []  # dedup
-    a3, state = wd.decide([_f("db", "fail")], state, NOW + 3700)
+    a3, state = _delivered_decision([_f("db", "fail")], state, NOW + 3700)
     assert [a["kind"] for a in a3] == ["fail"]  # an hour later, once more
-    a4, state = wd.decide([_f("db", "ok")], state, NOW + 4000)
+    a4, state = _delivered_decision([_f("db", "ok")], state, NOW + 4000)
     assert [a["kind"] for a in a4] == ["recovered"]
-    a5, state = wd.decide([_f("db", "ok")], state, NOW + 4300)
+    a5, state = _delivered_decision([_f("db", "ok")], state, NOW + 4300)
     assert a5 == []  # recovery is announced exactly once
 
 
 def test_web_and_lua_webhook_need_two_consecutive_failures():
     state = {"version": 1, "keys": {}}
-    a1, state = wd.decide([_f("web", "fail")], state, NOW)
+    a1, state = _delivered_decision([_f("web", "fail")], state, NOW)
     assert a1 == []
-    a2, state = wd.decide([_f("web", "fail")], state, NOW + 300)
+    a2, state = _delivered_decision([_f("web", "fail")], state, NOW + 300)
     assert [a["kind"] for a in a2] == ["fail"]
     # an ok in between resets the count
     state = {"version": 1, "keys": {}}
-    wd.decide([_f("web", "fail")], state, NOW)
-    wd.decide([_f("web", "ok")], state, NOW + 300)
-    a3, _ = wd.decide([_f("web", "fail")], state, NOW + 600)
+    _delivered_decision([_f("web", "fail")], state, NOW)
+    _delivered_decision([_f("web", "ok")], state, NOW + 300)
+    a3, _ = _delivered_decision([_f("web", "fail")], state, NOW + 600)
     assert a3 == []
 
 
@@ -204,34 +268,34 @@ def test_control_without_dedup_the_second_run_alerts_again(monkeypatch):
     failure alerts on every run — the noise the window exists to stop."""
     monkeypatch.setattr(wd, "ALERT_DEDUP_S", 0)
     state = {"version": 1, "keys": {}}
-    wd.decide([_f("db", "fail")], state, NOW)
-    a2, _ = wd.decide([_f("db", "fail")], state, NOW + 60)
+    _delivered_decision([_f("db", "fail")], state, NOW)
+    a2, _ = _delivered_decision([_f("db", "fail")], state, NOW + 60)
     assert [a["kind"] for a in a2] == ["fail"]
 
 
 def test_warn_alerts_on_the_transition_only():
     state = {"version": 1, "keys": {}}
-    a1, state = wd.decide([_f("disk", "warn")], state, NOW)
+    a1, state = _delivered_decision([_f("disk", "warn")], state, NOW)
     assert [a["kind"] for a in a1] == ["warn"]
-    a2, state = wd.decide([_f("disk", "warn")], state, NOW + 600)
+    a2, state = _delivered_decision([_f("disk", "warn")], state, NOW + 600)
     assert a2 == []
 
 
 def test_heartbeat_once_a_day_after_the_hour():
     state = {"version": 1, "keys": {}}
     morning = wd.dt.datetime(2026, 9, 7, 9, 5).timestamp()
-    a1, state = wd.decide([_f("db", "ok")], state, morning)
+    a1, state = _delivered_decision([_f("db", "ok")], state, morning)
     assert [a["kind"] for a in a1] == ["heartbeat"]
-    a2, state = wd.decide([_f("db", "ok")], state, morning + 3600)
+    a2, state = _delivered_decision([_f("db", "ok")], state, morning + 3600)
     assert a2 == []
     early = wd.dt.datetime(2026, 9, 8, 7, 0).timestamp()
-    a3, state = wd.decide([_f("db", "ok")], state, early)
+    a3, state = _delivered_decision([_f("db", "ok")], state, early)
     assert a3 == []
 
 
 def test_stale_keys_leave_the_state():
     state = {"version": 1, "keys": {"unit:gone": {"level": "fail", "consecutive_fail": 5, "last_alert_at": NOW}}}
-    _, state = wd.decide([_f("db", "ok")], state, NOW)
+    _, state = _delivered_decision([_f("db", "ok")], state, NOW)
     assert "unit:gone" not in state["keys"]
 
 
