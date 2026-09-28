@@ -1,5 +1,29 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Owner exception recorded 2026-09-28: the live message explicitly approved
+> #1067, then instructed continued merging of the remaining current PR queue
+> without repeated permission prompts when reviewed, corrected and green.
+> Eligible IDs: #963, #964, #965, #966, #969, #979, #1027, #1066, #1068-#1075,
+> #1077. Exact-head CI, addressed review findings and the prescribed merge cycle
+> remain mandatory. Excludes NEVER MERGE #924-#943/#967, held #956, services and
+> production. This is a bounded owner exception, not standing authorization for
+> unrelated future PRs; it does not change the repository's general policy.
+
+> #1068 interruption repair, 2026-09-28: real spawned children reproduced leaks
+> from kill/is_alive interruptions and actual SIGINT after OS spawn before
+> CPython attaches Process._popen (three failures; fixtures forcibly cleaned up).
+> Main-thread callable SIGINT handlers are temporarily deferred until ownership
+> exists, then restored before delivery; ignored/custom behavior and child masks
+> are preserved. Both escalation phases now retry all operations within bounded
+> grace deadlines. Persistent status/kill failures raise truthful unreaped errors.
+> Original parent errors still win after successful cleanup. Regression mutations
+> repeat all three failures; restored/cmp. Final 140 focused tests pass in 17.04s,
+> including 26 worker cases; Ruff and whitespace clean. Procfs and active_children
+> independently confirm child cleanup. No real SSH, service or remote writes.
+> Arbitrary exceptions injected inside private CPython startup and uninterruptible
+> OS waits are not claimed safe/bounded. Propagate this repair into descendants
+> before their final publication; original runtime roadmap remains unchanged.
+
 > Final main synchronization 2026-09-28: #1067 merged 1f4a388d, reviewed tree
 > equality verified. Normal main merge c99badb6 preserves worker backports and
 > final SSH identity. Repeat combined gate: 133 passed in 13.69s. Publish #1068
@@ -14,7 +38,7 @@
 > 2.004s/2.204s; procfs and active_children both confirm cleanup. Ruff clean.
 > Prior seen-failing late-observer mutation remains applicable to identical
 > worker bytes. Await actual #1067 main integration, then rerun/publish/review.
-> Owner authorized autonomous reviewed/green queue merges; no services enabled.
+> Owner's bounded queue exception is recorded above; no services enabled.
 
 >1068 refresh checkpoint2026-09-27: started from preserved local86c69e39,
 >NOT obsolete remote69a0ef29; normally merged reviewed parent1067 db7f3888

@@ -1,6 +1,7 @@
 """Real spawned-child proofs; no SSH, server, service or database operations."""
 
 import multiprocessing
+import multiprocessing.popen_spawn_posix
 import os
 import pickle
 import signal
@@ -195,3 +196,138 @@ def test_invalid_limits_do_not_spawn(timeout, grace, tmp_path):
     with pytest.raises(ValueError):
         run_bounded_capture_task(partial(_complete, marker), timeout_seconds=timeout, shutdown_grace=grace)
     assert not marker.exists()
+
+
+@pytest.mark.parametrize('operation', ['kill', 'is_alive'])
+def test_escalation_interruption_retries_and_reaps(tmp_path, monkeypatch, operation):
+    """One interruption anywhere in escalation cannot abandon a real child."""
+    kind = multiprocessing.get_context('spawn').Process
+    original = getattr(kind, operation)
+    original_join, original_kill, original_alive = kind.join, kind.kill, kind.is_alive
+    processes, interrupted = [], []
+    error = KeyboardInterrupt('fixture escalation interrupt')
+
+    def interrupt(process, *args):
+        if not processes:
+            processes.append(process)
+        # is_alive is first used for timeout classification; interrupt cleanup.
+        interrupted.append(None)
+        if len(interrupted) == (3 if operation == 'is_alive' else 1):
+            raise error
+        return original(process, *args)
+
+    monkeypatch.setattr(kind, operation, interrupt)
+    try:
+        with pytest.raises(KeyboardInterrupt) as raised:
+            run_bounded_capture_task(partial(_block, tmp_path / 'child', True),
+                                     timeout_seconds=1, shutdown_grace=0.2)
+        assert raised.value is error
+        pid = int((tmp_path / 'child').read_text())
+        assert not Path(f'/proc/{pid}').exists()
+        assert pid not in [p.pid for p in multiprocessing.active_children()]
+    finally:
+        for process in processes:
+            try:
+                if original_alive(process):
+                    original_kill(process)
+                original_join(process, 2)
+                process.close()
+            except ValueError:
+                pass  # Already closed by supervisor.
+
+
+def test_sigint_during_spawn_keeps_child_owned(tmp_path, monkeypatch):
+    """Deliver real SIGINT after OS spawn but before Process owns its Popen."""
+    popen = multiprocessing.popen_spawn_posix.Popen
+    original = popen._launch  # noqa: SLF001 - inject at the actual OS-spawn ownership gap
+    handles = []
+    marker = tmp_path / 'child'
+    previous_handler = signal.getsignal(signal.SIGINT)
+
+    def interrupted_launch(handle, process):
+        original(handle, process)
+        handles.append(handle)
+        os.kill(os.getpid(), signal.SIGINT)
+
+    monkeypatch.setattr(popen, '_launch', interrupted_launch)
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            run_bounded_capture_task(partial(_block, marker, False),
+                                     timeout_seconds=1, shutdown_grace=0.2)
+        pid = handles[0].pid
+        assert not Path(f'/proc/{pid}').exists()
+        assert pid not in [p.pid for p in multiprocessing.active_children()]
+        assert signal.getsignal(signal.SIGINT) == previous_handler
+    finally:
+        # Raw Popen remains available even when broken Process.pid is None.
+        for handle in handles:
+            if handle.poll() is None:
+                handle.kill()
+            handle.wait(2)
+            handle.close()
+
+
+def _record_signal_mask(marker):
+    """Observe child mask without changing it."""
+    blocked = signal.pthread_sigmask(signal.SIG_BLOCK, [])
+    Path(marker).write_text(','.join(str(int(item)) for item in sorted(blocked)))
+
+
+@pytest.mark.parametrize('ignored', [False, True])
+def test_startup_preserves_signal_handler_and_child_mask(tmp_path, monkeypatch, ignored):
+    """Deferred custom handlers run restored; ignored SIGINT remains ignored."""
+    popen = multiprocessing.popen_spawn_posix.Popen
+    original = popen._launch  # noqa: SLF001 - observe actual startup signal behavior
+    previous = signal.getsignal(signal.SIGINT)
+    calls = []
+
+    def custom(signum, frame):
+        assert signal.getsignal(signal.SIGINT) is custom
+        calls.append(signum)
+
+    handler = signal.SIG_IGN if ignored else custom
+    mask = signal.pthread_sigmask(signal.SIG_BLOCK, [])
+
+    def interrupted_launch(handle, process):
+        original(handle, process)
+        os.kill(os.getpid(), signal.SIGINT)
+
+    monkeypatch.setattr(popen, '_launch', interrupted_launch)
+    signal.signal(signal.SIGINT, handler)
+    try:
+        result = run_bounded_capture_task(partial(_record_signal_mask, tmp_path / 'mask'),
+                                         timeout_seconds=3, shutdown_grace=0.2)
+        assert result.status == 'completed'
+        assert signal.getsignal(signal.SIGINT) == handler
+        assert calls == ([] if ignored else [signal.SIGINT])
+        assert (tmp_path / 'mask').read_text() == ','.join(str(int(item)) for item in sorted(mask))
+        assert not Path(f'/proc/{result.pid}').exists()
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
+@pytest.mark.parametrize('operation', ['is_alive', 'kill'])
+def test_persistent_cleanup_failure_is_bounded_and_truthful(operation):
+    """Unobservable process death must never be reported as successful reaping."""
+    class BrokenProcess:
+        pid = 123
+
+        def is_alive(self):
+            if operation == 'is_alive':
+                raise OSError('fixture unavailable process status')
+            return True
+
+        def terminate(self):
+            pass
+
+        def join(self, timeout):
+            pass
+
+        def kill(self):
+            raise OSError('fixture unable to kill')
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match='could not be reaped') as raised:
+        runtime_worker._reap(BrokenProcess(), 0.02)  # noqa: SLF001 - isolated bounded cleanup fault
+    assert isinstance(raised.value.__cause__, OSError)
+    assert time.monotonic() - started < 1

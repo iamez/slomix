@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1068 fresh review exposed real escalation/startup SIGINT
+  child leaks. Three actual-spawn regressions failed before repair and again with
+  mutations; fixtures always cleaned leaked children. Bounded operation-wide
+  escalation retries and ownership-window SIGINT deferral preserve original
+  errors, custom/ignored handlers and child masks. Restored/cmp; no remote or
+  service actions. Root owns publication/review and descendant propagation.
+
 - (Astra, 2026-09-28) #1068 retains original worker fixes 86c69e39 and final
   SSH e22ae27c after normal merge eed58f6c. 133 combined cases pass in 14.44s,
   actual spawned children reaped by two observations; Ruff clean. Await #1067

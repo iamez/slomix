@@ -2,6 +2,8 @@
 
 import math
 import multiprocessing
+import signal
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -28,29 +30,53 @@ def _execute(task: Callable[[], None]) -> None:
 def _reap(process, grace: float) -> BaseException | None:
     """Reap our child before returning a deferred cleanup exception."""
     interrupted = None
-    try:
-        if process.is_alive():
-            process.terminate()
-            process.join(grace)
-    except BaseException as exc:
-        interrupted = exc
-    if process.is_alive():
-        process.kill()
+    for stop in (process.terminate, process.kill):
         deadline = time.monotonic() + grace
-        while True:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
+        while time.monotonic() < deadline:
             try:
-                process.join(remaining)
+                if not process.is_alive():
+                    return interrupted
+                stop()
+                process.join(max(0.0, deadline - time.monotonic()))
+                if not process.is_alive():
+                    return interrupted
             except BaseException as exc:
                 if interrupted is None:
                     interrupted = exc
-            if not process.is_alive():
-                break
-    if process.is_alive():
-        raise RuntimeError(f'Owned runtime worker {process.pid} could not be reaped') from interrupted
-    return interrupted
+    raise RuntimeError(f'Owned runtime worker {process.pid} could not be reaped') from interrupted
+
+
+def _start_owned(process):
+    """Defer main-thread SIGINT until spawn has attached its ownership handle.
+
+    No signal mask is changed or inherited by the child. Python dispatches signal
+    handlers only in the main thread; other threads need no handler replacement.
+    This protects OS SIGINT, not arbitrary exceptions injected into CPython internals.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        process.start()
+        return
+    previous = signal.getsignal(signal.SIGINT)
+    if not callable(previous):
+        process.start()  # Preserve SIG_IGN/SIG_DFL semantics without inventing errors.
+        return
+    pending = []
+
+    def defer(signum, frame):
+        if not pending:
+            pending.append((signum, frame))
+
+    error = None
+    signal.signal(signal.SIGINT, defer)
+    try:
+        process.start()
+    except BaseException as exc:
+        error = exc
+        raise
+    finally:
+        signal.signal(signal.SIGINT, previous)
+        if pending and error is None:
+            previous(*pending[0])
 
 
 def run_bounded_capture_task(
@@ -67,8 +93,10 @@ def run_bounded_capture_task(
     observation cannot establish the exact exit time of an already finished child.
     OS process startup and uninterruptible kernel waits cannot be hard-bounded.
     Failure to reap raises, never reports successful cleanup. Cleanup defers
-    join interruptions until reaping finishes; the original parent error
+    escalation interruptions until reaping finishes; the original parent error
     takes precedence over a cleanup interruption after successful reaping.
+    Main-thread SIGINT is deferred during spawn until ownership exists, preserving
+    custom handlers without inheriting a blocked signal mask in the child.
     Forced termination skips child finally blocks: retain sources and reconcile
     .part/final files.
     Launch from an import-safe main guarded by if __name__ == '__main__'.
@@ -80,7 +108,7 @@ def run_bounded_capture_task(
     deadline = time.monotonic() + timeout_seconds
     original_error = None
     try:
-        process.start()
+        _start_owned(process)
         pid = process.pid
         process.join(max(0.0, deadline - time.monotonic()))
         timed_out = process.is_alive()

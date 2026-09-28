@@ -1,5 +1,14 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Spawn ownership and the whole escalation path need interruption guards.**
+  CPython creates the OS child before Process._popen is assigned: real SIGINT
+  there can leave a child invisible to Process.pid and active_children. Defer
+  main-thread callable SIGINT handlers until ownership exists, restore before
+  delivery, and never pass a blocked signal mask into the child. Protect status,
+  terminate, kill and join together with finite cleanup phases, not join alone.
+  Actual child/procfs tests reproduce both gaps; synthetic persistent operation
+  failures must raise an unreaped error rather than claim successful cleanup.
+
 - **2026-09-27 · Publication modes are filtered by the process umask.**
   open(mode=0600) under umask0277 creates0400, still readable by its owner.
   Reconciliation must accept that safe publisher output without chmod widening;
