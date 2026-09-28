@@ -1,5 +1,44 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #965 warning-transition delivery repair, 2026-09-28: review reproduced a
+> delivered warn -> unknown -> warn being suppressed forever by notified_level.
+> One bounded per-key pending_warn bit now distinguishes a new observed warning
+> transition from delivery history. It survives cooldown and failed delivery,
+> clears on successful warning ACK or a superseding nonwarn measurement, and
+> always renders the latest condition rather than queuing historical warnings.
+> Two actual run/state-file regressions fail on old code; replacing the pending
+> bit with a naive observed-level OR also fails cooldown and failed-POST retry.
+> Restored/cmp; 48 watchdog tests pass in 0.48s, Ruff/whitespace clean. JSON read
+> independently agrees with load_state; mock delivery counts, latest reason and
+> ACK timestamps prove retry behavior. Existing heartbeat-midnight repair remains.
+> No real webhook, collector, service or remote operations; root owns publication.
+
+> Current #965 checkpoint 2026-09-28: normally integrated actual main 1f4a388d
+> after #1067 merged. Watchdog source and both test files remain byte-identical
+> to reviewed 3c967222, retaining original 2e035917 and the disk fix. All 45
+> focused contracts pass, including real temporary state/report files with
+> in-process mocked collectors/webhook only. Inverting delivery success fails
+> with last_alert_at 1788742800.0 instead of 0; restored/cmp and full rerun pass.
+> No real notification, service or database operation. Root owns publication,
+> fresh exact-head CI/review and merge gates. Runtime resume 1986d671 unchanged;
+> older checkpoints below describe their dates, not current queue authority.
+
+> Current965 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
+>matches reviewed0e66f238. This branch now normally integrates that main,
+>preserving source/test bytes and both documentation histories. 43focused
+>tests rerun after sync. Publish for fresh exact-head CI/review; no965 merge
+>approval, service activation or NEVER MERGE changes. Earlier waiting notes
+>below are historical; original runtime roadmap remains unchanged.
+
+>965 preservation checkpoint2026-09-27: start from local2e035917, not older
+>remote c8fa8e41; normally integrate main as44df616a, preserve both doc histories.
+>Watchdog source/tests byte-identical to2e035917.43focused cases pass0.43s,
+>Ruff clean. Inverting delivery-success guard advances an unconfirmed timestamp
+>and fails the retry test; restored/cmp. Separate in-process synthetic transport
+>with actual persisted files proves failed pending1/ACK0, success pending0,
+>two delivery attempts and no third-cycle duplicate. No Discord request, live
+>collector/service action or production data. Await1055 merge then final refresh
+>and publish for fresh exact-head review; no965 merge approval.
 >Current1067 checkpoint2026-09-27: approved1065 merged9ef42671 at20:36:29Z;
 >squash tree equals reviewed1f6562f0. Actualmain normally integrated; explicit
 >private-key-only sidecar repair preserved fromc63f8ac5. Repeat combined gate,
@@ -290,6 +329,53 @@
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
+
+## Proga: Astra watchdog delivery acknowledgement
+
+Consolidation update 2026-09-25: #1076, #1057 and #962 are merged; main is
+89a2fd38. Locally integrated main into #965, retaining both documentation tracks.
+45 watchdog/delivery/plan tests pass, including the disk-capacity change and
+actual run() with isolated state files and stub transport. Midnight retention
+mutation fails with `AssertionError: assert 1 == 2`; restored and cmp verified.
+No live webhook, service, database or deployment action. No #965 merge approval.
+Owner requires no additional GitHub charges: no AI review requests, remote
+pushes or new PRs until automatic-review billing safety is established. Local
+review and tests continue; account billing settings have not been verified.
+Original runtime resume remains #1077 c015270b completion delivery/sealing,
+then the new-site audit and separately approved reversible DEV transition.
+
+Consolidation update 2026-09-20: refreshed current main with a normal merge,
+retaining both documentation tracks.42 focused watchdog/delivery/plan tests pass;
+Ruff clean. #962 remains a separate disk-formula change; combine and rerun after
+its approved merge. Only #1076/#1057/#962 currently have explicit merge permission;
+#965 preparation is authorized, its merge is not. Original runtime resumes at
+#1077 c015270b completion delivery/snapshot sealing, then new-site audit and
+owner-approved reversible DEV cutover. No services or real webhooks activated.
+
+Zadnja posodobitev: 2026-09-08 (Astra). Implemented, locally verified; not deployed.
+Contract: observations and failure streaks persist before delivery; notification
+dedup and heartbeat acknowledgements advance only after successful delivery.
+Failed delivery retries next cycle; dry-run writes neither state nor report.
+Proof: 40 targeted tests pass; targeted Ruff and diff whitespace checks pass.
+Real run/send_webhook with an in-process HTTP transport stub: failed alert,
+successful retry, failed recovery, successful retry, then a silent healthy cycle
+(four POST attempts, no network). Mutation acknowledging a failed POST was seen
+failing (`last_alert_at` unexpectedly nonzero), restored and checked with `cmp`.
+Dry-run tests cover existing/missing output paths and reject save attempts.
+Discord batches are capped at ten and acknowledged separately; partial failure
+retries only the undelivered remainder. Pending notifications follow the latest
+measurement: resolved undelivered failures are superseded, not replayed as history.
+Next: root review, then branch/PR flow. Real Discord delivery requires owner-approved
+test; existing legacy timestamps cannot retroactively prove past delivery. A crash
+after POST success but before state save can duplicate a notification.
+No service changes, real webhook, disk formula or cadence changes.
+PR #965 review 3951724563: pending daily heartbeat now survives midnight until
+acknowledged, or is replaced by the newly due day's heartbeat (at most one).
+Actual run with local stub: failed 23:58 -> successful retry 00:03 -> silent
+00:08 -> next day's normal 09:05 heartbeat; on-disk dates/pending count checked.
+Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
+`2`); restored file matches snapshot by `cmp`. Main was merged normally and
+both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
 
