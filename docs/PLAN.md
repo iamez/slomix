@@ -1,5 +1,15 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current #1068 checkpoint, 2026-09-28: final reviewed #1067 e22ae27c merged
+> normally as eed58f6c; both document histories preserved. Worker source/tests
+> remain identical to preserved 86c69e39; SSH source/tests equal e22ae27c.
+> Combined 133 cases pass in 14.44s, including real spawned-child completion,
+> failure, parent/cleanup interruption and SIGTERM refusal. Timeout observations
+> 2.004s/2.204s; procfs and active_children both confirm cleanup. Ruff clean.
+> Prior seen-failing late-observer mutation remains applicable to identical
+> worker bytes. Await actual #1067 main integration, then rerun/publish/review.
+> Owner authorized autonomous reviewed/green queue merges; no services enabled.
+
 >1068 refresh checkpoint2026-09-27: started from preserved local86c69e39,
 >NOT obsolete remote69a0ef29; normally merged reviewed parent1067 db7f3888
 >as99f2161c. Both doc histories retained, worker/source test bytes unchanged.

@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1068 retains original worker fixes 86c69e39 and final
+  SSH e22ae27c after normal merge eed58f6c. 133 combined cases pass in 14.44s,
+  actual spawned children reaped by two observations; Ruff clean. Await #1067
+  actual main, final sync and fresh review. No runtime activation or deployment.
+
 - (Astra, 2026-09-27)1068 local refresh preserved86c69e39 worker backports,
   merged reviewed1067 db7f3888 normally as99f2161c.92offline cases pass12.33s;
   real child cleanup verified by procfs and active_children, interrupted cleanup
