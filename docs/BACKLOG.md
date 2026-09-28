@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1027 local dependency proof complete: zero audit findings,
+  identical original/patched generated API types, typecheck, 845 tests/70 files
+  and SPA build succeed. Six built HTML asset references resolve offline.
+  Actual YAML/nanoid guard mutations fail, restored/cmp and probes pass; no
+  browser/server/deploy. Ready for parent-led main sync, publication and review.
+
 - (Astra, 2026-09-28) #1027 compatible nanoid3.3.19 lock patch removes last
   audit finding; original/patched OpenAPI output identical and typecheck passes.
   Bounded old dependency probes fail, patched probes pass. Full single-worker

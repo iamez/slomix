@@ -1,5 +1,21 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1027 completed local dependency proof, 2026-09-28: Node22.23.2/npm10.9.8,
+> npm ci --ignore-scripts, typecheck and 70 files/845 Vitest tests pass (single
+> worker, 273.39s). build:app succeeds in 2.33s; offline HTML validation resolves
+> all six referenced local assets as nonempty files. This is not a browser/live
+> deployment proof. Existing Vite future-native-loader and Tailwind sourcemap
+> warnings remain; jsdom emitted canvas/navigation warnings, no failed tests.
+> npm audit JSON twice reports zero vulnerabilities; npm ls/explain independently
+> confirms core1.34.20, YAML4.3.2, nanoid3.3.19 and Vitest/mocker4.1.11.
+> Original-lock API generation equals patched output byte-for-byte. Actual
+> installed-package guard mutations reproduce missing YAML budget exception and
+> nanoid zero-size subprocess timeout (1s, child reaped); both restored with cmp,
+> then both bounded probes pass. No tracked generated artifacts or service changes.
+> Local proof script: /tmp/slomix-deps-security-proof-20260928.cjs; baseline install
+> /tmp/slomix-deps-baseline-5lbaDz. Next actual-main synchronization and fresh
+> exact-head review/CI; original runtime plan follows queue consolidation.
+
 > #1027 follow-up, 2026-09-28: upstream nanoid3.3.19 is compatible with
 > postcss8.5.25's existing ^3.3.16 range, removing the remaining high advisory
 > https://github.com/advisories/GHSA-2v37-7h3g-55p8 . Targeted lock-only update
