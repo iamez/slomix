@@ -145,6 +145,57 @@ def test_failed_warning_retries(cycle):
     assert wd.load_state(Path(cfg["WATCHDOG_STATE_FILE"]))["keys"]["db"]["notified_level"] == "warn"
 
 
+@pytest.mark.parametrize("transition_at", [600, 4000])
+def test_warning_after_unknown_survives_cooldown_and_failed_delivery(cycle, transition_at):
+    """Fresh warning survives JSON reload, cooldown and a failed repeat POST."""
+    cfg, findings, deliveries, outcome, run = cycle
+    path = Path(cfg["WATCHDOG_STATE_FILE"])
+    findings[0].level = "warn"
+    outcome[0] = True
+    run()
+    findings[0].level = "unknown"
+    run(NOW + 300)
+    findings[0].level = "warn"
+    findings[0].reason = "new warning"
+    outcome[0] = False
+    run(NOW + transition_at)
+    if transition_at < wd.ALERT_DEDUP_S:
+        assert len(deliveries) == 1
+        run(NOW + 4000)
+    assert len(deliveries) == 2
+    state = json.loads(path.read_text())
+    assert state == wd.load_state(path)
+    assert state["keys"]["db"]["notified_level"] == "warn"
+    assert state["keys"]["db"]["last_alert_at"] == NOW
+    findings[0].reason = "latest warning"
+    outcome[0] = True
+    run(NOW + 4300)
+    assert len(deliveries) == 3
+    assert deliveries[-1][0]["description"] == "latest warning"
+    assert wd.load_state(path)["keys"]["db"]["last_alert_at"] == NOW + 4300
+    run(NOW + 8000)
+    assert len(deliveries) == 3
+
+
+@pytest.mark.parametrize("superseding", ["ok", "unknown", "fail"])
+def test_pending_warning_is_superseded_by_latest_measurement(cycle, superseding):
+    cfg, findings, deliveries, outcome, run = cycle
+    findings[0].level = "warn"
+    outcome[0] = True
+    run()
+    findings[0].level = "unknown"
+    run(NOW + 300)
+    findings[0].level = "warn"
+    run(NOW + 600)
+    findings[0].level = superseding
+    run(NOW + 900)
+    key = wd.load_state(Path(cfg["WATCHDOG_STATE_FILE"]))["keys"]["db"]
+    assert not key.get("pending_warn", False)
+    run(NOW + 4000)
+    assert all(not embed["title"].startswith("▲")
+               for batch in deliveries[1:] for embed in batch)
+
+
 def test_unacknowledged_failure_resolving_does_not_send_false_recovery(cycle):
     cfg, findings, deliveries, _, run = cycle
     run()

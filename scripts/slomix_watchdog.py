@@ -465,6 +465,12 @@ def decide(findings: list[Finding], state: dict[str, Any], now: float,
     for f in findings:
         k = keys.setdefault(f.key, {"level": "ok", "consecutive_fail": 0, "last_alert_at": 0.0})
         notified = k.setdefault("notified_level", k.get("level", "ok") if k.get("last_alert_at") else "ok")
+        # Observation transitions and delivery acknowledgements are independent.
+        # One bounded bit survives cooldown/failed POST, never a historical queue.
+        if f.level != "warn":
+            k["pending_warn"] = False
+        elif k.get("level", "ok") in ("ok", "unknown") or notified in ("ok", "unknown"):
+            k["pending_warn"] = True
         if f.level == "fail":
             k["consecutive_fail"] = int(k.get("consecutive_fail", 0)) + 1
         else:
@@ -472,7 +478,7 @@ def decide(findings: list[Finding], state: dict[str, Any], now: float,
         needed = 2 if f.key in CONFIRM_TWICE else 1
         if f.level == "fail" and k["consecutive_fail"] >= needed and now - float(k.get("last_alert_at", 0)) >= ALERT_DEDUP_S:
             alerts.append({"kind": "fail", "key": f.key, "reason": f.reason, "suggest": f.suggest, "value": f.value})
-        elif f.level == "warn" and notified in ("ok", "unknown") and now - float(k.get("last_alert_at", 0)) >= ALERT_DEDUP_S:
+        elif f.level == "warn" and k.get("pending_warn", False) and now - float(k.get("last_alert_at", 0)) >= ALERT_DEDUP_S:
             alerts.append({"kind": "warn", "key": f.key, "reason": f.reason, "suggest": f.suggest, "value": f.value})
         elif f.level == "ok" and float(k.get("last_alert_at", 0)) > 0:
             alerts.append({"kind": "recovered", "key": f.key, "reason": f"{f.key} is back to ok"})
@@ -518,6 +524,8 @@ def acknowledge(state: dict[str, Any], alerts: list[dict[str, Any]], now: float)
             key = state["keys"][alert["key"]]
             key["last_alert_at"] = 0.0 if alert["kind"] == "recovered" else now
             key["notified_level"] = "ok" if alert["kind"] == "recovered" else alert["kind"]
+            if alert["kind"] == "warn":
+                key["pending_warn"] = False
         state["pending_alerts"].remove(alert)
 
 

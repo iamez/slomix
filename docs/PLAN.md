@@ -1,5 +1,18 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #965 warning-transition delivery repair, 2026-09-28: review reproduced a
+> delivered warn -> unknown -> warn being suppressed forever by notified_level.
+> One bounded per-key pending_warn bit now distinguishes a new observed warning
+> transition from delivery history. It survives cooldown and failed delivery,
+> clears on successful warning ACK or a superseding nonwarn measurement, and
+> always renders the latest condition rather than queuing historical warnings.
+> Two actual run/state-file regressions fail on old code; replacing the pending
+> bit with a naive observed-level OR also fails cooldown and failed-POST retry.
+> Restored/cmp; 48 watchdog tests pass in 0.48s, Ruff/whitespace clean. JSON read
+> independently agrees with load_state; mock delivery counts, latest reason and
+> ACK timestamps prove retry behavior. Existing heartbeat-midnight repair remains.
+> No real webhook, collector, service or remote operations; root owns publication.
+
 > Current #965 checkpoint 2026-09-28: normally integrated actual main 1f4a388d
 > after #1067 merged. Watchdog source and both test files remain byte-identical
 > to reviewed 3c967222, retaining original 2e035917 and the disk fix. All 45

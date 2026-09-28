@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #965 fresh review warning transition regression repaired
+  with bounded per-key pending_warn state. Real isolated JSON/run proof covers
+  cooldown, failed delivery/retry and latest-condition supersession. Old code
+  and naive-OR mutation both fail two cases; restored/cmp, 48 cases pass0.48s.
+  Heartbeat repair preserved; no real delivery/services or remote writes.
+
 - (Astra, 2026-09-28) #965 integrated actual main 1f4a388d, retaining all
   watchdog fixes and both doc histories. Source/tests unchanged from 3c967222;
   45 focused contracts pass using actual temporary files and mocked delivery.

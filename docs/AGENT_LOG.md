@@ -1,5 +1,12 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Observation transitions need pending state separate from ACK history.**
+  A delivered warning followed by unknown and another warning cannot use the old
+  notified_level alone. An observed-level OR fixes only the first attempt: it
+  loses the transition during cooldown or after a failed retry. Persist one
+  pending-warning bit per key until warning ACK or superseding nonwarn data;
+  keep latest payloads and delivery history separate, without a historical queue.
+
 - **2026-09-27 · Publication modes are filtered by the process umask.**
   open(mode=0600) under umask0277 creates0400, still readable by its owner.
   Reconciliation must accept that safe publisher output without chmod widening;
