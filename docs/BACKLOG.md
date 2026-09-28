@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1073 refreshed locally on 4a764f1c; 190 offline cases
+  pass in 24.41s. Filesystem/fsync/no-clobber proof and two mutation experiments
+  verified; restored/cmp, 18 manifest cases pass. Existing filename-cap review
+  is fixed and reverified but remains unresolved remotely. No service/SSH/PR
+  changes. Next publish/review after parent, then reader/recovery slices.
+
 - (Astra, 2026-09-20) #1073 review4057411193 corrected manifest name cap200->240
   to match Lua producer. Real-file boundary tests and old-limit mutation verified;
   157 combined tests pass. #1072 verification-alias CI succeeded at exactcba88132.

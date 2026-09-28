@@ -329,6 +329,23 @@
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04r completion manifest refresh — 2026-09-28
+
+Normal merge of #1072 head 4a764f1c preserves both histories and all inherited
+source/worker/SSH guards. 190 combined offline cases pass in 24.41s, no skips.
+Real filesystem proof verifies receipt bytes/stat/SHA agreement, file fsync
+before no-clobber publication and directory fsync afterwards. Failures retain
+only complete visible receipts, with no overwrite of existing entries.
+Existing review thread PRRT_kwDOP4ZX3s6kKUAS concerns the already-fixed filename
+cap: actual 200/201/240-byte filenames pass and 241 is rejected. Reintroducing
+the 200 cap fails both 201/240 cases; bypassing content agreement separately
+fails the wrong-digest guard. Restored/cmp, all 18 manifest cases pass; Ruff and
+whitespace clean. The thread remains unresolved remotely for the publishing
+agent to answer with fresh evidence; no remote mutations performed here.
+Trusted writer receipt and immutable payload remain caller preconditions;
+manifest fsync does not establish payload durability or producer authenticity.
+Next parent-led publication/review, then recovery reader/retry composition.
+
 ### R04r durable completion manifest — 2026-09-20
 
 Review4057411193 fixed: manifest basename limit now matches producer240 ASCII
