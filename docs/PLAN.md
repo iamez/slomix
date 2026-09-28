@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1073 actual-main checkpoint 2026-09-28: normal parent111bc694 merge
+> incorporates #1068 squash4de6f07e; both histories and source/tests552820a3
+> preserved byte-for-byte. Final combined266case gate passes47.87s, including
+> worker lifecycle, synthetic SSH capture, Lua harness, manifest and mocked
+> watchdog delivery. Ruff/whitespace clean. No network/DB/service/remote writes.
+> Original runtime1986d671 retained; root owns fresh exact-head publication and
+> review. Prior local proofs do not imply downstream PRs are already reviewed.
+
 > #1073 published-parent refresh 2026-09-28: normally merged #1072 6a229f75;
 > both histories and final worker e8f05dbd source/test bytes retained. All266
 > worker/SSH/capture/spool/Lua/manifest/watchdog/plan contracts pass47.35s with
@@ -25,6 +33,11 @@
 > skips, including actual children, SIGINT fault injection, Lua interpreter and
 > manifest filesystem proofs. Ruff/whitespace clean. Local preparation only;
 > actual-main synchronization, fresh CI/review and merge cycles remain required.
+> #1072 actual-main propagation 2026-09-28: normal parente3c2e2f5 merge
+> incorporates4de6f07e, preserving both histories and source/tests6a229f75.
+> Prior41case10.66s Lua/capture proof remains applicable; combined repeat follows.
+> Runtime1986d671 retained; no remote/services and no implied fresh review.
+
 > #1072 published-parent refresh 2026-09-28: normally merged #1071 44a05106;
 > both histories and final worker e8f05dbd bytes retained. Forty-one actual Lua
 > harness/capture/plan cases pass10.66s; no remote/network/DB/service actions.
@@ -36,6 +49,11 @@
 > Lua-completion plus SSH/stability tests pass10.85s offline; no game server,
 > source activation, real SSH or service changes. Grace callers remain compatible.
 > Root owns final main-sync/publication gates; original runtime1986d671 preserved.
+> #1071 actual-main propagation 2026-09-28: normal parent539f77fc merge
+> incorporates4de6f07e, preserving both histories and exact source/tests44a05106.
+> Prior29case10.52s proof remains applicable; combined downstream repeat follows.
+> Runtime1986d671 retained. No remote/services; fresh publication gates remain.
+
 > #1071 published-parent refresh 2026-09-28: normally merged #1070 28271ad8;
 > both histories and final worker e8f05dbd bytes retained. Twenty-nine composed
 > stability/capture/plan cases pass10.52s, offline with real owned children.
@@ -47,6 +65,12 @@
 > Twenty-seven stability/SSH-capture tests pass10.72s. Existing callers use
 > supported grace budgets; no fixture weakening. Root owns actual-main sync and
 > final publication/review. No services/network/DB; runtime1986d671 preserved.
+> #1070 actual-main propagation 2026-09-28: normal parent09a62009 merge
+> incorporates #1068 squash4de6f07e, retaining both doc histories and unchanged
+> runtime source/tests from28271ad8. Prior19case9.80s proof applies to identical
+> code; combined downstream rerun follows. Runtime1986d671 preserved, no remote
+> or service action. Fresh exact-head review remains a separate publication gate.
+
 > #1070 published-parent refresh 2026-09-28: merged #1069 4007e597 with
 > published worker e8f05dbd and both doc histories. Nineteen composed capture/
 > plan cases pass9.80s; worker bytes remain unchanged. No network/DB/services.
@@ -78,6 +102,13 @@
 >BLOCK publication until the newly reported1067 implicit key certificate-sidecar
 >loading fix propagates through1068/1069, followed by actual main sync and fresh
 >exact-head review/CI. No1070 merge permission inferred. Original plan preserved.
+> #1069 actual-main checkpoint 2026-09-28: #1068 merged4de6f07e;
+> normal merge retains both histories and exact shared/test code from4007e597.
+> Thirteen real owned-child SSH capture/plan cases pass4.74s after sync; prior
+> 220-case42.00s gate covers unchanged worker/SSH/spool/watchdog code. Original
+> runtime1986d671 retained. Root may retarget/publish for fresh exact-head review;
+> this local proof is not CI or merge readiness. No remote/network/DB/services.
+
 > #1069 published-parent refresh 2026-09-28: normal merge e8f05dbd preserves
 > both doc histories and exact final worker/source-test bytes. All 220 offline
 > worker/SSH/task/capture/spool/watchdog/plan cases pass42.00s, including real
