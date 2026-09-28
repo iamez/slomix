@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) Propagated final worker90026032 through local #1069–#1073
+  by normal merges, retaining both histories and exact worker/source-test bytes.
+  Combined218cases pass47.43s. Minimum-grace compatible with existing callers;
+  no fixture weakening. No remote/service/DB action. Root handles actual-main
+  sync/publication and original runtime1986d671 remains the development resume.
+
 - (Astra, 2026-09-28) Final worker repair 3fa2280f propagated by normal merges
   through prepared #1069-#1073; worker source/tests identical at every head.
   Final manifest/inherited offline suite passes 203 cases in 31.02s, no skips.
@@ -92,6 +98,15 @@
   pass; offline transport with actual child/filesystem demonstrates timeout can
   leave either partial or final content. Guard mutation fails/restores. Next
   reconciliation composition/source identity; no activation or network claim.
+- (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
+  installed before spawn through close; custom side effects replay even with
+  original error; 0.01s minimum grace rejects unsupported tiny budgets. Every
+  cleanup phase attempts its stop signal. Explicit delayed-SIGINT contract.
+  159cases pass37.24s including45workers; broad-catch narrowing fails3 actual
+  SystemExit cases, disabled lifetime guard leaks spawnwindow child in fixture,
+  restored/cmp and fixture cleanup verified. Removed unused cleanup_complete;
+  retained intentional BaseException deferred-rethrow semantics with proof.
+  No remote/services/DB/network. Runtime1986d671 preserved; root owns gates.
 
 - (Astra, 2026-09-28) Root-review worker follow-up: tiny-grace finished-child
   false error and cleanup-clock SIGINT leak reproduced, repaired and mutation
