@@ -1,5 +1,29 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #979 real artifact acceptance, 2026-09-28: normal merges preserve original
+> 94cf8e3d, actual main ec8ec7ed, Node pin ea5f2ab3 and dependency repair022f1115.
+> Clean committed source338f5b9b built with actual Node22.23.2/npm10.9.8 through
+> npm run build:app (not mocked Vite), after npm ci --ignore-scripts/typecheck.
+> Provenance records exact SHA and all137 output hashes; independent hashlib
+> and sha256sum agree, and all recorded input hashes match actual files.
+> Actual dev_deploy.sh with DEV_PREFLIGHT_ONLY=1, explicit offline SHA and ONLY
+> a disposable run clone succeeds. Run HEAD/tree and old asset bytes, inodes,
+> mtimes and independent hashes remain unchanged; temporary staging is removed.
+> In-process Starlette static HTTP requests return200 for HTML and six referenced
+> assets with bytes equal to built files. No listener, browser, actual DEV run
+> clone, service, network deployment or production operation was used.
+> All23 artifact guards pass5.63s; disabling output equality fails corruption
+> detection with DID NOT RAISE, restored/cmp. Ruff/bash syntax/whitespace clean.
+> Codacy annotation106142970471 at helper line28 reviewed: subprocess uses an
+> argv list, no shell; all helper callsites supply fixed Git subcommands/options,
+> source path is a separate -C argument. Trusted local PATH/toolchain remains a
+> prerequisite, not an untrusted execution boundary; no scanner disabled.
+> Proof script/disposable clone remain local under
+> /tmp/slomix-artifact-livebuild-kLb7dL. This closes missing-real-build evidence,
+> not live deployment acceptance. Rebuild/reverify after this documentation
+> commit because exact-SHA provenance must change even for documentation commits.
+> Parent must integrate actual merged #969/#1027, then fresh CI/review/merge cycle.
+
 > #965 warning-transition delivery repair, 2026-09-28: review reproduced a
 > delivered warn -> unknown -> warn being suppressed forever by notified_level.
 > One bounded per-key pending_warn bit now distinguishes a new observed warning

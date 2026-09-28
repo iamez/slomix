@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #979 real Node22.23.2 wrappedbuild/provenance verified:
+  137outputs hashes by two paths; actual preflight only in disposable clone
+  preserves HEAD/tree/assets/inodes/mtimes. In-process HTTP200 HTML+6assets
+  equalsdisk, no server/browser/DEVdeployment.23guards pass5.63s; corruption
+  mutation fails/restored/cmp. Final docscommit requires rebuilt exactSHA;
+  root owns actual parent merge synchronization and remote review/CI.
+
 - (Astra, 2026-09-20) #979 consolidation review: fixed stale default source ref,
   wrong-checkout verifier and hidden-index input flags, with four failing/restored
   regressions and23passing fixture tests. No real deploy. Branch refresh/CI and
