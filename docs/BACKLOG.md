@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1070 local bda56937 includes final SSH sidecar guard
+  and preserved worker fixes. 150 combined cases pass in 23.00s including
+  timeout with present final content and safe retries. Await #1069 actual main.
+
 - (Astra, 2026-09-27)1070 refreshed locally through8501f7b9 (merge5d2971f7),
   preserving worker/auth/0400 fixes and both documentation histories.141offline
   tests pass23.35s; real child/retry proofs and failing guard mutation restored/cmp.

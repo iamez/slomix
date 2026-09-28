@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current #1070 checkpoint, 2026-09-28: normal parent merge bda56937 retains
+> final SSH identity e22ae27c and worker fixes 86c69e39. Combined 150 cases pass
+> in 23.00s: real child outcomes remain separate from observed content, retries
+> do not re-read already matching content, and procfs/active_children confirm
+> cleanup. Actual supervised tests live in test_runtime_ssh_capture.py, not a
+> separate supervised test file. Local preparation only; actual main sync and
+> fresh exact-head gates still required after #1069. No services or live SSH.
+
 >1070 local refresh2026-09-27: live sourcef4d11cb6/base1069 normally merged
 >prepared1069 at8501f7b9 as5d2971f7. Both documentation histories retained;
 >spool conflicts preserve0400 inspection fix; worker/auth/source tests match
