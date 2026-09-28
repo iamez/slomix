@@ -1,6 +1,7 @@
 """SSH ownership proofs without any network access or real credentials."""
 
 from dataclasses import replace
+from secrets import token_urlsafe
 from unittest.mock import Mock
 
 import paramiko
@@ -47,9 +48,11 @@ def test_phase_failure_cleanup_and_explicit_auth(config, monkeypatch, phase):
     assert isinstance(client.set_missing_host_key_policy.call_args.args[0], paramiko.RejectPolicy)
     client.load_host_keys.assert_called_once_with(str(config.known_hosts))
     if phase != 'hosts':
+        strategy = client.connect.call_args.kwargs['auth_strategy']
+        assert isinstance(strategy, paramiko.auth_strategy.AuthStrategy)
         client.connect.assert_called_once_with(
             hostname='fixture.invalid', port=2222, username='fixture',
-            key_filename=str(config.key_path), allow_agent=False, look_for_keys=False,
+            auth_strategy=strategy,
             timeout=10.0, banner_timeout=10.0, auth_timeout=10.0, channel_timeout=10.0,
         )
 
@@ -84,3 +87,154 @@ def test_invalid_configuration_rejected(config, field, value):
     """Invalid endpoints or unbounded phase budgets fail before any SSH work."""
     with pytest.raises(ValueError):
         replace(config, **{field: value})
+
+
+@pytest.mark.parametrize('remaining', [['keyboard-interactive'], ['password'], []])
+def test_partial_publickey_never_prompts_or_opens_sftp(config, monkeypatch, remaining):
+    """Exercise installed legacy auth or the supplied strategy without a socket."""
+    key = paramiko.RSAKey.generate(2048)
+    key.write_private_key_file(str(config.key_path))
+    config.known_hosts.write_text('')
+    client = paramiko.SSHClient()
+    transport = Mock()
+    transport.auth_publickey.return_value = remaining
+    transport.is_authenticated.return_value = False
+    transport.auth_interactive_dumb.side_effect = AssertionError('Interactive authentication attempted')
+    client._transport = transport  # noqa: SLF001 - offline installed-auth regression seam
+    def connect(**kwargs):
+        strategy = kwargs.get('auth_strategy')
+        if strategy is not None:
+            return strategy.authenticate(transport)
+        return client._auth(kwargs['username'], None, None, [kwargs['key_filename']],  # noqa: SLF001
+                            kwargs['allow_agent'], kwargs['look_for_keys'], None)
+    monkeypatch.setattr(client, 'connect', connect)
+    sftp = Mock()
+    monkeypatch.setattr(client, 'open_sftp', sftp)
+    monkeypatch.setattr(paramiko, 'SSHClient', lambda: client)
+    with pytest.raises(paramiko.AuthenticationException), open_runtime_sftp(config):
+        pytest.fail('Incomplete authentication accepted')
+    transport.auth_publickey.assert_called_once()
+    transport.auth_interactive_dumb.assert_not_called()
+    transport.auth_password.assert_not_called()
+    transport.close.assert_called_once()
+    sftp.assert_not_called()
+
+
+@pytest.mark.parametrize('kind,encoding', [
+    ('rsa', 'pem'), ('rsa', 'openssh'), ('ecdsa', 'pem'),
+    ('ecdsa', 'openssh'), ('ed25519', 'openssh'),
+])
+def test_installed_connect_key_formats_without_legacy_auth(config, monkeypatch, kind, encoding):
+    """Real connect/host-key/loading/strategy path; only transport is synthetic."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import ec, ed25519, rsa
+
+    key = {'rsa': lambda: rsa.generate_private_key(public_exponent=65537, key_size=2048),
+           'ecdsa': lambda: ec.generate_private_key(ec.SECP256R1()),
+           'ed25519': ed25519.Ed25519PrivateKey.generate}[kind]()
+    form = (serialization.PrivateFormat.OpenSSH if encoding == 'openssh'
+            else serialization.PrivateFormat.TraditionalOpenSSL)
+    config.key_path.write_bytes(key.private_bytes(serialization.Encoding.PEM, form,
+                                                 serialization.NoEncryption()))
+    host = paramiko.ECDSAKey.generate()
+    keys = paramiko.HostKeys()
+    keys.add('[fixture.invalid]:2222', host.get_name(), host)
+    keys.save(str(config.known_hosts))
+    client = paramiko.SSHClient()
+    original_connect = client.connect
+    transport = Mock()
+    transport.get_security_options.return_value.key_types = ['ecdsa-sha2-nistp256']
+    transport.get_remote_server_key.return_value = host
+    transport.auth_publickey.return_value = []
+    transport.is_authenticated.return_value = True
+    def connect(**kwargs):
+        return original_connect(**kwargs, sock=Mock(), transport_factory=lambda *a, **k: transport)
+    monkeypatch.setattr(client, 'connect', connect)
+    legacy = Mock(side_effect=AssertionError('Legacy auth must not run'))
+    monkeypatch.setattr(client, '_auth', legacy)
+    sftp = Mock()
+    monkeypatch.setattr(client, 'open_sftp', lambda: sftp)
+    monkeypatch.setattr(paramiko, 'SSHClient', lambda: client)
+    with open_runtime_sftp(config) as actual:
+        assert actual is sftp
+    transport.auth_publickey.assert_called_once()
+    username, loaded_key = transport.auth_publickey.call_args.args
+    assert username == 'fixture'
+    assert loaded_key.can_sign()
+    assert loaded_key.asbytes() == paramiko.PKey.from_path(config.key_path).asbytes()
+    legacy.assert_not_called()
+    transport.auth_interactive_dumb.assert_not_called()
+    transport.auth_password.assert_not_called()
+    transport.close.assert_called_once()
+    sftp.close.assert_called_once()
+    print(f'Offline installed Paramiko connect proof: {kind}/{encoding}, strict host key, key-only auth, cleanup')
+
+
+@pytest.mark.parametrize('kind', ['missing', 'malformed', 'encrypted'])
+def test_unusable_explicit_key_fails_without_fallback(config, monkeypatch, kind):
+    """No prompt, ambient key or password fallback on loading failure."""
+    if kind == 'malformed':
+        config.key_path.write_text('not a private key')
+    elif kind == 'encrypted':
+        paramiko.RSAKey.generate(2048).write_private_key_file(
+            str(config.key_path), password=token_urlsafe(32),
+        )
+    client = Mock()
+    transport = Mock()
+    client.connect.side_effect = lambda **kwargs: kwargs['auth_strategy'].authenticate(transport)
+    monkeypatch.setattr(paramiko, 'SSHClient', lambda: client)
+    with pytest.raises((OSError, ValueError, TypeError, paramiko.SSHException)), open_runtime_sftp(config):
+        pytest.fail('Unusable key accepted')
+    transport.auth_publickey.assert_not_called()
+    transport.auth_interactive_dumb.assert_not_called()
+    transport.auth_password.assert_not_called()
+    client.open_sftp.assert_not_called()
+    client.close.assert_called_once()
+
+
+@pytest.mark.parametrize('sidecar', ['valid', 'malformed', 'explicit_certificate'])
+def test_adjacent_certificate_never_changes_explicit_identity(config, monkeypatch, sidecar):
+    """Real OpenSSH sidecar must not be discovered by private-key-only auth."""
+    import shutil
+    import subprocess
+
+    executable = shutil.which('ssh-keygen')
+    if executable is None:
+        pytest.fail('ssh-keygen is required for the offline certificate boundary proof')
+    ca = config.key_path.parent / 'fixture-ca'
+    for path in (config.key_path, ca):
+        subprocess.run([executable, '-q', '-t', 'ed25519', '-N', '', '-f', str(path)],
+                       check=True, capture_output=True, timeout=10)
+    subprocess.run([executable, '-q', '-s', str(ca), '-I', 'offline-fixture',
+                    '-n', 'fixture', str(config.key_path) + '.pub'],
+                   check=True, capture_output=True, timeout=10)
+    certificate = config.key_path.with_name(config.key_path.name + '-cert.pub')
+    assert certificate.read_text().startswith('ssh-ed25519-cert-v01@openssh.com ')
+    if sidecar == 'malformed':
+        certificate.write_text('invalid adjacent certificate')
+    original = certificate.read_bytes()
+    client = Mock()
+    transport = Mock()
+    transport.auth_publickey.return_value = []
+    transport.is_authenticated.return_value = True
+    def authenticate(user, key):
+        assert user == 'fixture'
+        assert key.can_sign()
+        assert key.public_blob is None, 'Ambient certificate changed explicit private-key identity'
+        return []
+    transport.auth_publickey.side_effect = authenticate
+    client.connect.side_effect = lambda **kwargs: kwargs['auth_strategy'].authenticate(transport)
+    monkeypatch.setattr(paramiko, 'SSHClient', lambda: client)
+    if sidecar == 'explicit_certificate':
+        with pytest.raises(paramiko.SSHException), open_runtime_sftp(replace(config, key_path=certificate)):
+            pytest.fail('Certificate pathname implicitly selected its private-key sibling')
+        transport.auth_publickey.assert_not_called()
+        client.open_sftp.assert_not_called()
+        client.close.assert_called_once()
+        return
+    with open_runtime_sftp(config):
+        pass
+    transport.auth_publickey.assert_called_once()
+    client.open_sftp.assert_called_once()
+    client.close.assert_called_once()
+    assert certificate.read_bytes() == original

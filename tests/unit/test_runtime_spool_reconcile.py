@@ -32,6 +32,29 @@ def test_missing_then_matching(tmp_path):
     print('Reconciliation proof: missing -> published -> match; exact bytes and inode retained')
 
 
+def test_restrictive_umask_publication_can_be_inspected_without_widening(tmp_path):
+    """The publisher's own owner-readable restrictive mode remains valid."""
+    previous = os.umask(0o277)
+    try:
+        path = publish(tmp_path)
+    finally:
+        os.umask(previous)
+    assert path.stat().st_mode & 0o777 == 0o400
+    assert inspect(tmp_path) == 'match'
+    assert path.read_bytes() == b'abc'
+    assert path.stat().st_size == len(path.read_bytes()) == 3
+    assert path.stat().st_mode & 0o777 == 0o400
+    print('Restrictive umask proof: published 0400, matching abc, mode unchanged')
+
+
+@pytest.mark.parametrize('mode', [0o500, 0o700, 0o640, 0o604, 0o660, 0o6000 | 0o600])
+def test_nonprivate_or_special_permissions_are_rejected(tmp_path, mode):
+    path = publish(tmp_path)
+    path.chmod(mode)
+    with pytest.raises(ValueError, match='owner-readable private regular'):
+        inspect(tmp_path)
+
+
 @pytest.mark.parametrize('payload', [b'abd', b'ab', b'abcd'])
 def test_conflict_is_never_overwritten(tmp_path, payload):
     """Equal-length corruption and size differences remain untouched conflicts."""
