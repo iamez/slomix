@@ -1,5 +1,14 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Worker repair propagation checkpoint, 2026-09-28: normal sequential parent
+> merges carry final worker 3fa2280f through #1069 3698e7de, #1070 9c63f046,
+> #1071 360667b8, #1072 f072786c and #1073 667089af. At each head both worker
+> source and tests compare byte-for-byte with 3fa2280f; document conflicts retain
+> both histories. Final #1073 combined offline gate: 203 passed in 31.02s, zero
+> skips, including actual children, SIGINT fault injection, Lua interpreter and
+> manifest filesystem proofs. Ruff/whitespace clean. Local preparation only;
+> actual-main synchronization, fresh CI/review and merge cycles remain required.
+
 > Current #1070 checkpoint, 2026-09-28: normal parent merge bda56937 retains
 > final SSH identity e22ae27c and worker fixes 86c69e39. Combined 150 cases pass
 > in 23.00s: real child outcomes remain separate from observed content, retries

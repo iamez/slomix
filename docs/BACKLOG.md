@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) Final worker repair 3fa2280f propagated by normal merges
+  through prepared #1069-#1073; worker source/tests identical at every head.
+  Final manifest/inherited offline suite passes 203 cases in 31.02s, no skips.
+  Both documentation histories preserved; no remote writes or activation.
+
 - (Astra, 2026-09-28) #1073 refreshed locally on 4a764f1c; 190 offline cases
   pass in 24.41s. Filesystem/fsync/no-clobber proof and two mutation experiments
   verified; restored/cmp, 18 manifest cases pass. Existing filename-cap review
