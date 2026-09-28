@@ -38,6 +38,16 @@
   pass,Ruff clean. Wait for #962 disk fix before combined verification. #965 has
   no merge permission. Runtime resume #1077 c015270b: completion delivery/sealing,
   then new-site audit and approved DEV transition. NEVER MERGE unchanged.
+
+- (Astra, 2026-09-28) #969 normal main1f4a388d refresh: six node/plan contracts
+  pass; isolated22.23.2 binary verified by two version paths. Old22.13.1 pin
+  mutation fails, restored/cmp. No install/build/browser/service/lock change.
+  Root owns remote review/merge; original runtime1986d671 plan preserved.
+
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
 - (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
   certificate discovery. Public typed file-object private-key loaders preserve
   five tested key encodings; certificate paths unsupported, no ambient cert or
