@@ -31,6 +31,7 @@
   latest exact-head CI all green. Next transport-specific task and source identity;
   no services activated and no DB transactions allowed in force-stopped workers.
 
+
 - (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
   certificate discovery. Public typed file-object private-key loaders preserve
   five tested key encodings; certificate paths unsupported, no ambient cert or
