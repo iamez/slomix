@@ -1,5 +1,14 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current #1068 checkpoint 2026-09-28: #965 merged ec8ec7ed; normal main sync
+> 9fb9d3db retains both document histories and worker/source test bytes90026032.
+> Root independently passed159cases37.50s before sync and207worker/SSH/spool/
+> capture/watchdog cases37.06s after sync. SIGINT lifetime and0.01minimumgrace
+> contracts below are current; prior narrower deferral notes are historical.
+> Publish for fresh exact-head CI/review; all five outstanding findings need
+> evidence-backed replies. Owner's current-queue exception remains bounded;
+> original runtime1986d671, NEVER MERGE, release956 and services stay excluded.
+
 > #1068 lifetime ownership correction 2026-09-28: fresh review reproduced tiny
 > positive grace leaving an owned child, a second-getsignal cleanup transition,
 > and dropped custom SIGINT side effects when launch also failed. Install one
