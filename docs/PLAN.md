@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Final main synchronization 2026-09-28: #1067 merged 1f4a388d, reviewed tree
+> equality verified. Normal main merge c99badb6 preserves worker backports and
+> final SSH identity. Repeat combined gate: 133 passed in 13.69s. Publish #1068
+> against main for fresh exact-head CI/review under owner's autonomous green
+> queue authorization. No service activation, production or snapshot changes.
+
 > Current #1068 checkpoint, 2026-09-28: final reviewed #1067 e22ae27c merged
 > normally as eed58f6c; both document histories preserved. Worker source/tests
 > remain identical to preserved 86c69e39; SSH source/tests equal e22ae27c.
