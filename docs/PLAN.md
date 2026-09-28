@@ -24,6 +24,24 @@
 >live SSH, DB or snapshot operations. Await parent approval/actual main sync and
 >fresh exact-head CI/review. Original runtime plan preserved after consolidation.
 
+>Current1067 checkpoint2026-09-27: approved1065 merged9ef42671 at20:36:29Z;
+>squash tree equals reviewed1f6562f0. Actualmain normally integrated; explicit
+>private-key-only sidecar repair preserved fromc63f8ac5. Repeat combined gate,
+>publish/reply and request fresh exact-head review. No1067 merge permission,
+>network/service/applicationDB action. Original runtime roadmap preserved.
+
+> PR1067 explicit-identity correction, 2026-09-27: follow-up review proved that
+> PKey.from_path silently loads key_path-cert.pub. A real temporary ssh-keygen
+> certificate changed the offered identity; a malformed neighbor broke auth.
+> Both regressions failed on old code. Load the named private-key contents once
+> through public typed from_private_key file-object APIs instead; no sidecar
+> lookup, certificate-path substitution or passphrase prompt. Five existing
+> RSA/ECDSA/Ed25519 encoding proofs still pass. Certificate paths explicitly
+> fail closed. All108 SSH/capture/spool/reconcile tests pass. Reintroducing
+> from_path failed both sidecar guards; restored/cmp. Earlier from_path claims
+> below are superseded by this correction. No live handshake/network/services
+> or DB actions; next fresh exact-head CI/review. Original plan remains intact.
+
 >Current1067 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
 >squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
 >all doc histories and source fixes preserved. Publish after repeated local gates
@@ -60,6 +78,22 @@
 >retarget/push and fresh exact-head CI/review. No1067 permission, no connections
 >or service changes. Phase timeouts do not bound DNS/handshake/cleanup as a whole;
 >the later dedicated worker remains an activation gate. Original plan preserved.
+
+>Current1065 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1065-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
+>1065 refresh checkpoint2026-09-27: integrated reviewed1064 parent3422cd3e
+>normally as ab5b17e4. Source/test bytes equal0e3d100a; both doc histories retained.
+>55real filesystem cases pass0.63s/0.66s, including partial failure, publication
+>race and failed directory fsync followed by content inspection without reread.
+>Mutation forcing a source read on match fails AssertionError: Source must not
+>be consumed; restored/cmp, Ruff clean. Content presence is not a durability or
+>import acknowledgement. Await1064 actual main merge before final sync/publish;
+>no1065 merge approval, no network, services or application DB changes.
+>Original runtime plan preserved; dependency consolidation only.
 
 
 >1064 restrictive-umask review2026-09-27: reproduced publication under0277
@@ -357,6 +391,22 @@ unknown-host rejection, no hosts mutation. Initial offline fixture lacked logger
 transport; fixed the fixture only. Cleanup mutation fails, restored/cmp; Ruff
 clean. No real SSH connection/server, credentials, service or DB changes.
 Not an activated source transport or end-to-end network proof.
+
+### R04j single-attempt capture reconciliation — 2026-09-20
+
+Contract: inspect before source iteration; content_present skips input but is
+not a durability/import acknowledgement; conflict preserves file without reading
+source; missing publishes through existing verified no-clobber primitive.
+All exceptions propagate, including source FileExistsError, races and post-link
+sync errors. A later caller-driven attempt re-inspects. No loop, scheduler,
+connection creation, source deletion or service activation. Caller owns bounded
+source, timeouts and cleanup. Verify interrupted transfer, racing publication,
+ambiguous sync failure and retry with no source consumption.
+Verified 55 combined filesystem cases pass. Removing match/conflict short-circuits
+fails two tests with Source must not be consumed; restored/cmp. Real filesystem
+proof preserves inode/bytes on repeat and leaves one winning file after a race.
+Ruff and whitespace clean; external review/CI required. This composes publication
+and reconciliation, not the SSH connection owner or automatic retry scheduler.
 
 
 ### R04i read-only spool reconciliation — 2026-09-20

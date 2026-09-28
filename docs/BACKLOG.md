@@ -38,6 +38,13 @@
   latest exact-head CI all green. Next transport-specific task and source identity;
   no services activated and no DB transactions allowed in force-stopped workers.
 
+- (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
+  certificate discovery. Public typed file-object private-key loaders preserve
+  five tested key encodings; certificate paths unsupported, no ambient cert or
+  passphrase fallback. Real temporary ssh-keygen cert + malformed neighbor fail
+  old code;108 combined tests pass fixed code; mutation2 failures, restored/cmp.
+  Publish for fresh CI/review next. Original runtime plan/activation gates stay.
+
 - (Astra, 2026-09-27) PR1067 fresh P2 fixed locally: bypass Paramiko legacy
   interactive fallback using explicit-key AuthStrategy and reject partial auth.
   Three old-code regressions and three guard-mutation failures observed;
@@ -50,6 +57,11 @@
   cases pass, strict-policy offline proof and cleanup mutation/restoration done.
   No real network. End-to-end handshake bound and source identity still block
   activation. #1066 capture/import integration CI/review remains in parallel.
+
+- (Astra, 2026-09-20) R04j adds one caller-driven capture attempt on #1064.
+  55 filesystem tests pass; source-consumption guard mutation fails/restored.
+  Match/conflict skip input; missing publishes; every exception remains visible.
+  No source acknowledgement/deletion, scheduler, SSH or service activation.
 
 
 - (Astra, 2026-09-27)1064 Codex4116756259 verified/fixed: umask0277 produces
