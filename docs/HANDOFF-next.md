@@ -11,7 +11,11 @@
 > snapshot, not the current queue. #955 and #912 are merged at `4f653c01`;
 > #961 merged as `28662f04`; its Claude handoff evidence is now included.
 > Merge, build, active service and runtime proof are separate states.
-> Do NOT run the old review `cut --push`: it uses forbidden push options.
+> Astra did not execute the old review `cut --push`. AGENTS.md records a
+> narrow written exception for scripts/review_slices.sh and only the historical
+> review-base/NN-* and review/NN-* vehicles. This record neither revokes that
+> exception nor authorizes a new run or extends it to work branches. Consult
+> current owner instructions before changing any NEVER MERGE review vehicles.
 > Do NOT treat old server/browser commands as permission to start them.
 > Watchdog exists; delivery/retry proof is still required. Keep its 5-minute
 > cadence/two-failure policy unless explicitly changed, not a <=2-minute SLA.
