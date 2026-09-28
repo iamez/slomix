@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current #966 checkpoint 2026-09-28: normally integrated actual main 1f4a388d
+> after #1067 merged, preserving cd483737's three guard fixes and both histories.
+> Snapshot scripts/tests unchanged from 79a7e2d1. Twenty disposable local-Git CLI
+> cases pass; combined with plan contracts, 22 pass in 4.85s. Disabling actual
+> generated-tree validation fails all three file/line/scope collateral cases;
+> restored/cmp. Real review/review-base ref digest unchanged before/after:
+> d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> No real review refs, remote configuration, service or billing changed. Root
+> owns publication and fresh merge gates. Runtime resume 1986d671 preserved;
+> earlier checkpoints below are dated history, not current queue authority.
+
 > Current966 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
 >0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
 >branch integrates that main normally; implementation/test bytes preserved.
@@ -34,6 +45,143 @@
 >unchanged before/after; no snapshot operation ran against this repository.
 >Await1055 merge and final sync before publishing for fresh review/CI; no966
 >merge approval. Original runtime work and all NEVER MERGE snapshots preserved.
+>Current1067 checkpoint2026-09-27: approved1065 merged9ef42671 at20:36:29Z;
+>squash tree equals reviewed1f6562f0. Actualmain normally integrated; explicit
+>private-key-only sidecar repair preserved fromc63f8ac5. Repeat combined gate,
+>publish/reply and request fresh exact-head review. No1067 merge permission,
+>network/service/applicationDB action. Original runtime roadmap preserved.
+
+> PR1067 explicit-identity correction, 2026-09-27: follow-up review proved that
+> PKey.from_path silently loads key_path-cert.pub. A real temporary ssh-keygen
+> certificate changed the offered identity; a malformed neighbor broke auth.
+> Both regressions failed on old code. Load the named private-key contents once
+> through public typed from_private_key file-object APIs instead; no sidecar
+> lookup, certificate-path substitution or passphrase prompt. Five existing
+> RSA/ECDSA/Ed25519 encoding proofs still pass. Certificate paths explicitly
+> fail closed. All108 SSH/capture/spool/reconcile tests pass. Reintroducing
+> from_path failed both sidecar guards; restored/cmp. Earlier from_path claims
+> below are superseded by this correction. No live handshake/network/services
+> or DB actions; next fresh exact-head CI/review. Original plan remains intact.
+
+>Current1067 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1067-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
+> PR1067 key-only authentication correction, 2026-09-27: installed/pinned
+> Paramiko5 legacy authentication can call auth_interactive_dumb after partial
+> public-key authentication even with agent/discovery disabled. Three new
+> regression cases failed on old code. The modern AuthStrategy hook now loads
+> exactly the explicit key with PKey.from_path and requires complete public-key
+> authentication; partial responses never reach SFTP, password or interactive
+> fallback. Actual installed SSHClient.connect exercised offline with synthetic
+> transport and real RSA PEM/OpenSSH, ECDSA PEM/OpenSSH and Ed25519 OpenSSH keys.
+> Missing/malformed/encrypted keys fail closed; no passphrase prompt. Guard
+> removal failed all three cases; restored/cmp. Combined SSH/capture/spool gate:
+> 84 passed. No real SSH handshake, external connection, service or DB action.
+> Next: publish for new exact-head CI/review; no1067 merge permission. Original
+> runtime plan and activation gates below remain intact.
+
+>Current1067 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
+>squash tree equals435268ef. Actual main now integrated normally, documentation
+>histories and implementation bytes preserved. Repeat local gates then publish
+>for fresh exact-head CI/review. No service, network or application DB action;
+>no1067-specific approval recorded yet. Earlier checkpoints below are history.
+
+>1067 refresh checkpoint2026-09-27: integrated reviewed1063 parent435268ef
+>normally as eb72ec88; retained documentation histories and source/test bytes
+>from9f86bd69.73combined cases pass, including real Paramiko RejectPolicy against
+>a generated unknown key offline (no network) and real local socket publication.
+>Omitting SSH close registration fails cleanup-after-SFTP-close-error assertion:
+>['sftp-close'] != ['sftp-close', 'ssh-close']; restored/cmp and all73 pass again.
+>Existing review threads empty. Await1063 actual main merge before final sync,
+>retarget/push and fresh exact-head CI/review. No1067 permission, no connections
+>or service changes. Phase timeouts do not bound DNS/handshake/cleanup as a whole;
+>the later dedicated worker remains an activation gate. Original plan preserved.
+
+>Current1065 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1065-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
+>1065 refresh checkpoint2026-09-27: integrated reviewed1064 parent3422cd3e
+>normally as ab5b17e4. Source/test bytes equal0e3d100a; both doc histories retained.
+>55real filesystem cases pass0.63s/0.66s, including partial failure, publication
+>race and failed directory fsync followed by content inspection without reread.
+>Mutation forcing a source read on match fails AssertionError: Source must not
+>be consumed; restored/cmp, Ruff clean. Content presence is not a durability or
+>import acknowledgement. Await1064 actual main merge before final sync/publish;
+>no1065 merge approval, no network, services or application DB changes.
+>Original runtime plan preserved; dependency consolidation only.
+
+
+>1064 restrictive-umask review2026-09-27: reproduced publication under0277
+>creating0400 successfully while reconciliation rejected its own output. Inspector
+>now accepts exact0400/0600 owner-readable private regular files without chmod;
+>group/other/execute/special permissions remain rejected.75actual filesystem and
+>local socket cases pass0.71s. Real0400 file matches expectedabc, stat length3,
+>mode unchanged. Reinstating strict0600 guard fails regression; restored/cmp;
+>Ruff clean. No permission widening, service/DB changes, push or merge. Original
+>runtime plan preserved; fresh review/CI remains required after publication.
+
+>Current1064 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
+>squash tree equals435268ef. Actual main now integrated normally, documentation
+>histories and implementation bytes preserved. Repeat local gates then publish
+>for fresh exact-head CI/review. No service, network or application DB action;
+>no1064-specific approval recorded yet. Earlier checkpoints below are history.
+
+> Current 1064 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
+>squash tree equals reviewed21e6c999. Actual main now merged normally here.
+>Documentation histories preserved; source/test bytes unchanged from5264909e.
+>49 filesystem/stream tests are the local gate; prior failed/restored guard
+>mutation retained. Retarget to main and publish for fresh exact-head CI/review;
+>no 1064 merge approval, service activation or application database writes.
+>Original Runtime v2 plan remains intact; this is dependency consolidation.
+
+>1064 refresh checkpoint2026-09-27: normally integrated reviewed parent1062
+>21e6c999 as4c119978, preserving both documentation histories. Reconciliation
+>implementation/test bytes equal5264909e; both existing review threads resolved,
+>including wrong-sized inode replacement detection before conflict.49actual
+>filesystem tests pass0.56s, including private publication, independent SHA-256,
+>missing/match/conflict, read failures and inode replacement. Reinstating the old
+>wrong-size early return fails DID NOT RAISE RuntimeError; restored/cmp. Ruff
+>clean. Wait for approved1062 merge, then sync actual main and refresh exact-head
+>CI/review before any1064 merge decision. No push, service, DB or snapshot changes.
+>Original runtime roadmap remains unchanged; this is existing-PR consolidation.
+
+> Current 1063 checkpoint 2026-09-27: approved parent1062 merged4454d6c5;
+>squash tree equals reviewed21e6c999. Actual main now merged normally here.
+>Documentation histories preserved; source/test bytes unchanged froma570431c.
+>54 filesystem/stream tests are the local gate; prior failed/restored guard
+>mutation retained. Retarget to main and publish for fresh exact-head CI/review;
+>no 1063 merge approval, service activation or application database writes.
+>Original Runtime v2 plan remains intact; this is dependency consolidation.
+
+>1063 refresh checkpoint2026-09-27: normally merged reviewed1062 head21e6c999
+>as6c1579b6. Capture source/tests byte-identical to a570431c.54socket/filesystem
+>cases pass0.54s; real socket EOF publishes exact3bytes, missing EOF times out
+>without publication. Moving deadline before file setup reproduces TimeoutError
+>Capture deadline exceeded; restored/cmp. Ruff clean. Existing reviewed fix is
+>retained, not reimplemented. Await approved1062 merge, then sync/retarget/push
+>for fresh exact-head CI/review. No1063 merge approval or service activation.
+
+> Current1062 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
+>0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
+>branch integrates that main normally; implementation/test bytes preserved.
+>Publish now for fresh exact-head CI/review; no1062 merge permission and no
+>service or production changes. Earlier waiting checkpoints are historical.
+
+>1062 refresh checkpoint2026-09-27: normally integrated reviewed1061 d00f5de2
+>as7f72ccc7; source/integrity test bytes unchanged from1a024ce4.35filesystem
+>cases pass0.33s; independent sha256sum agrees with exact bytes/stat length.
+>Removing digest mismatch guard fails equal-length-corruption test with DID NOT
+>RAISE ValueError; restored/cmp. Ruff clean. Await approved1061 merge, sync
+>actual main, retarget before final push, then fresh exact-head review/CI.
+>No1062 merge permission. Optional digest is content verification, not source
+>authentication, scheduler wiring or a production activation guarantee.
+
 
 > Current1061 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
 >matches reviewed0e66f238. This branch now normally integrates that main,
@@ -198,6 +346,93 @@ fixture remotes only; actual NEVER MERGE refs/PRs remain untouched. No merge
 permission for #966. Current authorized batch is #1076/#1057/#962 only. Original
 runtime resume remains #1077 completion delivery/snapshot sealing after this
 consolidation detour, then new-site audit and approved reversible DEV transition.
+### R04l explicit SSH session ownership — 2026-09-20
+
+On #1063: neutral RuntimeSSHConfig and caller-driven open_runtime_sftp context.
+Explicit host/user/port/absolute key and known-host paths; strict RejectPolicy,
+no agent/key discovery/password or ambient bot config. Close SFTP before SSH,
+including failure during setup/body/cleanup. Caller closes its file handles.
+Phase budgets are NOT an overall deadline: DNS, subsystem negotiation and close
+can block. Hard-bound worker/process design remains an activation gate; do not
+use an executor cancellation as proof of stopping transfer. Paramiko API checked
+against installed signature and https://docs.paramiko.org/en/stable/api/client.html.
+73 combined tests pass: recorded phase failures/cleanup and real offline Paramiko
+unknown-host rejection, no hosts mutation. Initial offline fixture lacked logger
+transport; fixed the fixture only. Cleanup mutation fails, restored/cmp; Ruff
+clean. No real SSH connection/server, credentials, service or DB changes.
+Not an activated source transport or end-to-end network proof.
+
+### R04j single-attempt capture reconciliation — 2026-09-20
+
+Contract: inspect before source iteration; content_present skips input but is
+not a durability/import acknowledgement; conflict preserves file without reading
+source; missing publishes through existing verified no-clobber primitive.
+All exceptions propagate, including source FileExistsError, races and post-link
+sync errors. A later caller-driven attempt re-inspects. No loop, scheduler,
+connection creation, source deletion or service activation. Caller owns bounded
+source, timeouts and cleanup. Verify interrupted transfer, racing publication,
+ambiguous sync failure and retry with no source consumption.
+Verified 55 combined filesystem cases pass. Removing match/conflict short-circuits
+fails two tests with Source must not be consumed; restored/cmp. Real filesystem
+proof preserves inode/bytes on repeat and leaves one winning file after a race.
+Ruff and whitespace clean; external review/CI required. This composes publication
+and reconciliation, not the SSH connection owner or automatic retry scheduler.
+
+
+### R04i read-only spool reconciliation — 2026-09-20
+
+Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
+name stability checks before conflict. All 49 filesystem tests pass. Restoring
+the early return fails replacement-after-open regression; restored/cmp. Ruff
+clean. Review 4056550740 case-count spacing corrected. Fresh CI required.
+
+Contract: inspect a caller-retained immutable private spool entry against required
+size and SHA-256, returning missing/match/conflict. Missing is only final-entry
+ENOENT; directory/access/I/O failures propagate. Never delete/replace files or
+write DB markers. Open no-follow/nonblocking, require owned regular0600 file,
+bound reads and compare descriptor/name identity before certifying content.
+Match does not certify durability after failed fsync or import completion.
+This is a primitive, not automatic retry policy, full source identity or transport
+activation. Verify actual post-link-fsync failure, conflicts and replacement race.
+Verified 48 combined filesystem cases pass: actual directory-fsync failure still
+permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
+entries rejected and I/O errors propagate. Removing digest and identity guards
+fails 2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
+retry scheduling or make ambiguous durability safe for source deletion.
+
+### R04h bounded stream capture — 2026-09-20
+
+Review4056389676/4056392696: start the read deadline inside the generator,
+after spool setup.54 combined tests pass; advancing the clock during real file
+opens preserves the full read budget. Old placement fails Capture deadline
+exceeded, restored/cmp. Ruff clean; no service/DB changes. Fresh CI required.
+
+Contract: caller-owned synchronous reader honours bounded read and settimeout;
+capture sets per-read timeout capped by remaining monotonic deadline, verifies
+size and required source SHA-256, requires EOF, then publishes via R04f/g.
+No connection/authentication, executor, scheduling or source close ownership.
+Deadline covers stream consumption, not filesystem durability or SSH handshake;
+blocking readers which ignore timeouts cannot be forcibly cancelled here.
+Verified53 combined capture/spool/integrity cases pass. Real local sockets prove
+success and stalled-EOF cleanup. Disabling post-read deadline fails DID NOT RAISE;
+restored/cmp. Ruff clean. No remote SSH, database or service changes. Next integrate
+connection lifecycle and explicit source identity/reconciliation before activation.
+
+### R04g capture integrity contract — 2026-09-20
+
+Stacked on #1061: add an optional expected SHA-256 to completed-file publication.
+Validate canonical lowercase 64-hex metadata before consuming the stream; hash
+incrementally and reject mismatch before fsync/link, cleaning only our temporary
+file. Existing destinations remain untouched. Omission preserves the size-only
+API, not integrity assurance. The future transport must supply a trusted digest
+of its immutable source snapshot; hashing received bytes alone proves nothing
+about source identity. No SSH/service/DB activation. All 35 filesystem cases pass,
+including independent sha256sum against the abc known-answer vector. Disabling
+the digest mismatch guard caused DID NOT RAISE on equal-length corruption;
+restored with apply_patch and cmp. Changed Python files pass Ruff. #1061 has all
+reported CI checks green at 28009e87; individual merge permission still required.
+Next: bounded transport, trusted source metadata and explicit retry reconciliation.
+
 
 ### R04f immutable spool publication — 2026-09-20
 

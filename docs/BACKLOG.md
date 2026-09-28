@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #966 integrated actual main 1f4a388d; all three cd483737
+  guard fixes retained, scripts/tests unchanged from 79a7e2d1. Twenty real CLI
+  cases in disposable local repositories plus two plan contracts pass. Actual
+  tree-validation mutation fails three cases, restored/cmp; real review-ref
+  digest unchanged. No real remote/service operation. Root owns publication,
+  exact-head review and merge gates; original runtime 1986d671 unchanged.
+
 - (Astra, 2026-09-27)966 follow-up: three review findings fixed locally;20real
   disposable Git CLI tests pass. Duplicate/missing-positive areas fail preflight;
   generated tree diff catches D/F collateral and actual bounds before ref writes.
@@ -18,6 +25,72 @@
   Ruff clean. Actual review-snapshot refs and NEVER MERGE PRs unchanged. Keep
   this older tooling proposal for review, not authorized for merge. Runtime
   resume #1077 completion delivery/sealing remains after consolidation.
+- (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
+  certificate discovery. Public typed file-object private-key loaders preserve
+  five tested key encodings; certificate paths unsupported, no ambient cert or
+  passphrase fallback. Real temporary ssh-keygen cert + malformed neighbor fail
+  old code;108 combined tests pass fixed code; mutation2 failures, restored/cmp.
+  Publish for fresh CI/review next. Original runtime plan/activation gates stay.
+
+- (Astra, 2026-09-27) PR1067 fresh P2 fixed locally: bypass Paramiko legacy
+  interactive fallback using explicit-key AuthStrategy and reject partial auth.
+  Three old-code regressions and three guard-mutation failures observed;
+  restored/cmp,84 SSH/capture/spool tests pass. Installed connect/key parsing
+  proved offline across five supported key encodings; real handshake untested.
+  Original runtime/activation work unchanged. Publish then fresh CI/review;
+  no service changes, network connections or1067 merge permission.
+
+- (Astra, 2026-09-20) R04l neutral SSH session ownership on #1063; 73 combined
+  cases pass, strict-policy offline proof and cleanup mutation/restoration done.
+  No real network. End-to-end handshake bound and source identity still block
+  activation. #1066 capture/import integration CI/review remains in parallel.
+
+- (Astra, 2026-09-20) R04j adds one caller-driven capture attempt on #1064.
+  55 filesystem tests pass; source-consumption guard mutation fails/restored.
+  Match/conflict skip input; missing publishes; every exception remains visible.
+  No source acknowledgement/deletion, scheduler, SSH or service activation.
+
+
+- (Astra, 2026-09-27)1064 Codex4116756259 verified/fixed: umask0277 produces
+ 0400; inspector now permits0400/0600 without broadening permissions.75real
+  filesystem/local socket tests pass; oldmodeguard mutation fails then restored
+  and cmp verified. Unsafepermission regressions retained. No push/service/DB.
+
+- (Astra, 2026-09-27)1063 and1064 both included merged1062 main4454d6c5.
+  Preserved source/tests and both documentation histories; publish only after
+  repeating local gates. Fresh exact-head CI/review and individual permission
+  still required before merge. No deployment or production changes.
+
+- (Astra, 2026-09-27)1064 preserved/refreshed through parent1062 at21e6c999;
+  normal merge4c119978 retained both doc histories and original runtime plan.
+ 49real filesystem tests pass; mutation of wrong-size identity handling fails,
+  restored/cmp. Existing two review threads resolved; no new finding in this pass.
+  Wait actual1062 main merge, final sync and fresh review/CI; no1064 permission
+  inferred, no push/retarget/service/database/snapshot action.
+
+- (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
+  49 cases pass, early-return mutation fails/restored. Next compose a single
+  caller-driven retry step; no scheduling, source deletion or service activation.
+
+- (Astra, 2026-09-20) R04i on #1062: read-only spool reconciliation implemented,
+  48 filesystem cases pass with failed/restored digest and identity mutations.
+  No automatic cleanup, overwrite, retry loop, DB or service changes. Next wire
+  explicit reconciliation policy with connection ownership and immutable source.
+
+- (Astra, 2026-09-20) #1063 review: read deadline starts after spool setup;
+  54 cases pass, old-placement mutation fails/restored. Investigating #1060
+  cross-half payload identity before resuming transport/reconciliation.
+
+- (Astra, 2026-09-20) R04h adds caller-owned timed stream capture on #1062.
+  53 combined cases pass; real socket success/timeout cleanup and failing/restored
+  deadline mutation verified. No SSH connections or live activation. Separately
+  #1060 calendar review fixed in742504ee with23 unit/PG cases passing.
+
+- (Astra, 2026-09-20) R04g extends #1061 with opt-in source SHA-256 validation
+  before publication. 35 filesystem cases pass; independent sha256sum agrees;
+  disabled mismatch guard fails, restored/cmp. No transport/services activated.
+  Continue bounded capture and reconciliation; new-site audit follows runtime.
+
 
 - (Astra, 2026-09-20) Runtime PRs marked ready per owner. Copilot on #1061
   unable to review due to requester quota. Fixed supported map alphabet finding
