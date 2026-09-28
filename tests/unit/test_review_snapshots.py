@@ -66,6 +66,69 @@ def snapshots(repo):
                "refs/heads/review", "refs/heads/review-base")
 
 
+def test_detached_checkout_without_local_branches_can_cut(repo):
+    commit(repo, {"a.py": "value = 1\n"})
+    git(repo, "checkout", "--detach")
+    git(repo, "update-ref", "-d", "refs/heads/main")
+    assert git(repo, "for-each-ref", "refs/heads") == ""
+    run(repo, "cut")
+    assert len(snapshots(repo).splitlines()) == 2
+
+
+def test_separate_push_destination_is_inspected_and_published(repo):
+    commit(repo, {"a.py": "value = 1\n"})
+    run(repo, "cut", "--push")  # Fetch remote already has the expected pair.
+    expected = snapshots(repo)
+    destination = repo.parent / "push.git"
+    git(repo, "init", "--bare", str(destination))
+    git(repo, "remote", "set-url", "--push", "origin", str(destination))
+    run(repo, "cut", "--push")
+    assert snapshots(destination) == expected
+    assert len((repo.parent / "hook-calls").read_text().splitlines()) == 2
+    run(repo, "cut", "--push")
+    assert len((repo.parent / "hook-calls").read_text().splitlines()) == 2
+
+
+def test_multiple_push_destinations_fail_before_ref_creation(repo):
+    commit(repo, {"a.py": "value = 1\n"})
+    destination = repo.parent / "push.git"
+    git(repo, "init", "--bare", str(destination))
+    git(repo, "remote", "set-url", "--add", "--push", "origin", str(repo.parent / "remote.git"))
+    git(repo, "remote", "set-url", "--add", "--push", "origin", str(destination))
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0
+    assert "exactly one push URL" in result.stderr
+    assert snapshots(repo) == snapshots(destination) == snapshots(repo.parent / "remote.git") == ""
+    assert not (repo.parent / "hook-calls").exists()
+
+
+def test_separate_push_conflict_blocks_before_local_refs(repo):
+    commit(repo, {"a.py": "value = 1\n"})
+    source, base = git(repo, "rev-parse", "HEAD"), git(repo, "rev-parse", "v1.39.0")
+    destination = repo.parent / "remote.git"
+    ref = f"refs/heads/review-base/v2-{source}-{base}/area-p001"
+    git(destination, "update-ref", ref, base)
+    fetch = repo.parent / "fetch.git"
+    git(repo, "init", "--bare", str(fetch))
+    git(repo, "remote", "set-url", "origin", str(fetch))
+    git(repo, "remote", "set-url", "--push", "origin", str(destination))
+    before = snapshots(destination)
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0 and "immutable snapshot conflict" in result.stderr
+    assert snapshots(repo) == snapshots(fetch) == ""
+    assert snapshots(destination) == before
+    assert not (repo.parent / "hook-calls").exists()
+
+
+def test_commit_encoding_does_not_change_immutable_snapshot(repo):
+    commit(repo, {"a.py": "value = 1\n"})
+    run(repo, "cut")
+    expected = snapshots(repo)
+    git(repo, "config", "i18n.commitEncoding", "ISO-8859-1")
+    run(repo, "cut")
+    assert snapshots(repo) == expected
+
+
 @pytest.mark.parametrize("raced", ["review-base", "review", "both"])
 def test_remote_creation_race_cannot_overwrite_or_partially_publish(repo, monkeypatch, raced):
     commit(repo, {"a.py": "value = 1\n"})
@@ -83,7 +146,7 @@ def test_remote_creation_race_cannot_overwrite_or_partially_publish(repo, monkey
     wrapper.write_text(
         f"#!{sys.executable}\nimport os, subprocess, sys\n"
         f"real_git = {real_git!r}\n"
-        "if sys.argv[1:] == ['ls-remote', '--heads', 'origin']:\n"
+        f"if sys.argv[1:] == ['ls-remote', '--heads', '--', {str(repo.parent / 'remote.git')!r}]:\n"
         "    result = subprocess.run([real_git, *sys.argv[1:]], capture_output=True)\n"
         f"    for ref in {raced_refs!r}:\n"
         f"        subprocess.run([real_git, '--git-dir', {str(repo.parent / 'remote.git')!r}, "

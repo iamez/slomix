@@ -136,7 +136,7 @@ def snapshot(base, source, paths, name):
                GIT_COMMITTER_EMAIL="review@invalid", GIT_AUTHOR_DATE=date,
                GIT_COMMITTER_DATE=date)
     def commit(tree, parent, kind):
-        return git("commit-tree", tree, "-p", parent, "-m",
+        return git("-c", "i18n.commitEncoding=UTF-8", "commit-tree", tree, "-p", parent, "-m",
                    f"review: {name} {kind} (NEVER MERGE)\n\nSource: {source}\nBaseline: {base}",
                    env=env).decode().strip()
     review_base = commit(tree, source, "base")
@@ -149,7 +149,16 @@ def snapshot(base, source, paths, name):
 
 def existing_refs():
     return {ref: sha for sha, ref in
-            (line.split() for line in git("show-ref", "--heads").decode().splitlines())}
+            (line.split() for line in git("for-each-ref", "--format=%(objectname) %(refname)",
+                                         "refs/heads").decode().splitlines())}
+
+
+def push_destination():
+    """Pin one actual destination; cross-remote atomicity is not supported."""
+    urls = git("remote", "get-url", "--push", "--all", "origin").decode().splitlines()
+    if len(urls) != 1 or not urls[0]:
+        raise ValueError("snapshot publication requires exactly one push URL")
+    return urls[0]
 
 
 def assert_compatible(expected, existing):
@@ -186,8 +195,9 @@ def main():
     assert_compatible(refs, existing)
     remote = {}
     if args.push and refs:
+        destination = push_destination()
         remote = {ref: sha for sha, ref in
-                  (line.split() for line in git("ls-remote", "--heads", "origin").decode().splitlines())}
+                  (line.split() for line in git("ls-remote", "--heads", "--", destination).decode().splitlines())}
         assert_compatible(refs, remote)
     creates = [f"create {ref} {sha}" for ref, sha in refs.items() if ref not in existing]
     if creates:
@@ -205,7 +215,7 @@ def main():
                 # Empty expected values are create-only compare-and-swap, never
                 # permission to overwrite. Preflight alone cannot exclude races.
                 git("push", "--atomic", *[f"--force-with-lease={ref}:" for ref in missing],
-                    "origin", *[f"{refs[ref]}:{ref}" for ref in missing])
+                    "--", destination, *[f"{refs[ref]}:{ref}" for ref in missing])
 
 
 if __name__ == "__main__":
