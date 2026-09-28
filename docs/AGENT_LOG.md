@@ -407,3 +407,14 @@ it treats a returned partial-method list as success. Regression exercised the
 installed legacy auth; offline installed connect tests cover RSA/ECDSA PEM and
 OpenSSH plus Ed25519 OpenSSH. No real handshake claim. Missing, malformed and
 encrypted keys must fail without prompt/fallback. Keep strict host-key policy.
+# 2026-09-27 — Correction: PKey.from_path discovers adjacent certificates
+
+The earlier key-only SSH note used PKey.from_path; that still discovers a
+neighboring key_path-cert.pub and can offer a different certificate identity.
+Actual generated OpenSSH certificate and malformed-sidecar regression tests
+proved both behaviors. For the explicit private-key-only contract, read that
+file once and use public RSAKey/ECDSAKey/Ed25519Key.from_private_key file-object
+loaders. Do not pass a path-aware loader or certificate path; encrypted keys
+fail without prompting. Existing five key-format proofs and complete-auth guard
+remain; no real handshake was tested. This corrects the earlier implication
+that disabling legacy auth alone removed all ambient identity discovery.
