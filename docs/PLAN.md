@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1071 local parent propagation 2026-09-28: normal merge of #1070 locald4c0f5b8
+> retains final worker90026032 source/tests exactly and both doc histories.
+> Twenty-seven stability/SSH-capture tests pass10.72s. Existing callers use
+> supported grace budgets; no fixture weakening. Root owns actual-main sync and
+> final publication/review. No services/network/DB; runtime1986d671 preserved.
+
 > #1070 local parent propagation 2026-09-28: normally merged #1069 local593edbbc,
 > retaining final worker90026032 bytes and both histories. Seventeen supervised
 > SSH-capture cases pass9.98s, including real bounded children; configured0.2s
