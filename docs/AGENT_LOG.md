@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Cleanup ownership includes loop control and handle close.**
+  Guarding process calls alone leaves SIGINT windows in the supervising clock
+  and loop. Defer callable SIGINT across the whole cleanup scope, then restore
+  and replay the caller's handler after close; preserve an earlier parent error.
+  Observe process death before checking a cleanup deadline: an accepted tiny
+  positive grace can round to an already-expired floating-point deadline even
+  when the child is already reaped. Never infer liveness from elapsed time alone.
+
 - **2026-09-28 · Spawn ownership and the whole escalation path need interruption guards.**
   CPython creates the OS child before Process._popen is assigned: real SIGINT
   there can leave a child invisible to Process.pid and active_children. Defer

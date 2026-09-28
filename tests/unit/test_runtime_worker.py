@@ -331,3 +331,97 @@ def test_persistent_cleanup_failure_is_bounded_and_truthful(operation):
         runtime_worker._reap(BrokenProcess(), 0.02)  # noqa: SLF001 - isolated bounded cleanup fault
     assert isinstance(raised.value.__cause__, OSError)
     assert time.monotonic() - started < 1
+
+
+def test_finished_child_with_tiny_positive_grace(tmp_path):
+    """An elapsed cleanup budget is not evidence that an exited child is alive."""
+    result = run_bounded_capture_task(partial(_complete, tmp_path / 'child'),
+                                     timeout_seconds=3, shutdown_grace=1e-20)
+    assert result.status == 'completed'
+    assert not Path(f'/proc/{result.pid}').exists()
+
+
+@pytest.mark.parametrize('parent_error', [False, True])
+def test_cleanup_clock_sigint_reaps_before_delivery(tmp_path, monkeypatch, parent_error):
+    """Real SIGINT at cleanup loop control cannot escape child ownership."""
+    kind = multiprocessing.get_context('spawn').Process
+    original_join, original_kill, original_alive = kind.join, kind.kill, kind.is_alive
+    clock = time.monotonic
+    processes, calls = [], []
+    error = LookupError('fixture original parent failure')
+
+    def join(process, timeout=None):
+        first = not processes
+        if first:
+            processes.append(process)
+        original_join(process, timeout)
+        if first and parent_error:
+            raise error
+
+    def interrupt_clock():
+        calls.append(None)
+        # deadline, initial join budget, cleanup phase deadline, loop condition.
+        if len(calls) == 4:
+            os.kill(os.getpid(), signal.SIGINT)
+        return clock()
+
+    monkeypatch.setattr(kind, 'join', join)
+    monkeypatch.setattr(runtime_worker, 'time', SimpleNamespace(monotonic=interrupt_clock))
+    try:
+        with pytest.raises(LookupError if parent_error else KeyboardInterrupt) as raised:
+            run_bounded_capture_task(partial(_block, tmp_path / 'child', True),
+                                     timeout_seconds=1, shutdown_grace=0.2)
+        if parent_error:
+            assert raised.value is error
+        pid = int((tmp_path / 'child').read_text())
+        assert not Path(f'/proc/{pid}').exists()
+        assert pid not in [p.pid for p in multiprocessing.active_children()]
+    finally:
+        for process in processes:
+            try:
+                if original_alive(process):
+                    original_kill(process)
+                original_join(process, 2)
+                process.close()
+            except ValueError:
+                pass
+
+
+@pytest.mark.parametrize('mode', ['custom', 'ignored', 'system_exit'])
+def test_cleanup_restores_and_replays_caller_handler(tmp_path, monkeypatch, mode):
+    """Cleanup deferral preserves the caller's signal policy after handle close."""
+    kind = multiprocessing.get_context('spawn').Process
+    original_close = kind.close
+    previous = signal.getsignal(signal.SIGINT)
+    closed, calls = [], []
+    error = SystemExit(42)
+
+    def custom(signum, frame):
+        assert signal.getsignal(signal.SIGINT) is custom
+        assert closed
+        calls.append(signum)
+        if mode == 'system_exit':
+            raise error
+
+    def close(process):
+        pid = process.pid
+        os.kill(os.getpid(), signal.SIGINT)
+        original_close(process)
+        closed.append(pid)
+
+    handler = signal.SIG_IGN if mode == 'ignored' else custom
+    monkeypatch.setattr(kind, 'close', close)
+    signal.signal(signal.SIGINT, handler)
+    try:
+        task = partial(_complete, tmp_path / 'child')
+        if mode == 'system_exit':
+            with pytest.raises(SystemExit) as raised:
+                run_bounded_capture_task(task, timeout_seconds=3)
+            assert raised.value is error
+        else:
+            assert run_bounded_capture_task(task, timeout_seconds=3).status == 'completed'
+        assert calls == ([] if mode == 'ignored' else [signal.SIGINT])
+        assert signal.getsignal(signal.SIGINT) == handler
+        assert not Path(f'/proc/{closed[0]}').exists()
+    finally:
+        signal.signal(signal.SIGINT, previous)

@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1068 root-review follow-up, 2026-09-28: reproduced false unreaped error for
+> an already-finished real child with accepted grace=1e-20, and real SIGINT in
+> cleanup clock/loop control bypassing reaping. Status is now observed before
+> expiry checks; callable SIGINT deferral covers the entire cleanup ownership
+> scope including exitcode and handle close. Handler replay happens restored and
+> only after cleanup; original parent errors retain precedence. Custom, ignored
+> and SystemExit handlers are verified at close. Both mutations fail as expected,
+> restored/cmp; final 146 combined cases pass in 20.51s including 32 worker cases.
+> Ruff/whitespace clean. SIGKILL/default SIGTERM, arbitrary injected CPython
+> exceptions and uninterruptible OS waits remain outside the guarantee. No
+> remote/service/SSH changes. Supersedes the narrower startup-only deferral below.
+
 > Owner exception recorded 2026-09-28: the live message explicitly approved
 > #1067, then instructed continued merging of the remaining current PR queue
 > without repeated permission prompts when reviewed, corrected and green.

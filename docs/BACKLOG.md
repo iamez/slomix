@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) Root-review worker follow-up: tiny-grace finished-child
+  false error and cleanup-clock SIGINT leak reproduced, repaired and mutation
+  verified/restored/cmp. Whole cleanup now defers callable SIGINT through close;
+  prior handler behavior and original parent error preserved. 146 combined cases
+  pass in 20.51s, Ruff clean. Parent handles publication/descendant propagation.
+
 - (Astra, 2026-09-28) #1068 fresh review exposed real escalation/startup SIGINT
   child leaks. Three actual-spawn regressions failed before repair and again with
   mutations; fixtures always cleaned leaked children. Bounded operation-wide
