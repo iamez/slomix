@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1072 local parent propagation 2026-09-28: normal #1071 localdd0b16f0 merge
+> retains final worker90026032 source/tests and both histories. Thirty-nine
+> Lua-completion plus SSH/stability tests pass10.85s offline; no game server,
+> source activation, real SSH or service changes. Grace callers remain compatible.
+> Root owns final main-sync/publication gates; original runtime1986d671 preserved.
+
 > #1071 local parent propagation 2026-09-28: normal merge of #1070 locald4c0f5b8
 > retains final worker90026032 source/tests exactly and both doc histories.
 > Twenty-seven stability/SSH-capture tests pass10.72s. Existing callers use
