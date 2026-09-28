@@ -1,5 +1,11 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · A flag named exclude does not make a Git pathspec negative.**
+  Passing a plain path through --exclude expanded snapshot selection; accepting
+  an empty area silently lost requested coverage. Validate actual exclusion
+  magic and nonempty measured changes before all ref writes. Disposable local
+  remotes prove rejection without refs/push hooks, and exact successful scope.
+
 - **2026-09-27 · Planned Git path slices are not actual tree differences.**
   Restoring a file over a source directory can implicitly remove unselected
   children. Validate generated trees against the exact selected path set and

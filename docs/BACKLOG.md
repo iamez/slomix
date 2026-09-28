@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #966 fresh review scope fixes: reject an area selecting
+  no changes and --exclude without actual nonempty exclusion magic. Six
+  disposable CLI failures reproduced, guards mutated/failing/restored/cmp;
+  32 combined cases pass6.44s. Real review refs unchanged. Await fresh review.
+
 - (Astra, 2026-09-28) #966 integrated actual main 1f4a388d; all three cd483737
   guard fixes retained, scripts/tests unchanged from 79a7e2d1. Twenty real CLI
   cases in disposable local repositories plus two plan contracts pass. Actual

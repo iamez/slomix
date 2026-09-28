@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #966 follow-up 2026-09-28: actual disposable CLI regressions reproduced both
+> fresh findings: unmatched/fully excluded area silently omitted, and a plain
+> --exclude argument selected additional files. Preflight now rejects empty
+> selected areas and requires explicit nonempty Git exclusion magic; CLI help
+> describes this contract. Both guards run before any snapshot refs are written.
+> Six old-code regressions failed; disabling the guards again fails six cases,
+> restored/cmp. Thirty real CLI cases plus two plan contracts pass in 6.44s;
+> positive short/long exclusions preserve only the selected file in local remote.
+> Ruff and whitespace clean. Real review-ref digest remains d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> Fresh publication/review required. No historical review refs, real snapshot
+> pushes, services or production changed; original runtime 1986d671 preserved.
+
 > Current #966 checkpoint 2026-09-28: normally integrated actual main 1f4a388d
 > after #1067 merged, preserving cd483737's three guard fixes and both histories.
 > Snapshot scripts/tests unchanged from 79a7e2d1. Twenty disposable local-Git CLI

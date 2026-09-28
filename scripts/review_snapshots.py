@@ -29,6 +29,8 @@ def oid(ref):
 
 def partition(base, source, areas, exclusions):
     """Split at file boundaries; unsupported/oversize files block all writes."""
+    if any(not exclusion_pathspec(spec) for spec in exclusions):
+        raise ValueError("exclude requires an exclusion pathspec with a pattern")
     result = []
     names = set()
     for area in areas:
@@ -60,9 +62,22 @@ def partition(base, source, areas, exclusions):
             total += lines
         if current:
             chunks.append((current, total))
+        if not chunks:
+            raise ValueError(f"area selects no changes: {name}")
         for number, (paths, lines) in enumerate(chunks, 1):
             result.append((f"{name}-p{number:03}", paths, lines))
     return result
+
+
+def exclusion_pathspec(spec):
+    """An exclusion option must never become an additional positive selection."""
+    if spec.startswith(":("):
+        magic, separator, pattern = spec[2:].partition(")")
+        return bool(separator and pattern) and "exclude" in magic.split(",")
+    if spec.startswith(":"):
+        magic = re.match(r"[:/!^]*", spec).group()
+        return len(spec) > len(magic) and ("!" in magic or "^" in magic)
+    return False
 
 
 def positive_pathspec(spec):
@@ -148,7 +163,8 @@ def main():
     parser.add_argument("--base", default="v1.39.0")
     parser.add_argument("--source", default="origin/main")
     parser.add_argument("--area", action="append", required=True)
-    parser.add_argument("--exclude", action="append", default=[])
+    parser.add_argument("--exclude", action="append", default=[],
+                        help="explicit Git exclusion pathspec, e.g. ':!private/*'; plain paths are rejected")
     parser.add_argument("command", choices=["measure", "cut", "prs"], nargs="?", default="measure")
     parser.add_argument("--push", action="store_true")
     args = parser.parse_args()

@@ -195,6 +195,42 @@ def test_duplicate_area_blocks_before_refs(repo):
     assert not (repo.parent / "hook-calls").exists()
 
 
+@pytest.mark.parametrize("area", ["empty|typo.py", "empty|a.py :!a.py"])
+def test_empty_selected_area_blocks_all_refs(repo, area):
+    commit(repo, {"a.py": "a\n", "secret.py": "synthetic data\n"})
+    result = run(repo, "--area", area, "cut", "--push",
+                 area="valid|a.py", check=False)
+    assert result.returncode != 0
+    assert "area selects no changes: empty" in result.stderr
+    assert snapshots(repo) == ""
+    assert "review" not in git(repo, "ls-remote", "origin")
+    assert not (repo.parent / "hook-calls").exists()
+
+
+@pytest.mark.parametrize("exclusion", ["secret.py", ":", ":!", ":(exclude)"])
+def test_exclusion_argument_cannot_expand_scope(repo, exclusion):
+    commit(repo, {"a.py": "a\n", "secret.py": "synthetic data\n"})
+    result = run(repo, "--exclude", exclusion, "cut", "--push",
+                 area="area|a.py", check=False)
+    assert result.returncode != 0
+    assert "exclude requires an exclusion pathspec" in result.stderr
+    assert snapshots(repo) == ""
+    assert "review" not in git(repo, "ls-remote", "origin")
+    assert not (repo.parent / "hook-calls").exists()
+
+
+@pytest.mark.parametrize("exclusion", [":!secret.py", ":^secret.py",
+                                        ":(exclude)secret.py", ":(top,exclude)secret.py"])
+def test_explicit_exclusion_preserves_only_selected_changes(repo, exclusion):
+    commit(repo, {"a.py": "a\n", "secret.py": "synthetic data\n"})
+    result = run(repo, "--exclude", exclusion, "cut", "--push")
+    assert "files=1 lines=1" in result.stdout
+    head = next(row.split()[1] for row in snapshots(repo).splitlines()
+                if row.startswith("refs/heads/review/"))
+    assert git(repo, "diff", "--name-only", f"{head}^", head) == "a.py"
+    assert git(repo, "ls-remote", "origin", "refs/heads/review/*").split()[0] == head
+
+
 @pytest.mark.parametrize("limit", ["files", "lines", "scope"])
 def test_directory_file_collateral_blocks_before_refs(repo, limit):
     commit(repo, {"z": "old\n"})
