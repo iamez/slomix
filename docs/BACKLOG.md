@@ -55,6 +55,10 @@
   writes final name directly, so stable metadata is NOT proof of producer close.
   Trusted completion/manifest remains a gate; no remote/service changes.
 
+- (Astra, 2026-09-28) #1070 local bda56937 includes final SSH sidecar guard
+  and preserved worker fixes. 150 combined cases pass in 23.00s including
+  timeout with present final content and safe retries. Await #1069 actual main.
+
 - (Astra, 2026-09-27)1070 refreshed locally through8501f7b9 (merge5d2971f7),
   preserving worker/auth/0400 fixes and both documentation histories.141offline
   tests pass23.35s; real child/retry proofs and failing guard mutation restored/cmp.
@@ -66,6 +70,11 @@
   retries recover missing content and skip already-complete/conflicting content.
   Mutation fails/restores. No orphan deletion or source acknowledgement. Next
   source metadata/discovery and verified importer integration; no services changed.
+
+- (Astra, 2026-09-28) #1069 local 005e8d83 includes final SSH identity and
+  preserved worker fixes; 144 combined cases pass in 18.35s. Initial wrong
+  test filename collected nothing and is not proof. Await #1068 actual main.
+
 - (Astra, 2026-09-27)1069 locally refreshed from87f9fa72 through prepared
   parent3244843d, merge4020bb69 preserves both doc histories and worker/auth fixes.
  114offline tests pass17.95s including actual child/spool lifecycle evidence;
@@ -78,6 +87,25 @@
   pass; offline transport with actual child/filesystem demonstrates timeout can
   leave either partial or final content. Guard mutation fails/restores. Next
   reconciliation composition/source identity; no activation or network claim.
+
+- (Astra, 2026-09-28) Root-review worker follow-up: tiny-grace finished-child
+  false error and cleanup-clock SIGINT leak reproduced, repaired and mutation
+  verified/restored/cmp. Whole cleanup now defers callable SIGINT through close;
+  prior handler behavior and original parent error preserved. 146 combined cases
+  pass in 20.51s, Ruff clean. Parent handles publication/descendant propagation.
+
+- (Astra, 2026-09-28) #1068 fresh review exposed real escalation/startup SIGINT
+  child leaks. Three actual-spawn regressions failed before repair and again with
+  mutations; fixtures always cleaned leaked children. Bounded operation-wide
+  escalation retries and ownership-window SIGINT deferral preserve original
+  errors, custom/ignored handlers and child masks. Restored/cmp; no remote or
+  service actions. Root owns publication/review and descendant propagation.
+
+- (Astra, 2026-09-28) #1068 retains original worker fixes 86c69e39 and final
+  SSH e22ae27c after normal merge eed58f6c. 133 combined cases pass in 14.44s,
+  actual spawned children reaped by two observations; Ruff clean. Await #1067
+  actual main, final sync and fresh review. No runtime activation or deployment.
+
 - (Astra, 2026-09-27)1068 local refresh preserved86c69e39 worker backports,
   merged reviewed1067 db7f3888 normally as99f2161c.92offline cases pass12.33s;
   real child cleanup verified by procfs and active_children, interrupted cleanup
@@ -96,6 +124,7 @@
   refusal/parent interruption; timeout-status mutation fails/restores. #1066
   latest exact-head CI all green. Next transport-specific task and source identity;
   no services activated and no DB transactions allowed in force-stopped workers.
+
 
 - (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
   certificate discovery. Public typed file-object private-key loaders preserve
