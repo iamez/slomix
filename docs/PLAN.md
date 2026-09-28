@@ -331,6 +331,19 @@
 
 ### R04q offline producer completion prototype — 2026-09-20
 
+Refresh checkpoint (2026-09-28): normal merge of #1071 head 97db51fa retains
+both document histories and all worker/strict SSH key-loading fixes. No code
+changes were needed in this prototype. 172 combined offline cases pass in
+28.00s with zero skips, including 12 real Lua 5.4/filesystem scenarios and
+inherited spawned-child proofs. Independent bytes/stat/sha256sum agree for
+completed files. Weakening write-count equality fails the short-write harness
+with `unexpected writer outcome: short-write`; restored/cmp and all 12 pass.
+Both Lua files parse; Ruff and whitespace pass. Review API currently has zero
+threads with no further page; this is not a fresh exact-head review approval.
+No service, game server, SSH, deployment or remote PR mutations performed.
+Next publish/review after the parent, then durable completion/manifest slices;
+the helper remains unwired and is not a durability or activation claim.
+
 Owner continuation accepted offline producer-protocol development, NOT deployment.
 New standalone Lua helper (not wired into SaveStats/game modules) validates a
 bounded chunk payload/name, checks each engine write count, attempts close even

@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1072 locally refreshed on #1071 head 97db51fa with
+  both histories retained. 172 combined offline tests pass in 28.00s, zero
+  skips; real Lua/filesystem completion proof and failing/restored write-count
+  mutation verified. Lua parse/Ruff clean. Review API has zero threads, not
+  fresh-review approval. No remote writes or activation; ready for parent-led
+  publication, followed by durable completion/manifest work in the runtime plan.
+
 - (Astra, 2026-09-20) R04q offline producer helper/proof, not game integration.
   139 combined tests pass; short-write mutation emits false completion and fails,
   restored/cmp. Fresh name/single writer required; durable receipt, digest and
