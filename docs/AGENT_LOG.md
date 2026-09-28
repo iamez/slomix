@@ -26,6 +26,25 @@
   bypassed canonical filename validation and gained a success marker. Apply:
   validate filename/calendar before dedup for both halves and test actual valid
   payloads already present in the DB. Terminal admission failure has no marker.
+- **2026-09-28 · Cleanup ownership includes loop control and handle close.**
+  Guarding process calls alone leaves SIGINT windows in the supervising clock
+  and loop. Correction after follow-up review: installing cleanup deferral itself
+  leaves an ownership window. Install once before spawn through handle close;
+  restore/replay even when the operation failed, preserving its exception over
+  a handler error. Observe death independently of elapsed time. Tiny positive
+  grace is now rejected below0.01s, and every phase attempts its stopping signal.
+  SIGINT can wait until timeout+cleanup; document that latency, never promise
+  immediate cancellation or successful reaping after an OS-level cleanup failure.
+
+- **2026-09-28 · Spawn ownership and the whole escalation path need interruption guards.**
+  CPython creates the OS child before Process._popen is assigned: real SIGINT
+  there can leave a child invisible to Process.pid and active_children. Defer
+  main-thread callable SIGINT handlers through the entire child lifetime (not
+  only until ownership exists), restore before delivery, and never pass a blocked
+  signal mask into the child. Protect status,
+  terminate, kill and join together with finite cleanup phases, not join alone.
+  Actual child/procfs tests reproduce both gaps; synthetic persistent operation
+  failures must raise an unreaped error rather than claim successful cleanup.
 
 - **2026-09-28 · Observation transitions need pending state separate from ACK history.**
   A delivered warning followed by unknown and another warning cannot use the old
@@ -68,6 +87,18 @@ data here.
   symlink R1 entries. Retained immutable R1 remains a caller precondition.
   Actual-PG proof must include a plausible external R1, not merely an empty cwd.
 
+- **2026-09-25 · A descendant fix does not protect an unmerged prerequisite.**
+  Worker cancellation fixes present on #1077 were absent from #1068. Before
+  merging a stacked prerequisite, backport its applicable fixes with regression
+  proofs, without importing unrelated descendant features. Compare the resulting
+  files against the reviewed descendant and retain exact PR merge authorization.
+
+- **2026-09-20 · Forced child termination skips application cleanup.**
+  A disposable spawned capture task can be terminated and reaped after a deadline,
+  including SIGTERM refusal. This boundary is not appropriate for shared locks,
+  queues or DB transactions. Reconcile any partial/final spool state and retain
+  source; child exit is not a durability or import acknowledgement. Supervise
+  only the exact child Process object created by this caller, never services.
 
 - **2026-09-25 · Review triggers can have a billing consequence.**
   An owner request to avoid additional charges applies to manual AI review

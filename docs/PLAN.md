@@ -1,5 +1,15 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1066 current synchronization checkpoint (2026-09-28): normally merge actual
+> main4de6f07e after reviewed #1068 merge, retaining both document histories.
+> Import implementation/tests remain byte-identical to boundary repair1bd6e304;
+> worker implementation/tests remain byte-identical to main4de6f07e. Combined
+> 167 import/spool/parser/worker cases pass35.09s (including45 actual-worker
+> cases), Ruff/whitespace clean. This reruns the real filesystem midnight guard
+> alongside worker lifecycle proofs; PostgreSQL was not restarted or tested.
+> Root handles fresh exact-head publication/review. Original plan and all
+> service/production/NEVER MERGE restrictions remain unchanged.
+
 > #1066 boundary review follow-up (2026-09-28): real parser selection for
 > 2020-01-01-000500 R2 chooses 2019-12-31-235500 R1 across midnight. Both
 > import entry points now apply the same supported-calendar admission to that
@@ -96,6 +106,101 @@
 >no application DB fallback or service action taken. Do not call this full import
 >proof yet. Await1065 actual merge, final main sync and real PG proof before
 >publishing/fresh review. Original runtime roadmap preserved, no1066 approval.
+> Current #1068 checkpoint 2026-09-28: #965 merged ec8ec7ed; normal main sync
+> 9fb9d3db retains both document histories and worker/source test bytes90026032.
+> Root independently passed159cases37.50s before sync and207worker/SSH/spool/
+> capture/watchdog cases37.06s after sync. SIGINT lifetime and0.01minimumgrace
+> contracts below are current; prior narrower deferral notes are historical.
+> Publish for fresh exact-head CI/review; all five outstanding findings need
+> evidence-backed replies. Owner's current-queue exception remains bounded;
+> original runtime1986d671, NEVER MERGE, release956 and services stay excluded.
+
+> #1068 lifetime ownership correction 2026-09-28: fresh review reproduced tiny
+> positive grace leaving an owned child, a second-getsignal cleanup transition,
+> and dropped custom SIGINT side effects when launch also failed. Install one
+> callable-SIGINT deferrer before any child exists and retain it through close;
+> replay the restored handler even after an operation error, preserving that
+> error if the handler also raises. SIGINT cancellation is deliberately delayed
+> up to timeout plus shutdown, coalesced to one callback; no immediate promise.
+> Require shutdown_grace >=0.01 before spawning, and always attempt each phase's
+> stopping signal before its elapsed budget limits waiting. OS inability to reap
+> still raises RuntimeError; no absolute startup/kernel bound or service claim.
+> Final 159 combined cases pass37.24s, including45real-child worker cases and
+> 114offline SSH/capture/spool cases. Real SIGINT during join tests default,
+> custom-return and SystemExit policies with/without original operation errors;
+> procfs/active_children and closed handles prove ownership release. Replacing
+> BaseException cleanup handling with Exception fails3 SystemExit cases; removing
+> lifetime deferral fails actual spawn-window ownership. Restored/cmp each time;
+> deliberate-failure fixture cleanup reaped its own children. CodeQL663's broad
+> catch is intentional deferred cancellation, not suppression; CodeQL662's
+> cleanup_complete variable is removed. No remote/service/network/DB operation.
+> Original runtime1986d671 and previous worker fixes remain preserved. Root
+> owns publication, fresh exact-head review and merge gates.
+
+> #1068 root-review follow-up, 2026-09-28: reproduced false unreaped error for
+> an already-finished real child with accepted grace=1e-20, and real SIGINT in
+> cleanup clock/loop control bypassing reaping. Status is now observed before
+> expiry checks; callable SIGINT deferral covers the entire cleanup ownership
+> scope including exitcode and handle close. Handler replay happens restored and
+> only after cleanup; original parent errors retain precedence. Custom, ignored
+> and SystemExit handlers are verified at close. Both mutations fail as expected,
+> restored/cmp; final 146 combined cases pass in 20.51s including 32 worker cases.
+> Ruff/whitespace clean. SIGKILL/default SIGTERM, arbitrary injected CPython
+> exceptions and uninterruptible OS waits remain outside the guarantee. No
+> remote/service/SSH changes. Supersedes the narrower startup-only deferral below.
+
+> Owner exception recorded 2026-09-28: the live message explicitly approved
+> #1067, then instructed continued merging of the remaining current PR queue
+> without repeated permission prompts when reviewed, corrected and green.
+> Eligible IDs: #963, #964, #965, #966, #969, #979, #1027, #1066, #1068-#1075,
+> #1077. Exact-head CI, addressed review findings and the prescribed merge cycle
+> remain mandatory. Excludes NEVER MERGE #924-#943/#967, held #956, services and
+> production. This is a bounded owner exception, not standing authorization for
+> unrelated future PRs; it does not change the repository's general policy.
+
+> #1068 interruption repair, 2026-09-28: real spawned children reproduced leaks
+> from kill/is_alive interruptions and actual SIGINT after OS spawn before
+> CPython attaches Process._popen (three failures; fixtures forcibly cleaned up).
+> Main-thread callable SIGINT handlers are temporarily deferred until ownership
+> exists, then restored before delivery; ignored/custom behavior and child masks
+> are preserved. Both escalation phases now retry all operations within bounded
+> grace deadlines. Persistent status/kill failures raise truthful unreaped errors.
+> Original parent errors still win after successful cleanup. Regression mutations
+> repeat all three failures; restored/cmp. Final 140 focused tests pass in 17.04s,
+> including 26 worker cases; Ruff and whitespace clean. Procfs and active_children
+> independently confirm child cleanup. No real SSH, service or remote writes.
+> Arbitrary exceptions injected inside private CPython startup and uninterruptible
+> OS waits are not claimed safe/bounded. Propagate this repair into descendants
+> before their final publication; original runtime roadmap remains unchanged.
+
+> Final main synchronization 2026-09-28: #1067 merged 1f4a388d, reviewed tree
+> equality verified. Normal main merge c99badb6 preserves worker backports and
+> final SSH identity. Repeat combined gate: 133 passed in 13.69s. Publish #1068
+> against main for fresh exact-head CI/review under owner's autonomous green
+> queue authorization. No service activation, production or snapshot changes.
+
+> Current #1068 checkpoint, 2026-09-28: final reviewed #1067 e22ae27c merged
+> normally as eed58f6c; both document histories preserved. Worker source/tests
+> remain identical to preserved 86c69e39; SSH source/tests equal e22ae27c.
+> Combined 133 cases pass in 14.44s, including real spawned-child completion,
+> failure, parent/cleanup interruption and SIGTERM refusal. Timeout observations
+> 2.004s/2.204s; procfs and active_children both confirm cleanup. Ruff clean.
+> Prior seen-failing late-observer mutation remains applicable to identical
+> worker bytes. Await actual #1067 main integration, then rerun/publish/review.
+> Owner's bounded queue exception is recorded above; no services enabled.
+
+>1068 refresh checkpoint2026-09-27: started from preserved local86c69e39,
+>NOT obsolete remote69a0ef29; normally merged reviewed parent1067 db7f3888
+>as99f2161c. Both doc histories retained, worker/source test bytes unchanged.
+>92 offline worker/SSH/capture/spool/integrity cases pass12.33s. Actual spawned
+>children complete/fail/time out and are absent from both procfs and active_children;
+>SIGTERM-resistant children are killed/reaped even when cleanup joins raise.
+>Actual Paramiko RejectPolicy test opens no network connection; capture proof
+>uses a local socket pair. Restoring late-observer timeout bug fails two cases
+>(timed_out instead of completed/failed); restored/cmp. No remote pushes, services,
+>live SSH, DB or snapshot operations. Await parent approval/actual main sync and
+>fresh exact-head CI/review. Original runtime plan preserved after consolidation.
+
 
 > #965 warning-transition delivery repair, 2026-09-28: review reproduced a
 > delivered warn -> unknown -> warn being suppressed forever by notified_level.
@@ -515,6 +620,46 @@ Bypassing conflict gate fails the actual-PG assertion, restored/cmp. New files
 Ruff clean. Imported foundation code byte-identical to both parent branches;
 only new composition/tests/docs added. Disposable PG stopped; no application
 DB/service or source transport activation. Fresh CI/review required.
+### R04m consolidation safety backport — 2026-09-25
+
+Locally backported the exact worker and regression-test changes from #1077
+c015270b into #1068 before its eventual merge. Five regression cases fail the
+old implementation: late observation misclassifies a finished child, and cleanup
+interruptions can abandon a child or replace the original parent interruption.
+94 worker/SSH/spool/integrity/capture/plan tests now pass; Ruff/whitespace clean.
+Real spawned children checked against procfs and active_children; Process objects
+closed. SIGTERM/SIGKILL timeout cases measured 2.003s/2.205s including cold spawn
+with a 2s deadline and 0.2s grace. No hard OS scheduling bound is claimed.
+Late-clock mutation fails both finished-child cases, restored with cmp proof.
+No network, DB, services or production changes. Owner reported unwanted GitHub
+review charges: keep this commit local, no push or automated review request.
+#1068 still requires PR-specific merge approval and fresh merge-base/CI review.
+Do not merge the whole #1077 descendant into this prerequisite. Original plan
+continues with trusted completion delivery/immutable sealing at #1077, then the
+new-site audit and separately approved reversible DEV cutover.
+
+### R04m disposable capture worker supervision — 2026-09-20
+
+Contract: explicitly spawned capture-only child, monotonic operation deadline,
+terminate/join then kill/join escalation, result only after reaping. Completed,
+failed and timed_out remain separate; parent cancellation also enters cleanup.
+No DB pool/shared queues/locks/descendant processes in tasks. No task return
+payload or exception text crosses process boundary. Forced stop can skip finally
+and leave partial/complete spool state, so retain source and reconcile on retry.
+Startup counts against deadline but OS startup/uninterruptible kernel waits
+cannot be hard-bounded; cleanup has two bounded grace windows and raises if it
+cannot reap. This is an internal primitive, not SSH activation or service control.
+Prove real child success/failure, blocked task and SIGTERM refusal with procfs
+and active-child checks before integrating a transport-specific task.
+Verified 86 combined worker/SSH/capture/spool tests pass. Actual spawned children
+complete/fail, time out under SIGTERM and escalate after SIGTERM refusal; exit
+codes -15/-9 agree with absence from procfs and active_children. Parent join
+interruption also reaps, unpicklable startup leaves no task child. Two runs of
+timeout proofs measured about 2.00s/2.20s with 2s budget and 0.2s grace (cold
+spawn included). Mutation reporting timeout as completed fails both cases;
+restored/cmp. Ruff/whitespace clean. No remote connection or service/DB changes.
+Python termination semantics verified against official multiprocessing docs;
+do not use this boundary for transactions/shared locks or claim hard OS bounds.
 
 
 ### R04l explicit SSH session ownership — 2026-09-20
