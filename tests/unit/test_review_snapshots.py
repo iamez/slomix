@@ -1,4 +1,6 @@
 """Execute the snapshot CLI against disposable repositories and a local remote."""
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -62,6 +64,46 @@ def run(repo, *args, area="area|.", check=True):
 def snapshots(repo):
     return git(repo, "for-each-ref", "--format=%(refname) %(objectname)",
                "refs/heads/review", "refs/heads/review-base")
+
+
+@pytest.mark.parametrize("raced", ["review-base", "review", "both"])
+def test_remote_creation_race_cannot_overwrite_or_partially_publish(repo, monkeypatch, raced):
+    commit(repo, {"a.py": "value = 1\n"})
+    run(repo, "cut")
+    before = snapshots(repo)
+    refs = [line.split()[0] for line in before.splitlines()]
+    ancestor = git(repo, "rev-parse", "v1.39.0")
+    raced_refs = [ref for ref in refs if raced == "both" or ref.startswith(f"refs/heads/{raced}/")]
+    real_git = shutil.which("git")
+    wrapper_dir = repo.parent / "race-bin"
+    wrapper_dir.mkdir()
+    wrapper = wrapper_dir / "git"
+    # Return the genuine preflight advertisement, then race before push starts.
+    # All objects/ref transactions and the push itself use the actual Git CLI.
+    wrapper.write_text(
+        f"#!{sys.executable}\nimport os, subprocess, sys\n"
+        f"real_git = {real_git!r}\n"
+        "if sys.argv[1:] == ['ls-remote', '--heads', 'origin']:\n"
+        "    result = subprocess.run([real_git, *sys.argv[1:]], capture_output=True)\n"
+        f"    for ref in {raced_refs!r}:\n"
+        f"        subprocess.run([real_git, '--git-dir', {str(repo.parent / 'remote.git')!r}, "
+        f"'update-ref', ref, {ancestor!r}], check=True)\n"
+        "    sys.stdout.buffer.write(result.stdout)\n"
+        "    sys.stderr.buffer.write(result.stderr)\n"
+        "    sys.exit(result.returncode)\n"
+        "os.execv(real_git, [real_git, *sys.argv[1:]])\n"
+    )
+    wrapper.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{wrapper_dir}{os.pathsep}{os.environ['PATH']}")
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0, "concurrent immutable ref was overwritten by a fast-forward"
+    remote = dict(line.split()[::-1] for line in git(repo, "ls-remote", "origin").splitlines())
+    for ref in refs:
+        if ref in raced_refs:
+            assert remote[ref] == ancestor
+        else:
+            assert ref not in remote, "atomic pair was partially published"
+    assert snapshots(repo) == before
 
 
 def test_split_pushes_use_real_hook_and_are_idempotent_without_worktree_changes(repo):

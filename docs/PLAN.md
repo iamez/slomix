@@ -1,5 +1,19 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #966 concurrency checkpoint 2026-09-28: three actual disposable bare-Git
+> regressions reproduced an ancestor ref created after ls-remote being silently
+> fast-forward overwritten (review-base, review, or both). Atomic pair pushes
+> now attach an explicit empty-expect lease to each missing ref: create-only
+> compare-and-swap, not overwrite permission or a hook bypass. The raced refs
+> retain their exact ancestor OIDs and an absent counterpart remains absent.
+> All 33 CLI cases plus two plan contracts pass (20.72s), including normal hook,
+> secret rejection and idempotence proofs. Removing leases fails all three race
+> cases; restored/cmp. Installed git-push manual confirms empty expected value
+> requires an absent ref. Ruff/whitespace clean; actual review-ref digest remains
+> d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> Local-only; root owns publication/review. Runtime 1986d671 remains the resume
+> anchor. Earlier checkpoints are retained history, not fresh merge evidence.
+
 > #966 follow-up 2026-09-28: actual disposable CLI regressions reproduced both
 > fresh findings: unmatched/fully excluded area silently omitted, and a plain
 > --exclude argument selected additional files. Preflight now rejects empty

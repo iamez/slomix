@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Immutable review vehicles. No checkout, fetch, force push or hook bypass.
+"""Immutable review vehicles. No checkout, fetch, ref overwrite or hook bypass.
 
 The caller supplies area pathspecs. Every invocation pins both commits once,
 preflights the entire selection, and uses a private index to construct trees.
@@ -202,7 +202,10 @@ def main():
         for offset in range(0, len(ordered), 2):
             missing = [ref for ref in ordered[offset:offset + 2] if ref not in remote]
             if missing:
-                git("push", "--atomic", "origin", *[f"{refs[ref]}:{ref}" for ref in missing])
+                # Empty expected values are create-only compare-and-swap, never
+                # permission to overwrite. Preflight alone cannot exclude races.
+                git("push", "--atomic", *[f"--force-with-lease={ref}:" for ref in missing],
+                    "origin", *[f"{refs[ref]}:{ref}" for ref in missing])
 
 
 if __name__ == "__main__":

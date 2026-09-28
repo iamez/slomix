@@ -404,6 +404,19 @@ isolates OFF workers; do not claim shared OFF cache reuse. Two ASGI proofs retai
 the backend across both same-app toggles and app recreation. Both fail without
 the namespace guard; source restored and cmp verified. Full cached HTTP/browser
 TTL behavior and actual Redis restart behavior remain separate activation checks.
+# 2026-09-28 — Immutable remote creation requires an atomic absence precondition
+
+An ls-remote preflight followed by ordinary push is not create-only: a racer
+can create an ancestor ref between the commands and the push will fast-forward
+overwrite it. Reproduced using real disposable bare repositories for either or
+both members of a review pair. Use an explicit empty expected value per missing
+ref (`--force-with-lease=<ref>:`) together with atomic pair push. Despite the
+option name this permits creation only, never replacement; all hooks remain
+enabled. Installed git-push documentation states the named ref must not exist.
+Regressions verify unchanged raced OIDs and no partial counterpart publication;
+removing leases fails all three cases, then restoration is checked by cmp.
+Do not replace this with generic force or a tracking-ref-inferred lease.
+
 # 2026-09-27 — Explicit key-only SSH must reject partial authentication
 
 Paramiko5 legacy SSHClient authentication can invoke auth_interactive_dumb
