@@ -1,5 +1,12 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Observation transitions need pending state separate from ACK history.**
+  A delivered warning followed by unknown and another warning cannot use the old
+  notified_level alone. An observed-level OR fixes only the first attempt: it
+  loses the transition during cooldown or after a failed retry. Persist one
+  pending-warning bit per key until warning ACK or superseding nonwarn data;
+  keep latest payloads and delivery history separate, without a historical queue.
+
 - **2026-09-27 · Publication modes are filtered by the process umask.**
   open(mode=0600) under umask0277 creates0400, still readable by its owner.
   Reconciliation must accept that safe publisher output without chmod widening;
@@ -32,6 +39,22 @@ data here.
   cold-cache sampling, directory mtime and shared stash ownership each retain
   their separate dated entries below; do not combine them into one lesson.
 
+- **2026-09-25 · Review triggers can have a billing consequence.**
+  An owner request to avoid additional charges applies to manual AI review
+  requests and potentially automatic reviews after PR creation or pushes.
+  Local tests/review can proceed without those triggers. Repository settings
+  do not prove account billing is disabled; verify separately, and do not
+  mistake a budget notification for an enforced usage stop.
+
+- **2026-09-07 · Measurement is not delivery acknowledgement.** Watchdog
+  observations/failure streaks must persist even when the notification fails,
+  but alert timestamps, recovery reset and daily heartbeat dedup advance only
+  after successful POST. Otherwise failed recovery/heartbeat delivery disappears
+  until another transition/day. Apply: persist pending latest-condition alerts,
+  acknowledge each successful batch of at most ten embeds, and test retries
+  across reloaded state. A crash between POST and acknowledgement can duplicate
+  delivery; do not claim exactly-once. Dry-run must skip both state and report
+  writes, including when output directories do not yet exist.
 - **2026-09-20 · Content reconciliation is not durability or import completion.**
   A link can succeed before directory fsync fails. Inspecting size and SHA-256
   can recognize the existing complete file without overwrite, but cannot prove
@@ -390,3 +413,25 @@ isolates OFF workers; do not claim shared OFF cache reuse. Two ASGI proofs retai
 the backend across both same-app toggles and app recreation. Both fail without
 the namespace guard; source restored and cmp verified. Full cached HTTP/browser
 TTL behavior and actual Redis restart behavior remain separate activation checks.
+# 2026-09-27 — Explicit key-only SSH must reject partial authentication
+
+Paramiko5 legacy SSHClient authentication can invoke auth_interactive_dumb
+after a public-key result requests another factor, despite allow_agent=False
+and look_for_keys=False. Use the modern AuthStrategy hook with one explicit
+PKey.from_path key and require both an empty remaining-method list and an
+authenticated transport. Default AuthStrategy iteration alone is insufficient:
+it treats a returned partial-method list as success. Regression exercised the
+installed legacy auth; offline installed connect tests cover RSA/ECDSA PEM and
+OpenSSH plus Ed25519 OpenSSH. No real handshake claim. Missing, malformed and
+encrypted keys must fail without prompt/fallback. Keep strict host-key policy.
+# 2026-09-27 — Correction: PKey.from_path discovers adjacent certificates
+
+The earlier key-only SSH note used PKey.from_path; that still discovers a
+neighboring key_path-cert.pub and can offer a different certificate identity.
+Actual generated OpenSSH certificate and malformed-sidecar regression tests
+proved both behaviors. For the explicit private-key-only contract, read that
+file once and use public RSAKey/ECDSAKey/Ed25519Key.from_private_key file-object
+loaders. Do not pass a path-aware loader or certificate path; encrypted keys
+fail without prompting. Existing five key-format proofs and complete-auth guard
+remain; no real handshake was tested. This corrects the earlier implication
+that disabling legacy auth alone removed all ambient identity discovery.

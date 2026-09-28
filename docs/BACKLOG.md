@@ -14,6 +14,49 @@
   integration queue remain unchanged; no deployment or historical-data claims.
   Ten document/plan contracts pass; both actual timer-recipe mutations fail,
   restored/cmp. Build/deploy command paths checked without running either.
+- (Astra, 2026-09-28) #965 fresh review warning transition regression repaired
+  with bounded per-key pending_warn state. Real isolated JSON/run proof covers
+  cooldown, failed delivery/retry and latest-condition supersession. Old code
+  and naive-OR mutation both fail two cases; restored/cmp, 48 cases pass0.48s.
+  Heartbeat repair preserved; no real delivery/services or remote writes.
+
+- (Astra, 2026-09-28) #965 integrated actual main 1f4a388d, retaining all
+  watchdog fixes and both doc histories. Source/tests unchanged from 3c967222;
+  45 focused contracts pass using actual temporary files and mocked delivery.
+  Inverted ACK guard fails, restored/cmp; no real notification/service action.
+  Root handles fresh publication/review/merge gates. Runtime 1986d671 preserved.
+
+- (Astra, 2026-09-25) #1076/#1057/#962 confirmed merged; #965 integrated
+  current main locally, 45 focused tests pass, midnight mutation fails/restores
+  with cmp. No push or AI review request: owner reported unwanted review charges.
+  Billing not verified; preserve local work while avoiding automatic triggers.
+  #965 still needs exact-PR merge permission. Original runtime #1077 completion
+  delivery/sealing remains the resume point; NEVER MERGE and services untouched.
+
+- (Astra, 2026-09-20) Consolidation detour: #965 refreshed from main, preserving
+  notification/midnight fixes and both documentation tracks;42 targeted tests
+  pass,Ruff clean. Wait for #962 disk fix before combined verification. #965 has
+  no merge permission. Runtime resume #1077 c015270b: completion delivery/sealing,
+  then new-site audit and approved DEV transition. NEVER MERGE unchanged.
+- (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
+  certificate discovery. Public typed file-object private-key loaders preserve
+  five tested key encodings; certificate paths unsupported, no ambient cert or
+  passphrase fallback. Real temporary ssh-keygen cert + malformed neighbor fail
+  old code;108 combined tests pass fixed code; mutation2 failures, restored/cmp.
+  Publish for fresh CI/review next. Original runtime plan/activation gates stay.
+
+- (Astra, 2026-09-27) PR1067 fresh P2 fixed locally: bypass Paramiko legacy
+  interactive fallback using explicit-key AuthStrategy and reject partial auth.
+  Three old-code regressions and three guard-mutation failures observed;
+  restored/cmp,84 SSH/capture/spool tests pass. Installed connect/key parsing
+  proved offline across five supported key encodings; real handshake untested.
+  Original runtime/activation work unchanged. Publish then fresh CI/review;
+  no service changes, network connections or1067 merge permission.
+
+- (Astra, 2026-09-20) R04l neutral SSH session ownership on #1063; 73 combined
+  cases pass, strict-policy offline proof and cleanup mutation/restoration done.
+  No real network. End-to-end handshake bound and source identity still block
+  activation. #1066 capture/import integration CI/review remains in parallel.
 
 - (Astra, 2026-09-20) R04j adds one caller-driven capture attempt on #1064.
   55 filesystem tests pass; source-consumption guard mutation fails/restored.

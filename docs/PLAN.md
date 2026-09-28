@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Current #963 main-sync checkpoint 2026-09-28: ec8ec7ed normally merged,
+> including reviewed #1067 SSH and #965 watchdog changes; both documentation
+> histories and d8431e06's historical corrections retained. Preserve runtime resume 1986d671.
+> 10 focused document/plan contracts pass; unchanged guard tests retain their
+> earlier observed mutation failure and restored/cmp proof. Historical content
+> is not current host evidence. Root owns publication and fresh review gates;
+> this documentation detour does not replace the original runtime roadmap.
+> No production, service, real review-ref or remote operations were performed.
+
+> Historical checkpoint below predates this actual-main synchronization:
+
 > Current checkpoint 2026-09-28: #963 historical handoff corrections are a
 > documentation-only queue detour. Main 9ef42671 contains #1065; #1066 SQL
 > proof and #1067 SSH review are recorded in the integration checkpoint.
@@ -10,6 +21,99 @@
 > mutations adding timer enable recipes with --dry-run and --now each fail the
 > cleanup guard, restored with byte-for-byte cmp. Build recipe paths validated
 > without executing build/deploy; no current host-data measurement is claimed.
+> #965 warning-transition delivery repair, 2026-09-28: review reproduced a
+> delivered warn -> unknown -> warn being suppressed forever by notified_level.
+> One bounded per-key pending_warn bit now distinguishes a new observed warning
+> transition from delivery history. It survives cooldown and failed delivery,
+> clears on successful warning ACK or a superseding nonwarn measurement, and
+> always renders the latest condition rather than queuing historical warnings.
+> Two actual run/state-file regressions fail on old code; replacing the pending
+> bit with a naive observed-level OR also fails cooldown and failed-POST retry.
+> Restored/cmp; 48 watchdog tests pass in 0.48s, Ruff/whitespace clean. JSON read
+> independently agrees with load_state; mock delivery counts, latest reason and
+> ACK timestamps prove retry behavior. Existing heartbeat-midnight repair remains.
+> No real webhook, collector, service or remote operations; root owns publication.
+
+> Current #965 checkpoint 2026-09-28: normally integrated actual main 1f4a388d
+> after #1067 merged. Watchdog source and both test files remain byte-identical
+> to reviewed 3c967222, retaining original 2e035917 and the disk fix. All 45
+> focused contracts pass, including real temporary state/report files with
+> in-process mocked collectors/webhook only. Inverting delivery success fails
+> with last_alert_at 1788742800.0 instead of 0; restored/cmp and full rerun pass.
+> No real notification, service or database operation. Root owns publication,
+> fresh exact-head CI/review and merge gates. Runtime resume 1986d671 unchanged;
+> older checkpoints below describe their dates, not current queue authority.
+
+> Current965 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
+>matches reviewed0e66f238. This branch now normally integrates that main,
+>preserving source/test bytes and both documentation histories. 43focused
+>tests rerun after sync. Publish for fresh exact-head CI/review; no965 merge
+>approval, service activation or NEVER MERGE changes. Earlier waiting notes
+>below are historical; original runtime roadmap remains unchanged.
+
+>965 preservation checkpoint2026-09-27: start from local2e035917, not older
+>remote c8fa8e41; normally integrate main as44df616a, preserve both doc histories.
+>Watchdog source/tests byte-identical to2e035917.43focused cases pass0.43s,
+>Ruff clean. Inverting delivery-success guard advances an unconfirmed timestamp
+>and fails the retry test; restored/cmp. Separate in-process synthetic transport
+>with actual persisted files proves failed pending1/ACK0, success pending0,
+>two delivery attempts and no third-cycle duplicate. No Discord request, live
+>collector/service action or production data. Await1055 merge then final refresh
+>and publish for fresh exact-head review; no965 merge approval.
+>Current1067 checkpoint2026-09-27: approved1065 merged9ef42671 at20:36:29Z;
+>squash tree equals reviewed1f6562f0. Actualmain normally integrated; explicit
+>private-key-only sidecar repair preserved fromc63f8ac5. Repeat combined gate,
+>publish/reply and request fresh exact-head review. No1067 merge permission,
+>network/service/applicationDB action. Original runtime roadmap preserved.
+
+> PR1067 explicit-identity correction, 2026-09-27: follow-up review proved that
+> PKey.from_path silently loads key_path-cert.pub. A real temporary ssh-keygen
+> certificate changed the offered identity; a malformed neighbor broke auth.
+> Both regressions failed on old code. Load the named private-key contents once
+> through public typed from_private_key file-object APIs instead; no sidecar
+> lookup, certificate-path substitution or passphrase prompt. Five existing
+> RSA/ECDSA/Ed25519 encoding proofs still pass. Certificate paths explicitly
+> fail closed. All108 SSH/capture/spool/reconcile tests pass. Reintroducing
+> from_path failed both sidecar guards; restored/cmp. Earlier from_path claims
+> below are superseded by this correction. No live handshake/network/services
+> or DB actions; next fresh exact-head CI/review. Original plan remains intact.
+
+>Current1067 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
+>squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
+>all doc histories and source fixes preserved. Publish after repeated local gates
+>for new exact-head CI/review; no1067-specific merge approval. No services,
+>application DB or real SSH activated. Original runtime roadmap remains intact.
+
+> PR1067 key-only authentication correction, 2026-09-27: installed/pinned
+> Paramiko5 legacy authentication can call auth_interactive_dumb after partial
+> public-key authentication even with agent/discovery disabled. Three new
+> regression cases failed on old code. The modern AuthStrategy hook now loads
+> exactly the explicit key with PKey.from_path and requires complete public-key
+> authentication; partial responses never reach SFTP, password or interactive
+> fallback. Actual installed SSHClient.connect exercised offline with synthetic
+> transport and real RSA PEM/OpenSSH, ECDSA PEM/OpenSSH and Ed25519 OpenSSH keys.
+> Missing/malformed/encrypted keys fail closed; no passphrase prompt. Guard
+> removal failed all three cases; restored/cmp. Combined SSH/capture/spool gate:
+> 84 passed. No real SSH handshake, external connection, service or DB action.
+> Next: publish for new exact-head CI/review; no1067 merge permission. Original
+> runtime plan and activation gates below remain intact.
+
+>Current1067 checkpoint2026-09-27: approved1063 merged d047554c at19:59:44Z;
+>squash tree equals435268ef. Actual main now integrated normally, documentation
+>histories and implementation bytes preserved. Repeat local gates then publish
+>for fresh exact-head CI/review. No service, network or application DB action;
+>no1067-specific approval recorded yet. Earlier checkpoints below are history.
+
+>1067 refresh checkpoint2026-09-27: integrated reviewed1063 parent435268ef
+>normally as eb72ec88; retained documentation histories and source/test bytes
+>from9f86bd69.73combined cases pass, including real Paramiko RejectPolicy against
+>a generated unknown key offline (no network) and real local socket publication.
+>Omitting SSH close registration fails cleanup-after-SFTP-close-error assertion:
+>['sftp-close'] != ['sftp-close', 'ssh-close']; restored/cmp and all73 pass again.
+>Existing review threads empty. Await1063 actual main merge before final sync,
+>retarget/push and fresh exact-head CI/review. No1067 permission, no connections
+>or service changes. Phase timeouts do not bound DNS/handshake/cleanup as a whole;
+>the later dedicated worker remains an activation gate. Original plan preserved.
 
 >Current1065 checkpoint2026-09-27: approved1064 merged f9327cae at20:22:36Z;
 >squash tree c627a055 equals reviewed00f16c55. Actualmain integrated normally,
@@ -247,6 +351,53 @@
 
 **Zadnja posodobitev:** 2026-09-28 (Astra, historical handoff review corrections)
 
+## Proga: Astra watchdog delivery acknowledgement
+
+Consolidation update 2026-09-25: #1076, #1057 and #962 are merged; main is
+89a2fd38. Locally integrated main into #965, retaining both documentation tracks.
+45 watchdog/delivery/plan tests pass, including the disk-capacity change and
+actual run() with isolated state files and stub transport. Midnight retention
+mutation fails with `AssertionError: assert 1 == 2`; restored and cmp verified.
+No live webhook, service, database or deployment action. No #965 merge approval.
+Owner requires no additional GitHub charges: no AI review requests, remote
+pushes or new PRs until automatic-review billing safety is established. Local
+review and tests continue; account billing settings have not been verified.
+Original runtime resume remains #1077 c015270b completion delivery/sealing,
+then the new-site audit and separately approved reversible DEV transition.
+
+Consolidation update 2026-09-20: refreshed current main with a normal merge,
+retaining both documentation tracks.42 focused watchdog/delivery/plan tests pass;
+Ruff clean. #962 remains a separate disk-formula change; combine and rerun after
+its approved merge. Only #1076/#1057/#962 currently have explicit merge permission;
+#965 preparation is authorized, its merge is not. Original runtime resumes at
+#1077 c015270b completion delivery/snapshot sealing, then new-site audit and
+owner-approved reversible DEV cutover. No services or real webhooks activated.
+
+Zadnja posodobitev: 2026-09-08 (Astra). Implemented, locally verified; not deployed.
+Contract: observations and failure streaks persist before delivery; notification
+dedup and heartbeat acknowledgements advance only after successful delivery.
+Failed delivery retries next cycle; dry-run writes neither state nor report.
+Proof: 40 targeted tests pass; targeted Ruff and diff whitespace checks pass.
+Real run/send_webhook with an in-process HTTP transport stub: failed alert,
+successful retry, failed recovery, successful retry, then a silent healthy cycle
+(four POST attempts, no network). Mutation acknowledging a failed POST was seen
+failing (`last_alert_at` unexpectedly nonzero), restored and checked with `cmp`.
+Dry-run tests cover existing/missing output paths and reject save attempts.
+Discord batches are capped at ten and acknowledged separately; partial failure
+retries only the undelivered remainder. Pending notifications follow the latest
+measurement: resolved undelivered failures are superseded, not replayed as history.
+Next: root review, then branch/PR flow. Real Discord delivery requires owner-approved
+test; existing legacy timestamps cannot retroactively prove past delivery. A crash
+after POST success but before state save can duplicate a notification.
+No service changes, real webhook, disk formula or cadence changes.
+PR #965 review 3951724563: pending daily heartbeat now survives midnight until
+acknowledged, or is replaced by the newly due day's heartbeat (at most one).
+Actual run with local stub: failed 23:58 -> successful retry 00:03 -> silent
+00:08 -> next day's normal 09:05 heartbeat; on-disk dates/pending count checked.
+Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
+`2`); restored file matches snapshot by `cmp`. Main was merged normally and
+both existing plan additions preserved. Next: root push and review reply.
+
 ## Track: runtime v2 R01 (Astra)
 
 ### Consolidation: historical Opus handoff #963 — 2026-09-20
@@ -266,6 +417,21 @@ consolidation queue, with current-main checks/runtime proof required before merg
 All host measurements in the old handoff remain explicitly historical. Original
 runtime resume is #1077 completion delivery/sealing, then new-site audit and
 approved reversible DEV cutover. #963 has no merge permission.
+### R04l explicit SSH session ownership — 2026-09-20
+
+On #1063: neutral RuntimeSSHConfig and caller-driven open_runtime_sftp context.
+Explicit host/user/port/absolute key and known-host paths; strict RejectPolicy,
+no agent/key discovery/password or ambient bot config. Close SFTP before SSH,
+including failure during setup/body/cleanup. Caller closes its file handles.
+Phase budgets are NOT an overall deadline: DNS, subsystem negotiation and close
+can block. Hard-bound worker/process design remains an activation gate; do not
+use an executor cancellation as proof of stopping transfer. Paramiko API checked
+against installed signature and https://docs.paramiko.org/en/stable/api/client.html.
+73 combined tests pass: recorded phase failures/cleanup and real offline Paramiko
+unknown-host rejection, no hosts mutation. Initial offline fixture lacked logger
+transport; fixed the fixture only. Cleanup mutation fails, restored/cmp; Ruff
+clean. No real SSH connection/server, credentials, service or DB changes.
+Not an activated source transport or end-to-end network proof.
 
 ### R04j single-attempt capture reconciliation — 2026-09-20
 
