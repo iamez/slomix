@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1027 actual-main synchronization, 2026-09-28: normally merged ec8ec7ed
+> as0ee8e3e6, preserving both document histories. Explicit git diff from845-test
+> head022f1115 over ALL website/frontend and docs/api/openapi.json is empty;
+> previous845-test and real SPA build evidence applies to identical inputs, not
+> a freshly rerun full suite. No unmerged Node-pin branch imported; local proof
+> uses22.23.2 while current workflow remains22.x. Fresh typecheck succeeds,
+> regenerated API types cmp/SHA match original baseline61f4c4a5, and50 focused
+> plan/watchdog tests pass0.60s. Whitespace clean. Dependency and artifact proof
+> scripts safely copied/cmp-verified to the local durable runtime audit directory;
+> temporary fixtures retained. Parent owns publication and fresh exact-SHA gates.
+
 > #1027 completed local dependency proof, 2026-09-28: Node22.23.2/npm10.9.8,
 > npm ci --ignore-scripts, typecheck and 70 files/845 Vitest tests pass (single
 > worker, 273.39s). build:app succeeds in 2.33s; offline HTML validation resolves

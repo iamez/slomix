@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1027 main ec8ec7ed integrated normally as0ee8e3e6.
+  All frontend/API inputs identical to022f1115's845-test proof; fresh typecheck,
+  API generationcmp and50plan/watchdogtests pass. No Nodebranch mixed in.
+  Proof scripts copied to durable local audit path, cmp verified; root publishes.
+
 - (Astra, 2026-09-28) #1027 local dependency proof complete: zero audit findings,
   identical original/patched generated API types, typecheck, 845 tests/70 files
   and SPA build succeed. Six built HTML asset references resolve offline.
