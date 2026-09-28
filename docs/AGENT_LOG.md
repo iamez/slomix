@@ -1,5 +1,24 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-27 · Publication modes are filtered by the process umask.**
+  open(mode=0600) under umask0277 creates0400, still readable by its owner.
+  Reconciliation must accept that safe publisher output without chmod widening;
+  exact0400/0600 admission preserves group/other/execute/special-bit rejection.
+
+- **2026-09-27 · Calendar-valid dates can still overflow adjacent-day lookup.**
+  Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
+  dependency admission now matches the canonical2020-2035 year range without
+  importing presentation/configuration. Tests cover outside years, both accepted
+  bounds, and a real PG terminal failed marker for0001. Do not treat calendar
+  parsing alone as proof that downstream date arithmetic is safe.
+
+- **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
+  #1059 base changed from a feature branch to main. Its push CI passed, but the
+  default pull_request triggers did not include edited, leaving required hygiene
+  and CodeQL contexts absent. Publish the real follow-up checkpoint normally and
+  verify all required checks on the NEW head; never bypass rules or credit old
+  head checks to the new SHA. No workflow/settings changes are needed here.
+
 One entry per fact. Format: date · fact · why it matters · how to apply.
 Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
@@ -13,6 +32,86 @@ data here.
   cold-cache sampling, directory mtime and shared stash ownership each retain
   their separate dated entries below; do not combine them into one lesson.
 
+- **2026-09-20 · Content reconciliation is not durability or import completion.**
+  A link can succeed before directory fsync fails. Inspecting size and SHA-256
+  can recognize the existing complete file without overwrite, but cannot prove
+  the directory entry will survive a crash or that PostgreSQL imported it.
+  Keep those acknowledgements separate; never delete the retained source merely
+  because inspection returned match. Operational read errors are not absence.
+
+- **2026-09-20 · A timeout around a worker is not a stopped transfer.**
+  Legacy SSH listing awaits an executor future under wait_for; cancelling that
+  wait does not forcibly stop its synchronous work. Runtime capture instead
+  requires a timeout-aware reader, caps each read by remaining monotonic budget,
+  and checks again after read before publication. This still does not bound
+  SSH setup or filesystem fsync, or interrupt a reader which ignores timeouts.
+  Preserve these distinctions when integrating the connection owner.
+
+- **2026-09-20 · A complete-length transfer is not an integrity proof.**
+  Runtime spool publication can now validate an expected SHA-256 before linking
+  the final name. Obtain that expectation from a trusted immutable source
+  snapshot, not from the just-received bytes. Without it the API remains
+  size-only; the optional parameter is not evidence of transport integration.
+  Test equal-length corruption and compare successful output by another tool.
+
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
+
+- **2026-09-19 · Source retention does not prove independent ingestion.**
+  Design21 section7a overstates bot/web independence. Files waiting on the source
+  can be replayed later while the writer still stops with Discord readiness.
+  Trace startup, cadence and metadata transport before claiming bot/web-off DB
+  continuity; keep that R04 acceptance proof separate from durable cache receipts.
+
+- **2026-09-18 · A closed asyncpg connection may raise InterfaceError.**
+  It is not a PostgresError. A polling worker that retries only database-server
+  errors can stop permanently on a closed connection. Retry InterfaceError only
+  when the acquired native connection confirms is_closed; propagate other
+  interface errors to avoid hiding misuse. Prove reacquisition with actual PG.
+
+- **2026-09-18 · Generation keys need a bounded memory backend.**
+  Reading only the current namespace never touches expired older keys; lazy
+  deletion of the requested key cannot reclaim them. Clear-on-generation-change
+  alone also allows late old requests to insert again. Bound count and retained
+  string bytes, prune expired entries on writes, and test late old-epoch writes.
+  State per-worker storage limits separately from RSS and serialization peaks.
+
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
+
+- **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
+  A neutral real-PG fixture supplied32 hex characters but the canonical regular
+  stats parser stored8 via short_guid. The first test's32-character assertion
+  was wrong; corrected after inspecting the actual parser and observing DB rows.
+  Do not change persistence semantics to satisfy a mistaken test expectation.
+
+- **2026-09-20 · Explicit configuration is not enough if imports initialize the process.**
+  The manager previously imported dotenv and configured root logging before its
+  constructor could inspect supplied config. R04d moves legacy setup behind
+  the default loader while preserving dotenv-before-log-path selection. Test in
+  fresh processes with forbidden imports; also pin unchanged sys.path and root
+  handlers. Import-only callers intentionally no longer initialize logging.
+
+
+- **2026-09-20 · Header-free payload equality is not cross-half identity.**
+  An unchanged cumulative R2 has the same payload hash as R1. Canonical import
+  and neutral duplicate preflight must scope successful hashes by half before
+  treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
+  removing the SQL half filter loses that half. Same-half cross-match identity
+  still needs a stronger source contract; do not infer it from this narrow fix.
+- **2026-09-20 · Undefined disk capacity is not zero usage.**
+  A zero denominator must produce unknown, not healthy 0%; used>0 with free=0
+  is instead measurable 100%/fail. Compare collector ratios with df used/available
+  bytes, not exact displayed integers: df rounds its displayed percentage upward.
+
 - **2026-09-20 · A failed reservation may still own its namespace.**
   Atomic mkdir prevents two same-token writers from reserving one generation.
   A later fsync failure can leave that directory; retry must refuse reuse even
@@ -24,6 +123,21 @@ data here.
   Include every changed Python path in local lint. Module-attribute aliases
   retain the legacy function identities without unused-import ambiguity;
   mutation-test the export identity rather than assuming an alias is correct.
+
+- **2026-09-19 · Parser parity needs nonempty players and a controlled clock.**
+  The committed legacy sample_stats_files parse headers but zero player rows.
+  Header parity alone cannot certify R2 player calculations. Supply valid player
+  lines with a known differential and freeze the parser's generated timestamp
+  when comparing subprocess outputs. A blocked-import subprocess proves absence
+  of Discord/config dependencies more strongly than checking imports in pytest.
+
+- **2026-09-19 · A neutral process needs neutral configuration.**
+  shared.config reexports BotConfig and its validation requires Discord. The
+  cache entrypoint reads explicit environment without dotenv or that validator,
+  defaults OFF before network, and owns its native pool/task. Prove independence
+  by actual subprocess imports, catch-up and signals, not just a coroutine test.
+  A dev label/local host is not attestation that the chosen database is dev.
+
 
 - **2026-09-19 · Logging emission is separate from process setup.**
   Importing bot.logging_config creates its log directory. Runtime-only callers
@@ -261,3 +375,18 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+# 2026-09-27: Cache rollback is an invalidation boundary
+
+Follow-up: isolating only OFF is insufficient. ON/OFF/ON can retain the same
+database generation if writes occurred while events were disabled. Both modes
+need lifetime/transition isolation; worker-local response reuse also in ON mode
+is the explicit tradeoff. Root env examples do not configure website/.env:
+mirror required flags there and test their parsed defaults.
+
+Reusing an unversioned OFF namespace can revive pre-activation responses after
+an ON generation change. Keep OFF entries unique per middleware lifetime and
+observed mode transition, and capture the token before awaiting. This also
+isolates OFF workers; do not claim shared OFF cache reuse. Two ASGI proofs retain
+the backend across both same-app toggles and app recreation. Both fail without
+the namespace guard; source restored and cmp verified. Full cached HTTP/browser
+TTL behavior and actual Redis restart behavior remain separate activation checks.

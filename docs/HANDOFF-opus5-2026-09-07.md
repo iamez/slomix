@@ -155,8 +155,9 @@ Vsi rabijo ownerjeve roke (sudo) ali njegovo odločitev.
 - **Prelet faze 7: delen.** Manifest (32 rut) + skrajšani prelet (20 rut, vse
   200, 0 konzolnih napak). Celoten (4 viewporti × anon/owner) ni tekel — RAM.
 - ⛔ **Bundle ni zgrajen**: nobena SPA sprememba od `09-06 11:03` ni vidna na
-  `:8000`. Pred preletom ali oceno frontenda: `npm run build:app` +
-  `scripts/dev_deploy.sh` (ta restarta servise → **ownerjev DA**).
+  `:8000`. Corrected repository-root recipe before a future approved sweep:
+  `(cd website/frontend && npm run build:app) && scripts/dev_deploy.sh`
+  (this restarts services → **ownerjev DA**, not executed by this correction).
 - Dev servisi tečejo iz `/home/samba/share/slomix-dev-run` (ne več iz
   agentovega drevesa). Watchdog: 11 preverb, vse `ok`, vključno z
   `bot_streaks`, ki bere datoteko iz #923.
