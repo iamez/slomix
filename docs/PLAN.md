@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+>Current1066 SQL proof, 2026-09-28: owner-started isolated PostgreSQL verified by
+>systemd ExecStart and SQL data_directory; local socket only, no app DB fallback.
+>Clean sequential run:142 cases pass54.89s, including all7actual-PG scenarios.
+>Verified spool rejects missing/conflicting content and outside legacy R1, then
+>imports R1=3/R2=5/R0=8; repeat keeps rows/events/markers unchanged. Zero-delta,
+>late/deferred R1 and invalid calendar terminal failure also pass. Bypassing
+>content admission fails with FileNotFoundError; restored/cmp. First full run
+>overlapped the deliberate mutation and is NOT counted as final proof; the clean
+>sequential run above supersedes it. Both catalog count and schema listing show
+>no neutral_import_test schemas left. Publish for fresh exact-head CI/review;
+>no1066 merge approval, application DB or service operation by this agent.
+
 >Current1066 checkpoint2026-09-27: approved1065 merged9ef42671; actualmain now
 >normally integrated with source fixes/doc histories preserved.135local unit/
 >filesystem cases are the repeat gate. FullSQLproof still waits owner-started

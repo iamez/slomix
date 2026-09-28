@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28)1066 missing SQL proof completed on verified isolatedPG:
+  clean142cases pass54.89s, all7PGscenarios; guard mutation failed/restored/cmp.
+  Initial overlapped run discarded as final evidence; zero temporary schemas
+  remain by count/list. Publish current head for newreview/CI, no merge approval.
+
 - (Astra, 2026-09-27)1066 local preparation5e8b769d retains both calendar and
   spool-only R1 guards across parent1065 merge.54local cases pass, guard mutation
   fails/restored/cmp. Full PostgreSQL proof waits owner-started disposable service;
