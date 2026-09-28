@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #964 review detour: September 7/8 execution entries and
+  four dated lessons retained behind newer checkpoints. Historical-only wording
+  applies to those entries, not later runtime work. PLAN resumes at 1986d671 and
+  current dependency consolidation; no reimplementation of completed R01 work.
+  No deployment, service action, live-data repair or snapshot change.
+  Five document/plan contracts pass; obsolete-resume mutation fails and is
+  restored/cmp. The four historical lesson bodies are retained verbatim.
 - (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
   installed before spawn through close; custom side effects replay even with
   original error; 0.01s minimum grace rejects unsupported tiny budgets. Every
@@ -656,6 +663,42 @@
   lokalni `docs/research/DATAPOINT_AUDIT_2026-09-07.md`; agenti zaprti.
   Odprto po vrsti: #980 (drift tipov + 11 niti), #981 vrata, veji
   `feat/live-ticker-reads-its-events` in `feat/profile-long-tail` za PR.
+- (Astra, 2026-09-20) Historical consolidation checkpoint: preserve #964 historical execution ledger
+  and current-main runtime track together. September7/8 entries below describe
+  then, not the current runtime implementation. #1076 merged; #1057/#962 approved
+  conditionally; #964 not approved. Resume #1077 delivery/sealing after detour.
+
+- **2026-09-08 (Astra, resume checkpoint):** first implementation slices are
+  published as #964/#965/#966/#969/#979; see PLAN's current ledger. Targeted
+  tests pass per slice (2/40/7/4/19), not a combined whole-project proof.
+  Review corrections: closed issue moved to closure ledger, YAML dependency
+  declared directly, failed heartbeat retained across midnight. Helpers stopped
+  after their bounded tasks; local agent Node/Python tools persist separately
+  from services. No merge/deploy/browser/live-data mutation by Astra. Runtime
+  R01 remains gated by necessary stability/review work; it is not implemented.
+
+- **2026-09-07 (Astra):** owner approved the reconciled implementation plan.
+  Current authority: PLAN's "Astra execution ledger" (A01–A10, R01–R04).
+  Source `4f653c01`: #955 and #912 are now merged; runtime proof is separate.
+  Handoff saved in PR #964; watchdog delivery in #965; immutable review
+  snapshot candidate tested separately. Node/CI pin alignment is the next slice.
+  No service, deployment, browser, live-data write or merge performed by Astra.
+  Next: finish these stability slices, Codex/local environment safeguards and
+  artifact identity; isolated event-journal development follows the gate.
+
+**Only the September 7/8 entries immediately above are historical, not current action instructions.** In
+particular, Astra has not executed `review_slices.sh cut --push`: #961 added a
+narrow AGENTS exception for the legacy script while our approved plan prepares
+an immutable replacement. Preserve that exception pending owner review; do not
+apply it to any other push. Old advice to delete generated OpenAPI types is superseded
+by npm `pre*` hooks (`generate:api` before bare `npx`). Prior "install/restart
+watchdog" notes are not proof that installation is still pending.
+
+Deferred, not forgotten: twins r4/puran test, user layouts, spiderweb layer 3
+rendering/layer 4, endpoint-gap features, broad response typing and modular UI
+work. Data repairs, production migration and real alert delivery have their
+own permission gates. Read PLAN A09/A10 before reopening old research.
+
 - (Fable 5.1, 2026-09-07, 22:05) Owner: »poglej live mode kot obiskovalec«
   — pregledano med živo igro na produkciji (legacy `#/live`, v1.39.0):
   deset vrzeli (L1–L10) in osem rezin v LOKALNEM

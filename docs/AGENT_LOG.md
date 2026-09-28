@@ -1,5 +1,11 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · A local resume hash is not a public handoff reference.**
+  Preserve unpublished work with its exact host worktree, branch and read-only
+  object/ancestry checks. A fresh remote clone must obtain owner-provided source
+  or wait for reviewed publication; an older public PR is context, not the same
+  implementation. Separate first-session onboarding from approved continuation.
+
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
   and loop. Correction after follow-up review: installing cleanup deferral itself
@@ -304,6 +310,29 @@ data here.
   wiring evidence, not real PostgreSQL transaction proof. Initial journal
   events are not final-round events: validation warnings and post-commit
   correlation/Lua/endstats changes remain distinct facts.
+
+- **2026-09-07 · Commit, artifact, process and data are separate evidence.**
+  The handoff audit found merged SPA source newer than the served bundle.
+  Why: a healthy endpoint and matching git revision do not identify static
+  assets. Apply: record source/build identities and process start time before
+  live proof; never close a runtime obligation from a merge alone.
+- **2026-09-07 · Canonical import is earlier than data finalization.**
+  At the 2026-09-07 audit, `process_file()` committed stats before later updates;
+  `processed_files` is also written after that commit. Why: a Discord-only
+  emitter misses other inputs and a first event cannot promise final stats.
+  Apply: emit transactionally in the canonical importer, deduplicate the first
+  event durably and cover late changes before enabling consumers.
+- **2026-09-07 · Record the safety-policy snapshot when reviewing tooling.**
+  At `4f653c01` the review cutter contradicted the general force/no-verify ban;
+  #961 subsequently added a narrow legacy-script exception. Why: simultaneous
+  handoffs change policy while audits run. Apply: preserve the written exception
+  without extending it; the approved Astra plan prepares an immutable replacement
+  with ordinary hooks. Do not confuse preparing the replacement with deploying it.
+- **2026-09-07 · Configured Codex hooks are not necessarily active.**
+  The local hook was hardened and credential-bearing saved approvals sanitized,
+  but hooks/list still reports both hooks untrusted. Apply: owner reviews /hooks;
+  never claim lifecycle enforcement from synthetic subprocess tests, and never
+  log real tool input to prove integration. Rotation remains a separate action.
 
 - **2026-09-07 · A directory's mtime is not its contents' mtime.** `ls -la
   <dir>` reports when the directory entry list last changed (a file added or

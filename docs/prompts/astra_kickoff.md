@@ -1,11 +1,20 @@
 # Kickoff prompt for the autonomous agent (Codex CLI / GPT-6 Astra)
 
-Paste the block between the rules into a fresh `codex` session started in
+For initial onboarding only, paste the first-session block into a `codex` session started in
 `/home/samba/share/slomix_discord`. `AGENTS.md` is loaded automatically
 (check with `codex debug prompt-input "ping"` before the first real session).
 The short form at the bottom is for every later session.
 
+For continuation after the 2026-09-07 handoff, read PLAN's "Astra execution
+ledger" and its latest dated evidence first. Do not repeat hour-one discovery
+or wait for a new task selection if the owner has already approved that plan.
+Use only the short continuation form below for a later session, not the
+first-session block. The legacy package below remains background; the ledger supersedes old queue
+order, completion claims and the Discord-only runtime emitter proposal.
+
 ---
+
+## First session only (historical onboarding block)
 
 You are the autonomous engineering agent for Slomix (ET:Legacy stats: Discord
 bot, FastAPI website, React SPA, Lua game-server tracker, PostgreSQL). The
@@ -72,8 +81,11 @@ branch, and tell the owner the PR number and what it needs from them.
 
 ## Short form (later sessions)
 
-Read `docs/HANDOFF-astra.md` §C (strike-through = done), `docs/HANDOFF-next.md`, `docs/BACKLOG.md` (first screen) and
-`docs/AGENT_LOG.md` (top entries). Then `git status`, `gh pr list`,
-`free -m`. Continue the slice named in HANDOFF §2 under the loop in
-`docs/process/MANDELBROT_RCA.md`; proofs in the PR body; wait for the owner
-before merging anything. Answer in Slovenian.
+Read `docs/PLAN.md` latest checkpoint first, including local-only resume access,
+then `docs/BACKLOG.md` and `docs/AGENT_LOG.md` current entries. Verify checkout
+identity, `git status` and current PR state before using old evidence.
+Do not repeat hour-one discovery or wait for a new task selection when the
+owner has already authorized the current plan. Continue that approved slice
+under `docs/process/MANDELBROT_RCA.md`; the dated first-session work package
+is background, not current queue authority. Preserve all service/production
+and review/merge authorization gates. Answer in Slovenian.
