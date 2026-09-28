@@ -20,6 +20,13 @@
   Actual child/procfs tests reproduce both gaps; synthetic persistent operation
   failures must raise an unreaped error rather than claim successful cleanup.
 
+- **2026-09-28 · Observation transitions need pending state separate from ACK history.**
+  A delivered warning followed by unknown and another warning cannot use the old
+  notified_level alone. An observed-level OR fixes only the first attempt: it
+  loses the transition during cooldown or after a failed retry. Persist one
+  pending-warning bit per key until warning ACK or superseding nonwarn data;
+  keep latest payloads and delivery history separate, without a historical queue.
+
 - **2026-09-27 · Publication modes are filtered by the process umask.**
   open(mode=0600) under umask0277 creates0400, still readable by its owner.
   Reconciliation must accept that safe publisher output without chmod widening;
@@ -89,6 +96,22 @@ data here.
   source; child exit is not a durability or import acknowledgement. Supervise
   only the exact child Process object created by this caller, never services.
 
+- **2026-09-25 · Review triggers can have a billing consequence.**
+  An owner request to avoid additional charges applies to manual AI review
+  requests and potentially automatic reviews after PR creation or pushes.
+  Local tests/review can proceed without those triggers. Repository settings
+  do not prove account billing is disabled; verify separately, and do not
+  mistake a budget notification for an enforced usage stop.
+
+- **2026-09-07 · Measurement is not delivery acknowledgement.** Watchdog
+  observations/failure streaks must persist even when the notification fails,
+  but alert timestamps, recovery reset and daily heartbeat dedup advance only
+  after successful POST. Otherwise failed recovery/heartbeat delivery disappears
+  until another transition/day. Apply: persist pending latest-condition alerts,
+  acknowledge each successful batch of at most ten embeds, and test retries
+  across reloaded state. A crash between POST and acknowledgement can duplicate
+  delivery; do not claim exactly-once. Dry-run must skip both state and report
+  writes, including when output directories do not yet exist.
 - **2026-09-20 · Content reconciliation is not durability or import completion.**
   A link can succeed before directory fsync fails. Inspecting size and SHA-256
   can recognize the existing complete file without overwrite, but cannot prove
