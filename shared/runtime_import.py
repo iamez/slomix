@@ -58,6 +58,11 @@ async def import_ready_file(manager, file_path: Path) -> ImportStepResult:
         return ImportStepResult('failed', str(error))
     if _can_wait_for_r1(file_path.name):
         dependency = manager.parser.find_corresponding_round_1_file(str(file_path))
+        if dependency is not None:
+            try:
+                _validate_import_filename(Path(dependency).name)
+            except ValueError as error:
+                return ImportStepResult('failed', f'Invalid R1 dependency: {error}')
         if dependency is None:
             if await manager.is_file_processed(file_path.name):
                 return ImportStepResult('imported', 'Already processed')

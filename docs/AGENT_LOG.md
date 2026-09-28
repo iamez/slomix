@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Validate selected dependencies as well as current inputs.**
+  The earliest supported R2 can select a previous-year R1 across midnight;
+  matching trusted bytes do not establish calendar admission. Both import
+  paths reuse current-input validation for selected R1 before canonical calls.
+  Verified capture remains match while dependency=invalid is terminal, not a
+  fabricated content conflict. Prove this with the actual filesystem selector,
+  not only a mock returning an invalid name; DBless proof is not SQL proof.
+
 - **2026-09-28 · Validate terminal input before stricter lower-layer validation.**
   Verified import called spool inspection before filename admission, so malformed
   names raised instead of returning the promised failed result. Move shared

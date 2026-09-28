@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1066 boundary review follow-up (2026-09-28): real parser selection for
+> 2020-01-01-000500 R2 chooses 2019-12-31-235500 R1 across midnight. Both
+> import entry points now apply the same supported-calendar admission to that
+> dependency before canonical import; verified import reports capture=match,
+> dependency=invalid, terminal failed before R1 content inspection or DB calls.
+> Both real-filesystem regressions failed before repair; shared year-guard
+> mutation failed both again, restored/cmp. 122 focused tests pass (1.22s), Ruff
+> passes. Independent DBless runtime probe with actual parser and matching hash
+> returned that exact outcome; fixture retained outside git. No PostgreSQL run
+> after this guard: prior 199-case PG evidence predates it, proof service expired.
+> No service restart, deployment or remote write. Original runtime plan retained.
+
 > Current #1066 checkpoint 2026-09-28: #965 merged ec8ec7ed after its420-second
 > cycle; normal main sync 58626d92 preserves both document histories and every
 > import implementation/test blob from f8d8e849 (199-case actual-PG proof above).

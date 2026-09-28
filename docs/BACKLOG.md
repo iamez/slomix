@@ -1,5 +1,13 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-09-28 #1066 review boundary repaired locally: selected R1 receives the
+> same calendar/year admission as current input, even with trusted matching
+> content. Actual midnight parser/filesystem reproduction failed on old code;
+> 122 focused cases and independent DBless runtime probe now pass. Mutation
+> seen failing and restored/cmp. PG proof remains pending an owner-started
+> isolated service; old SQL evidence does not cover this new guard. Resume
+> exact-head review/queue gates, then the unchanged runtime v2 plan.
+
 > Pravilo za skoke: ko uporabnik vpraša nekaj IZVEN trenutnega taska,
 > najprej TUKAJ zapiši, kje si ostal; po fixu se vrni in vpiši, kaj si
 > spremenil — tudi če si kaj pokvaril. Commit po vsakem zaključenem

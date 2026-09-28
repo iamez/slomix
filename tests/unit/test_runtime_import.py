@@ -27,7 +27,7 @@ async def test_missing_r1_waits_then_imports_when_available():
     path = Path('2026-09-20-121000-goldrush-round-2.txt')
     assert (await import_ready_file(subject, path)).status == 'waiting_for_r1'
     subject.process_file.assert_not_awaited()
-    subject.parser.find_corresponding_round_1_file.return_value = 'matching-round-1.txt'
+    subject.parser.find_corresponding_round_1_file.return_value = '2026-09-20-120000-goldrush-round-1.txt'
     assert (await import_ready_file(subject, path)).status == 'imported'
     subject.process_file.assert_awaited_once_with(path.absolute())
 
@@ -44,7 +44,7 @@ async def test_completed_r2_does_not_wait_for_pruned_dependency():
 async def test_bare_relative_file_uses_same_absolute_path_for_lookup_and_import(monkeypatch, tmp_path):
     """A parser lookup must not receive an empty directory for a bare filename."""
     monkeypatch.chdir(tmp_path)
-    subject = manager(dependency='fixture-round-1.txt')
+    subject = manager(dependency='2026-09-20-120000-fixture-round-1.txt')
     path = Path('2026-09-20-121000-fixture-round-2.txt')
     await import_ready_file(subject, path)
     subject.parser.find_corresponding_round_1_file.assert_called_once_with(str(tmp_path / path))
@@ -133,3 +133,13 @@ async def test_valid_calendar_boundaries_can_wait(stamp, round_number):
         subject.process_file.assert_not_awaited()
     else:
         subject.process_file.assert_awaited_once()
+
+
+@pytest.mark.parametrize('stamp', ['2019-12-31-235500', '2036-01-01-000000', '2026-02-29-120000', '2026-09-20-240000'])
+async def test_selected_dependency_uses_same_calendar_admission(stamp):
+    subject = manager(dependency=f'{stamp}-map-round-1.txt')
+    result = await import_ready_file(subject, Path('2026-09-20-121000-map-round-2.txt'))
+    assert result.status == 'failed' and result.message == 'Invalid R1 dependency: Invalid stats timestamp'
+    subject.process_file.assert_not_awaited()
+    subject.is_file_processed.assert_not_awaited()
+    subject.find_processed_duplicate.assert_not_awaited()

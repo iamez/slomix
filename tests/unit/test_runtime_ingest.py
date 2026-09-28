@@ -6,14 +6,48 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from bot.community_stats_parser import C0RNP0RN3StatsParser
 from shared import runtime_ingest
-from shared.runtime_import import ImportStepResult
+from shared.runtime_import import ImportStepResult, import_ready_file
 from shared.runtime_ingest import ExpectedStatsIdentity, import_verified_file
 from shared.runtime_spool import publish_stats_file
 
 NAME = '2026-09-20-120000-map-round-1.txt'
 DIGEST = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
 MANAGER = SimpleNamespace(parser=SimpleNamespace(allow_legacy_r1_fallback=False))
+
+
+@pytest.mark.parametrize('verified', [False, True])
+async def test_real_midnight_dependency_outside_supported_year_is_terminal(tmp_path, monkeypatch, verified):
+    """Real parser selection must not bypass the importer's calendar admission."""
+    r1 = '2019-12-31-235500-map-round-1.txt'
+    r2 = '2020-01-01-000500-map-round-2.txt'
+    for name in (r1, r2):
+        publish_stats_file(tmp_path, name, [b'abc'], expected_size=3)
+    parser = C0RNP0RN3StatsParser(allow_legacy_r1_fallback=False)
+    assert parser.find_corresponding_round_1_file(str(tmp_path / r2)) == str(tmp_path / r1)
+    subject = SimpleNamespace(
+        parser=parser, process_file=AsyncMock(return_value=(True, 'unexpected import')),
+        is_file_processed=AsyncMock(), find_processed_duplicate=AsyncMock(),
+    )
+    inspect = Mock(wraps=runtime_ingest.inspect_published_stats_file)
+    monkeypatch.setattr(runtime_ingest, 'inspect_published_stats_file', inspect)
+    if verified:
+        result = await import_verified_file(
+            subject, tmp_path, r2, expected_size=3, expected_sha256=DIGEST,
+            expected_r1={r1: ExpectedStatsIdentity(3, DIGEST)},
+        )
+        assert result.capture_status == 'match'
+        assert result.dependency_status == 'invalid'
+        inspect.assert_called_once()  # R1 rejected before inspecting its bytes.
+        outcome = result.import_result
+    else:
+        outcome = await import_ready_file(subject, tmp_path / r2)
+    assert outcome.status == 'failed'
+    assert 'Invalid R1 dependency' in outcome.message
+    subject.process_file.assert_not_awaited()
+    subject.is_file_processed.assert_not_awaited()
+    subject.find_processed_duplicate.assert_not_awaited()
 
 
 @pytest.mark.parametrize('filename', [

@@ -28,7 +28,7 @@ class VerifiedImportResult:
 
     capture_status: Literal['missing', 'match', 'conflict'] | None
     import_result: ImportStepResult | None
-    dependency_status: Literal['not_required', 'missing', 'unverified', 'match', 'conflict'] | None = None
+    dependency_status: Literal['not_required', 'missing', 'unverified', 'match', 'conflict', 'invalid'] | None = None
 
 
 async def import_verified_file(
@@ -50,6 +50,8 @@ async def import_verified_file(
     import without DB markers. Existing R1 callers need no additional argument.
     Invalid names return terminal failed before I/O, with capture_status=None;
     this is unmeasured content, not a missing file or a verified match.
+    An invalid selected R1 returns terminal failed with dependency_status=invalid;
+    the current capture remains match, but dependency bytes are not inspected.
     """
     try:
         _validate_import_filename(filename)
@@ -72,6 +74,12 @@ async def import_verified_file(
             dependency = Path(selected).absolute()
             if dependency.parent != directory:
                 raise ValueError('Selected R1 must remain inside the verified spool')
+            try:
+                _validate_import_filename(dependency.name)
+            except ValueError as error:
+                return VerifiedImportResult(
+                    state, ImportStepResult('failed', f'Invalid R1 dependency: {error}'), 'invalid',
+                )
             identity = (expected_r1 or {}).get(dependency.name)
             if identity is None:
                 return VerifiedImportResult(state, None, 'unverified')
