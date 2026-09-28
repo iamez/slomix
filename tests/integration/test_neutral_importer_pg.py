@@ -106,6 +106,13 @@ async def main():
                 invalid.write_bytes(r2.read_bytes())
                 result = await import_ready_file(manager, invalid)
                 assert result.status == 'failed', result
+                payload = invalid.read_bytes()
+                verified = await import_verified_file(
+                    manager, invalid.parent, invalid.name, expected_size=len(payload),
+                    expected_sha256=hashlib.sha256(payload).hexdigest(),
+                )
+                assert verified.import_result.status == 'failed', verified
+                assert verified.capture_status is None and verified.dependency_status is None, verified
             for table in ('rounds', 'player_comprehensive_stats', 'processed_files', 'runtime_events'):
                 assert await admin.fetchval(f'SELECT count(*) FROM {table}') == 0
                 assert await admin.fetch(f'SELECT * FROM {table}') == []

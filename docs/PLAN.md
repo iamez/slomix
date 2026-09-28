@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1066 follow-up 2026-09-28: fresh review found structural invalid names raised
+> from capture inspection before terminal filename admission. Reproduced with
+> actual PostgreSQL valid-payload fixture (ValueError), plus three unit cases.
+> Move shared structural/calendar validation before all file inspection. The
+> terminal failed result explicitly reports capture_status=None and dependency
+> status None: content was not measured, so never fabricate match/missing.
+> Root 199 cases including nine actual PostgreSQL scenarios pass in 81.01s.
+> Removing early validation reproduces actual SQL-scenario failure; restored/cmp.
+> Valid input still propagates genuine I/O/metadata errors. Fresh publication and
+> exact-head review required; original runtime 1986d671 and service limits hold.
+
 > #1066 review correction 2026-09-28: real PostgreSQL reproduced both retained
 > conflicting R1 import and valid-payload double-dot filename import. R2 now
 > requires trusted frozen ExpectedStatsIdentity metadata for its parser-selected

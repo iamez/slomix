@@ -24,9 +24,9 @@ class ExpectedStatsIdentity:
 
 @dataclass(frozen=True)
 class VerifiedImportResult:
-    """Content verification and database import are separate observations."""
+    """Separate observations; capture None means filename rejected before I/O."""
 
-    capture_status: Literal['missing', 'match', 'conflict']
+    capture_status: Literal['missing', 'match', 'conflict'] | None
     import_result: ImportStepResult | None
     dependency_status: Literal['not_required', 'missing', 'unverified', 'match', 'conflict'] | None = None
 
@@ -48,7 +48,13 @@ async def import_verified_file(
     For R2, supply trusted source identities keyed by R1 filename. A selected
     dependency without admission metadata or with conflicting content blocks
     import without DB markers. Existing R1 callers need no additional argument.
+    Invalid names return terminal failed before I/O, with capture_status=None;
+    this is unmeasured content, not a missing file or a verified match.
     """
+    try:
+        _validate_import_filename(filename)
+    except ValueError as error:
+        return VerifiedImportResult(None, ImportStepResult('failed', str(error)))
     directory = directory.absolute()
     state = inspect_published_stats_file(
         directory, filename, expected_size=expected_size,
@@ -58,10 +64,6 @@ async def import_verified_file(
         return VerifiedImportResult(state, None)
     if manager.parser.allow_legacy_r1_fallback is not False:
         raise ValueError('Verified import requires a spool-only R1 parser')
-    try:
-        _validate_import_filename(filename)
-    except ValueError as error:
-        return VerifiedImportResult(state, ImportStepResult('failed', str(error)))
     dependency_status = 'not_required' if filename.endswith('-round-1.txt') else None
     if _can_wait_for_r1(filename):
         selected = manager.parser.find_corresponding_round_1_file(str(directory / filename))

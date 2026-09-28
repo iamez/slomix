@@ -16,6 +16,26 @@ DIGEST = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
 MANAGER = SimpleNamespace(parser=SimpleNamespace(allow_legacy_r1_fallback=False))
 
 
+@pytest.mark.parametrize('filename', [
+    '2026-09-20-120000-foo..bar-round-2.txt',
+    '../2026-09-20-120000-map-round-1.txt',
+    '2026-02-29-120000-map-round-2.txt',
+])
+async def test_invalid_filename_is_terminal_without_content_inspection(tmp_path, monkeypatch, filename):
+    inspect = Mock(side_effect=AssertionError('invalid names must not reach filesystem inspection'))
+    importer = AsyncMock()
+    monkeypatch.setattr(runtime_ingest, 'inspect_published_stats_file', inspect)
+    monkeypatch.setattr(runtime_ingest, 'import_ready_file', importer)
+    result = await import_verified_file(
+        MANAGER, tmp_path, filename, expected_size=3, expected_sha256=DIGEST,
+    )
+    assert result.capture_status is None  # unmeasured, never a fabricated match
+    assert result.dependency_status is None
+    assert result.import_result.status == 'failed'
+    inspect.assert_not_called()
+    importer.assert_not_awaited()
+
+
 async def ingest(directory):
     """Use fixed source metadata independently of local contents."""
     return await import_verified_file(MANAGER, directory, NAME, expected_size=3, expected_sha256=DIGEST)

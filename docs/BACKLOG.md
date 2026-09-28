@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #1066 verified-entry terminal filename contract corrected:
+  validate before I/O and return failed with capture_status=None (unmeasured).
+  Three unit/one actual PG regressions failed before fix; 199 combined pass81.01s.
+  Guard mutation fails actual PG case, restored/cmp. Fresh review still required.
+
 - (Astra, 2026-09-28) #1066 P1/P2 reproduced with real payload/SQL, then fixed:
   selected R1 needs independent source size/SHA admission; dependency conflict
   cannot contaminate valid R2. Shared importer calendar/name admission precedes

@@ -1,5 +1,12 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Validate terminal input before stricter lower-layer validation.**
+  Verified import called spool inspection before filename admission, so malformed
+  names raised instead of returning the promised failed result. Move shared
+  validation first and label capture_status=None as unmeasured, not a match or
+  absence. Actual valid-payload PostgreSQL regression proves rejection; unit
+  spies additionally prove no filesystem inspection or importer call occurred.
+
 - **2026-09-28 · A dependency is not admitted by verifying its consumer.**
   A retained conflicting R1 inside a private spool contaminated verified R2.
   Why: path isolation does not certify dependency content. Apply: validate the
