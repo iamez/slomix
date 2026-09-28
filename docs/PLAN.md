@@ -1,5 +1,46 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #963 fresh-review correction 2026-09-28: actual main4de6f07e normally
+> integrated with both histories retained. Three new findings independently
+> reproduced and corrected; 13 focused document/plan contracts pass. Actual
+> local resume object/branch/ancestry verified read-only; no claim that the hash
+> is available to a fresh GitHub clone. Document mutations failed and all files
+> restored/cmp. No real deploy, review-ref, service or remote operation. Root
+> owns publication, thread replies and fresh exact-head review/CI gates.
+
+> LOCAL-ONLY runtime resume 1986d671 (2026-09-28 clarification): the retained
+> implementation is on this owner's host at
+> /home/samba/share/slomix-astra-runtime-integration-20260926, branch
+> refactor/db-runtime-team-assignment-20260926. It is not fetchable from GitHub.
+> Read-only identity check on that host:
+> `git -C /home/samba/share/slomix-astra-runtime-integration-20260926 cat-file -e '1986d671^{commit}'`
+> and `git -C /home/samba/share/slomix-astra-runtime-integration-20260926 log -1 --oneline`.
+> Read its latest PLAN before continuing; later commits preserve the checkpoint.
+> A fresh clone without this host must obtain an owner-provided bundle or wait
+> for reviewed slice publication, not pretend this local hash is a public ref.
+> Public queue context is PR #1077 (not equivalent to the later local work).
+
+> Current #963 main-sync checkpoint 2026-09-28: ec8ec7ed normally merged,
+> including reviewed #1067 SSH and #965 watchdog changes; both documentation
+> histories and d8431e06's historical corrections retained. Preserve runtime resume 1986d671.
+> 10 focused document/plan contracts pass; unchanged guard tests retain their
+> earlier observed mutation failure and restored/cmp proof. Historical content
+> is not current host evidence. Root owns publication and fresh review gates;
+> this documentation detour does not replace the original runtime roadmap.
+> No production, service, real review-ref or remote operations were performed.
+
+> Historical checkpoint below predates this actual-main synchronization:
+
+> Current checkpoint 2026-09-28: #963 historical handoff corrections are a
+> documentation-only queue detour. Main 9ef42671 contains #1065; #1066 SQL
+> proof and #1067 SSH review are recorded in the integration checkpoint.
+> Preserve runtime resume commit 1986d671 and the #1067 → #1068 → #1069 →
+> #1070 dependency chain. No service, production or NEVER MERGE action.
+> Earlier dated checkpoints below describe their date, not current authority.
+> Verification: 10 document/plan contracts pass; actual historical-document
+> mutations adding timer enable recipes with --dry-run and --now each fail the
+> cleanup guard, restored with byte-for-byte cmp. Build recipe paths validated
+> without executing build/deploy; no current host-data measurement is claimed.
 > Current #1068 checkpoint 2026-09-28: #965 merged ec8ec7ed; normal main sync
 > 9fb9d3db retains both document histories and worker/source test bytes90026032.
 > Root independently passed159cases37.50s before sync and207worker/SSH/spool/
@@ -424,7 +465,7 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
+**Zadnja posodobitev:** 2026-09-28 (Astra, historical handoff review corrections)
 
 ## Proga: Astra watchdog delivery acknowledgement
 
@@ -475,6 +516,23 @@ both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
 
+### Consolidation: historical Opus handoff #963 — 2026-09-20
+
+Historical checkpoint only; current queue and authority are recorded above.
+
+Preserve historical measurements, not obsolete operating instructions. Normal
+main integration restores the tracked docs/HANDOFF-astra.md reference. Correct
+release attribution (#952/#955/#958 after1.45.0), timer static-state inference,
+journal rotation/config activation advice and bundled lessons. Local journalctl
+manual confirms vacuum handles archived files and rotation precedes vacuum when
+combined; no cleanup or service action executed. Git ancestry independently
+confirms the release sequence; GitHub confirms #912 merged2026-09-07.
+#912's historical live arena duel caveat is not proven resolved by its merge:
+owner-controlled live verification remains separate. #962 is approved in the
+consolidation queue, with current-main checks/runtime proof required before merge.
+All host measurements in the old handoff remain explicitly historical. Original
+runtime resume is #1077 completion delivery/sealing, then new-site audit and
+approved reversible DEV cutover. #963 has no merge permission.
 ### R04m consolidation safety backport — 2026-09-25
 
 Locally backported the exact worker and regression-test changes from #1077

@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-28) #963 review detour: preserve the September 7 handoff
+  below its later checkpoints, correct repository-root build/deploy paths and
+  reject every timer enable recipe in the historical cleanup guard. PLAN's
+  update date now reflects this change. Runtime resume 1986d671 and the current
+  integration queue remain unchanged; no deployment or historical-data claims.
+  Ten document/plan contracts pass; both actual timer-recipe mutations fail,
+  restored/cmp. Build/deploy command paths checked without running either.
 - (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
   installed before spawn through close; custom side effects replay even with
   original error; 0.01s minimum grace rejects unsupported tiny budgets. Every
@@ -724,6 +731,27 @@
   #924–#943 na novi main) — če seja ugasne prej, to naredi Astra ali owner.
   Astra vstopi prek `AGENTS.md` §4 → `docs/HANDOFF-astra.md` §E (prva ura) → §C.
   Bundle NI zgrajen (owner: pozneje); sudo/DB geslo rotacija = owner.
+- (Opus 5, 2026-09-07, 12:10; historical snapshot, not current instructions)
+  **SEJA SE ZAKLJUČUJE — predaja je
+  `docs/HANDOFF-opus5-2026-09-07.md`** (komplementarna k `HANDOFF-astra.md`).
+  Mergano danes: #923, #948, #950, #952, #955, #958 → **endpoint gap 13 → 12**,
+  #952/#955/#958 so prišli po v1.45.0. Takrat odprto: **#912** (arena, CI zelen, ⛔ `arena_acc_log`
+  NEIZMERJEN v živo — manjka en dvoboj na prižganem strežniku; razsodnik je
+  `lua_status` podpis, ne datoteka na disku) in **#962** (watchdog je kazal
+  84,9 % diska, `df` 90 % — prag 85 % se je sprožil šele pri `df` ~89,6 %).
+  ⛔ **Bundle ni zgrajen**: nobena SPA sprememba od 09-06 11:03 ni vidna na
+  `:8000`; corrected repository-root recipe for owner-approved build/deploy:
+  `(cd website/frontend && npm run build:app) && DEV_SRC_DIR="$PWD" scripts/dev_deploy.sh`
+  (restart = ownerjev DA; command not executed here). Prelet faze 7 delen
+  (manifest 32 rut + 20 rut, vse 200, 0 konzolnih napak); celoten čaka RAM.
+  SSD sproščen 90 % → 80 % (nič izbrisano, vse v
+  `share/_from_ssd_tmp_2026-09-07/` in
+  `share/slomix-archive/cleanup-2026-08-26/`). Historical note corrected 2026-09-20:
+  inspect timer state/activation and tmpfiles age rules before proposing changes;
+  static alone does not diagnose failed cleanup. Journal vacuum affects archived
+  files; any owner-approved cleanup needs retention review and rotation, and
+  changed journald limits need explicit owner activation. No cleanup was performed.
+
 - (Fable 5.1, 2026-09-07, 04:30) Predaja projekta Astri: `docs/HANDOFF-astra.md`
   (§A Fable, §B sestra dobesedno, §C delovni paket 1–20, §D ne delaj, §E prva
   ura) + `docs/HANDOFF-astra-inventory.md` (inventar po območjih, §11 ownerjeve
