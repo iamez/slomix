@@ -121,13 +121,14 @@ def test_unpicklable_task_fails_without_child(explicit_pickling_error):
 
 
 @pytest.mark.parametrize('interrupt_calls', [(2,), (3,), (1, 2, 3)])
-def test_cleanup_interruption_still_reaps_child(tmp_path, monkeypatch, interrupt_calls):
+@pytest.mark.parametrize('error_type', [KeyboardInterrupt, SystemExit])
+def test_cleanup_interruption_still_reaps_child(tmp_path, monkeypatch, interrupt_calls, error_type):
     """Delay cancellation until the SIGTERM-resistant real child is reaped."""
     process_type = multiprocessing.get_context('spawn').Process
     original_join = process_type.join
     processes = []
     calls = []
-    errors = {n: KeyboardInterrupt(f'join {n}') for n in interrupt_calls}
+    errors = {n: error_type(f'join {n}') for n in interrupt_calls}
 
     def interrupted_join(process, timeout=None):
         if not processes:
@@ -146,7 +147,7 @@ def test_cleanup_interruption_still_reaps_child(tmp_path, monkeypatch, interrupt
         try:
             raise LookupError('caller is already handling an unrelated error')
         except LookupError:
-            with pytest.raises(KeyboardInterrupt) as raised:
+            with pytest.raises(error_type) as raised:
                 run_bounded_capture_task(partial(_block, marker, True),
                                          timeout_seconds=2, shutdown_grace=0.2)
         assert raised.value is errors[interrupt_calls[0]]
@@ -333,10 +334,10 @@ def test_persistent_cleanup_failure_is_bounded_and_truthful(operation):
     assert time.monotonic() - started < 1
 
 
-def test_finished_child_with_tiny_positive_grace(tmp_path):
-    """An elapsed cleanup budget is not evidence that an exited child is alive."""
+def test_finished_child_with_minimum_supported_grace(tmp_path):
+    """The supported minimum remains usable for an already finished child."""
     result = run_bounded_capture_task(partial(_complete, tmp_path / 'child'),
-                                     timeout_seconds=3, shutdown_grace=1e-20)
+                                     timeout_seconds=3, shutdown_grace=0.01)
     assert result.status == 'completed'
     assert not Path(f'/proc/{result.pid}').exists()
 
@@ -425,3 +426,166 @@ def test_cleanup_restores_and_replays_caller_handler(tmp_path, monkeypatch, mode
         assert not Path(f'/proc/{closed[0]}').exists()
     finally:
         signal.signal(signal.SIGINT, previous)
+
+
+def test_tiny_grace_is_rejected_before_child_creation(tmp_path, monkeypatch):
+    kind = multiprocessing.get_context('spawn').Process
+    original_start, original_join = kind.start, kind.join
+    processes = []
+
+    def start(process):
+        processes.append(process)
+        return original_start(process)
+
+    monkeypatch.setattr(kind, 'start', start)
+    try:
+        with pytest.raises(ValueError, match='grace'):
+            run_bounded_capture_task(partial(_block, tmp_path / 'child', True),
+                                     timeout_seconds=1, shutdown_grace=1e-20)
+        assert not processes
+    finally:
+        for process in processes:
+            try:
+                if process.is_alive():
+                    process.kill()
+                original_join(process, 2)
+                process.close()
+            except ValueError:
+                pass
+
+
+def test_no_signal_handler_reinstallation_after_child_exists(tmp_path, monkeypatch):
+    kind = multiprocessing.get_context('spawn').Process
+    original_start, original_join = kind.start, kind.join
+    previous = signal.getsignal(signal.SIGINT)
+    processes, calls = [], []
+
+    def start(process):
+        result = original_start(process)
+        processes.append(process)
+        return result
+
+    def getsignal(signum):
+        calls.append(signum)
+        if len(calls) == 2:
+            os.kill(os.getpid(), signal.SIGINT)
+        return signal.getsignal(signum)
+
+    monkeypatch.setattr(kind, 'start', start)
+    monkeypatch.setattr(runtime_worker, 'signal', SimpleNamespace(
+        SIGINT=signal.SIGINT, getsignal=getsignal, signal=signal.signal,
+    ))
+    try:
+        try:
+            run_bounded_capture_task(partial(_block, tmp_path / 'child', True),
+                                     timeout_seconds=1, shutdown_grace=0.2)
+        except KeyboardInterrupt:
+            pass
+        pid = int((tmp_path / 'child').read_text())
+        assert not Path(f'/proc/{pid}').exists()
+        assert pid not in [p.pid for p in multiprocessing.active_children()]
+        assert len(calls) == 1, 'Signal ownership must be installed only before spawn'
+        assert signal.getsignal(signal.SIGINT) == previous
+    finally:
+        for process in processes:
+            try:
+                if process.is_alive():
+                    process.kill()
+                original_join(process, 2)
+                process.close()
+            except ValueError:
+                pass
+
+
+@pytest.mark.parametrize('handler_raises', [False, True])
+def test_launch_failure_still_replays_custom_signal_policy(tmp_path, monkeypatch, handler_raises):
+    popen = multiprocessing.popen_spawn_posix.Popen
+    previous = signal.getsignal(signal.SIGINT)
+    calls = []
+    original_error = OSError('fixture launch failed before OS spawn')
+
+    def custom(signum, frame):
+        assert signal.getsignal(signal.SIGINT) is custom
+        calls.append(signum)
+        if handler_raises:
+            raise SystemExit(17)
+
+    def launch(handle, process):
+        os.kill(os.getpid(), signal.SIGINT)
+        raise original_error
+
+    monkeypatch.setattr(popen, '_launch', launch)
+    signal.signal(signal.SIGINT, custom)
+    try:
+        with pytest.raises(OSError) as raised:
+            run_bounded_capture_task(partial(_complete, tmp_path / 'child'), timeout_seconds=1)
+        assert raised.value is original_error
+        assert calls == [signal.SIGINT]
+        assert signal.getsignal(signal.SIGINT) is custom
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
+@pytest.mark.parametrize('mode', ['default', 'custom', 'system_exit'])
+@pytest.mark.parametrize('parent_error', [False, True])
+def test_join_signal_replayed_after_close_with_original_error_precedence(tmp_path, monkeypatch, mode, parent_error):
+    """Actual SIGINT during a real join is deferred until bounded cleanup."""
+    kind = multiprocessing.get_context('spawn').Process
+    original_join, original_close = kind.join, kind.close
+    previous = signal.getsignal(signal.SIGINT)
+    processes, closed, calls = [], [], []
+    failure = LookupError('fixture operation error')
+
+    def custom(signum, frame):
+        assert signal.getsignal(signal.SIGINT) is custom
+        assert closed, 'Custom policy must run after owned handles are closed'
+        calls.append(signum)
+        if mode == 'system_exit':
+            raise SystemExit(23)
+
+    def join(process, timeout=None):
+        first = not processes
+        if first:
+            processes.append(process)
+            os.kill(os.getpid(), signal.SIGINT)
+        original_join(process, timeout)
+        if first and parent_error:
+            raise failure
+
+    def close(process):
+        pid = process.pid
+        original_close(process)
+        closed.append(pid)
+
+    monkeypatch.setattr(kind, 'join', join)
+    monkeypatch.setattr(kind, 'close', close)
+    signal.signal(signal.SIGINT, signal.default_int_handler if mode == 'default' else custom)
+    started = time.monotonic()
+    try:
+        expected = LookupError if parent_error else (
+            KeyboardInterrupt if mode == 'default' else SystemExit if mode == 'system_exit' else None
+        )
+        task = partial(_block, tmp_path / 'child', True)
+        if expected:
+            with pytest.raises(expected) as raised:
+                run_bounded_capture_task(task, timeout_seconds=1, shutdown_grace=0.2)
+            if parent_error:
+                assert raised.value is failure
+        else:
+            assert run_bounded_capture_task(task, timeout_seconds=1, shutdown_grace=0.2).status == 'timed_out'
+        elapsed = time.monotonic() - started
+        assert 1 <= elapsed < 5, elapsed
+        pid = int((tmp_path / 'child').read_text())
+        assert not Path(f'/proc/{pid}').exists()
+        assert pid not in [p.pid for p in multiprocessing.active_children()]
+        assert calls == ([] if mode == 'default' else [signal.SIGINT])
+    finally:
+        signal.signal(signal.SIGINT, previous)
+        for process in processes:
+            try:
+                if process.is_alive():
+                    process.kill()
+                original_join(process, 2)
+                original_close(process)
+            except ValueError:
+                pass
