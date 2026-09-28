@@ -37,12 +37,14 @@ def _reap(process, grace: float) -> BaseException | None:
             try:
                 if not process.is_alive():
                     return interrupted
-                if time.monotonic() >= deadline:
-                    break
+                # Even an expired phase must attempt its stopping signal once.
+                # Its deadline limits waits/retries, not the initial escalation.
                 stop()
                 process.join(max(0.0, deadline - time.monotonic()))
                 if not process.is_alive():
                     return interrupted
+                if time.monotonic() >= deadline:
+                    break
             except BaseException as exc:
                 if interrupted is None:
                     interrupted = exc
@@ -53,7 +55,7 @@ def _reap(process, grace: float) -> BaseException | None:
 
 @contextmanager
 def _defer_sigint():
-    """Defer main-thread SIGINT over a critical child-ownership transition.
+    """Own main-thread SIGINT for the complete child lifetime.
 
     No signal mask is changed or inherited by the child. Python dispatches signal
     handlers only in the main thread; other threads need no handler replacement.
@@ -81,8 +83,14 @@ def _defer_sigint():
         raise
     finally:
         signal.signal(signal.SIGINT, previous)
-        if pending and error is None:
-            previous(*pending[0])
+        if pending:
+            try:
+                previous(*pending[0])
+            except BaseException:
+                # The handler must run even when the operation failed. Preserve
+                # its side effects, but do not replace that original exception.
+                if error is None:
+                    raise
 
 
 def run_bounded_capture_task(
@@ -95,15 +103,21 @@ def run_bounded_capture_task(
     processes. No task return value is transported. Normal return means completed;
     exceptions/SystemExit become failed without transmitting exception text.
     Startup counts against the deadline; shutdown may add two grace periods.
+    shutdown_grace must be at least 0.01 seconds; even then OS scheduling can
+    prevent timely reaping, which remains an explicit RuntimeError.
     Timeout means the child is still alive after the bounded join. A late parent
     observation cannot establish the exact exit time of an already finished child.
     OS process startup and uninterruptible kernel waits cannot be hard-bounded.
     Failure to reap raises, never reports successful cleanup. Cleanup defers
     escalation interruptions until reaping finishes; the original parent error
     takes precedence over a cleanup interruption after successful reaping.
-    Main-thread SIGINT is deferred during spawn until ownership exists and during
-    cleanup through handle close, preserving custom handlers without inheriting a
-    blocked signal mask in the child. SIGKILL/default SIGTERM cannot be recovered.
+    Main-thread callable SIGINT handlers are deferred across the entire child
+    lifetime through handle close, then restored and invoked even after an error.
+    Cancellation latency can therefore reach the task timeout plus shutdown;
+    there is no immediate SIGINT cancellation promise. Signals coalesce to one
+    callback. No blocked signal mask is inherited. SIGKILL/default SIGTERM cannot
+    be recovered; non-callable SIG_DFL/SIG_IGN policies remain unchanged. The
+    caller must not replace SIGINT policy during supervision.
     Forced termination skips child finally blocks: retain sources and reconcile
     .part/final files.
     Launch from an import-safe main guarded by if __name__ == '__main__'.
@@ -111,32 +125,28 @@ def run_bounded_capture_task(
     for value, maximum in ((timeout_seconds, 300), (shutdown_grace, 5)):
         if type(value) not in (int, float) or not math.isfinite(value) or not 0 < value <= maximum:
             raise ValueError('Worker deadlines must be finite positive numbers within limits')
-    process = multiprocessing.get_context('spawn').Process(target=_execute, args=(task,), daemon=True)
-    deadline = time.monotonic() + timeout_seconds
-    original_error = None
-    try:
-        with _defer_sigint():
-            process.start()
-        pid = process.pid
-        process.join(max(0.0, deadline - time.monotonic()))
-        timed_out = process.is_alive()
-    except BaseException as exc:
-        original_error = exc
-        raise
-    finally:
-        cleanup_error = None
-        cleanup_complete = False
+    if shutdown_grace < 0.01:
+        raise ValueError('Worker shutdown grace must be at least 0.01 seconds')
+    # Install once, before a child can exist; no unprotected cleanup transition.
+    with _defer_sigint():
+        process = multiprocessing.get_context('spawn').Process(target=_execute, args=(task,), daemon=True)
+        deadline = time.monotonic() + timeout_seconds
+        original_error = None
         try:
-            with _defer_sigint():
-                if process.pid is not None:
-                    cleanup_error = _reap(process, shutdown_grace)
-                exit_code = process.exitcode
-                process.close()
-                cleanup_complete = True
-        except BaseException:
-            if not cleanup_complete or original_error is None:
-                raise
-        if cleanup_error is not None and original_error is None:
-            raise cleanup_error
-    status = 'timed_out' if timed_out else ('completed' if exit_code == 0 else 'failed')
-    return WorkerResult(status, pid, exit_code)
+            process.start()
+            pid = process.pid
+            process.join(max(0.0, deadline - time.monotonic()))
+            timed_out = process.is_alive()
+        except BaseException as exc:
+            original_error = exc
+            raise
+        finally:
+            cleanup_error = None
+            if process.pid is not None:
+                cleanup_error = _reap(process, shutdown_grace)
+            exit_code = process.exitcode
+            process.close()
+            if cleanup_error is not None and original_error is None:
+                raise cleanup_error
+        status = 'timed_out' if timed_out else ('completed' if exit_code == 0 else 'failed')
+        return WorkerResult(status, pid, exit_code)

@@ -1,5 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1071 local parent propagation 2026-09-28: normal merge of #1070 locald4c0f5b8
+> retains final worker90026032 source/tests exactly and both doc histories.
+> Twenty-seven stability/SSH-capture tests pass10.72s. Existing callers use
+> supported grace budgets; no fixture weakening. Root owns actual-main sync and
+> final publication/review. No services/network/DB; runtime1986d671 preserved.
+
+> #1070 local parent propagation 2026-09-28: normally merged #1069 local593edbbc,
+> retaining final worker90026032 bytes and both histories. Seventeen supervised
+> SSH-capture cases pass9.98s, including real bounded children; configured0.2s
+> grace/default compatible with minimum0.01s. Root owns later actual-main sync,
+> publication/review. No remote/service/network/DB changes; runtime1986d671 kept.
+
 > Current #1070 checkpoint, 2026-09-28: normal parent merge bda56937 retains
 > final SSH identity e22ae27c and worker fixes 86c69e39. Combined 150 cases pass
 > in 23.00s: real child outcomes remain separate from observed content, retries
@@ -19,6 +31,12 @@
 >BLOCK publication until the newly reported1067 implicit key certificate-sidecar
 >loading fix propagates through1068/1069, followed by actual main sync and fresh
 >exact-head review/CI. No1070 merge permission inferred. Original plan preserved.
+> #1069 local parent propagation 2026-09-28: merged final worker90026032,
+> retaining both histories and exact worker/source-test bytes. Eleven real
+> spawned SSH-capture fixture cases pass4.85s; callers use0.2s grace or default,
+> compatible with new0.01 minimum. Worker lifetime SIGINT latency contract
+> retained. No remote/service/network/DB changes. Original runtime1986d671
+> remains resume point; actual-main sync and fresh review remain root gates.
 
 > Current #1069 checkpoint, 2026-09-28: normal parent merge 005e8d83 retains
 > worker fixes 86c69e39 and SSH identity guard e22ae27c byte-for-byte. Combined
@@ -39,6 +57,27 @@
 >Ruff clean. No live network, service/DB/snapshot operations, push or retarget.
 >Await actual parent/main synchronization and fresh exact-head CI/review plus
 >individual approval; original runtime roadmap preserved after consolidation.
+> #1068 lifetime ownership correction 2026-09-28: fresh review reproduced tiny
+> positive grace leaving an owned child, a second-getsignal cleanup transition,
+> and dropped custom SIGINT side effects when launch also failed. Install one
+> callable-SIGINT deferrer before any child exists and retain it through close;
+> replay the restored handler even after an operation error, preserving that
+> error if the handler also raises. SIGINT cancellation is deliberately delayed
+> up to timeout plus shutdown, coalesced to one callback; no immediate promise.
+> Require shutdown_grace >=0.01 before spawning, and always attempt each phase's
+> stopping signal before its elapsed budget limits waiting. OS inability to reap
+> still raises RuntimeError; no absolute startup/kernel bound or service claim.
+> Final 159 combined cases pass37.24s, including45real-child worker cases and
+> 114offline SSH/capture/spool cases. Real SIGINT during join tests default,
+> custom-return and SystemExit policies with/without original operation errors;
+> procfs/active_children and closed handles prove ownership release. Replacing
+> BaseException cleanup handling with Exception fails3 SystemExit cases; removing
+> lifetime deferral fails actual spawn-window ownership. Restored/cmp each time;
+> deliberate-failure fixture cleanup reaped its own children. CodeQL663's broad
+> catch is intentional deferred cancellation, not suppression; CodeQL662's
+> cleanup_complete variable is removed. No remote/service/network/DB operation.
+> Original runtime1986d671 and previous worker fixes remain preserved. Root
+> owns publication, fresh exact-head review and merge gates.
 
 > #1068 root-review follow-up, 2026-09-28: reproduced false unreaped error for
 > an already-finished real child with accepted grace=1e-20, and real SIGINT in
