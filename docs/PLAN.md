@@ -1,5 +1,20 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Result2026-10-03: owner supplied incremental SaaS extraction guidance; no new
+>SaaS product scope. Local ignored docs/research/future-saas-extraction.md records
+>components, game-specific limits, prerequisites and over-engineering risks.
+>Real isolated PG14 proof with canonical parser/adapter as etlegacy_user in cloneC:
+>synthetic proofspider vehicle write failure returns unsuccessful,0rows/0receipts;
+>retry commits1vehicle(distance360)/1receipt; repeat leaves counts unchanged.
+>Observer SQL COUNT and fetched row length agree. Discord/website/dotenv/config
+>imports blocked; only private socket allowed. No matching canonical round exists
+>for this synthetic map: unresolved linkage is explicit, not a linkage proof.
+>Private script proximity_acceptance.py retained alongside backup. New boundary
+>still not worker/cog wired. Inspection finds _mark_file_processed catches and
+>logs errors: NEXT reproduce post-write receipt failure before treating parser
+>success as durable completion. Do not claim all-section/concurrency proof.
+>No live/production changes; original runtime plan and withheld metrics retained.
+
 > Spiderweb runtime slice 2026-10-03 (additive, original roadmap retained):
 >SW-2 scene, SW-3 oracle LOS and SW-4 research protocol already exist on main;
 >do not rebuild them from the older detached checkout's September6 status.

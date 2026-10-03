@@ -2,6 +2,14 @@
 
 ## Runtime independence checkpoint (2026-10-03)
 
+Private PostgreSQL proof now covers one synthetic vehicle: failed write leaves
+zero rows/receipts, retry commits one of each, repeat does not duplicate. Imports
+of Discord/website/config are forbidden in that process. The synthetic map has
+no canonical round, so this is not round-linkage or complete Spiderweb proof.
+Receipt-error propagation still needs a dedicated test: the existing parser's
+`_mark_file_processed` catches exceptions. Do not equate parser success with
+durable acknowledgment until that path is verified and addressed.
+
 The completed SW-2/SW-3/SW-4 work below must not be rebuilt or confused with
 runtime independence. The automatic ingestion and relinking loops still live
 in `ProximityCog`; ingestion's `before_scan` awaits `bot.wait_until_ready()`.
