@@ -7,6 +7,26 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-03) Prepared1070 on reviewed1069, preserving source and
+  both documentation histories.68tests pass; two deliberate guard failures
+  observed then restored/cmp. Await actual parent merge, no live service action.
+
+- (Astra, 2026-09-28) #1070 local bda56937 includes final SSH sidecar guard
+  and preserved worker fixes. 150 combined cases pass in 23.00s including
+  timeout with present final content and safe retries. Await #1069 actual main.
+
+- (Astra, 2026-09-27)1070 refreshed locally through8501f7b9 (merge5d2971f7),
+  preserving worker/auth/0400 fixes and both documentation histories.141offline
+  tests pass23.35s; real child/retry proofs and failing guard mutation restored/cmp.
+  New1067 implicit certificate-sidecar finding still requires propagated repair
+  before publication; do not call auth fully reviewed. No push/retarget/service/DB.
+
+- (Astra, 2026-09-20) R04o combines #1069/#1064 and keeps observed spool content
+  separate from supervised child outcome. 117 cases pass; actual spawned offline
+  retries recover missing content and skip already-complete/conflicting content.
+  Mutation fails/restores. No orphan deletion or source acknowledgement. Next
+  source metadata/discovery and verified importer integration; no services changed.
+
 - (Astra, 2026-10-03) Newly observed undici/brace-expansion advisories repaired
   narrowly in1027. Cleaninstall/audit0/typecheck/845tests/SPA build succeed;
   actual package probes and failing/restored isolated mutations verified. No
@@ -210,6 +230,15 @@
   53 combined cases pass; real socket success/timeout cleanup and failing/restored
   deadline mutation verified. No SSH connections or live activation. Separately
   #1060 calendar review fixed in742504ee with23 unit/PG cases passing.
+
+- (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
+  49 cases pass, early-return mutation fails/restored. Next compose a single
+  caller-driven retry step; no scheduling, source deletion or service activation.
+
+- (Astra, 2026-09-20) R04i on #1062: read-only spool reconciliation implemented,
+  48 filesystem cases pass with failed/restored digest and identity mutations.
+  No automatic cleanup, overwrite, retry loop, DB or service changes. Next wire
+  explicit reconciliation policy with connection ownership and immutable source.
 
 - (Astra, 2026-09-20) R04g extends #1061 with opt-in source SHA-256 validation
   before publication. 35 filesystem cases pass; independent sha256sum agrees;
