@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
+  unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
+  checked against actualPG; deliberately mismatched17/14 fails fixture setup.
+  YAML/major guards observed failing and restored/cmp. Await actualPG17 CI proof.
+
 - (Astra helper, 2026-10-03) #1078 resumed proof: actualPG14.24 gives31passed,
   4newer-version skips; twelve observed failures across three guard mutations,
   all restored/cmp. SQL unchanged from98b92702. Root owns restored-copy rehearsal.

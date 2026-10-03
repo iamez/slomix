@@ -1,5 +1,18 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 2026-10-03 #1078 CI coverage: retain exactly the existing two Python check
+> names/jobs, pairing Python3.11 with PostgreSQL14 and Python3.13 with PostgreSQL17
+> (not a cross product). No triggers or extra jobs added. Images pinned to root's
+> Docker registry manifest digests verified independently against response bytes.
+> ACL fixture now compares actual server_version_num with the expected CI major;
+> expected17 against actual14 fails setup instead of skipping new coverage.
+> Parsed-YAML contract pins pairing, hashes, check names and unchanged job/trigger
+> inventory. Hardcoding14 service image causes1 test failure; disabling actual-major
+> check causes2 failures; restored/cmp for both. This proves guards, not PG17 SQL
+> behavior: that still requires the actual17 CI leg to finish successfully.
+> Final local suite with expected14:35 passed,4 version-skipped52.70s; Ruff and
+> whitespace checks pass. Timing is this run, not a performance comparison.
+
 > 2026-10-03 #1078 resumed after owner restarted private proof service. On actual
 > PostgreSQL14.24, root suite31passed/4version-skipped24.83s; helper independent
 > repeat31passed/4skipped31.55s. Guard mutations observed: column check removed

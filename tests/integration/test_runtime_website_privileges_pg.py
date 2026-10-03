@@ -1,5 +1,6 @@
 """Actual runtime ACL repair with permissive inherited defaults, isolated only."""
 
+import os
 import subprocess
 import uuid
 from pathlib import Path
@@ -17,12 +18,22 @@ TABLES = (
 )
 
 
+def assert_expected_pg_major(version_number):
+    expected = os.getenv("RUNTIME_ACL_EXPECTED_PG_MAJOR")
+    if os.getenv("RUNTIME_EVENTS_TEST_CI") == "true":
+        assert expected in {"14", "17"}, "CI must declare its expected PostgreSQL major"
+    if expected is not None:
+        actual = int(version_number) // 10000
+        assert actual == int(expected), f"Expected PostgreSQL {expected}, connected to {actual}"
+
+
 @pytest.fixture
 async def acl_db():
     conn = await asyncpg.connect(**connection_options())
     tx = conn.transaction()
     await tx.start()
     try:
+        assert_expected_pg_major(await conn.fetchval("SHOW server_version_num"))
         # Existing roles are never changed; new test roles roll back with the fixture.
         if not await conn.fetchval("SELECT EXISTS(SELECT FROM pg_roles WHERE rolname='website_app')"):
             await conn.execute("CREATE ROLE website_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT")
