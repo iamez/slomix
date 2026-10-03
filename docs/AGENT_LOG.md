@@ -58,6 +58,11 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Transport close timeout can follow successful publication.**
+  A real disposable child with an offline SSH seam published verified bytes then
+  blocked in file close. Supervisor reaped it as timed_out while final bytes and
+  independent sha256sum remained correct. Treat worker status and spool state as
+  separate facts; retain source and reconcile, never delete/overwrite on failure.
 - **2026-09-25 · A descendant fix does not protect an unmerged prerequisite.**
   Worker cancellation fixes present on #1077 were absent from #1068. Before
   merging a stacked prerequisite, backport its applicable fixes with regression

@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Actual-main checkpoint2026-10-03 for1027: #1069 mergedb25d4020
+> at02:58:00Z after420s gates; reviewed/squash treesd2482893 match exactly.
+> Normal merge retains both documentation histories. All frontend/API inputs byte-identical toef1410b9 and its845-test/build proof; six Node/plan contracts freshly pass0.36s.
+> Publish for fresh exact-head review/CI. No service or production action;
+> original runtime roadmap, NEVER MERGE exclusions and held956 unchanged.
+
 > Security refresh2026-10-03: live npm audit found two affected package groups,
 > undici7.29.0 and brace-expansion2.1.4, despite September28's audit0. Narrow
 > lock patch advances only these entries to7.29.1/2.1.7 with registry integrity;
@@ -91,6 +97,55 @@
 > high nanoid<3.3.18 advisory GHSA-2v37-7h3g-55p8; audit is NOT clean. No blanket
 > audit fix applied. Next owner/root decision on narrow additional patch, then
 > npm ci, generator output comparison, typecheck/test/build:app and fresh CI.
+
+> Recovery checkpoint 2026-10-03, #1069: resumed the interrupted normal
+> merge of actual main19e65354 after the usage-limit interruption. Both
+> documentation histories retained; no source changes lost.
+> 17 capture/Node/plan tests pass5.77s; actual spawned-child and filesystem proofs repeated. Capture source/tests unchanged from09a62009.
+> Fresh exact-head review/CI required after publication. Original runtime
+> roadmap and local-only1986d671 retained; no service/deployment action.
+
+> #1069 actual-main checkpoint 2026-09-28: #1068 merged4de6f07e;
+> normal merge retains both histories and exact shared/test code from4007e597.
+> Thirteen real owned-child SSH capture/plan cases pass4.74s after sync; prior
+> 220-case42.00s gate covers unchanged worker/SSH/spool/watchdog code. Original
+> runtime1986d671 retained. Root may retarget/publish for fresh exact-head review;
+> this local proof is not CI or merge readiness. No remote/network/DB/services.
+
+> #1069 published-parent refresh 2026-09-28: normal merge e8f05dbd preserves
+> both doc histories and exact final worker/source-test bytes. All 220 offline
+> worker/SSH/task/capture/spool/watchdog/plan cases pass42.00s, including real
+> owned-child cleanup and synthetic capture proofs; no network/DB/services.
+> Original runtime1986d671 retained. Actual #1068 squash-main synchronization
+> and fresh publication/review remain required; root owns remote operations.
+
+> #1069 local parent propagation 2026-09-28: merged final worker90026032,
+> retaining both histories and exact worker/source-test bytes. Eleven real
+> spawned SSH-capture fixture cases pass4.85s; callers use0.2s grace or default,
+> compatible with new0.01 minimum. Worker lifetime SIGINT latency contract
+> retained. No remote/service/network/DB changes. Original runtime1986d671
+> remains resume point; actual-main sync and fresh review remain root gates.
+
+> Current #1069 checkpoint, 2026-09-28: normal parent merge 005e8d83 retains
+> worker fixes 86c69e39 and SSH identity guard e22ae27c byte-for-byte. Combined
+> 144 cases pass in 18.35s, including real child success/corruption/read-block/
+> close-block with independent filesystem digest and process cleanup checks.
+> Initial command used nonexistent test_runtime_ssh_task.py and executed no
+> tests; corrected test_runtime_ssh_capture.py run above is the actual evidence.
+> Local preparation only; wait #1068 actual main and fresh exact-head gates.
+
+>1069 local refresh2026-09-27: live source87f9fa72 normally merged prepared
+>1068 parent3244843d as4020bb69. Three doc conflicts retained both histories;
+>worker cleanup and SSH explicit-key authentication source/tests equal parent.
+>114 offline worker/SSH/capture/spool cases pass17.95s, including actual child
+>completion/corruption/read-timeout/close-timeout and independent sha256sum.
+>Every owned lifecycle child absent from procfs and active_children after reaping;
+>close timeout can retain a complete final file, so status is not spool state.
+>Absolute remote path guard removal fails DID NOT RAISE ValueError; restored/cmp.
+>Ruff clean. No live network, service/DB/snapshot operations, push or retarget.
+>Await actual parent/main synchronization and fresh exact-head CI/review plus
+>individual approval; original runtime roadmap preserved after consolidation.
+
 > Current #969 checkpoint 2026-09-28: normal integration of actual worker
 > main4de6f07e preserves both document histories and exact Node/PyYAML/CI
 > bytes6f423762; worker source/tests equal main. Root99node/watchdog/plan/
@@ -595,6 +650,25 @@ Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
 both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
+
+### R04n concrete SSH capture task — 2026-09-20
+
+On #1068: picklable SSHCaptureTask carries only explicit configuration into the
+spawned worker. Opens SFTP/file there, streams through existing size/SHA/EOF
+publication, closes file before session, never deletes/acknowledges the source.
+Absolute canonical remote path and absolute local spool required. Caller still
+supplies trusted immutable source metadata; no remote discovery/hash guarantee.
+97 combined tests pass, including real spawned-task/filesystem proofs with an
+offline connection seam: successful bytes independently checked by sha256sum,
+corruption rejected, blocked read terminated leaving only a .part, blocked close
+terminated with a complete final retained. Both terminated children confirmed
+absent by procfs and active_children. No actual SSH/network proof is claimed.
+Removing the absolute remote path guard fails DID NOT RAISE; restored/cmp.
+Next compose retry reconciliation with supervised capture and verified import;
+trusted source identity, bounded discovery/retention, single-writer handoff and
+owner-approved dev failure matrix remain activation gates. Original sequence:
+runtime first, then new-site/design/security audit, then reversible dev cutover.
+No merge permission inferred, no service/live database/production changes.
 
 ### Consolidation: preserve Node pin #969 — 2026-09-20
 
