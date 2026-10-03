@@ -13,8 +13,10 @@
 > Nine deliberate guard regressions fail in disposable Git repos, restored/cmp.
 > Includes races after ls-remote changing either existing member and real hooks
 > emitting a synthetic credential marker on both successful and rejected pushes.
-> All 49 CLI/plan cases pass13.31s, Ruff and whitespace clean. Normal
-> main19e65354 integration pending; no real snapshot cut,
+> All 49 CLI/plan cases pass13.31s; after normal main19e65354 integration,
+> all 53 snapshot/plan/Node cases pass13.63s, Ruff and whitespace clean.
+> Both documentation histories and repair e9124506 source/test bytes retained.
+> No real snapshot cut,
 > remote publication, service action or production change. Root owns fresh gates.
 
 > #966 configuration review checkpoint (2026-09-28): disposable Git repos
@@ -113,6 +115,36 @@
 >unchanged before/after; no snapshot operation ran against this repository.
 >Await1055 merge and final sync before publishing for fresh review/CI; no966
 >merge approval. Original runtime work and all NEVER MERGE snapshots preserved.
+> Current #969 checkpoint 2026-09-28: normal integration of actual worker
+> main4de6f07e preserves both document histories and exact Node/PyYAML/CI
+> bytes6f423762; worker source/tests equal main. Root99node/watchdog/plan/
+> real-child worker cases pass34.80s. Prior actual binary and restored failing
+> pin mutation apply to unchanged files. Fresh exact-head CI/review required.
+> Runtime resume1986d671 and bounded queue authorization remain unchanged;
+> NEVER MERGE, held release956, services and production remain excluded.
+
+> Current #969 checkpoint 2026-09-28 after watchdog merge ec8ec7ed: normal
+> integration preserves both documentation histories and exact Node/PyYAML/CI
+> source and test bytes from ea5f2ab3. Root54node/watchdog/plan cases pass1.33s.
+> Earlier actual22.23.2 two-path proof and restored failing old-pin mutation
+> apply to identical files. Publish for new exact-head review/CI, then owner-
+> authorized current-queue merge gates. No service/install/production action.
+> Original runtime1986d671 retained; NEVER MERGE and held release956 excluded.
+
+> Current #969 checkpoint 2026-09-28: normal integration of main 1f4a388d
+> preserves both histories and the exact Node pin/PyYAML declaration. Six
+> node/plan contracts pass in 0.30s. Actual isolated binary reports v22.23.2
+> via --version and 22.23.2 via process.versions.node. Restoring old22.13.1
+> fails the frontend engine-floor guard; restored/cmp. No npm installation,
+> build, browser, system toolchain, dependency lock or service change. Root
+> owns publication and final review/merge gates. Runtime resume1986d671 and
+> dependency consolidation remain current; older checkpoints are historical.
+
+> Node pin slice follow-up (Astra, 2026-09-08): PR #969 review identified
+> PyYAML as an undeclared direct test dependency despite green CI. Declared
+> PyYAML==6.0.3 in requirements-dev and added a declaration contract. Validate
+> with the isolated agent venv; no service environment changes.
+
 > Current #1068 checkpoint 2026-09-28: #965 merged ec8ec7ed; normal main sync
 > 9fb9d3db retains both document histories and worker/source test bytes90026032.
 > Root independently passed159cases37.50s before sync and207worker/SSH/spool/
@@ -596,6 +628,17 @@ fixture remotes only; actual NEVER MERGE refs/PRs remain untouched. No merge
 permission for #966. Current authorized batch is #1076/#1057/#962 only. Original
 runtime resume remains #1077 completion delivery/snapshot sealing after this
 consolidation detour, then new-site audit and approved reversible DEV transition.
+
+### Consolidation: preserve Node pin #969 — 2026-09-20
+
+Normal merge of current main retains shared exact .nvmrc CI inputs and explicit
+PyYAML development dependency. Four pin-contract and two plan-contract tests pass.
+This refresh preserves the reviewed version; it does not claim a current security
+release audit, frontend build or system toolchain upgrade. Fresh CI/review required.
+No merge permission for #969; only #1076/#1057/#962 currently authorized. Original
+runtime resumes after this consolidation detour at #1077 completion delivery and
+snapshot sealing, followed by new-site audit and approved reversible DEV cutover.
+
 ### R04m consolidation safety backport — 2026-09-25
 
 Locally backported the exact worker and regression-test changes from #1077
@@ -2471,3 +2514,20 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
 - Next: parent review, ordinary feature PR through real pre-push protections,
   then owner-specific merge decision. No permission to publish review snapshots
   or merge any review vehicle is implied by this implementation.
+
+## Proga: Astra shared Node 22 pin
+
+Zadnja posodobitev: 2026-09-07 (Astra). Implemented; local contract verified.
+Pin local development and both CI Node setup jobs to `.nvmrc`, version 22.23.2.
+Verified against the official release index and archive (latest 22, Jod LTS),
+and the security release announcement:
+https://nodejs.org/en/blog/release/v22.23.2
+Contract tests parse package engines and workflow YAML, rejecting a pin below
+the frontend floor or an inline CI override. No local installation, dependencies,
+build, browser, global environment or service changes in this slice.
+Proof: three tests and targeted Ruff pass. Mutations to old Node 22.13.1 and
+inline CI `22.x` both failed the respective contract; restored files match
+pre-mutation snapshots by `cmp`. Independent Node JSON comparison confirms the
+pin meets the floor; parsed YAML resolves both jobs to 22.23.2. That is config
+proof, not execution under the selected Node: host Node remains v20.20.0.
+Next: root review/PR, then isolated portable runtime validation and actual CI.

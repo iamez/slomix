@@ -11,8 +11,9 @@
   remote diagnostics withheld, legacy body generator retired, partial remote
   pairs rejected before publication. Nine guard mutations fail/restored/cmp in
   actual disposable Git repos. Existing complete pairs are observed, not locked;
-  no same-OID lease guarantee.49 CLI/plan cases pass13.31s, Ruff/whitespace clean;
-  main19e65354 sync pending; root owns
+  no same-OID lease guarantee. Normal main19e65354 merge retains both histories
+  and repair e9124506 source/test bytes;53 snapshot/plan/Node cases pass13.63s.
+  Ruff/whitespace clean; root owns
   publication. Original runtime roadmap and real review refs remain untouched.
 
 - (Astra, 2026-09-28) #966 three configuration findings reproduced/fixed:
@@ -46,6 +47,21 @@
   Ruff clean. Actual review-snapshot refs and NEVER MERGE PRs unchanged. Keep
   this older tooling proposal for review, not authorized for merge. Runtime
   resume #1077 completion delivery/sealing remains after consolidation.
+
+- (Astra, 2026-09-28) #969 integrated actual worker main4de6f07e normally;
+  both histories retained, Node/CI/PyYAML bytes unchanged. Root99combined
+  cases pass34.80s, including actual child cleanup. No service action.
+
+- (Astra, 2026-09-28) #969 normal main1f4a388d refresh: six node/plan contracts
+  pass; isolated22.23.2 binary verified by two version paths. Old22.13.1 pin
+  mutation fails, restored/cmp. No install/build/browser/service/lock change.
+  Root owns remote review/merge; original runtime1986d671 plan preserved.
+
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
+
 - (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
   installed before spawn through close; custom side effects replay even with
   original error; 0.01s minimum grace rejects unsupported tiny budgets. Every
