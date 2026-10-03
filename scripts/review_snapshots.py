@@ -23,13 +23,18 @@ REVIEWER_FILES = 500
 MAX_LINES = 8000
 
 
+def git_env(env=None):
+    # Pin actual object identities, including Git invoked by publication hooks.
+    return dict(os.environ if env is None else env, GIT_NO_REPLACE_OBJECTS="1")
+
+
 def git(*args, data=None, env=None):
-    return subprocess.check_output(["git", *args], input=data, env=env)
+    return subprocess.check_output(["git", *args], input=data, env=git_env(env))
 
 
 def remote_git(command, *args):
     """Remote output (even on success) can contain credentials from its URL/hooks."""
-    result = subprocess.run(["git", command, *args], capture_output=True)
+    result = subprocess.run(["git", command, *args], capture_output=True, env=git_env())
     if result.returncode:
         raise ValueError(f"git {command} failed (exit {result.returncode}); "
                          "remote diagnostics withheld because they may contain credentials")
@@ -38,6 +43,31 @@ def remote_git(command, *args):
 
 def oid(ref):
     return git("rev-parse", "--verify", f"{ref}^{{commit}}").decode().strip()
+
+
+def reject_binary_blobs(left, right, path):
+    """Attributes/drivers may force text; raw NUL-bearing blobs still block.
+
+    Read bounded chunks rather than loading an arbitrarily large object into RAM.
+    Numstat remains an additional veto for explicitly binary non-NUL content.
+    """
+    for tree in (left, right):
+        entry = git("ls-tree", "-z", tree, "--", ":(literal)" + os.fsdecode(path))
+        if not entry:
+            continue
+        metadata, _ = entry.split(b"\t", 1)
+        _, kind, blob = metadata.split()
+        if kind != b"blob":
+            continue
+        command = ["git", "cat-file", "blob", blob.decode()]
+        binary = False
+        with subprocess.Popen(command, stdout=subprocess.PIPE, env=git_env()) as process:
+            while chunk := process.stdout.read(65536):
+                binary |= b"\0" in chunk
+            if process.wait():
+                raise subprocess.CalledProcessError(process.returncode, command)
+        if binary:
+            raise ValueError(f"binary file needs separate review: {os.fsdecode(path)!r}")
 
 
 def partition(base, source, areas, exclusions):
@@ -64,6 +94,7 @@ def partition(base, source, areas, exclusions):
             added, removed, path = record.split(b"\t", 2)
             if added == b"-" or removed == b"-":
                 raise ValueError(f"binary file needs separate review: {os.fsdecode(path)!r}")
+            reject_binary_blobs(base, source, path)
             lines = int(added) + int(removed)
             if lines > MAX_LINES:
                 raise ValueError(f"single file exceeds {MAX_LINES} lines: {os.fsdecode(path)!r}")
@@ -115,6 +146,7 @@ def validate_snapshot(tree, source, paths):
         added, removed, path = record.split(b"\t", 2)
         if added == b"-" or removed == b"-":
             raise ValueError("actual snapshot contains a binary change")
+        reject_binary_blobs(tree, source, path)
         actual.add(path)
         lines += int(added) + int(removed)
     if (actual != set(paths) or len(actual) > min(MAX_FILES, REVIEWER_FILES)
@@ -143,7 +175,7 @@ def snapshot(base, source, paths, name):
                 git("update-index", "-z", "--index-info", data=update, env=env)
         tree = git("write-tree", env=env).decode().strip()
     validate_snapshot(tree, source, paths)
-    date = git("show", "-O/dev/null", "-s", "--format=%cI", source).decode().strip()
+    date = git("show", "--no-show-signature", "-O/dev/null", "-s", "--format=%cI", source).decode().strip()
     env = dict(os.environ, GIT_AUTHOR_NAME="Review snapshot",
                GIT_AUTHOR_EMAIL="review@invalid", GIT_COMMITTER_NAME="Review snapshot",
                GIT_COMMITTER_EMAIL="review@invalid", GIT_AUTHOR_DATE=date,
@@ -198,7 +230,7 @@ def preflight_publication(refs, remote):
     guard = Path(__file__).resolve().parent / "git-hooks" / "pre-push"
     # Guard diff failures are intentionally quiet. An inaccessible ambient
     # order file must not silently turn its changed-file set into an empty set.
-    env = dict(os.environ)
+    env = git_env()
     count = int(env.get("GIT_CONFIG_COUNT", "0"))
     env.update({"GIT_CONFIG_COUNT": str(count + 1),
                 f"GIT_CONFIG_KEY_{count}": "diff.orderFile",
@@ -249,9 +281,10 @@ def main():
                 # Never complete a partial pair against an unchecked member.
                 raise ValueError("partial remote snapshot pair; publication blocked")
         preflight_publication(refs, remote)
-    creates = [f"create {ref} {sha}" for ref, sha in refs.items() if ref not in existing]
-    if creates:
-        git("update-ref", "--stdin", data=("start\n" + "\n".join(creates)
+    updates = [f"{'verify' if ref in existing else 'create'} {ref} {sha}"
+               for ref, sha in refs.items()]
+    if updates:
+        git("update-ref", "--stdin", data=("start\n" + "\n".join(updates)
             + "\nprepare\ncommit\n").encode())
     for ref, sha in refs.items():
         print(f"{ref} {sha}")

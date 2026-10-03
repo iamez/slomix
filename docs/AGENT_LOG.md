@@ -1,5 +1,21 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · Immutable snapshots must read real objects and verify refs.**
+  A pinned commit OID does not disable refs/replace. Set GIT_NO_REPLACE_OBJECTS
+  for every Git subprocess, including direct blob reads and publication hooks.
+  Numstat binary classification can be forced to text by attributes/drivers;
+  reject raw NUL-bearing blobs on both sides independently, retaining numstat
+  as an additional conservative veto, not claiming all configuration invariant.
+  Metadata-only git show can emit signature diagnostics under log.showSignature;
+  explicitly suppress signature display for date extraction. Verify existing
+  local refs inside the same update-ref transaction as creates, even when none
+  are new. A preflight dictionary alone races; the transaction protects only
+  that operation, not later external writers. See primary Git documentation:
+  https://git-scm.com/docs/git-update-ref,
+  https://git-scm.com/docs/git-replace,
+  https://git-scm.com/docs/git-show,
+  https://git-scm.com/docs/gitattributes.
+
 - **2026-10-03 · Snapshot determinism includes order files; hooks are local.**
   Pin diff ordering as well as its algorithm, including metadata-only git show:
   it still fails on a missing configured order file. A fresh clone does not

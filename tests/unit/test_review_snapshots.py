@@ -66,6 +66,120 @@ def snapshots(repo):
                "refs/heads/review", "refs/heads/review-base")
 
 
+@pytest.mark.parametrize("all_existing", [False, True])
+@pytest.mark.parametrize("raced", ["review-base", "review"])
+def test_local_existing_ref_race_is_verified_in_transaction(repo, monkeypatch, all_existing, raced):
+    commit(repo, {"a.py": "value = 1\n"})
+    run(repo, "cut")
+    expected = dict(line.split() for line in snapshots(repo).splitlines())
+    existing = next(ref for ref in expected if f"/{raced}/" in ref)
+    missing = next(ref for ref in expected if ref != existing)
+    if not all_existing:
+        git(repo, "update-ref", "-d", missing)
+    ancestor = git(repo, "rev-parse", "v1.39.0")
+    real_git = shutil.which("git")
+    wrapper_dir = repo.parent / "race-bin"
+    wrapper_dir.mkdir()
+    wrapper = wrapper_dir / "git"
+    wrapper.write_text(
+        f"#!{sys.executable}\nimport os, subprocess, sys\n"
+        f"real_git = {real_git!r}\n"
+        "if sys.argv[1:] == ['for-each-ref', '--format=%(objectname) %(refname)', 'refs/heads']:\n"
+        "    result = subprocess.run([real_git, *sys.argv[1:]], capture_output=True)\n"
+        f"    subprocess.run([real_git, 'update-ref', {existing!r}, {ancestor!r}], check=True)\n"
+        "    sys.stdout.buffer.write(result.stdout)\n"
+        "    sys.exit(result.returncode)\n"
+        "os.execv(real_git, [real_git, *sys.argv[1:]])\n"
+    )
+    wrapper.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{wrapper_dir}{os.pathsep}{os.environ['PATH']}")
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0, "stale local refs were reported as a successful immutable cut"
+    assert "cannot lock ref" in result.stderr
+    actual = dict(line.split() for line in snapshots(repo).splitlines())
+    assert actual[existing] == ancestor
+    assert (actual.get(missing) == expected[missing]) if all_existing else missing not in actual
+    assert snapshots(repo.parent / "remote.git") == ""
+    assert not (repo.parent / "hook-calls").exists()
+
+
+@pytest.mark.parametrize("attribute", ["diff=forced", "diff"])
+@pytest.mark.parametrize("deleted", [False, True])
+def test_binary_attributes_cannot_force_raw_nul_blob_into_text_review(repo, attribute, deleted):
+    (repo / ".git/info/attributes").write_text(f"*.py {attribute}\n")
+    git(repo, "config", "diff.forced.binary", "false")
+    commit(repo, {"binary.py": "a\0b\n"})
+    base = "v1.39.0"
+    if deleted:
+        base = git(repo, "rev-parse", "HEAD")
+        (repo / "binary.py").unlink()
+        git(repo, "add", "binary.py")
+        git(repo, "commit", "-m", "remove binary")
+    # Independent Git measurement proves the original numstat-only gate is bypassed.
+    assert git(repo, "diff", "--numstat", base, "HEAD").split()[0] != "-"
+    result = run(repo, "--base", base, "cut", "--push", check=False)
+    assert result.returncode != 0, "attributes bypassed binary admission"
+    assert "binary file needs separate review" in result.stderr
+    assert snapshots(repo) == snapshots(repo.parent / "remote.git") == ""
+
+
+@pytest.mark.parametrize("target", ["source", "baseline", "blob", "tree"])
+def test_replace_objects_cannot_redefine_pinned_snapshot(repo, target):
+    commit(repo, {"a.py": "source = 1\n"})
+    source = git(repo, "rev-parse", "HEAD")
+    source_tree = git(repo, "rev-parse", "HEAD^{tree}")
+    baseline = git(repo, "rev-parse", "v1.39.0")
+    run(repo, "cut")
+    expected = snapshots(repo)
+    commit(repo, {"a.py": "replacement = 9\n", "unselected.py": "must not leak\n"})
+    alternate = git(repo, "rev-parse", "HEAD")
+    original, replacement = {
+        "source": (source, alternate), "baseline": (baseline, alternate),
+        "blob": (git(repo, "rev-parse", f"{source}:a.py"), git(repo, "rev-parse", "HEAD:a.py")),
+        "tree": (source_tree, git(repo, "rev-parse", "HEAD^{tree}")),
+    }[target]
+    git(repo, "replace", original, replacement)
+    run(repo, "--source", source, "cut", "--push")
+    assert snapshots(repo) == expected
+    head = next(line.split()[1] for line in expected.splitlines() if "/review/" in line)
+    # Read the actual objects through an independent Git path and bare remote.
+    assert git(repo, "--no-replace-objects", "rev-parse", f"{head}^{{tree}}") == source_tree
+    assert git(repo.parent / "remote.git", "show", f"{head}:a.py") == "source = 1"
+    assert "unselected.py" not in git(repo.parent / "remote.git", "ls-tree", "-r", "--name-only", head)
+
+
+def test_signed_source_ignores_log_show_signature(repo):
+    key = repo.parent / "signing-key"
+    subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)], check=True)
+    allowed = repo.parent / "allowed-signers"
+    allowed.write_text("snapshot@example.invalid " + key.with_suffix(".pub").read_text())
+    git(repo, "config", "gpg.format", "ssh")
+    git(repo, "config", "user.signingkey", str(key))
+    git(repo, "config", "gpg.ssh.allowedSignersFile", str(allowed))
+    git(repo, "config", "commit.gpgsign", "true")
+    commit(repo, {"a.py": "value = 1\n"})
+    run(repo, "cut")
+    expected = snapshots(repo)
+    git(repo, "config", "log.showSignature", "true")
+    assert "Good" in git(repo, "show", "-s", "--format=%cI", "HEAD")
+    run(repo, "cut")
+    assert snapshots(repo) == expected
+
+
+def test_blob_replacement_cannot_hide_raw_binary_source(repo):
+    (repo / ".git/info/attributes").write_text("*.py diff\n")
+    commit(repo, {"binary.py": "raw\0binary\n", "text.py": "plain text\n"})
+    blob = git(repo, "rev-parse", "HEAD:binary.py")
+    replacement = git(repo, "rev-parse", "HEAD:text.py")
+    git(repo, "replace", blob, replacement)
+    assert git(repo, "cat-file", "blob", blob) == "plain text"
+    assert "\0" in git(repo, "--no-replace-objects", "cat-file", "blob", blob)
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0, "replacement hid the raw binary object from admission"
+    assert "binary file needs separate review" in result.stderr
+    assert snapshots(repo) == snapshots(repo.parent / "remote.git") == ""
+
+
 def test_detached_checkout_without_local_branches_can_cut(repo):
     commit(repo, {"a.py": "value = 1\n"})
     git(repo, "checkout", "--detach")

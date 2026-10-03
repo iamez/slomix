@@ -1,5 +1,30 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #966 ambient-object and local-transaction repair (2026-10-03): verify every
+> already-existing local ref in the same update-ref transaction as creates,
+> including an all-existing invocation. Actual races against either member now
+> abort the whole operation before remote publication. Disable replacement
+> objects in all Git subprocess environments, including the direct bundled
+> guard and ordinary push hooks. Raw NUL-bearing blobs on both sides are an
+> unconditional binary veto, scanned in bounded-memory chunks independently of
+> attributes/drivers; Git numstat remains an additional veto for non-NUL content.
+> This does not promise every binary classification/configuration is invariant:
+> a local binary=true can still conservatively reject otherwise textual content.
+> Metadata extraction explicitly disables log.showSignature. A real disposable
+> SSH-signed commit proves date extraction and immutable identities survive it.
+> Proof: 75 snapshot/Node/plan cases pass28.81s, Ruff clean; 11 expected failures
+> after four guard mutations (7.03s), plus one raw cat-file replacement failure
+> (0.56s). Restored with apply_patch and cmp. Two replacement-tree/blob controls
+> passed the first mutation run and are not counted as mutation failures.
+> Independent bare-remote object reads preserve the original source tree and
+> bytes. Local ref verification protects the transaction, not later external
+> writes; complete existing remote pairs remain observations only. No real
+> snapshot refs, pushes, services or production changes. A metadata-only probe
+> of actual signed194b1e6e incidentally made GPG initialize an empty user config
+> directory/keybox; no key was imported, signature trust was not established,
+> and those files were not subsequently changed or removed. Original runtime
+> roadmap unchanged; parent owns actual-main synchronization and publication.
+
 > #966 root follow-up checkpoint 2026-10-03: normal main194b1e6e merge
 > retains both histories and exact guard repair4827760a source/tests. Root
 > independently passes61 disposable Git/Node/plan cases17.02s; Ruff clean.

@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Codex, 2026-10-03) #966 four fresh findings repaired: transaction verify for
+  existing local refs, raw binary admission independent of forced-text drivers,
+  replacement-object suppression across Git/hook subprocesses, and signed
+  commit date extraction. 75 disposable Git/Node/plan cases pass28.81s; twelve
+  measured mutation failures restored/cmp. No real review refs or services
+  changed; parent handles main synchronization, fresh CI/review and publication.
+  Original runtime development plan remains unchanged.
+
 - (Codex, 2026-10-03) #966 follow-up: ambient order-file partition drift and
   missing-hook publication repaired. Direct bundled guard preflight covers
   every proposed pair before any publication; original runtime work preserved.
