@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra helper, 2026-10-03) #979 RUN index flags review4172412989 repaired:
+  four old-guard failures and four deliberate mutation failures, restored/cmp;
+  50 focused tests pass11.44s. Disposable checkout independently reproduces hidden
+  runtime-byte survival. No live changes; root continues exact-SHA rebuild/review
+  and dev restoration rehearsal before returning to the original runtime plan.
+
 - (Astra, 2026-10-03) DEV-only authorization received. Read-only Samba preflight
   identifies old75ee10b5 deployment and ten pending main migrations. Refreshing
   #979 on5e948f0b preserves artifact safeguards and both histories. No deployment

@@ -34,6 +34,7 @@ def fixture(tmp_path):
         "website/frontend/src/app/main.ts": "console.log('app');\n",
         "docs/api/openapi.json": "{}\n",
         "scripts/spa_artifact.py": HELPER.read_text(),
+        "bot/runtime.py": "ENABLED = False\n",
     }
     for relative, content in files.items():
         path = source / relative
@@ -197,6 +198,41 @@ def test_hidden_tracked_changes_cannot_certify_build(fixture, flag):
     assert result.returncode != 0, "Hidden input was falsely certified as committed"
     assert "index flags" in result.stderr
     assert not (source / "website/static/app/.slomix-build.json").exists()
+
+
+@pytest.mark.parametrize("flag", ["--assume-unchanged", "--skip-worktree"])
+@pytest.mark.parametrize("hidden_change", [False, True])
+def test_run_index_flags_rejected_before_any_deploy_mutation(fixture, flag, hidden_change):
+    """A clean status does not prove that RUN's tracked runtime bytes match HEAD."""
+    source, run = fixture
+    relative = "bot/runtime.py"
+    git(run, "update-index", flag, relative)
+    if hidden_change:
+        (run / relative).write_text("ENABLED = True\n")
+    before_bytes = (run / relative).read_bytes()
+    before_index = (run / ".git/index").read_bytes()
+    assert git(run, "status", "--porcelain", "--untracked-files=no") == ""
+    # An unchanged runtime blob in a newer target would preserve hidden bytes.
+    git(source, "commit", "--allow-empty", "-m", "next deployment")
+    build(source)
+    result = preflight(source, run)
+    assert result.returncode != 0, "RUN index flags incorrectly passed preflight"
+    assert "run clone has unsupported index flags" in result.stderr
+    assert before_bytes == (run / relative).read_bytes()
+    assert before_index == (run / ".git/index").read_bytes()
+
+    # Reject before even refreshing the default source ref, not just checkout.
+    result = preflight(source, run, target="origin/main")
+    assert result.returncode != 0
+    assert "run clone has unsupported index flags" in result.stderr
+    result = preflight(source, run, extra={"DEV_PREFLIGHT_ONLY": "0"})
+    assert result.returncode != 0
+    assert "run clone has unsupported index flags" in result.stderr
+    # Independently show the underlying Git failure mode on this disposable clone.
+    git(run, "fetch", str(source), "main")
+    git(run, "checkout", "-B", "main", "FETCH_HEAD")
+    assert git(run, "rev-parse", "HEAD") == git(source, "rev-parse", "HEAD")
+    assert before_bytes == (run / relative).read_bytes()
 
 
 def test_source_change_during_build_cannot_be_certified(fixture):

@@ -1,5 +1,19 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 2026-10-03 #979 review4172412989: reject RUN assume-unchanged/skip-worktree
+> index flags before status, source fetch, staging or deployment. Four actual
+> disposable Git regressions first failed against the old guard; both flags
+> with clean and hidden modified runtime bytes now fail closed. Preflight and
+> activation paths preserve RUN HEAD, index and assets; an independent disposable
+> checkout confirms unchanged target blobs would retain the hidden runtime bytes.
+> Deliberately disabling the new guard fails all four cases; restored and cmp
+> verified. Focused artifact/Node/plan/watchdog suite:50 passed11.44s; Ruff,
+> bash syntax and whitespace pass. One initial mutation invocation rejected an
+> invalid pytest --showlocals=no option (exit4, no tests); corrected invocation
+> produced the four actual failures. No live service, deployment or DB action.
+> Root must rebuild exact-SHA artifacts, publish, obtain fresh CI/review and
+> PR-specific merge permission. Original runtime roadmap remains unchanged.
+
 > 2026-10-03 DEV preflight: owner authorizes updates/restarts on Samba only;
 > production is a separate host and remains excluded. Local address inspection
 > confirms 192.168.64.116 belongs to Samba. Read-only transactions through both

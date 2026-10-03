@@ -1,5 +1,12 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · Artifact provenance does not certify the RUN index.**
+  A clean tracked status can hide locally changed runtime files behind
+  assume-unchanged or skip-worktree. Checkout of a new commit preserves these
+  bytes when its blob is unchanged. Reject both flags across the entire RUN
+  index before status/fetch/staging; parse NUL records and propagate Git errors.
+  Source-only guards cannot protect the separately maintained runtime clone.
+
 - **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
   After a usage-limit pause, the previously clean frontend lock had newly
   observed undici and brace-expansion findings. Refresh the advisory result

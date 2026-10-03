@@ -27,6 +27,18 @@ REF="${1:-origin/main}"
 [ -d "$RUN/.git" ] || { echo "no run clone at $RUN" >&2; exit 2; }
 [ "$(realpath "$RUN")" != "$(realpath "$SRC")" ] || { echo "source and run clone must differ" >&2; exit 2; }
 [ ! -L "$RUN/website" ] && [ ! -L "$RUN/website/static" ] && [ ! -L "$RUN/website/static/app" ] || { echo "symlinked run artifacts are unsupported" >&2; exit 3; }
+# A clean status can hide modified runtime bytes behind index flags. Reject
+# these before status (which can refresh the index), source fetch or staging.
+# NUL records preserve arbitrary Git paths; lowercase tags mean assume-unchanged,
+# S means skip-worktree (s means both). Git failures must abort, not look empty.
+python3 - "$RUN" <<'PY'
+import subprocess
+import sys
+
+entries = subprocess.check_output(["git", "-C", sys.argv[1], "ls-files", "-v", "-z"])
+if any(entry[:1].islower() or entry[:1] == b"S" for entry in entries.split(b"\0") if entry):
+    sys.exit("run clone has unsupported index flags; refusing deploy")
+PY
 [ -z "$(git -C "$RUN" status --porcelain --untracked-files=no)" ] || { echo "run clone has tracked changes; refusing deploy" >&2; exit 3; }
 # Refresh the default source ref before pinning it; explicit commits stay offline.
 if [ "$REF" = "origin/main" ]; then
