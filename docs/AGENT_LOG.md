@@ -6,6 +6,12 @@
   or wait for reviewed publication; an older public PR is context, not the same
   implementation. Separate first-session onboarding from approved continuation.
 
+- **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
+  After a usage-limit pause, the previously clean frontend lock had newly
+  observed undici and brace-expansion findings. Refresh the advisory result
+  before merge, retain its date, and independently prove installed guard behavior.
+  Run mutation probes in isolated copies, not packages used by concurrent tests.
+
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
   and loop. Correction after follow-up review: installing cleanup deferral itself
@@ -58,6 +64,17 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Retry result must preserve worker and content separately.**
+  A timed-out SSH close can leave verified final bytes; reconciliation must return
+  both timed_out and match, not report worker success or assume missing content.
+  Inspect before spawning the next attempt, skip match/conflict, leave orphan
+  partials untouched. Local inspection is not covered by the child's deadline.
+
+- **2026-09-20 · Transport close timeout can follow successful publication.**
+  A real disposable child with an offline SSH seam published verified bytes then
+  blocked in file close. Supervisor reaped it as timed_out while final bytes and
+  independent sha256sum remained correct. Treat worker status and spool state as
+  separate facts; retain source and reconcile, never delete/overwrite on failure.
 - **2026-09-25 · A descendant fix does not protect an unmerged prerequisite.**
   Worker cancellation fixes present on #1077 were absent from #1068. Before
   merging a stacked prerequisite, backport its applicable fixes with regression
