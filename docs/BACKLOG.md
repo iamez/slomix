@@ -7,6 +7,28 @@
 
 ## Trenutna pozicija
 
+- (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
+  unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
+  checked against actualPG; deliberately mismatched17/14 fails fixture setup.
+  YAML/major guards observed failing and restored/cmp. Await actualPG17 CI proof.
+
+- (Astra helper, 2026-10-03) #1078 resumed proof: actualPG14.24 gives31passed,
+  4newer-version skips; twelve observed failures across three guard mutations,
+  all restored/cmp. SQL unchanged from98b92702. Root owns restored-copy rehearsal.
+  Next paired PG14/3.11 and PG17/3.13 CI coverage without extra jobs/triggers.
+
+- (Astra helper, 2026-10-03) #1078 review follow-up prepared: column ACLs,
+  version-gated MAINTAIN and transitive SET ROLE/ownership checks. Proof service
+  expired, so new PG cases/mutations are explicitly pending; no service start,
+  live DB fallback or existing restored-copy ledger change. Repeat093 acceptance
+  on fresh disposable restore after owner restart. Original roadmap unchanged.
+
+- (Astra helper, 2026-10-03) DEV permission rehearsal exposed inherited runtime
+  CRUD/sequence grants. New093 narrows only runtime object ACLs; real isolated
+  tests verify denied writes, generation read, unchanged legacy/default grants,
+  and fail-closed PUBLIC/wrong-role cases.19 tests pass5.23s; observed mutation
+  failure restored/cmp. No application DB changes. Root owns restored-backup
+  rehearsal and review/merge gates; original runtime queue remains preserved.
 - (Astra helper, 2026-10-03) #979 RUN index flags review4172412989 repaired:
   four old-guard failures and four deliberate mutation failures, restored/cmp;
   50 focused tests pass11.44s. Disposable checkout independently reproduces hidden

@@ -1,5 +1,83 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 2026-10-03 #1078 CI coverage: retain exactly the existing two Python check
+> names/jobs, pairing Python3.11 with PostgreSQL14 and Python3.13 with PostgreSQL17
+> (not a cross product). No triggers or extra jobs added. Images pinned to root's
+> Docker registry manifest digests verified independently against response bytes.
+> ACL fixture now compares actual server_version_num with the expected CI major;
+> expected17 against actual14 fails setup instead of skipping new coverage.
+> Parsed-YAML contract pins pairing, hashes, check names and unchanged job/trigger
+> inventory. Hardcoding14 service image causes1 test failure; disabling actual-major
+> check causes2 failures; restored/cmp for both. This proves guards, not PG17 SQL
+> behavior: that still requires the actual17 CI leg to finish successfully.
+> Final local suite with expected14:35 passed,4 version-skipped52.70s; Ruff and
+> whitespace checks pass. Timing is this run, not a performance comparison.
+
+> 2026-10-03 #1078 resumed after owner restarted private proof service. On actual
+> PostgreSQL14.24, root suite31passed/4version-skipped24.83s; helper independent
+> repeat31passed/4skipped31.55s. Guard mutations observed: column check removed
+> gives8 DID NOT RAISE failures; reachable-role traversal removed gives3 failures;
+> ownership check alone removed gives1 failure. All three edits restored with
+> apply_patch and cmp against saved exactSQL. Real SESSION AUTHORIZATION website
+> followed by SET ROLE proves two-hop NOINHERIT table/sequence/owner capabilities.
+> All fixtures rolled back in postgres disposable schemas; root's restored DB
+> was untouched. Three MAINTAIN cases and PG16 membership-options case still
+> require real newer PostgreSQL; no PG17 runtime claim or version simulation.
+
+> 2026-10-03 #1078 review4172501633/636/639 follow-up, PREPARED NOT PG-VERIFIED:
+> unmerged093 now also rejects effective column privileges, PostgreSQL17 MAINTAIN,
+> and table/sequence rights or ownership reachable through transitive SET ROLE.
+> Version-specific reachability uses PG16+ SET and PG14/15 MEMBER; unrelated
+> role grants remain untouched. Official references:
+> https://www.postgresql.org/docs/14/functions-info.html and
+> https://www.postgresql.org/docs/16/functions-info.html distinguish membership
+> semantics; https://www.postgresql.org/docs/17/functions-info.html documents
+> column privileges/MAINTAIN; https://www.postgresql.org/docs/17/role-membership.html
+> explains SET versus INHERIT. Added isolated regression fixtures for column
+> PUBLIC/group grants, real session-authenticated two-hop NOINHERIT role changes,
+> owner-with-revoked-grants, MAINTAIN and PG16 non-SET membership compatibility.
+> Proof service expired before these changes: no restart or fallback connection
+> attempted. Static registration/Ruff/whitespace pass; actual PG tests and guard
+> mutations are PENDING owner restart. PG16/17-specific cases require that actual
+> server version, not simulated version strings. Only PG14 is installed locally.
+> Prior093 restore/checksum proof below describes older SQL, not this revision;
+> repeat on a fresh disposable restore, never edit the old migration ledger.
+> Root reports live DEV has no additional SET-reachable website roles; these
+> bypasses are regression/contract risks, not newly observed live grants.
+> Original runtime plan remains preserved; do not deploy or merge on this note.
+
+> Root's independent restored-DEV rehearsal, 2026-10-03: official migration
+> runner as etlegacy_user applied exact093 from6396b222 (unchanged in subsequent
+> test/docs commits), checksum verified. Ledger95; rounds3474/playerrows22501
+> unchanged. Actual website generation SELECT succeeds; journal/receipt SELECT,
+> generation INSERT and sequence nextval are denied. This is the private restored
+> backup, not the live application database; root reports no live writes.
+
+> 093 follow-up: require effective generation SELECT as well as denied writes.
+> An attempted no-grants/wrong-role fixture stopped earlier with permission denied
+> for runtime_events, so it did not exercise that positive postcondition. Replaced
+> it with an explicit ineffective-GRANT SQL fault injection; disabling only the
+> positive postcondition then fails DID NOT RAISE, restored/cmp. Final focused
+> suite20 passed6.85s. This fault injection is not a claim of a production GRANT
+> failure. All SQL ran in the explicitly configured disposable cluster only.
+
+> 2026-10-03 DEV rehearsal follow-up: inherited default ACLs grant website_app
+> CRUD on newly created runtime tables and rights on their sequences; migration
+> 092's additive SELECT grant does not restrict them. New093 revokes only six
+> runtime table grants and their owned serial/identity sequences, then grants
+> generation SELECT. Legacy and default ACLs remain unchanged. Effective-grant
+> assertions fail closed on PUBLIC/inherited privileges or a wrong runner role.
+> Real private-PG tests reproduce083-092 with permissive defaults, prove old
+> generation INSERT succeeds, and verify093 via catalog permissions plus actual
+> denied SQL. Transaction-owned fixtures roll back fully; root's restored copy
+> and live databases were not touched.19 focused PG/journal/plan tests pass5.23s;
+> disabled093 mutation fails runtime_events SELECT permission, restored/cmp.
+> Fixture corrections: SET LOCAL ROLE survives successful savepoints (RESET ROLE
+> required); identity-column UPDATE is rejected before ACL checks, so use a
+> nonidentity column to prove authorization. Existing083-092 remain immutable.
+> Next: root independently rehearses093 on the restored backup, fresh PR/CI/review
+> and specific merge permission before DEV deployment. Runtime roadmap unchanged.
+
 > 2026-10-03 #979 review4172412989: reject RUN assume-unchanged/skip-worktree
 > index flags before status, source fetch, staging or deployment. Four actual
 > disposable Git regressions first failed against the old guard; both flags
