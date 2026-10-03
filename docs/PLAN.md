@@ -1,5 +1,182 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #966 root verification 2026-10-03: normal main5e948f0b sync preserves both
+> histories and exact repair29c8fbba scripts/tests. Root75 disposable Git/Node/
+> plan cases pass28.77s. Existing local refs verified atomically; actual object
+> bytes checked with replacement suppression; signed dates remain clean.
+> Publish for fresh review/CI, no merge approval. No real snapshot refs changed.
+
+> #966 ambient-object and local-transaction repair (2026-10-03): verify every
+> already-existing local ref in the same update-ref transaction as creates,
+> including an all-existing invocation. Actual races against either member now
+> abort the whole operation before remote publication. Disable replacement
+> objects in all Git subprocess environments, including the direct bundled
+> guard and ordinary push hooks. Raw NUL-bearing blobs on both sides are an
+> unconditional binary veto, scanned in bounded-memory chunks independently of
+> attributes/drivers; Git numstat remains an additional veto for non-NUL content.
+> This does not promise every binary classification/configuration is invariant:
+> a local binary=true can still conservatively reject otherwise textual content.
+> Metadata extraction explicitly disables log.showSignature. A real disposable
+> SSH-signed commit proves date extraction and immutable identities survive it.
+> Proof: 75 snapshot/Node/plan cases pass28.81s, Ruff clean; 11 expected failures
+> after four guard mutations (7.03s), plus one raw cat-file replacement failure
+> (0.56s). Restored with apply_patch and cmp. Two replacement-tree/blob controls
+> passed the first mutation run and are not counted as mutation failures.
+> Independent bare-remote object reads preserve the original source tree and
+> bytes. Local ref verification protects the transaction, not later external
+> writes; complete existing remote pairs remain observations only. No real
+> snapshot refs, pushes, services or production changes. A metadata-only probe
+> of actual signed194b1e6e incidentally made GPG initialize an empty user config
+> directory/keybox; no key was imported, signature trust was not established,
+> and those files were not subsequently changed or removed. Original runtime
+> roadmap unchanged; parent owns actual-main synchronization and publication.
+
+> #966 root follow-up checkpoint 2026-10-03: normal main194b1e6e merge
+> retains both histories and exact guard repair4827760a source/tests. Root
+> independently passes61 disposable Git/Node/plan cases17.02s; Ruff clean.
+> Actual review/tracking ref digest3214c396 remains unchanged. Publish fixes
+> for fresh exact-head review/CI; no966 merge approval or service action.
+
+> #966 follow-up review repair (2026-10-03): disable ambient diff.orderFile
+> for partitioning, tree validation and commit-date extraction. Real Git with
+> reversed 26-file ordering previously changed immutable part identities;
+> even metadata-only git show reads a missing order file unless reset.
+> Before any local ref creation or remote publication, execute the bundled
+> repository pre-push guard on all prospective create-only updates, retaining
+> normal push hooks. Missing inspection tools or guard fail closed; captured
+> scanner diagnostics cannot print prohibited content. Fresh clones no longer
+> depend on an installed hook. Original runtime roadmap unchanged; no real
+> review refs, services, production, pushes or merges in this repair.
+> Proof: 61 snapshot/Node/plan cases pass (17.19s), Ruff and whitespace pass.
+> Actual disposable Git CLI tests verify reversed/missing order configuration,
+> absent/disabled/unrelated hooks, missing bundled guard/scanner, and a safe
+> first pair followed by a prohibited second pair with zero refs published.
+> Removing ordering/preflight caused five failures (1.91s); removing tool check
+> caused one failure (0.48s); omitting guard config override caused one unsafe
+> publication failure (0.57s). All mutations restored with apply_patch and cmp.
+> Real review-ref digest remains d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+
+> #966 main refresh 2026-10-03: #1027 mergedcc6b0a4d through420s gates;
+> reviewed/squash trees a7f31e32 match. Preserve both document histories and
+> exact snapshot scripts/tests from2c5c32d5. Fresh exact-head gates follow.
+> No real snapshot refs, services or production changes.
+
+> #966 review repair checkpoint (2026-10-03): pin Myers in both partition and
+> generated-tree validation; actual fixture differs by 72 versus 104 lines under
+> Myers/Patience and previously changed an 8000-line part into 7928 + 104.
+> Capture remote Git output on success and failure, exposing only operation and
+> exit status: URLs, transport stderr and hook output may contain credentials.
+> Retire the obsolete area-body generator explicitly; historical bodies remain.
+> Reject partial remote pairs before local ref writes or publication. A same-OID
+> push can omit its lease check; do not claim this locks an existing pair.
+> Complete absent pairs retain atomic create-only leases; complete existing pairs
+> are observations, not protection against subsequent unrelated remote writers.
+> Nine deliberate guard regressions fail in disposable Git repos, restored/cmp.
+> Includes races after ls-remote changing either existing member and real hooks
+> emitting a synthetic credential marker on both successful and rejected pushes.
+> All 49 CLI/plan cases pass13.31s; after normal main19e65354 integration,
+> all 53 snapshot/plan/Node cases pass13.63s, Ruff and whitespace clean.
+> Both documentation histories and repair e9124506 source/test bytes retained.
+> No real snapshot cut,
+> remote publication, service action or production change. Root owns fresh gates.
+
+> #966 configuration review checkpoint (2026-09-28): disposable Git repos
+> reproduced detached/no-local-branch failure, fetch/push URL mismatch, and
+> commitEncoding-dependent false immutable conflicts. Enumerate with for-each-ref;
+> pin commit-tree UTF-8; resolve exactly one origin push URL and use that same
+> destination for preflight and publication. Multiple push URLs fail before local
+> ref creation: cross-remote atomic publication is deliberately unsupported.
+> Existing create-only leases, atomic pairs, hooks and scope guards remain.
+> Five configuration guard mutations fail, restored/cmp. Normal main4de6f07e
+> merge preserves both doc histories and repairf0497399 source/test bytes.
+> Forty real disposable CLI/plan cases pass10.24s; Ruff/whitespace clean. Separate
+> push target independently has both exact expected OIDs by local for-each-ref
+> and remote ls-remote; hook count2 remains unchanged on retry. Actual commit
+> objects omit encoding header despite local ISO-8859-1. Real Slomix review-ref
+> digest unchanged: d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> No real snapshot cuts/pushes, service actions or remote settings changes.
+> Root owns publication/fresh review; original runtime1986d671 plan retained.
+
+> #966 actual-main sync 2026-09-28: normally merged ec8ec7ed after #965;
+> both documentation histories retained. Snapshot source/tests remain byte-equal
+> to 57cf5e3b, whose create-only guard mutation was seen failing/restored/cmp.
+> All 83 combined contracts pass in 10.14s: 35 snapshot/plan and 48 watchdog
+> cases using only disposable repositories/files and mocked webhook delivery.
+> No actual review refs, service or remote writes; runtime 1986d671 preserved.
+> Root owns fresh exact-head publication/review/merge gates.
+
+> #966 concurrency checkpoint 2026-09-28: three actual disposable bare-Git
+> regressions reproduced an ancestor ref created after ls-remote being silently
+> fast-forward overwritten (review-base, review, or both). Atomic pair pushes
+> now attach an explicit empty-expect lease to each missing ref: create-only
+> compare-and-swap, not overwrite permission or a hook bypass. The raced refs
+> retain their exact ancestor OIDs and an absent counterpart remains absent.
+> All 33 CLI cases plus two plan contracts pass (20.72s), including normal hook,
+> secret rejection and idempotence proofs. Removing leases fails all three race
+> cases; restored/cmp. Installed git-push manual confirms empty expected value
+> requires an absent ref. Ruff/whitespace clean; actual review-ref digest remains
+> d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> Local-only; root owns publication/review. Runtime 1986d671 remains the resume
+> anchor. Earlier checkpoints are retained history, not fresh merge evidence.
+
+> #966 follow-up 2026-09-28: actual disposable CLI regressions reproduced both
+> fresh findings: unmatched/fully excluded area silently omitted, and a plain
+> --exclude argument selected additional files. Preflight now rejects empty
+> selected areas and requires explicit nonempty Git exclusion magic; CLI help
+> describes this contract. Both guards run before any snapshot refs are written.
+> Six old-code regressions failed; disabling the guards again fails six cases,
+> restored/cmp. Thirty real CLI cases plus two plan contracts pass in 6.44s;
+> positive short/long exclusions preserve only the selected file in local remote.
+> Ruff and whitespace clean. Real review-ref digest remains d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> Fresh publication/review required. No historical review refs, real snapshot
+> pushes, services or production changed; original runtime 1986d671 preserved.
+
+> Current #966 checkpoint 2026-09-28: normally integrated actual main 1f4a388d
+> after #1067 merged, preserving cd483737's three guard fixes and both histories.
+> Snapshot scripts/tests unchanged from 79a7e2d1. Twenty disposable local-Git CLI
+> cases pass; combined with plan contracts, 22 pass in 4.85s. Disabling actual
+> generated-tree validation fails all three file/line/scope collateral cases;
+> restored/cmp. Real review/review-base ref digest unchanged before/after:
+> d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> No real review refs, remote configuration, service or billing changed. Root
+> owns publication and fresh merge gates. Runtime resume 1986d671 preserved;
+> earlier checkpoints below are dated history, not current queue authority.
+
+> Current966 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
+>0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
+>branch integrates that main normally; implementation/test bytes preserved.
+>Publish now for fresh exact-head CI/review; no966 merge permission and no
+>service or production changes. Earlier waiting checkpoints are historical.
+
+>966 review follow-up2026-09-27: fixed all three new findings on4f5a2f24.
+>Reject duplicate area names and missing positive pathspecs; validate actual
+>private-index tree diff against exact selected paths and25-file/8000-line caps
+>before any refs are written. Unsafe D/F splits fail closed; complete bounded
+>pairs work in both directions (tree entries are not restored as index leaves).
+>20 disposable Git CLI tests pass4.84s, including real local pushes/hooks; ten
+>regressions failed before fixes and under deliberate guard removal, restored/cmp.
+>Ruff and whitespace clean. One exploratory reverse-exclusion rejection assertion
+>was incorrect: its actual one-file diff is safe; replaced with exact-scope proof.
+>No real review refs, service actions, pushes or merges. Runtime roadmap preserved;
+>parent continues numbered PR consolidation, then returns to original runtime work.
+
+> Current966 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
+>matches reviewed0e66f238. This branch now normally integrates that main,
+>preserving source/test bytes and both documentation histories. 7focused
+>tests rerun after sync. Publish for fresh exact-head CI/review; no966 merge
+>approval, service activation or NEVER MERGE changes. Earlier waiting notes
+>below are historical; original runtime roadmap remains unchanged.
+
+>966 preservation checkpoint2026-09-27: normally integrated current main as
+>30dbcfa3, retaining both documentation histories. Source/test bytes unchanged
+>from a05bbf39. Seven real-CLI tests pass2.60s in disposable repositories/local
+>remotes, exercising actual pre-push hook and immutable conflict refusal.
+>Disabling conflict guard fails remote-conflict test (exit0 instead of refusal),
+>restored/cmp. Ruff/whitespace clean. Actual Slomix review/review-base ref digest
+>unchanged before/after; no snapshot operation ran against this repository.
+>Await1055 merge and final sync before publishing for fresh review/CI; no966
+>merge approval. Original runtime work and all NEVER MERGE snapshots preserved.
+
 > #1071 actual-parent checkpoint 2026-10-03: #1070 merged194b1e6e at04:21:17Z
 > after owner confirmation and420s gates. Reviewed/squash treesfd38bcde match.
 > Normal actual-main merge retains every stability test and both histories;
@@ -749,6 +926,15 @@ Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
 both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
+
+### Consolidation: preserve immutable-review tooling #966 — 2026-09-20
+
+Normal main integration retained this older tooling proposal. Seven disposable
+repository CLI tests plus two plan contracts pass; Ruff clean. Tests use local
+fixture remotes only; actual NEVER MERGE refs/PRs remain untouched. No merge
+permission for #966. Current authorized batch is #1076/#1057/#962 only. Original
+runtime resume remains #1077 completion delivery/snapshot sealing after this
+consolidation detour, then new-site audit and approved reversible DEV transition.
 
 ### R04p source stability parent refresh — 2026-09-28
 
@@ -2710,6 +2896,40 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
 - hosting ticket, če watcher potrdi populacijo B (host stall).
+
+## Astra — immutable review snapshot safety (2026-09-07)
+
+- Implemented locally on `fix/ci-immutable-review-snapshots`; not pushed,
+  merged or deployed. Existing review PRs #924–943 remain NEVER MERGE and
+  their refs are not modified. Source examined: `4f653c01`.
+- `review_slices.sh` delegates to a private-index snapshot builder: pin source
+  and baseline commits once, partition at 25 files / 8,000 changed lines
+  (also below the 500-file reviewer cap), preflight all areas before refs or
+  remote writes, reject oversize single files and unmeasurable binary files.
+- SHA-versioned base/head pairs have deterministic commits. Existing identical
+  refs are reused; conflicting refs block. No checkout, fetch, worktree removal,
+  forced push or hook bypass. Explicit `cut --push` uses ordinary atomic Git
+  pushes per pair; a later pair failure can leave earlier pairs published,
+  and retry reuses them. Historical credential-scanner hits remain blockers.
+- `prs` now refuses automatic PR creation. For a new generation, create draft
+  NEVER MERGE PRs explicitly using the emitted immutable base/head refs and
+  measured part sizes; old generated area bodies are historical context, not
+  current per-part measurements. Fetch explicitly before choosing the source.
+- Evidence: seven disposable-repository CLI tests passed, including a local
+  bare remote and the actual pre-push hook: two guarded pushes for 26 files,
+  no pushes on identical rerun, historical credential rejection, unsplit
+  26-file rejection, local/remote conflict rejection, oversize/binary preflight,
+  preserved dirty/untracked files, deletion and space-containing paths.
+- Mutation `MAX_FILES=26` was seen failing the 25+1 split assertion, then
+  restored; `cmp` against the saved original passed and all seven tests passed
+  again. Ruff and shell syntax checks passed. This is CLI runtime proof with
+  synthetic repositories, not evidence of GitHub publication or live services.
+- Read-only real-repo measurement yielded 26 parts at the examined source.
+  First area: 23 files / 8,094 lines, independently confirmed by direct Git
+  numstat; split into 22 / 7,868 and 1 / 226. No real snapshot refs created.
+- Next: parent review, ordinary feature PR through real pre-push protections,
+  then owner-specific merge decision. No permission to publish review snapshots
+  or merge any review vehicle is implied by this implementation.
 
 ## Proga: Astra shared Node 22 pin
 

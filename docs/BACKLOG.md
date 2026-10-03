@@ -7,6 +7,60 @@
 
 ## Trenutna pozicija
 
+- (Codex, 2026-10-03) #966 four fresh findings repaired: transaction verify for
+  existing local refs, raw binary admission independent of forced-text drivers,
+  replacement-object suppression across Git/hook subprocesses, and signed
+  commit date extraction. 75 disposable Git/Node/plan cases pass28.81s; twelve
+  measured mutation failures restored/cmp. No real review refs or services
+  changed; parent handles main synchronization, fresh CI/review and publication.
+  Original runtime development plan remains unchanged.
+
+- (Codex, 2026-10-03) #966 follow-up: ambient order-file partition drift and
+  missing-hook publication repaired. Direct bundled guard preflight covers
+  every proposed pair before any publication; original runtime work preserved.
+  Parent review and fresh exact-head CI/review remain required before merge.
+
+- (Codex, 2026-10-03) #966 repairs four fresh findings: diff algorithm pinned,
+  remote diagnostics withheld, legacy body generator retired, partial remote
+  pairs rejected before publication. Nine guard mutations fail/restored/cmp in
+  actual disposable Git repos. Existing complete pairs are observed, not locked;
+  no same-OID lease guarantee. Normal main19e65354 merge retains both histories
+  and repair e9124506 source/test bytes;53 snapshot/plan/Node cases pass13.63s.
+  Ruff/whitespace clean; root owns
+  publication. Original runtime roadmap and real review refs remain untouched.
+
+- (Astra, 2026-09-28) #966 three configuration findings reproduced/fixed:
+  empty branch enumeration, actual push-destination preflight, deterministic
+  UTF-8 commit objects. Reject multiple push URLs before refs; preserve existing
+  CAS/pathspec/no-empty/hook protections. Five mutations fail/restored/cmp;
+  40 disposable Git CLI/plan cases pass10.24s after normal main4de6f07e merge.
+  Independent remote OID/object proofs pass, real review refs unchanged.
+  No real publication/services; fresh review next, original runtime plan intact.
+
+- (Astra, 2026-09-28) #966 fresh review scope fixes: reject an area selecting
+  no changes and --exclude without actual nonempty exclusion magic. Six
+  disposable CLI failures reproduced, guards mutated/failing/restored/cmp;
+  32 combined cases pass6.44s. Real review refs unchanged. Await fresh review.
+
+- (Astra, 2026-09-28) #966 integrated actual main 1f4a388d; all three cd483737
+  guard fixes retained, scripts/tests unchanged from 79a7e2d1. Twenty real CLI
+  cases in disposable local repositories plus two plan contracts pass. Actual
+  tree-validation mutation fails three cases, restored/cmp; real review-ref
+  digest unchanged. No real remote/service operation. Root owns publication,
+  exact-head review and merge gates; original runtime 1986d671 unchanged.
+
+- (Astra, 2026-09-27)966 follow-up: three review findings fixed locally;20real
+  disposable Git CLI tests pass. Duplicate/missing-positive areas fail preflight;
+  generated tree diff catches D/F collateral and actual bounds before ref writes.
+  Both bounded transition directions proven;10regressions fail under mutation,
+  restored/cmp. No real review refs or services touched, no push/merge. Original
+  runtime continuation remains preserved while parent consolidates existing PRs.
+
+- (Astra, 2026-09-20) #966 refreshed against main;9snapshot/plan tests pass,
+  Ruff clean. Actual review-snapshot refs and NEVER MERGE PRs unchanged. Keep
+  this older tooling proposal for review, not authorized for merge. Runtime
+  resume #1077 completion delivery/sealing remains after consolidation.
+
 - (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
   and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual
   child lifecycle and independent file/hash/reaping evidence. EOF guard mutation

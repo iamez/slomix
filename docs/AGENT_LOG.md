@@ -1,5 +1,73 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · Immutable snapshots must read real objects and verify refs.**
+  A pinned commit OID does not disable refs/replace. Set GIT_NO_REPLACE_OBJECTS
+  for every Git subprocess, including direct blob reads and publication hooks.
+  Numstat binary classification can be forced to text by attributes/drivers;
+  reject raw NUL-bearing blobs on both sides independently, retaining numstat
+  as an additional conservative veto, not claiming all configuration invariant.
+  Metadata-only git show can emit signature diagnostics under log.showSignature;
+  explicitly suppress signature display for date extraction. Verify existing
+  local refs inside the same update-ref transaction as creates, even when none
+  are new. A preflight dictionary alone races; the transaction protects only
+  that operation, not later external writers. See primary Git documentation:
+  https://git-scm.com/docs/git-update-ref,
+  https://git-scm.com/docs/git-replace,
+  https://git-scm.com/docs/git-show,
+  https://git-scm.com/docs/gitattributes.
+
+- **2026-10-03 · Snapshot determinism includes order files; hooks are local.**
+  Pin diff ordering as well as its algorithm, including metadata-only git show:
+  it still fails on a missing configured order file. A fresh clone does not
+  inherit active hooks, and an arbitrary executable hook proves nothing about
+  protection. Snapshot publication now directly executes the bundled guard for
+  all proposed create-only refs before the first write, then keeps normal push
+  hooks enabled. Require inspection tools first: suppressed missing-grep errors
+  otherwise turn an unperformed scan into apparent success. Override order-file
+  config inside the direct guard too: its suppressed diff errors otherwise
+  skip inspection entirely (measured unsafe publication in a local fixture).
+  Capture guard
+  diagnostics because they can contain the very content being blocked. This
+  retains the existing guard's documented detection limits, not a complete
+  history/credential audit or protection against a malicious local checkout.
+
+- **2026-10-03 · Snapshot partition identity includes the diff algorithm.**
+  Pin Myers for both planned numstat and generated-tree validation; otherwise
+  the same source/base pair can produce different boundaries and false conflicts.
+  Consumer formats must migrate with producers: the old area-body generator
+  silently converted immutable -pNNN measurements to zeros and is now retired.
+
+- **2026-10-03 · Remote Git diagnostics and partial pairs fail closed.**
+  Capture stdout/stderr on remote operations, including successful pushes:
+  transport and hook messages may echo URL credentials. Report operation/exit
+  status only; this deliberately sacrifices raw hook diagnostics. Reject partial
+  remote pairs before any local refs or push: Git may elide an unchanged ref and
+  its lease check. Create absent pairs atomically with absence leases; existing
+  complete pairs are only observed, never guaranteed against external writers.
+
+- **2026-09-28 · Snapshot identity and remote admission depend on Git configuration.**
+  show-ref exits1 for an empty branch set; for-each-ref gives a valid empty set.
+  Origin's fetch URL need not be its push URL: resolve one push destination and
+  inspect/publish that same endpoint, retaining create-only CAS for races. Fail
+  before ref writes for multiple URLs rather than promise cross-remote atomicity.
+  Pin commit-tree UTF-8: i18n.commitEncoding otherwise changes commit headers
+  and OIDs for identical source/base inputs. Test with actual disposable Git
+  repos, genuine hooks, distinct bare remotes and independent object inspection.
+
+- **2026-09-28 · A flag named exclude does not make a Git pathspec negative.**
+  Passing a plain path through --exclude expanded snapshot selection; accepting
+  an empty area silently lost requested coverage. Validate actual exclusion
+  magic and nonempty measured changes before all ref writes. Disposable local
+  remotes prove rejection without refs/push hooks, and exact successful scope.
+
+- **2026-09-27 · Planned Git path slices are not actual tree differences.**
+  Restoring a file over a source directory can implicitly remove unselected
+  children. Validate generated trees against the exact selected path set and
+  line/file limits before publishing refs; reject unsafe D/F splits. A baseline
+  tree entry is not an index leaf: restore selected descendant blobs instead.
+  Reject duplicate area identities and empty/exclusion-only pathspecs before
+  Git's implicit whole-tree selection or dictionary replacement loses scope.
+
 - **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
   After a usage-limit pause, the previously clean frontend lock had newly
   observed undici and brace-expansion findings. Refresh the advisory result
@@ -455,6 +523,14 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+- **2026-09-07 · Review snapshots are not exempt from publishing guards.**
+  Restoring a historical baseline can reintroduce a credential even when the
+  source is already public. Apply: SHA-versioned review refs, at most 25 files
+  and 8,000 changed lines per part, normal Git push with the real hook; scanner
+  rejection blocks publication. Never refresh old review PR refs or bypass a
+  scanner because a snapshot will not be merged. Local integration tests prove
+  historical literal rejection; they do not certify all repository history.
+
 # 2026-09-27: Cache rollback is an invalidation boundary
 
 Follow-up: isolating only OFF is insufficient. ON/OFF/ON can retain the same
@@ -470,6 +546,19 @@ isolates OFF workers; do not claim shared OFF cache reuse. Two ASGI proofs retai
 the backend across both same-app toggles and app recreation. Both fail without
 the namespace guard; source restored and cmp verified. Full cached HTTP/browser
 TTL behavior and actual Redis restart behavior remain separate activation checks.
+# 2026-09-28 — Immutable remote creation requires an atomic absence precondition
+
+An ls-remote preflight followed by ordinary push is not create-only: a racer
+can create an ancestor ref between the commands and the push will fast-forward
+overwrite it. Reproduced using real disposable bare repositories for either or
+both members of a review pair. Use an explicit empty expected value per missing
+ref (`--force-with-lease=<ref>:`) together with atomic pair push. Despite the
+option name this permits creation only, never replacement; all hooks remain
+enabled. Installed git-push documentation states the named ref must not exist.
+Regressions verify unchanged raced OIDs and no partial counterpart publication;
+removing leases fails all three cases, then restoration is checked by cmp.
+Do not replace this with generic force or a tracking-ref-inferred lease.
+
 # 2026-09-27 — Explicit key-only SSH must reject partial authentication
 
 Paramiko5 legacy SSHClient authentication can invoke auth_interactive_dumb
