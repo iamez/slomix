@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1072 actual-parent checkpoint 2026-10-03: #1071 merged5e948f0b at05:07:24Z
+> after explicit permission and420s gates; reviewed/squash trees5d47e81e match.
+> Normal actual-main merge retains both histories and exact runtime/Lua bytes
+> fromf90c37f7. Root45 Lua/capture/Node/plan cases pass10.75s. Retarget main,
+> publish for fresh exact-head review/CI; no1072 merge permission or deployment.
+
 > #1072 reviewed-parent refresh 2026-10-03: normal parente5621f2f merge
 > retains actualmain194b1e6e and both histories. Runtime/Lua bytes unchanged
 > from3cce1ed1; root45 Lua/capture/Node/plan cases pass10.84s. Await1071 actual
