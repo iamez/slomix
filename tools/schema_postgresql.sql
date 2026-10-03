@@ -9377,5 +9377,8 @@ BEGIN
                 RAISE EXCEPTION 'website_app retains runtime table privileges on %', table_name;
             END IF;
         END LOOP;
+        IF NOT has_table_privilege('website_app', 'runtime_cache_generations', 'SELECT') THEN
+            RAISE EXCEPTION 'website_app lacks runtime generation read privilege';
+        END IF;
     END IF;
 END $$;
