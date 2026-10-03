@@ -1,5 +1,10 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Review follow-up 2026-10-03 for #1070: remove only the duplicated
+> 2026-09-20 content-reconciliation lesson from AGENT_LOG; preserve its earlier
+> identical entry and every distinct lesson. Runtime code and tests unchanged.
+> Fresh exact-head review and CI remain required before merge.
+
 > Actual-main checkpoint2026-10-03 for1070: #1069 mergedb25d4020
 > at02:58:00Z after420s gates; reviewed/squash treesd2482893 match exactly.
 > Normal merge retains both documentation histories. Source/tests byte-identical to55cd33dc after conflict resolution; earlier68-case and restored guard proof remain applicable.
