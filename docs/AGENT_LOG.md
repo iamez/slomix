@@ -7,6 +7,12 @@
   executable and special-bit modes remain rejected. Apply the publisher/reader
   boundary check to metadata receipts as well as payload spool entries.
 
+- **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
+  After a usage-limit pause, the previously clean frontend lock had newly
+  observed undici and brace-expansion findings. Refresh the advisory result
+  before merge, retain its date, and independently prove installed guard behavior.
+  Run mutation probes in isolated copies, not packages used by concurrent tests.
+
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
   and loop. Correction after follow-up review: installing cleanup deferral itself
@@ -151,13 +157,6 @@ data here.
   and checks again after read before publication. This still does not bound
   SSH setup or filesystem fsync, or interrupt a reader which ignores timeouts.
   Preserve these distinctions when integrating the connection owner.
-
-- **2026-09-20 · Content reconciliation is not durability or import completion.**
-  A link can succeed before directory fsync fails. Inspecting size and SHA-256
-  can recognize the existing complete file without overwrite, but cannot prove
-  the directory entry will survive a crash or that PostgreSQL imported it.
-  Keep those acknowledgements separate; never delete the retained source merely
-  because inspection returned match. Operational read errors are not absence.
 
 - **2026-09-20 · A complete-length transfer is not an integrity proof.**
   Runtime spool publication can now validate an expected SHA-256 before linking
