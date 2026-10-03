@@ -1,5 +1,12 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Root's independent restored-DEV rehearsal, 2026-10-03: official migration
+> runner as etlegacy_user applied exact093 from6396b222 (unchanged in subsequent
+> test/docs commits), checksum verified. Ledger95; rounds3474/playerrows22501
+> unchanged. Actual website generation SELECT succeeds; journal/receipt SELECT,
+> generation INSERT and sequence nextval are denied. This is the private restored
+> backup, not the live application database; root reports no live writes.
+
 > 093 follow-up: require effective generation SELECT as well as denied writes.
 > An attempted no-grants/wrong-role fixture stopped earlier with permission denied
 > for runtime_events, so it did not exercise that positive postcondition. Replaced
