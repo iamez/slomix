@@ -47,6 +47,26 @@
   Ruff clean. Actual review-snapshot refs and NEVER MERGE PRs unchanged. Keep
   this older tooling proposal for review, not authorized for merge. Runtime
   resume #1077 completion delivery/sealing remains after consolidation.
+- (Astra, 2026-10-03) Recovered interrupted #1069 main19e65354 merge,
+  retaining both histories. Focused checks repeated; fresh publication gates
+  still required. No service restart or production changes.
+
+- (Astra, 2026-09-28) #1069 local 005e8d83 includes final SSH identity and
+  preserved worker fixes; 144 combined cases pass in 18.35s. Initial wrong
+  test filename collected nothing and is not proof. Await #1068 actual main.
+
+- (Astra, 2026-09-27)1069 locally refreshed from87f9fa72 through prepared
+  parent3244843d, merge4020bb69 preserves both doc histories and worker/auth fixes.
+ 114offline tests pass17.95s including actual child/spool lifecycle evidence;
+  absolute-path mutation fails then restored/cmp. No active owned child remains
+  in lifecycle assertions. No push/retarget/liveSSH/service/DB changes; original
+  runtime sequence and parent final sync/review gates unchanged.
+
+- (Astra, 2026-09-20) R04n composes SSH session/file ownership and verified stream
+  publication inside a picklable capture-only task on #1068. 97 combined cases
+  pass; offline transport with actual child/filesystem demonstrates timeout can
+  leave either partial or final content. Guard mutation fails/restores. Next
+  reconciliation composition/source identity; no activation or network claim.
 
 - (Astra, 2026-09-28) #969 integrated actual worker main4de6f07e normally;
   both histories retained, Node/CI/PyYAML bytes unchanged. Root99combined
