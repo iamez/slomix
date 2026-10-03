@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-03) Prepared1070 on reviewed1069, preserving source and
+  both documentation histories.68tests pass; two deliberate guard failures
+  observed then restored/cmp. Await actual parent merge, no live service action.
+
 - (Astra, 2026-09-28) #1070 local bda56937 includes final SSH sidecar guard
   and preserved worker fixes. 150 combined cases pass in 23.00s including
   timeout with present final content and safe retries. Await #1069 actual main.
@@ -22,6 +26,10 @@
   retries recover missing content and skip already-complete/conflicting content.
   Mutation fails/restores. No orphan deletion or source acknowledgement. Next
   source metadata/discovery and verified importer integration; no services changed.
+
+- (Astra, 2026-10-03) Recovered interrupted #1069 main19e65354 merge,
+  retaining both histories. Focused checks repeated; fresh publication gates
+  still required. No service restart or production changes.
 
 - (Astra, 2026-09-28) #1069 local 005e8d83 includes final SSH identity and
   preserved worker fixes; 144 combined cases pass in 18.35s. Initial wrong
@@ -39,6 +47,21 @@
   pass; offline transport with actual child/filesystem demonstrates timeout can
   leave either partial or final content. Guard mutation fails/restores. Next
   reconciliation composition/source identity; no activation or network claim.
+
+- (Astra, 2026-09-28) #969 integrated actual worker main4de6f07e normally;
+  both histories retained, Node/CI/PyYAML bytes unchanged. Root99combined
+  cases pass34.80s, including actual child cleanup. No service action.
+
+- (Astra, 2026-09-28) #969 normal main1f4a388d refresh: six node/plan contracts
+  pass; isolated22.23.2 binary verified by two version paths. Old22.13.1 pin
+  mutation fails, restored/cmp. No install/build/browser/service/lock change.
+  Root owns remote review/merge; original runtime1986d671 plan preserved.
+
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
+
 - (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
   installed before spawn through close; custom side effects replay even with
   original error; 0.01s minimum grace rejects unsupported tiny budgets. Every
