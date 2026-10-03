@@ -1,5 +1,15 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Continuation2026-10-03: proof service rechecked, MainPID0/failed/timeout.
+>Prepared private proximity_acceptance.py receipt-python and receipt-sql modes,
+>each with separate synthetic filename/map. Injection asserts actual vehicle
+>INSERT visible to transaction adapter and invisible to independent observer
+>before receipt failure; then requires failure,0rows/0receipts, successful retry
+>and unchanged repeat. SQL mode injects SELECT1/0; Python mode raises before
+>receipt execute. Syntax checked only, neither mode run yet. Owner must start
+>isolated service; no live DB fallback. Parser fix9f6090d0 remains unverified
+>on realPG for these failure modes and is not ready for publication/deployment.
+
 > Receipt fix2026-10-03 prepared locally: canonical parser previously returned
 >True after data writes when receipt table was absent or receipt execute raised
 >a Python exception. Regression reaches actual receipt path after synthetic data
