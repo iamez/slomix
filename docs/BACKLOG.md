@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-03) DEV-only authorization received. Read-only Samba preflight
+  identifies old75ee10b5 deployment and ten pending main migrations. Refreshing
+  #979 on5e948f0b preserves artifact safeguards and both histories. No deployment
+  yet; return to original runtime queue after safe deployment preparation.
+
 - (Astra, 2026-09-28) #979 real Node22.23.2 wrappedbuild/provenance verified:
   137outputs hashes by two paths; actual preflight only in disposable clone
   preserves HEAD/tree/assets/inodes/mtimes. In-process HTTP200 HTML+6assets
@@ -19,6 +24,162 @@
   regressions and23passing fixture tests. No real deploy. Branch refresh/CI and
   PR-specific permission remain gates. Runtime resume remains #1077 after detour.
 
+- (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
+  and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual
+  child lifecycle and independent file/hash/reaping evidence. EOF guard mutation
+  fails all three drift scenarios; restored/cmp and three passes. No remote
+  writes or activation; trusted completion remains a gate. Ready for parent-led
+  publication/review, not a claim of operational runtime completion.
+
+- (Astra, 2026-09-20) Source-completion investigation: round notification can
+  precede file write; generic saved log and delayed file-created notifier are not
+  exact durable receipts. Local runtime counterexample confirms equal metadata
+  and hashes while writer remains open (7bytes then18). Next owner decision on
+  offline source-producer protocol vs retaining source freeze; no deployment.
+
+- (Astra, 2026-09-20) R04p adds fail-closed source metadata checks before read
+  and before local publication. 127 combined cases pass; disabling EOF guard
+  fails three real-child/offline-transport proofs, restored/cmp. Checked-in Lua
+  writes final name directly, so stable metadata is NOT proof of producer close.
+  Trusted completion/manifest remains a gate; no remote/service changes.
+
+- (Astra, 2026-10-03) Prepared1070 on reviewed1069, preserving source and
+  both documentation histories.68tests pass; two deliberate guard failures
+  observed then restored/cmp. Await actual parent merge, no live service action.
+
+- (Astra, 2026-09-28) #1070 local bda56937 includes final SSH sidecar guard
+  and preserved worker fixes. 150 combined cases pass in 23.00s including
+  timeout with present final content and safe retries. Await #1069 actual main.
+
+- (Astra, 2026-09-27)1070 refreshed locally through8501f7b9 (merge5d2971f7),
+  preserving worker/auth/0400 fixes and both documentation histories.141offline
+  tests pass23.35s; real child/retry proofs and failing guard mutation restored/cmp.
+  New1067 implicit certificate-sidecar finding still requires propagated repair
+  before publication; do not call auth fully reviewed. No push/retarget/service/DB.
+
+- (Astra, 2026-09-20) R04o combines #1069/#1064 and keeps observed spool content
+  separate from supervised child outcome. 117 cases pass; actual spawned offline
+  retries recover missing content and skip already-complete/conflicting content.
+  Mutation fails/restores. No orphan deletion or source acknowledgement. Next
+  source metadata/discovery and verified importer integration; no services changed.
+
+- (Astra, 2026-10-03) Newly observed undici/brace-expansion advisories repaired
+  narrowly in1027. Cleaninstall/audit0/typecheck/845tests/SPA build succeed;
+  actual package probes and failing/restored isolated mutations verified. No
+  service/deploy. Publish fresh head, never reuse September's clean-audit claim.
+
+- (Astra, 2026-10-03) Recovered interrupted #1027 main19e65354 merge,
+  retaining both histories. Focused checks repeated; fresh publication gates
+  still required. No service restart or production changes.
+
+- (Astra, 2026-09-28) #1027 actualmain4de6f07e integrated, frontend inputs
+  unchanged from845-test/build proof. Fresh typecheck, API hash, actual installed
+  YAML/nanoid guard probes and50plan/watchdog cases pass. No deployment.
+
+- (Astra, 2026-09-28) #1027 main ec8ec7ed integrated normally as0ee8e3e6.
+  All frontend/API inputs identical to022f1115's845-test proof; fresh typecheck,
+  API generationcmp and50plan/watchdogtests pass. No Nodebranch mixed in.
+  Proof scripts copied to durable local audit path, cmp verified; root publishes.
+
+- (Astra, 2026-09-28) #1027 local dependency proof complete: zero audit findings,
+  identical original/patched generated API types, typecheck, 845 tests/70 files
+  and SPA build succeed. Six built HTML asset references resolve offline.
+  Actual YAML/nanoid guard mutations fail, restored/cmp and probes pass; no
+  browser/server/deploy. Ready for parent-led main sync, publication and review.
+
+- (Astra, 2026-09-28) #1027 compatible nanoid3.3.19 lock patch removes last
+  audit finding; original/patched OpenAPI output identical and typecheck passes.
+  Bounded old dependency probes fail, patched probes pass. Full single-worker
+  Vitest run in progress; SPA build next. Only three package entries changed
+  versus original PR lock; no runtime server or production action.
+
+- (Astra, 2026-09-28) #1027 lock-only upstream security patch prepared:
+  core1.34.20/YAML4.3.2 only; unrelated npm10 libc metadata loss restored.
+  Existing Vitest4.1.11 preserved. npm audit still finds high nanoid<3.3.18,
+  so no clean-audit/readiness claim. No npm ci or runtime validation yet;
+  next controlled dependency decision and frontend validation, no deployment.
+
+- (Astra, 2026-10-03) Recovered interrupted #1069 main19e65354 merge,
+  retaining both histories. Focused checks repeated; fresh publication gates
+  still required. No service restart or production changes.
+
+- (Astra, 2026-09-28) #1069 local 005e8d83 includes final SSH identity and
+  preserved worker fixes; 144 combined cases pass in 18.35s. Initial wrong
+  test filename collected nothing and is not proof. Await #1068 actual main.
+
+- (Astra, 2026-09-27)1069 locally refreshed from87f9fa72 through prepared
+  parent3244843d, merge4020bb69 preserves both doc histories and worker/auth fixes.
+ 114offline tests pass17.95s including actual child/spool lifecycle evidence;
+  absolute-path mutation fails then restored/cmp. No active owned child remains
+  in lifecycle assertions. No push/retarget/liveSSH/service/DB changes; original
+  runtime sequence and parent final sync/review gates unchanged.
+
+- (Astra, 2026-09-20) R04n composes SSH session/file ownership and verified stream
+  publication inside a picklable capture-only task on #1068. 97 combined cases
+  pass; offline transport with actual child/filesystem demonstrates timeout can
+  leave either partial or final content. Guard mutation fails/restores. Next
+  reconciliation composition/source identity; no activation or network claim.
+
+- (Astra, 2026-09-28) #969 integrated actual worker main4de6f07e normally;
+  both histories retained, Node/CI/PyYAML bytes unchanged. Root99combined
+  cases pass34.80s, including actual child cleanup. No service action.
+
+- (Astra, 2026-09-28) #969 normal main1f4a388d refresh: six node/plan contracts
+  pass; isolated22.23.2 binary verified by two version paths. Old22.13.1 pin
+  mutation fails, restored/cmp. No install/build/browser/service/lock change.
+  Root owns remote review/merge; original runtime1986d671 plan preserved.
+
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
+
+- (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
+  installed before spawn through close; custom side effects replay even with
+  original error; 0.01s minimum grace rejects unsupported tiny budgets. Every
+  cleanup phase attempts its stop signal. Explicit delayed-SIGINT contract.
+  159cases pass37.24s including45workers; broad-catch narrowing fails3 actual
+  SystemExit cases, disabled lifetime guard leaks spawnwindow child in fixture,
+  restored/cmp and fixture cleanup verified. Removed unused cleanup_complete;
+  retained intentional BaseException deferred-rethrow semantics with proof.
+  No remote/services/DB/network. Runtime1986d671 preserved; root owns gates.
+
+- (Astra, 2026-09-28) Root-review worker follow-up: tiny-grace finished-child
+  false error and cleanup-clock SIGINT leak reproduced, repaired and mutation
+  verified/restored/cmp. Whole cleanup now defers callable SIGINT through close;
+  prior handler behavior and original parent error preserved. 146 combined cases
+  pass in 20.51s, Ruff clean. Parent handles publication/descendant propagation.
+
+- (Astra, 2026-09-28) #1068 fresh review exposed real escalation/startup SIGINT
+  child leaks. Three actual-spawn regressions failed before repair and again with
+  mutations; fixtures always cleaned leaked children. Bounded operation-wide
+  escalation retries and ownership-window SIGINT deferral preserve original
+  errors, custom/ignored handlers and child masks. Restored/cmp; no remote or
+  service actions. Root owns publication/review and descendant propagation.
+
+- (Astra, 2026-09-28) #1068 retains original worker fixes 86c69e39 and final
+  SSH e22ae27c after normal merge eed58f6c. 133 combined cases pass in 14.44s,
+  actual spawned children reaped by two observations; Ruff clean. Await #1067
+  actual main, final sync and fresh review. No runtime activation or deployment.
+
+- (Astra, 2026-09-27)1068 local refresh preserved86c69e39 worker backports,
+  merged reviewed1067 db7f3888 normally as99f2161c.92offline cases pass12.33s;
+  real child cleanup verified by procfs and active_children, interrupted cleanup
+  retains original errors. Timeout mutation fails2cases, restored/cmp. No push,
+  service/liveSSH/DB changes; parent owns final sync/review and original plan.
+
+- (Astra, 2026-09-25) Consolidation side quest: backported exact #1077 worker
+  fixes/tests into #1068 locally; five old-code regressions fail, 94 combined
+  tests now pass. Late-clock mutation fails/restores/cmp. No GitHub writes or
+  AI review requests because owner requires no additional review charges.
+  #1076/#1057/#962 already merged; #965 local integration saved at2e035917.
+  Runtime resume remains #1077 completion delivery/sealing. No services changed.
+
+- (Astra, 2026-09-20) R04m adds isolated capture-task deadline supervision on
+  #1067. 86 combined tests pass, real owned children reaped even after SIGTERM
+  refusal/parent interruption; timeout-status mutation fails/restores. #1066
+  latest exact-head CI all green. Next transport-specific task and source identity;
+  no services activated and no DB transactions allowed in force-stopped workers.
 
 
 - (Astra, 2026-09-28) #965 fresh review warning transition regression repaired
@@ -115,6 +276,15 @@
   53 combined cases pass; real socket success/timeout cleanup and failing/restored
   deadline mutation verified. No SSH connections or live activation. Separately
   #1060 calendar review fixed in742504ee with23 unit/PG cases passing.
+
+- (Astra, 2026-09-20) #1064 review fixed: validate identity even on wrong size;
+  49 cases pass, early-return mutation fails/restored. Next compose a single
+  caller-driven retry step; no scheduling, source deletion or service activation.
+
+- (Astra, 2026-09-20) R04i on #1062: read-only spool reconciliation implemented,
+  48 filesystem cases pass with failed/restored digest and identity mutations.
+  No automatic cleanup, overwrite, retry loop, DB or service changes. Next wire
+  explicit reconciliation policy with connection ownership and immutable source.
 
 - (Astra, 2026-09-20) R04g extends #1061 with opt-in source SHA-256 validation
   before publication. 35 filesystem cases pass; independent sha256sum agrees;

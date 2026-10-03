@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 2026-10-03 DEV preflight: owner authorizes updates/restarts on Samba only;
+> production is a separate host and remains excluded. Local address inspection
+> confirms 192.168.64.116 belongs to Samba. Read-only transactions through both
+> bot/web roles show 84 ledger entries and no new 083-092 entries; running web
+> and run checkout agree on75ee10b5. Main5e948f0b postmerge workflows all pass.
+> Refresh #979 onto actual main before exact-SHA artifact rebuild and review.
+> Preserve both document histories during normal merge. No live mutation,
+> migration or restart performed; no PR-specific merge authority inferred.
+> Next: refreshed artifact proofs/review, backup and migration rehearsal, then
+> approved DEV update. Runtime v2 activation and original roadmap stay gated.
+
 > #979 real artifact acceptance, 2026-09-28: normal merges preserve original
 > 94cf8e3d, actual main ec8ec7ed, Node pin ea5f2ab3 and dependency repair022f1115.
 > Clean committed source338f5b9b built with actual Node22.23.2/npm10.9.8 through
@@ -23,6 +34,376 @@
 > not live deployment acceptance. Rebuild/reverify after this documentation
 > commit because exact-SHA provenance must change even for documentation commits.
 > Parent must integrate actual merged #969/#1027, then fresh CI/review/merge cycle.
+> #1071 actual-parent checkpoint 2026-10-03: #1070 merged194b1e6e at04:21:17Z
+> after owner confirmation and420s gates. Reviewed/squash treesfd38bcde match.
+> Normal actual-main merge retains every stability test and both histories;
+> runtime source/tests byte-identical toa1ead937. Repeat focused gates, retarget
+> to main and publish for fresh review/CI. No approval inferred for1071 merge.
+
+> #1071 security-baseline refresh 2026-10-03: normal parent965a2494 merge
+> includes actualmaincc6b0a4d. Both histories retained; runtime source/tests
+> unchanged from2915eae9 and dependency manifests match main exactly.
+> Focused capture/worker/Node/plan validation repeated before local commit.
+> Await actual #1070 merge and fresh publication review; no service changes.
+
+> #1071 local refresh 2026-10-03: normal merge of parent72b2cd06 retains
+> actual mainb25d4020 and the reviewed duplicate-lesson correction. Both plan
+> histories preserved; runtime source/tests byte-identical to e3c2e2f5.
+> Root78 capture/worker/Node/plan cases pass44.68s with actual child cleanup
+> and filesystem outcomes. No live SSH/DB or service action. Await actual
+> #1070 merge, next main synchronization and fresh publication gates.
+
+> #1071 actual-main propagation 2026-09-28: normal parent539f77fc merge
+> incorporates4de6f07e, preserving both histories and exact source/tests44a05106.
+> Prior29case10.52s proof remains applicable; combined downstream repeat follows.
+> Runtime1986d671 retained. No remote/services; fresh publication gates remain.
+
+> #1071 published-parent refresh 2026-09-28: normally merged #1070 28271ad8;
+> both histories and final worker e8f05dbd bytes retained. Twenty-nine composed
+> stability/capture/plan cases pass10.52s, offline with real owned children.
+> No remote/DB/service action; original runtime1986d671 unchanged. Actual
+> #1068 squash-main sync and fresh exact-head review remain publication gates.
+
+> #1071 local parent propagation 2026-09-28: normal merge of #1070 locald4c0f5b8
+> retains final worker90026032 source/tests exactly and both doc histories.
+> Twenty-seven stability/SSH-capture tests pass10.72s. Existing callers use
+> supported grace budgets; no fixture weakening. Root owns actual-main sync and
+> final publication/review. No services/network/DB; runtime1986d671 preserved.
+
+> #1070 main refresh 2026-10-03: #1027 mergedcc6b0a4d through420s gates;
+> reviewed/squash trees a7f31e32 match. Inherit its dependency patches with
+> both document histories retained. Runtime source/tests unchanged from72b2cd06;
+> rerun focused gates before fresh review/CI. No service or deployment action.
+
+> Review follow-up 2026-10-03 for #1070: remove only the duplicated
+> 2026-09-20 content-reconciliation lesson from AGENT_LOG; preserve its earlier
+> identical entry and every distinct lesson. Runtime code and tests unchanged.
+> Fresh exact-head review and CI remain required before merge.
+
+> Actual-main checkpoint2026-10-03 for1070: #1069 mergedb25d4020
+> at02:58:00Z after420s gates; reviewed/squash treesd2482893 match exactly.
+> Normal merge retains both documentation histories. Source/tests byte-identical to55cd33dc after conflict resolution; earlier68-case and restored guard proof remain applicable.
+> Publish for fresh exact-head review/CI. No service or production action;
+> original runtime roadmap, NEVER MERGE exclusions and held956 unchanged.
+
+> Current1070 preparation2026-10-03: normal merge of reviewed1069 head3e2ffad5
+> retains both documentation histories and exact supervised/worker/test bytes
+> from539f77fc. Root68combined cases pass44.01s, including actual owned child
+> timeout, cleanup and filesystem retry evidence. Disabling existing-content
+> admission fails both match/conflict cases with "Existing content must not
+> spawn capture"; restored/cmp. Actual1069 squash-main sync still required
+> before publication and fresh exact-head review. No live SSH, DB or services.
+> Original runtime plan and bounded queue authority retained; no SaaS expansion.
+
+> #1070 actual-main propagation 2026-09-28: normal parent09a62009 merge
+> incorporates #1068 squash4de6f07e, retaining both doc histories and unchanged
+> runtime source/tests from28271ad8. Prior19case9.80s proof applies to identical
+> code; combined downstream rerun follows. Runtime1986d671 preserved, no remote
+> or service action. Fresh exact-head review remains a separate publication gate.
+
+> #1070 published-parent refresh 2026-09-28: merged #1069 4007e597 with
+> published worker e8f05dbd and both doc histories. Nineteen composed capture/
+> plan cases pass9.80s; worker bytes remain unchanged. No network/DB/services.
+> Original runtime1986d671 preserved; actual #1068 squash-main sync and fresh
+> exact-head review remain root publication gates, not completed by this merge.
+
+> #1070 local parent propagation 2026-09-28: normally merged #1069 local593edbbc,
+> retaining final worker90026032 bytes and both histories. Seventeen supervised
+> SSH-capture cases pass9.98s, including real bounded children; configured0.2s
+> grace/default compatible with minimum0.01s. Root owns later actual-main sync,
+> publication/review. No remote/service/network/DB changes; runtime1986d671 kept.
+
+> Current #1070 checkpoint, 2026-09-28: normal parent merge bda56937 retains
+> final SSH identity e22ae27c and worker fixes 86c69e39. Combined 150 cases pass
+> in 23.00s: real child outcomes remain separate from observed content, retries
+> do not re-read already matching content, and procfs/active_children confirm
+> cleanup. Actual supervised tests live in test_runtime_ssh_capture.py, not a
+> separate supervised test file. Local preparation only; actual main sync and
+> fresh exact-head gates still required after #1069. No services or live SSH.
+
+>1070 local refresh2026-09-27: live sourcef4d11cb6/base1069 normally merged
+>prepared1069 at8501f7b9 as5d2971f7. Both documentation histories retained;
+>spool conflicts preserve0400 inspection fix; worker/auth/source tests match
+>parent.141offline tests pass23.35s, including actual child/filesystem retries:
+>failed/missing and timed_out/missing retry once; timed_out/match skips recapture.
+>Independent sha256sum confirms retained final bytes; procfs and active_children
+>confirm reaping. Disabling existing-content guard fails2cases with forbidden
+>spawn assertion; restored/cmp, Ruff clean. No live network/service/DB changes.
+>BLOCK publication until the newly reported1067 implicit key certificate-sidecar
+>loading fix propagates through1068/1069, followed by actual main sync and fresh
+>exact-head review/CI. No1070 merge permission inferred. Original plan preserved.
+
+> Actual-main checkpoint2026-10-03 for1027: #1069 mergedb25d4020
+> at02:58:00Z after420s gates; reviewed/squash treesd2482893 match exactly.
+> Normal merge retains both documentation histories. All frontend/API inputs byte-identical toef1410b9 and its845-test/build proof; six Node/plan contracts freshly pass0.36s.
+> Publish for fresh exact-head review/CI. No service or production action;
+> original runtime roadmap, NEVER MERGE exclusions and held956 unchanged.
+
+> Security refresh2026-10-03: live npm audit found two affected package groups,
+> undici7.29.0 and brace-expansion2.1.4, despite September28's audit0. Narrow
+> lock patch advances only these entries to7.29.1/2.1.7 with registry integrity;
+> jsdom's undici^7.24.5 and minimatch's brace-expansion^2.0.1 permit them;
+> no overrides or
+> unrelated metadata changes. Clean npm ci --ignore-scripts succeeds; separate
+> npm audit JSON reports0 across268 dependencies. Fresh typecheck,70files/
+>845tests259.88s(singleworker), SPA build2.58s pass; generated API SHA61f4c4a5
+> unchanged. Actual BalancedPool factory receives original TLS identity callback
+> without network requests; actual brace expansion preserves ordinary output and
+> bounds nesting. Isolated-copy guard mutations each fail, restored/cmp and pass.
+> Initial brace probe incorrectly expected[] instead of literal fallback; corrected
+> from installed implementation, not counted as a security regression failure.
+> Proof script remains local in slomix-runtime-audit-20260927-dkSfCn.
+> Upstream sources: github.com/nodejs/undici/security/advisories/GHSA-w293-vg96-wgc3
+> and github.com/juliangruber/brace-expansion/security/advisories/GHSA-qhr7-859c-m2p7.
+> These are development dependencies; no live production exploit claim. No service,
+> browser or deployment. Fresh exact-head CI/review required; runtime plan intact.
+
+> Recovery checkpoint 2026-10-03, #1027: resumed the interrupted normal
+> merge of actual main19e65354 after the usage-limit interruption. Both
+> documentation histories retained; no source changes lost.
+> 54 Node/watchdog/plan tests pass1.34s. All frontend/API inputs remain identical to022f1115; earlier845-test evidence is historical, not a fresh full-suite claim.
+> Fresh exact-head review/CI required after publication. Original runtime
+> roadmap and local-only1986d671 retained; no service/deployment action.
+
+> Current #1027 checkpoint 2026-09-28: normal actual-main4de6f07e integration
+> preserves both histories. All frontend/API inputs still byte-identical to
+> 022f1115's845-test/build proof; not claiming that suite rerun. Fresh typecheck
+> passes; generated API SHA remains61f4c4a5b04489b01fe4913df6ac43ef1474a262f0dc873076acea0463ade05d.
+> Root repeats bounded actual installed YAML/nanoid probes successfully and50
+> plan/watchdog contracts pass0.68s. No service/browser/deployment action.
+> Publish for fresh exact-head gates; original runtime1986d671 remains queued.
+
+> #1027 actual-main synchronization, 2026-09-28: normally merged ec8ec7ed
+> as0ee8e3e6, preserving both document histories. Explicit git diff from845-test
+> head022f1115 over ALL website/frontend and docs/api/openapi.json is empty;
+> previous845-test and real SPA build evidence applies to identical inputs, not
+> a freshly rerun full suite. No unmerged Node-pin branch imported; local proof
+> uses22.23.2 while current workflow remains22.x. Fresh typecheck succeeds,
+> regenerated API types cmp/SHA match original baseline61f4c4a5, and50 focused
+> plan/watchdog tests pass0.60s. Whitespace clean. Dependency and artifact proof
+> scripts safely copied/cmp-verified to the local durable runtime audit directory;
+> temporary fixtures retained. Parent owns publication and fresh exact-SHA gates.
+
+> #1027 completed local dependency proof, 2026-09-28: Node22.23.2/npm10.9.8,
+> npm ci --ignore-scripts, typecheck and 70 files/845 Vitest tests pass (single
+> worker, 273.39s). build:app succeeds in 2.33s; offline HTML validation resolves
+> all six referenced local assets as nonempty files. This is not a browser/live
+> deployment proof. Existing Vite future-native-loader and Tailwind sourcemap
+> warnings remain; jsdom emitted canvas/navigation warnings, no failed tests.
+> npm audit JSON twice reports zero vulnerabilities; npm ls/explain independently
+> confirms core1.34.20, YAML4.3.2, nanoid3.3.19 and Vitest/mocker4.1.11.
+> Original-lock API generation equals patched output byte-for-byte. Actual
+> installed-package guard mutations reproduce missing YAML budget exception and
+> nanoid zero-size subprocess timeout (1s, child reaped); both restored with cmp,
+> then both bounded probes pass. No tracked generated artifacts or service changes.
+> Local proof script: /tmp/slomix-deps-security-proof-20260928.cjs; baseline install
+> /tmp/slomix-deps-baseline-5lbaDz. Next actual-main synchronization and fresh
+> exact-head review/CI; original runtime plan follows queue consolidation.
+
+> #1027 follow-up, 2026-09-28: upstream nanoid3.3.19 is compatible with
+> postcss8.5.25's existing ^3.3.16 range, removing the remaining high advisory
+> https://github.com/advisories/GHSA-2v37-7h3g-55p8 . Targeted lock-only update
+> and restored unrelated libc metadata leave exactly three changed lock entries
+> against original f0d263c2: core, YAML and nanoid; package.json remains identical.
+> Node22.23.2/npm10.9.8 clean install and audit report zero vulnerabilities;
+> npm explain independently confirms the expected installed dependency paths.
+> Same committed OpenAPI JSON generates byte-identical types with original and
+> patched locks (cmp and SHA25661f4c4a5b04489b01fe4913df6ac43ef1474a262f0dc873076acea0463ade05d).
+> Temporary no-save downgrade failed with npm's `Cannot read properties of null
+> (reading 'edgesOut')`; no concurrent/partial-install comparison is credited.
+> Reinstalled patched lock, then used separate original-lock npm ci for the
+> comparison. Bounded original-package probes reproduce YAML merge-budget bypass
+> and nanoid zero-size timeout; patched probes pass. Typecheck passes. Full tests
+> and SPA build remain pending at this checkpoint; no server/browser/deployment.
+
+> #1027 dependency preparation, 2026-09-28: Node22.23.2/npm10.9.8 targeted
+> lock-only/ignore-scripts update advances @redocly/openapi-core1.34.19->1.34.20
+> and js-yaml4.3.1->4.3.2 without overrides. openapi-typescript7.13.0 already
+> permits core^1.34.6; registry metadata shows unchanged engine/dependency
+> requirements except the YAML patch, and upstream core has no source changes.
+> npm10 stripped18 unrelated libc selectors; restored those exactly from HEAD.
+> Structural lock comparison proves only the two intended package entries differ;
+> package.json and Vitest/mocker4.1.11 retained. No node_modules installation.
+> Sources: https://redocly.com/docs/cli/v1/changelog and
+> https://github.com/nodeca/js-yaml/security/advisories/GHSA-2883-xcg3-v3hh .
+> Fresh npm audit removes those YAML/Vitest findings but reports one remaining
+> high nanoid<3.3.18 advisory GHSA-2v37-7h3g-55p8; audit is NOT clean. No blanket
+> audit fix applied. Next owner/root decision on narrow additional patch, then
+> npm ci, generator output comparison, typecheck/test/build:app and fresh CI.
+
+> Recovery checkpoint 2026-10-03, #1069: resumed the interrupted normal
+> merge of actual main19e65354 after the usage-limit interruption. Both
+> documentation histories retained; no source changes lost.
+> 17 capture/Node/plan tests pass5.77s; actual spawned-child and filesystem proofs repeated. Capture source/tests unchanged from09a62009.
+> Fresh exact-head review/CI required after publication. Original runtime
+> roadmap and local-only1986d671 retained; no service/deployment action.
+
+> #1069 actual-main checkpoint 2026-09-28: #1068 merged4de6f07e;
+> normal merge retains both histories and exact shared/test code from4007e597.
+> Thirteen real owned-child SSH capture/plan cases pass4.74s after sync; prior
+> 220-case42.00s gate covers unchanged worker/SSH/spool/watchdog code. Original
+> runtime1986d671 retained. Root may retarget/publish for fresh exact-head review;
+> this local proof is not CI or merge readiness. No remote/network/DB/services.
+
+> #1069 published-parent refresh 2026-09-28: normal merge e8f05dbd preserves
+> both doc histories and exact final worker/source-test bytes. All 220 offline
+> worker/SSH/task/capture/spool/watchdog/plan cases pass42.00s, including real
+> owned-child cleanup and synthetic capture proofs; no network/DB/services.
+> Original runtime1986d671 retained. Actual #1068 squash-main synchronization
+> and fresh publication/review remain required; root owns remote operations.
+
+> #1069 local parent propagation 2026-09-28: merged final worker90026032,
+> retaining both histories and exact worker/source-test bytes. Eleven real
+> spawned SSH-capture fixture cases pass4.85s; callers use0.2s grace or default,
+> compatible with new0.01 minimum. Worker lifetime SIGINT latency contract
+> retained. No remote/service/network/DB changes. Original runtime1986d671
+> remains resume point; actual-main sync and fresh review remain root gates.
+
+> Current #1069 checkpoint, 2026-09-28: normal parent merge 005e8d83 retains
+> worker fixes 86c69e39 and SSH identity guard e22ae27c byte-for-byte. Combined
+> 144 cases pass in 18.35s, including real child success/corruption/read-block/
+> close-block with independent filesystem digest and process cleanup checks.
+> Initial command used nonexistent test_runtime_ssh_task.py and executed no
+> tests; corrected test_runtime_ssh_capture.py run above is the actual evidence.
+> Local preparation only; wait #1068 actual main and fresh exact-head gates.
+
+>1069 local refresh2026-09-27: live source87f9fa72 normally merged prepared
+>1068 parent3244843d as4020bb69. Three doc conflicts retained both histories;
+>worker cleanup and SSH explicit-key authentication source/tests equal parent.
+>114 offline worker/SSH/capture/spool cases pass17.95s, including actual child
+>completion/corruption/read-timeout/close-timeout and independent sha256sum.
+>Every owned lifecycle child absent from procfs and active_children after reaping;
+>close timeout can retain a complete final file, so status is not spool state.
+>Absolute remote path guard removal fails DID NOT RAISE ValueError; restored/cmp.
+>Ruff clean. No live network, service/DB/snapshot operations, push or retarget.
+>Await actual parent/main synchronization and fresh exact-head CI/review plus
+>individual approval; original runtime roadmap preserved after consolidation.
+
+> Current #969 checkpoint 2026-09-28: normal integration of actual worker
+> main4de6f07e preserves both document histories and exact Node/PyYAML/CI
+> bytes6f423762; worker source/tests equal main. Root99node/watchdog/plan/
+> real-child worker cases pass34.80s. Prior actual binary and restored failing
+> pin mutation apply to unchanged files. Fresh exact-head CI/review required.
+> Runtime resume1986d671 and bounded queue authorization remain unchanged;
+> NEVER MERGE, held release956, services and production remain excluded.
+
+> Current #969 checkpoint 2026-09-28 after watchdog merge ec8ec7ed: normal
+> integration preserves both documentation histories and exact Node/PyYAML/CI
+> source and test bytes from ea5f2ab3. Root54node/watchdog/plan cases pass1.33s.
+> Earlier actual22.23.2 two-path proof and restored failing old-pin mutation
+> apply to identical files. Publish for new exact-head review/CI, then owner-
+> authorized current-queue merge gates. No service/install/production action.
+> Original runtime1986d671 retained; NEVER MERGE and held release956 excluded.
+
+> Current #969 checkpoint 2026-09-28: normal integration of main 1f4a388d
+> preserves both histories and the exact Node pin/PyYAML declaration. Six
+> node/plan contracts pass in 0.30s. Actual isolated binary reports v22.23.2
+> via --version and 22.23.2 via process.versions.node. Restoring old22.13.1
+> fails the frontend engine-floor guard; restored/cmp. No npm installation,
+> build, browser, system toolchain, dependency lock or service change. Root
+> owns publication and final review/merge gates. Runtime resume1986d671 and
+> dependency consolidation remain current; older checkpoints are historical.
+
+> Node pin slice follow-up (Astra, 2026-09-08): PR #969 review identified
+> PyYAML as an undeclared direct test dependency despite green CI. Declared
+> PyYAML==6.0.3 in requirements-dev and added a declaration contract. Validate
+> with the isolated agent venv; no service environment changes.
+
+> Current #1068 checkpoint 2026-09-28: #965 merged ec8ec7ed; normal main sync
+> 9fb9d3db retains both document histories and worker/source test bytes90026032.
+> Root independently passed159cases37.50s before sync and207worker/SSH/spool/
+> capture/watchdog cases37.06s after sync. SIGINT lifetime and0.01minimumgrace
+> contracts below are current; prior narrower deferral notes are historical.
+> Publish for fresh exact-head CI/review; all five outstanding findings need
+> evidence-backed replies. Owner's current-queue exception remains bounded;
+> original runtime1986d671, NEVER MERGE, release956 and services stay excluded.
+
+> #1068 lifetime ownership correction 2026-09-28: fresh review reproduced tiny
+> positive grace leaving an owned child, a second-getsignal cleanup transition,
+> and dropped custom SIGINT side effects when launch also failed. Install one
+> callable-SIGINT deferrer before any child exists and retain it through close;
+> replay the restored handler even after an operation error, preserving that
+> error if the handler also raises. SIGINT cancellation is deliberately delayed
+> up to timeout plus shutdown, coalesced to one callback; no immediate promise.
+> Require shutdown_grace >=0.01 before spawning, and always attempt each phase's
+> stopping signal before its elapsed budget limits waiting. OS inability to reap
+> still raises RuntimeError; no absolute startup/kernel bound or service claim.
+> Final 159 combined cases pass37.24s, including45real-child worker cases and
+> 114offline SSH/capture/spool cases. Real SIGINT during join tests default,
+> custom-return and SystemExit policies with/without original operation errors;
+> procfs/active_children and closed handles prove ownership release. Replacing
+> BaseException cleanup handling with Exception fails3 SystemExit cases; removing
+> lifetime deferral fails actual spawn-window ownership. Restored/cmp each time;
+> deliberate-failure fixture cleanup reaped its own children. CodeQL663's broad
+> catch is intentional deferred cancellation, not suppression; CodeQL662's
+> cleanup_complete variable is removed. No remote/service/network/DB operation.
+> Original runtime1986d671 and previous worker fixes remain preserved. Root
+> owns publication, fresh exact-head review and merge gates.
+
+> #1068 root-review follow-up, 2026-09-28: reproduced false unreaped error for
+> an already-finished real child with accepted grace=1e-20, and real SIGINT in
+> cleanup clock/loop control bypassing reaping. Status is now observed before
+> expiry checks; callable SIGINT deferral covers the entire cleanup ownership
+> scope including exitcode and handle close. Handler replay happens restored and
+> only after cleanup; original parent errors retain precedence. Custom, ignored
+> and SystemExit handlers are verified at close. Both mutations fail as expected,
+> restored/cmp; final 146 combined cases pass in 20.51s including 32 worker cases.
+> Ruff/whitespace clean. SIGKILL/default SIGTERM, arbitrary injected CPython
+> exceptions and uninterruptible OS waits remain outside the guarantee. No
+> remote/service/SSH changes. Supersedes the narrower startup-only deferral below.
+
+> Owner exception recorded 2026-09-28: the live message explicitly approved
+> #1067, then instructed continued merging of the remaining current PR queue
+> without repeated permission prompts when reviewed, corrected and green.
+> Eligible IDs: #963, #964, #965, #966, #969, #979, #1027, #1066, #1068-#1075,
+> #1077. Exact-head CI, addressed review findings and the prescribed merge cycle
+> remain mandatory. Excludes NEVER MERGE #924-#943/#967, held #956, services and
+> production. This is a bounded owner exception, not standing authorization for
+> unrelated future PRs; it does not change the repository's general policy.
+
+> #1068 interruption repair, 2026-09-28: real spawned children reproduced leaks
+> from kill/is_alive interruptions and actual SIGINT after OS spawn before
+> CPython attaches Process._popen (three failures; fixtures forcibly cleaned up).
+> Main-thread callable SIGINT handlers are temporarily deferred until ownership
+> exists, then restored before delivery; ignored/custom behavior and child masks
+> are preserved. Both escalation phases now retry all operations within bounded
+> grace deadlines. Persistent status/kill failures raise truthful unreaped errors.
+> Original parent errors still win after successful cleanup. Regression mutations
+> repeat all three failures; restored/cmp. Final 140 focused tests pass in 17.04s,
+> including 26 worker cases; Ruff and whitespace clean. Procfs and active_children
+> independently confirm child cleanup. No real SSH, service or remote writes.
+> Arbitrary exceptions injected inside private CPython startup and uninterruptible
+> OS waits are not claimed safe/bounded. Propagate this repair into descendants
+> before their final publication; original runtime roadmap remains unchanged.
+
+> Final main synchronization 2026-09-28: #1067 merged 1f4a388d, reviewed tree
+> equality verified. Normal main merge c99badb6 preserves worker backports and
+> final SSH identity. Repeat combined gate: 133 passed in 13.69s. Publish #1068
+> against main for fresh exact-head CI/review under owner's autonomous green
+> queue authorization. No service activation, production or snapshot changes.
+
+> Current #1068 checkpoint, 2026-09-28: final reviewed #1067 e22ae27c merged
+> normally as eed58f6c; both document histories preserved. Worker source/tests
+> remain identical to preserved 86c69e39; SSH source/tests equal e22ae27c.
+> Combined 133 cases pass in 14.44s, including real spawned-child completion,
+> failure, parent/cleanup interruption and SIGTERM refusal. Timeout observations
+> 2.004s/2.204s; procfs and active_children both confirm cleanup. Ruff clean.
+> Prior seen-failing late-observer mutation remains applicable to identical
+> worker bytes. Await actual #1067 main integration, then rerun/publish/review.
+> Owner's bounded queue exception is recorded above; no services enabled.
+
+>1068 refresh checkpoint2026-09-27: started from preserved local86c69e39,
+>NOT obsolete remote69a0ef29; normally merged reviewed parent1067 db7f3888
+>as99f2161c. Both doc histories retained, worker/source test bytes unchanged.
+>92 offline worker/SSH/capture/spool/integrity cases pass12.33s. Actual spawned
+>children complete/fail/time out and are absent from both procfs and active_children;
+>SIGTERM-resistant children are killed/reaped even when cleanup joins raise.
+>Actual Paramiko RejectPolicy test opens no network connection; capture proof
+>uses a local socket pair. Restoring late-observer timeout bug fails two cases
+>(timed_out instead of completed/failed); restored/cmp. No remote pushes, services,
+>live SSH, DB or snapshot operations. Await parent approval/actual main sync and
+>fresh exact-head CI/review. Original runtime plan preserved after consolidation.
+
 
 > #965 warning-transition delivery repair, 2026-09-28: review reproduced a
 > delivered warn -> unknown -> warn being suppressed forever by notified_level.
@@ -480,6 +861,94 @@ both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04p source stability parent refresh — 2026-09-28
+
+Local normal merge of reviewed capture parent bda56937 into #1071 preserves
+both documentation histories, worker interruption/late-exit fixes, strict SSH
+authentication and explicit-key-only loading (no certificate sidecars).
+160 focused offline cases pass in 25.71s, including actual spawned children,
+filesystem publication and installed Paramiko transport seams. Growth, handle
+mtime drift and named-path drift fail before publication; procfs and active
+children independently confirm reaping. Successful bytes agree with sha256sum.
+Disabling EOF metadata verification makes all three drift cases publish and
+fail; restored file compares byte-for-byte with its backup and all three pass.
+Ruff and whitespace checks pass. No real SSH, service, DB or remote PR changes.
+Equal metadata still does not prove producer closure; trusted completion and
+immutable digest remain activation gates. Next: publish/review this refreshed
+slice after its parent merges, then continue the original runtime plan.
+
+### R04p remote metadata stability guard — 2026-09-20
+
+Completion investigation: STATS_READY is emitted on intermission (default send
+delay zero), whereas checked-in stats writer delays SaveStats by3000ms and also
+has a ShutdownGame path. Generic Stats saved log has no filename/digest; deprecated
+on_created notifier merely sleeps3s. None establishes durable exact-file closure.
+Executed synthetic local proof: path stat/open-handle fstat and two hashes agree
+while writer remains open, then append changes7bytes to18. No live-server claims.
+Before source-side expansion, ask owner whether to develop an offline producer
+completion protocol (recommended, no deploy) or keep source frozen and continue
+other runtime work with this activation gate unresolved. Do not substitute a
+delay heuristic. Detailed research/proof stay local, no game/Lua/service changes.
+
+Discovery: checked-in c0rnp0rn8.lua SaveStats writes directly to the final stats
+name (FS_WRITE, header/player writes, close); legacy SSHHandler uses sftp.get.
+This is code evidence, not verification of deployed Lua or remote corpus. Neither
+path supplies an immutable snapshot manifest. Keep trusted source identity and
+producer completion as activation gates; equal metadata does not prove closure.
+SSHCaptureTask now requires regular-file mode/size/mtime from lstat before open,
+expected size agreement, and matching handle/path metadata before reading and
+again at EOF BEFORE local publication. Missing metadata fails closed. Paramiko
+stat/lstat semantics checked against official SFTP API documentation.
+127 combined tests pass. Real spawned task/filesystem with offline SFTP seam
+rejects growth, handle mtime drift and named-path drift without publishing final;
+rejects symlink/directory/missing fields/wrong size before opening remote file.
+Mutation disabling EOF verification publishes invalid final and fails all three
+drift cases; restored/cmp. Ruff/whitespace clean. No actual SSH or service changes.
+Limitations: no inode identity, writer lock, same-size/same-mtime detection or
+parent-path symlink protection. Digest and immutable-source preconditions remain.
+#1070 reported checks green, no inline findings at refresh, no merge permission.
+Next: source completion/manifest contract and verified importer composition;
+original runtime-first/new-site audit/reversible dev sequence remains unchanged.
+
+### R04o supervised capture reconciliation — 2026-09-20
+
+Normal ancestry merge combines #1069 with #1064; documentation conflicts retain
+both tracks. capture_ssh_once inspects first, skips match/conflict without spawn,
+otherwise supervises one SSH task and inspects again only after the child is
+reaped. Result preserves observed content and child outcome independently:
+timed_out+match is possible and is not converted into worker success. No source
+ack, deletion, retry loop, import or service activation. Inspection remains a
+byte-bounded local filesystem operation outside the child deadline; no overall
+wall-clock bound is claimed. Caller must keep private spool/snapshot immutable.
+117 combined tests pass. Real child/filesystem with offline SSH seam proves
+retry after corruption/interrupted read succeeds without touching orphan parts;
+retry after close timeout reuses verified final without a new child. Existing
+conflict remains unchanged. Disabling preinspection short-circuit fails two
+tests with Existing content must not spawn capture; restored/cmp, Ruff clean.
+#1069 all reported checks green; no individual merge permission inferred.
+Next trusted source metadata/discovery and integration with verified importer;
+single-writer handoff/dev failure matrix remain gates. New-site audit follows
+runtime completion as originally planned; production remains untouched.
+
+### R04n concrete SSH capture task — 2026-09-20
+
+On #1068: picklable SSHCaptureTask carries only explicit configuration into the
+spawned worker. Opens SFTP/file there, streams through existing size/SHA/EOF
+publication, closes file before session, never deletes/acknowledges the source.
+Absolute canonical remote path and absolute local spool required. Caller still
+supplies trusted immutable source metadata; no remote discovery/hash guarantee.
+97 combined tests pass, including real spawned-task/filesystem proofs with an
+offline connection seam: successful bytes independently checked by sha256sum,
+corruption rejected, blocked read terminated leaving only a .part, blocked close
+terminated with a complete final retained. Both terminated children confirmed
+absent by procfs and active_children. No actual SSH/network proof is claimed.
+Removing the absolute remote path guard fails DID NOT RAISE; restored/cmp.
+Next compose retry reconciliation with supervised capture and verified import;
+trusted source identity, bounded discovery/retention, single-writer handoff and
+owner-approved dev failure matrix remain activation gates. Original sequence:
+runtime first, then new-site/design/security audit, then reversible dev cutover.
+No merge permission inferred, no service/live database/production changes.
+
 ### Consolidation: preserve Node pin #969 — 2026-09-20
 
 Normal merge of current main retains shared exact .nvmrc CI inputs and explicit
@@ -489,6 +958,49 @@ release audit, frontend build or system toolchain upgrade. Fresh CI/review requi
 No merge permission for #969; only #1076/#1057/#962 currently authorized. Original
 runtime resumes after this consolidation detour at #1077 completion delivery and
 snapshot sealing, followed by new-site audit and approved reversible DEV cutover.
+
+### R04m consolidation safety backport — 2026-09-25
+
+Locally backported the exact worker and regression-test changes from #1077
+c015270b into #1068 before its eventual merge. Five regression cases fail the
+old implementation: late observation misclassifies a finished child, and cleanup
+interruptions can abandon a child or replace the original parent interruption.
+94 worker/SSH/spool/integrity/capture/plan tests now pass; Ruff/whitespace clean.
+Real spawned children checked against procfs and active_children; Process objects
+closed. SIGTERM/SIGKILL timeout cases measured 2.003s/2.205s including cold spawn
+with a 2s deadline and 0.2s grace. No hard OS scheduling bound is claimed.
+Late-clock mutation fails both finished-child cases, restored with cmp proof.
+No network, DB, services or production changes. Owner reported unwanted GitHub
+review charges: keep this commit local, no push or automated review request.
+#1068 still requires PR-specific merge approval and fresh merge-base/CI review.
+Do not merge the whole #1077 descendant into this prerequisite. Original plan
+continues with trusted completion delivery/immutable sealing at #1077, then the
+new-site audit and separately approved reversible DEV cutover.
+
+### R04m disposable capture worker supervision — 2026-09-20
+
+Contract: explicitly spawned capture-only child, monotonic operation deadline,
+terminate/join then kill/join escalation, result only after reaping. Completed,
+failed and timed_out remain separate; parent cancellation also enters cleanup.
+No DB pool/shared queues/locks/descendant processes in tasks. No task return
+payload or exception text crosses process boundary. Forced stop can skip finally
+and leave partial/complete spool state, so retain source and reconcile on retry.
+Startup counts against deadline but OS startup/uninterruptible kernel waits
+cannot be hard-bounded; cleanup has two bounded grace windows and raises if it
+cannot reap. This is an internal primitive, not SSH activation or service control.
+Prove real child success/failure, blocked task and SIGTERM refusal with procfs
+and active-child checks before integrating a transport-specific task.
+Verified 86 combined worker/SSH/capture/spool tests pass. Actual spawned children
+complete/fail, time out under SIGTERM and escalate after SIGTERM refusal; exit
+codes -15/-9 agree with absence from procfs and active_children. Parent join
+interruption also reaps, unpicklable startup leaves no task child. Two runs of
+timeout proofs measured about 2.00s/2.20s with 2s budget and 0.2s grace (cold
+spawn included). Mutation reporting timeout as completed fails both cases;
+restored/cmp. Ruff/whitespace clean. No remote connection or service/DB changes.
+Python termination semantics verified against official multiprocessing docs;
+do not use this boundary for transactions/shared locks or claim hard OS bounds.
+
+
 ### R04l explicit SSH session ownership — 2026-09-20
 
 On #1063: neutral RuntimeSSHConfig and caller-driven open_runtime_sftp context.
@@ -560,6 +1072,27 @@ Verified53 combined capture/spool/integrity cases pass. Real local sockets prove
 success and stalled-EOF cleanup. Disabling post-read deadline fails DID NOT RAISE;
 restored/cmp. Ruff clean. No remote SSH, database or service changes. Next integrate
 connection lifecycle and explicit source identity/reconciliation before activation.
+
+### R04i read-only spool reconciliation — 2026-09-20
+
+Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
+name stability checks before conflict. All 49 filesystem tests pass. Restoring
+the early return fails replacement-after-open regression; restored/cmp. Ruff
+clean. Review 4056550740 case-count spacing corrected. Fresh CI required.
+
+Contract: inspect a caller-retained immutable private spool entry against required
+size and SHA-256, returning missing/match/conflict. Missing is only final-entry
+ENOENT; directory/access/I/O failures propagate. Never delete/replace files or
+write DB markers. Open no-follow/nonblocking, require owned regular0600 file,
+bound reads and compare descriptor/name identity before certifying content.
+Match does not certify durability after failed fsync or import completion.
+This is a primitive, not automatic retry policy, full source identity or transport
+activation. Verify actual post-link-fsync failure, conflicts and replacement race.
+Verified 48 combined filesystem cases pass: actual directory-fsync failure still
+permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
+entries rejected and I/O errors propagate. Removing digest and identity guards
+fails 2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
+retry scheduling or make ambiguous durability safe for source deletion.
 
 ### R04g capture integrity contract — 2026-09-20
 
