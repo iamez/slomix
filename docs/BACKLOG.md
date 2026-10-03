@@ -62,6 +62,25 @@
   and restores/cmp. PG stopped. Next connection/source identity and review;
   no deployment, services, source deletion or automatic scheduler.
 
+- (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
+  and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual
+  child lifecycle and independent file/hash/reaping evidence. EOF guard mutation
+  fails all three drift scenarios; restored/cmp and three passes. No remote
+  writes or activation; trusted completion remains a gate. Ready for parent-led
+  publication/review, not a claim of operational runtime completion.
+
+- (Astra, 2026-09-20) Source-completion investigation: round notification can
+  precede file write; generic saved log and delayed file-created notifier are not
+  exact durable receipts. Local runtime counterexample confirms equal metadata
+  and hashes while writer remains open (7bytes then18). Next owner decision on
+  offline source-producer protocol vs retaining source freeze; no deployment.
+
+- (Astra, 2026-09-20) R04p adds fail-closed source metadata checks before read
+  and before local publication. 127 combined cases pass; disabling EOF guard
+  fails three real-child/offline-transport proofs, restored/cmp. Checked-in Lua
+  writes final name directly, so stable metadata is NOT proof of producer close.
+  Trusted completion/manifest remains a gate; no remote/service changes.
+
 - (Astra, 2026-10-03) Prepared1070 on reviewed1069, preserving source and
   both documentation histories.68tests pass; two deliberate guard failures
   observed then restored/cmp. Await actual parent merge, no live service action.
