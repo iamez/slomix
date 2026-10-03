@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Codex, 2026-10-03) #966 repairs four fresh findings: diff algorithm pinned,
+  remote diagnostics withheld, legacy body generator retired, partial remote
+  pairs rejected before publication. Nine guard mutations fail/restored/cmp in
+  actual disposable Git repos. Existing complete pairs are observed, not locked;
+  no same-OID lease guarantee.49 CLI/plan cases pass13.31s, Ruff/whitespace clean;
+  main19e65354 sync pending; root owns
+  publication. Original runtime roadmap and real review refs remain untouched.
+
 - (Astra, 2026-09-28) #966 three configuration findings reproduced/fixed:
   empty branch enumeration, actual push-destination preflight, deterministic
   UTF-8 commit objects. Reject multiple push URLs before refs; preserve existing

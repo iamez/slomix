@@ -1,5 +1,22 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #966 review repair checkpoint (2026-10-03): pin Myers in both partition and
+> generated-tree validation; actual fixture differs by 72 versus 104 lines under
+> Myers/Patience and previously changed an 8000-line part into 7928 + 104.
+> Capture remote Git output on success and failure, exposing only operation and
+> exit status: URLs, transport stderr and hook output may contain credentials.
+> Retire the obsolete area-body generator explicitly; historical bodies remain.
+> Reject partial remote pairs before local ref writes or publication. A same-OID
+> push can omit its lease check; do not claim this locks an existing pair.
+> Complete absent pairs retain atomic create-only leases; complete existing pairs
+> are observations, not protection against subsequent unrelated remote writers.
+> Nine deliberate guard regressions fail in disposable Git repos, restored/cmp.
+> Includes races after ls-remote changing either existing member and real hooks
+> emitting a synthetic credential marker on both successful and rejected pushes.
+> All 49 CLI/plan cases pass13.31s, Ruff and whitespace clean. Normal
+> main19e65354 integration pending; no real snapshot cut,
+> remote publication, service action or production change. Root owns fresh gates.
+
 > #966 configuration review checkpoint (2026-09-28): disposable Git repos
 > reproduced detached/no-local-branch failure, fetch/push URL mismatch, and
 > commitEncoding-dependent false immutable conflicts. Enumerate with for-each-ref;

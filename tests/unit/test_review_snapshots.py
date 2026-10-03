@@ -129,6 +129,121 @@ def test_commit_encoding_does_not_change_immutable_snapshot(repo):
     assert snapshots(repo) == expected
 
 
+def test_diff_algorithm_does_not_change_snapshot_partition(repo):
+    old = list("aacbbbaeaedaaabbeeaebedbdecabdccbbcaadaccecadeadaececebaabcabadcdcbccbcaebebbddc")
+    new = list("ebcabacdcabecbdddbcbbeecededcbbedaaabbdeaddedeceaaeccacdbdacebeaceebbcbeeaecdaac")
+    old[10] = new[60] = "unique-anchor"
+    commit(repo, {"z.py": "\n".join(old) + "\n"})
+    base = git(repo, "rev-parse", "HEAD")
+    commit(repo, {"z.py": "\n".join(new) + "\n"})
+    counts = {}
+    for algorithm in ("myers", "patience"):
+        row = git(repo, "diff", f"--diff-algorithm={algorithm}", "--numstat", base, "HEAD")
+        counts[algorithm] = sum(map(int, row.split()[:2]))
+    assert counts["myers"] < counts["patience"], counts
+    commit(repo, {"a.py": "filler\n" * (8000 - counts["myers"])})
+    git(repo, "config", "diff.algorithm", "myers")
+    first = run(repo, "--base", base, "cut")
+    expected = snapshots(repo)
+    assert "files=2 lines=8000" in first.stdout
+    git(repo, "config", "diff.algorithm", "patience")
+    second = run(repo, "--base", base, "cut")
+    assert "files=2 lines=8000" in second.stdout
+    assert snapshots(repo) == expected
+    head = next(sha for ref, sha in (line.split() for line in expected.splitlines())
+                if ref.startswith("refs/heads/review/"))
+    rows = git(repo, "diff", "--diff-algorithm=myers", "--numstat", f"{head}^", head)
+    assert sum(int(n) for row in rows.splitlines() for n in row.split()[:2]) == 8000
+
+
+def test_failed_remote_probe_does_not_expose_destination_credentials(repo):
+    commit(repo, {"a.py": "value = 1\n"})
+    marker = "synthetic-marker-only"
+    destination = f"file://test:{marker}@localhost/nonexistent-review-fixture"
+    git(repo, "remote", "set-url", "--push", "origin", destination)
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0
+    assert marker not in result.stdout + result.stderr
+    assert destination not in result.stdout + result.stderr
+    assert "ls-remote failed" in result.stderr
+    assert snapshots(repo) == ""
+
+
+@pytest.mark.parametrize("reject", [False, True])
+def test_remote_push_diagnostics_do_not_expose_credentials(repo, reject):
+    commit(repo, {"a.py": "value = 1\n"})
+    marker = "synthetic-marker-only"
+    remote = repo.parent / "remote.git"
+    destination = f"file://test:{marker}@localhost{remote}"
+    git(repo, "remote", "set-url", "--push", "origin", destination)
+    hook = remote / "hooks/pre-receive"
+    hook.write_text(f"#!/bin/sh\necho '{marker}' >&2\nexit {int(reject)}\n")
+    hook.chmod(0o755)
+    result = run(repo, "cut", "--push", check=False)
+    assert bool(result.returncode) == reject
+    assert marker not in result.stdout + result.stderr
+    assert destination not in result.stdout + result.stderr
+    assert bool(snapshots(remote)) != reject
+
+
+@pytest.mark.parametrize("present", ["review-base", "review"])
+@pytest.mark.parametrize("race", [False, True])
+def test_partial_remote_pair_is_rejected_before_any_publication(repo, monkeypatch, present, race):
+    commit(repo, {"a.py": "value = 1\n"})
+    run(repo, "cut")
+    expected = dict(line.split() for line in snapshots(repo).splitlines())
+    ref = next(ref for ref in expected if ref.startswith(f"refs/heads/{present}/"))
+    git(repo, "push", "origin", f"{expected[ref]}:{ref}")
+    before = snapshots(repo.parent / "remote.git")
+    for local_ref in expected:
+        git(repo, "update-ref", "-d", local_ref)
+    calls = (repo.parent / "hook-calls").read_text()
+    if race:
+        real_git = shutil.which("git")
+        remote = str(repo.parent / "remote.git")
+        ancestor = git(repo, "rev-parse", "v1.39.0")
+        wrapper_dir = repo.parent / "race-bin"
+        wrapper_dir.mkdir()
+        wrapper = wrapper_dir / "git"
+        wrapper.write_text(
+            f"#!{sys.executable}\nimport os, subprocess, sys\n"
+            f"real_git = {real_git!r}\n"
+            f"if sys.argv[1:] == ['ls-remote', '--heads', '--', {remote!r}]:\n"
+            "    result = subprocess.run([real_git, *sys.argv[1:]], capture_output=True)\n"
+            f"    subprocess.run([real_git, '--git-dir', {remote!r}, "
+            f"'update-ref', {ref!r}, {ancestor!r}], check=True)\n"
+            "    sys.stdout.buffer.write(result.stdout)\n"
+            "    sys.exit(result.returncode)\n"
+            "os.execv(real_git, [real_git, *sys.argv[1:]])\n"
+        )
+        wrapper.chmod(0o755)
+        monkeypatch.setenv("PATH", f"{wrapper_dir}{os.pathsep}{os.environ['PATH']}")
+        before = f"{ref} {ancestor}"
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0, "partial pair was completed without an atomic check of its existing member"
+    assert "partial remote snapshot pair" in result.stderr
+    assert snapshots(repo) == ""
+    assert snapshots(repo.parent / "remote.git") == before
+    assert (repo.parent / "hook-calls").read_text() == calls
+
+
+def test_retired_body_generator_fails_without_overwriting_historical_bodies(tmp_path):
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    script = scripts / "review_slice_bodies.py"
+    shutil.copyfile(ROOT / "scripts/review_slice_bodies.py", script)
+    (scripts / "review_slices.sh").write_text(
+        "#!/bin/sh\nprintf '01-proximity-spiderweb-lua-p001: files=2 lines=3\\n'\n"
+    )
+    output = tmp_path / "docs/review/SLICES.md"
+    output.parent.mkdir(parents=True)
+    output.write_text("historical body sizes must survive\n")
+    result = subprocess.run([sys.executable, str(script)], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "review body generator retired:" in result.stderr
+    assert output.read_text() == "historical body sizes must survive\n"
+
+
 @pytest.mark.parametrize("raced", ["review-base", "review", "both"])
 def test_remote_creation_race_cannot_overwrite_or_partially_publish(repo, monkeypatch, raced):
     commit(repo, {"a.py": "value = 1\n"})
@@ -231,8 +346,8 @@ def test_real_secret_scanner_refuses_pair_atomically(repo):
     commit(repo, {"bad.py": "connect()\n"})
     result = run(repo, "--base", "archived-baseline", "cut", "--push", check=False)
     assert result.returncode != 0
-    assert "hardcodes a credential" in result.stderr
-    assert "refusing to publish" in result.stderr
+    assert "git push failed" in result.stderr
+    assert "remote diagnostics withheld" in result.stderr
     assert "review" not in git(repo, "ls-remote", "origin")
     assert (repo.parent / "hook-calls").read_text() == "called\n"
 

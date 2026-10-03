@@ -1,5 +1,19 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · Snapshot partition identity includes the diff algorithm.**
+  Pin Myers for both planned numstat and generated-tree validation; otherwise
+  the same source/base pair can produce different boundaries and false conflicts.
+  Consumer formats must migrate with producers: the old area-body generator
+  silently converted immutable -pNNN measurements to zeros and is now retired.
+
+- **2026-10-03 · Remote Git diagnostics and partial pairs fail closed.**
+  Capture stdout/stderr on remote operations, including successful pushes:
+  transport and hook messages may echo URL credentials. Report operation/exit
+  status only; this deliberately sacrifices raw hook diagnostics. Reject partial
+  remote pairs before any local refs or push: Git may elide an unchanged ref and
+  its lease check. Create absent pairs atomically with absence leases; existing
+  complete pairs are only observed, never guaranteed against external writers.
+
 - **2026-09-28 · Snapshot identity and remote admission depend on Git configuration.**
   show-ref exits1 for an empty branch set; for-each-ref gives a valid empty set.
   Origin's fetch URL need not be its push URL: resolve one push destination and

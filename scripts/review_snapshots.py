@@ -4,6 +4,9 @@
 The caller supplies area pathspecs. Every invocation pins both commits once,
 preflights the entire selection, and uses a private index to construct trees.
 Historical review refs are never touched. Existing content conflicts fail closed.
+Remote publication creates complete absent pairs atomically; partial pairs are
+rejected. Already complete pairs are observed only, not locked against other writers.
+Remote command diagnostics are withheld because Git/hooks can echo credentials.
 """
 from __future__ import annotations
 
@@ -21,6 +24,15 @@ MAX_LINES = 8000
 
 def git(*args, data=None, env=None):
     return subprocess.check_output(["git", *args], input=data, env=env)
+
+
+def remote_git(command, *args):
+    """Remote output (even on success) can contain credentials from its URL/hooks."""
+    result = subprocess.run(["git", command, *args], capture_output=True)
+    if result.returncode:
+        raise ValueError(f"git {command} failed (exit {result.returncode}); "
+                         "remote diagnostics withheld because they may contain credentials")
+    return result.stdout
 
 
 def oid(ref):
@@ -43,7 +55,7 @@ def partition(base, source, areas, exclusions):
         specs = specs.split()
         if not any(positive_pathspec(spec) for spec in specs):
             raise ValueError("area requires a positive pathspec")
-        records = git("diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+        records = git("diff", "--diff-algorithm=myers", "--no-ext-diff", "--no-textconv", "--no-renames",
                       "--numstat", "-z", base, source, "--", *specs,
                       *exclusions).split(b"\0")
         chunks, current, total = [], [], 0
@@ -95,7 +107,7 @@ def positive_pathspec(spec):
 
 def validate_snapshot(tree, source, paths):
     """Index D/F replacement can change unselected paths: verify actual trees."""
-    records = git("diff", "--no-ext-diff", "--no-textconv", "--no-renames",
+    records = git("diff", "--diff-algorithm=myers", "--no-ext-diff", "--no-textconv", "--no-renames",
                   "--numstat", "-z", tree, source).split(b"\0")
     actual, lines = set(), 0
     for record in filter(None, records):
@@ -197,8 +209,15 @@ def main():
     if args.push and refs:
         destination = push_destination()
         remote = {ref: sha for sha, ref in
-                  (line.split() for line in git("ls-remote", "--heads", "--", destination).decode().splitlines())}
+                  (line.split() for line in remote_git("ls-remote", "--heads", "--", destination).decode().splitlines())}
         assert_compatible(refs, remote)
+        ordered = list(refs)
+        for offset in range(0, len(ordered), 2):
+            pair = ordered[offset:offset + 2]
+            if sum(ref in remote for ref in pair) == 1:
+                # Git can elide a same-OID push, including its lease check.
+                # Never complete a partial pair against an unchecked member.
+                raise ValueError("partial remote snapshot pair; publication blocked")
     creates = [f"create {ref} {sha}" for ref, sha in refs.items() if ref not in existing]
     if creates:
         git("update-ref", "--stdin", data=("start\n" + "\n".join(creates)
@@ -214,7 +233,7 @@ def main():
             if missing:
                 # Empty expected values are create-only compare-and-swap, never
                 # permission to overwrite. Preflight alone cannot exclude races.
-                git("push", "--atomic", *[f"--force-with-lease={ref}:" for ref in missing],
+                remote_git("push", "--atomic", *[f"--force-with-lease={ref}:" for ref in missing],
                     "--", destination, *[f"{refs[ref]}:{ref}" for ref in missing])
 
 
