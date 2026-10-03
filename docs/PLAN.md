@@ -1,5 +1,124 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1066 publication refresh 2026-10-03: normal main5e948f0b sync preserves
+> both histories and importer/parser source fromad9f590d/1a2dfb13. Root128
+> offline ingest/import/parser/spool/Node/plan cases pass1.36s. Fresh review/CI
+> required after publication. Prior SQL evidence remains historical; no PG
+> restart, application DB fallback, service action or merge approval inferred.
+
+> #1066 preservation refresh 2026-10-03: normal main194b1e6e merge retains
+> both histories and exact ingest/import/parser bytes1a2dfb13. Root128 offline
+> ingest/import/parser/spool/Node/plan cases pass1.51s. No new SQL claim: isolated
+> proof PG remains owner-operated and was not restarted. Preserve prior SQL
+> evidence separately; await final main sync and fresh exact-head review/CI.
+
+> #1066 current synchronization checkpoint (2026-09-28): normally merge actual
+> main4de6f07e after reviewed #1068 merge, retaining both document histories.
+> Import implementation/tests remain byte-identical to boundary repair1bd6e304;
+> worker implementation/tests remain byte-identical to main4de6f07e. Combined
+> 167 import/spool/parser/worker cases pass35.09s (including45 actual-worker
+> cases), Ruff/whitespace clean. This reruns the real filesystem midnight guard
+> alongside worker lifecycle proofs; PostgreSQL was not restarted or tested.
+> Root handles fresh exact-head publication/review. Original plan and all
+> service/production/NEVER MERGE restrictions remain unchanged.
+
+> #1066 boundary review follow-up (2026-09-28): real parser selection for
+> 2020-01-01-000500 R2 chooses 2019-12-31-235500 R1 across midnight. Both
+> import entry points now apply the same supported-calendar admission to that
+> dependency before canonical import; verified import reports capture=match,
+> dependency=invalid, terminal failed before R1 content inspection or DB calls.
+> Both real-filesystem regressions failed before repair; shared year-guard
+> mutation failed both again, restored/cmp. 122 focused tests pass (1.22s), Ruff
+> passes. Independent DBless runtime probe with actual parser and matching hash
+> returned that exact outcome; fixture retained outside git. No PostgreSQL run
+> after this guard: prior 199-case PG evidence predates it, proof service expired.
+> No service restart, deployment or remote write. Original runtime plan retained.
+
+> Current #1066 checkpoint 2026-09-28: #965 merged ec8ec7ed after its420-second
+> cycle; normal main sync 58626d92 preserves both document histories and every
+> import implementation/test blob from f8d8e849 (199-case actual-PG proof above).
+> After sync, 110 import/watchdog/plan cases pass1.20s; the actual PostgreSQL
+> invalid-name valid-payload case passes8.41s. Earlier mutation restored/cmp,
+> schema count zero/list empty before final isolated case; its cleanup succeeded.
+> Owner-started proof service subsequently reached its60-minute limit and now
+> reports Result=timeout. No restart or application DB fallback. Fresh exact-head
+> publication/review next; owner current-queue exception applies, all gates remain.
+> Original runtime resume1986d671, NEVER MERGE and held release exclusions hold.
+
+> #1066 follow-up 2026-09-28: fresh review found structural invalid names raised
+> from capture inspection before terminal filename admission. Reproduced with
+> actual PostgreSQL valid-payload fixture (ValueError), plus three unit cases.
+> Move shared structural/calendar validation before all file inspection. The
+> terminal failed result explicitly reports capture_status=None and dependency
+> status None: content was not measured, so never fabricate match/missing.
+> Root 199 cases including nine actual PostgreSQL scenarios pass in 81.01s.
+> Removing early validation reproduces actual SQL-scenario failure; restored/cmp.
+> Valid input still propagates genuine I/O/metadata errors. Fresh publication and
+> exact-head review required; original runtime 1986d671 and service limits hold.
+
+> #1066 review correction 2026-09-28: real PostgreSQL reproduced both retained
+> conflicting R1 import and valid-payload double-dot filename import. R2 now
+> requires trusted frozen ExpectedStatsIdentity metadata for its parser-selected
+> R1, inspected in the same private spool. capture_status remains the R2 state;
+> dependency_status separately reports unverified/missing/match/conflict (None
+> means not inspected, not_required means valid R1). No SQL/markers on blocked
+> dependencies. Directory/files must remain immutable; no authentication claim.
+> Importer-only shared filename/calendar admission precedes canonical dedup for
+> both halves. Publisher structural contract is unchanged. Terminal invalid
+> inputs return failed WITHOUT a processed marker; callers consume that result.
+> Correction to earlier proof: invalid-calendar tests used malformed payloads,
+> so they did not prove filename rejection. Valid duplicate payload actually
+> bypassed canonical validation and returned imported. New SQL proof rejects
+> invalid dates/times/0001/2019/2036 for both halves via direct and verified APIs;
+> supported 2020/2035 bounds remain covered. Retained conflict and invalid-name
+> cases have zero stats/events/markers, independently counted and listed.
+> Final 163 tests pass in 73.79s including nine actual isolated PG scenarios.
+> Dependency, structural and calendar mutations each fail; restored/cmp.
+> Initial corrected-code run had a mismatched success-log prefix only; fixed,
+> and this clean final run supersedes it. Schema cleanup count=0/list empty.
+> Call inventory: no production callers on main or local runtime integration;
+> selected-R1 verified calls must supply expected_r1 or fail closed. Existing
+> integration tests migrate to returned failed/no-marker semantics. Runtime
+> resume1986d671 preserved; root handles publication/review. No service action.
+
+> Final main synchronization 2026-09-28: #1067 merged 1f4a388d; normal merge
+> 86b83475 preserves both histories and verified-import code/test bytes from
+> 2050d487. Repeated expanded gate: 175 passed in 49.28s, including all seven
+> actual PostgreSQL scenarios plus offline SSH identity cases. Isolated service
+> identity reconfirmed; schema count zero and independent listing empty after
+> cleanup. Owner authorized autonomous reviewed/green queue merges; publish for
+> fresh exact-head gates. No application DB, service or production operations.
+
+>Current1066 SQL proof, 2026-09-28: owner-started isolated PostgreSQL verified by
+>systemd ExecStart and SQL data_directory; local socket only, no app DB fallback.
+>Clean sequential run:142 cases pass54.89s, including all7actual-PG scenarios.
+>Verified spool rejects missing/conflicting content and outside legacy R1, then
+>imports R1=3/R2=5/R0=8; repeat keeps rows/events/markers unchanged. Zero-delta,
+>late/deferred R1 and invalid calendar terminal failure also pass. Bypassing
+>content admission fails with FileNotFoundError; restored/cmp. First full run
+>overlapped the deliberate mutation and is NOT counted as final proof; the clean
+>sequential run above supersedes it. Both catalog count and schema listing show
+>no neutral_import_test schemas left. Publish for fresh exact-head CI/review;
+>no1066 merge approval, application DB or service operation by this agent.
+
+>Current1066 checkpoint2026-09-27: approved1065 merged9ef42671; actualmain now
+>normally integrated with source fixes/doc histories preserved.135local unit/
+>filesystem cases are the repeat gate. FullSQLproof still waits owner-started
+>isolated PostgreSQL; do not treat old PG proof as newhead evidence. No1066
+>push/merge permission or service action. Original runtime plan preserved.
+
+>1066 refresh checkpoint2026-09-27: normal merge of prepared1065 parent4f1c4a2b
+>as5e8b769d. Explicit conflict resolution preserves BOTH spool-only legacy-R1
+>isolation and already-merged2020-2035 calendar admission, including0001 terminal
+>failure proof. Startup test retains ambient SSH isolation; no old test restored.
+>54unit/filesystem/import-boundary cases pass3.70s and2.79s, Ruff clean.
+>Disabling spool-only manager guard fails DID NOT RAISE ValueError; restored/cmp.
+>Live PostgreSQL proof NOT repeated: owner-started isolated proof service reports
+>ActiveState=failed/SubState=failed with RuntimeMaxUSec=1h. Requested owner start;
+>no application DB fallback or service action taken. Do not call this full import
+>proof yet. Await1065 actual merge, final main sync and real PG proof before
+>publishing/fresh review. Original runtime roadmap preserved, no1066 approval.
+
 > #1071 actual-parent checkpoint 2026-10-03: #1070 merged194b1e6e at04:21:17Z
 > after owner confirmation and420s gates. Reviewed/squash treesfd38bcde match.
 > Normal actual-main merge retains every stability test and both histories;
@@ -482,6 +601,7 @@
 >Original runtime plan preserved; dependency consolidation only.
 
 
+
 >1064 restrictive-umask review2026-09-27: reproduced publication under0277
 >creating0400 successfully while reconciliation rejected its own output. Inspector
 >now accepts exact0400/0600 owner-readable private regular files without chmod;
@@ -750,6 +870,45 @@ both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04k verified spool to canonical import — 2026-09-20
+
+Review 4056749351: constructor flag allow_legacy_r1_fallback defaults True for
+legacy compatibility; verified runtime import requires literal False. Strict
+parser searches only R2's directory and rejects symlink/non-file R1 candidates
+in exact/same-day/midnight paths. Actual PG fixture has valid R1 only in cwd/
+local_stats and remains waiting with zero DB writes until published into spool.
+Re-enabling fallback mutates waiting into imported and fails the PG guard;
+restored/cmp. Review 4056749353 rejects '..' in waiting eligibility. Review
+4056750531 prose spacing corrected. Expanded 153 tests pass; small changed files
+lint clean, parser/manager diagnostics unchanged by code/message against parent.
+Disposable PG stopped. Caller still must guarantee retained immutable R1 content;
+this is directory isolation, not independent source digest verification for R1.
+
+SSH follow-up discovery: installed Paramiko from_transport calls invoke_subsystem,
+whose _wait_for_event invokes event.wait() without a timeout. Existing phase
+budgets therefore do not bound subsystem negotiation; retain the explicit worker
+deadline activation gate. #1067 checks all pass; no network/service activation.
+
+Integration branch combines #1065 capture/reconciliation and #1060 importer
+via normal ancestry merge; preserved both document histories, no code conflicts.
+New import_verified_file observes content before the dependency-aware importer:
+missing/conflict => no import_result or manager calls; match => canonical result
+kept separate from capture status. I/O/DB/cancellation propagate. Caller owns
+stable immutable spool, retained R1, source metadata and borrowed manager/pool.
+Local verification remains synchronous/byte-bounded, not time-bounded; dedicated
+ingestion process only. No locks against same-UID mutation, source deletion,
+connection lifecycle, scheduler or activation. Actual-PG composition must prove
+missing/conflict/waiting leave zero rows/events/markers, then R2-first import and
+repeat preserve differential, events and idempotence with Discord/setup blocked.
+Verified 137 combined unit/actual-PG cases pass. Real capture -> verified import
+proof has zero rows/markers/events before valid R1/R2 availability, then
+R0=8/R1=3/R2=5 and exactly two half events. Repeated capture does not consume
+source; repeated verified import is Already processed with unchanged counts.
+Bypassing conflict gate fails the actual-PG assertion, restored/cmp. New files
+Ruff clean. Imported foundation code byte-identical to both parent branches;
+only new composition/tests/docs added. Disposable PG stopped; no application
+DB/service or source transport activation. Fresh CI/review required.
+
 ### R04p source stability parent refresh — 2026-09-28
 
 Local normal merge of reviewed capture parent bda56937 into #1071 preserves
@@ -923,6 +1082,7 @@ Ruff and whitespace clean; external review/CI required. This composes publicatio
 and reconciliation, not the SSH connection owner or automatic retry scheduler.
 
 
+
 ### R04i read-only spool reconciliation — 2026-09-20
 
 Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
@@ -1021,6 +1181,176 @@ Runtime filesystem proof and size-guard mutation included; next integrate with
 bounded capture and explicit retry/reconciliation, preserving original plan.
 New-site/design/functionality/security audit remains after runtime completion,
 then owner-approved reversible dev transition; production unchanged.
+### Accepted delivery sequence — 2026-09-20
+
+Owner explicitly includes the new website/design in the final dev transition.
+First prove independent runtime capture/import/recovery; then audit new-site
+implementation against original design, functional journeys/data parity, auth
+and permissions/API security, mobile/accessibility/performance and absent/error
+states. Fix findings, integrate runtime+site, then owner-approved reversible dev
+cutover. Production remains frozen. Build/test success is not a website audit.
+
+### R04e dependency-aware import step — 2026-09-20
+
+Review4056385615 RCA: payload hash omits the header, so unchanged cumulative
+R2 equals R1. Scope canonical duplicate queries to the same filename round suffix
+in BOTH the neutral preflight and process_file; waiting bypass additionally
+requires a valid R2 source. Preserve legacy unscoped lookup for callers omitting
+filename. Actual PG zero-delta case: R1 retired => waiting/no R2 marker; restored
+=> R0=3/R1=3/R2=0 and two half events. Removing SQL half filter reproduces
+Skipped duplicate payload file and missing R2; restored/cmp. Same-half identity
+across different matches remains legacy payload-based behavior, not a complete
+source-identity guarantee. No historical data repair or application DB changes.
+66 combined unit/actual-PG tests pass; two waiting-gate mutations fail as well,
+restored/cmp. Changed small modules Ruff clean; manager diagnostics identical
+to parent20-code/message multiset. Disposable PG stopped; fresh CI required.
+
+Review4056323000: validate actual calendar/time before dependency waiting,
+not only regex shape.23 unit/PG cases pass, including impossible timestamp
+through canonical failure, leap-day and midnight boundaries. Skipping calendar
+validation fails7 cases; restored/cmp. Ruff clean; disposable PG stopped.
+
+Review4056294780/4056294781: preserve canonical renamed-payload deduplication
+when R1 is gone, via a public read-only manager preflight; malformed R2 names
+use canonical import/failure instead of waiting.14 unit/actual-PG cases pass:
+mirror gets a success marker without new rounds/events, malformed fixture gets
+a failed marker. Both guard mutations fail, restored/cmp. New modules lint
+clean; manager retains exactly its previous20 code/message diagnostics. Isolated
+PG stopped after proof; no application DB/service changes. Fresh CI required.
+
+Review4056275060/4056275062 fixed: completed R2 remains imported after R1
+retention, and bare paths normalize before both lookups.12 unit/actual-PG cases
+pass; actual deferred scenario uses relative paths and then retires R1 before
+retry. Both removed guards fail their tests, restored/cmp. PG stopped. Lookup
+failure is not waiting/absence: processed-state errors propagate to caller.
+
+Verified:69 combined cases pass,0skips,2existingwarnings. Actual-PG deferred-R1
+scenario has zero rounds/markers/events before R1 arrives, then R1=3/R2=5/R0=8
+and exactly2half-events with duplicate retry unchanged. Disabling dependency
+guard imports an orphan and fails waiting-state assertion; restored/cmp.
+Changed Python files lint clean; disposable PG stopped. Pending review/CI.
+
+Caller-driven step reuses canonical parser R1 lookup and process_file; missing
+R1 returns explicit waiting_for_r1 after a read-only processed-state check,
+without marker writes. Already-processed R2 remains successful if R1 was pruned.
+Bare relative paths normalize to absolute for both lookup and import. No scheduler,
+connection ownership change, automatic orphan repair or activation. Caller must
+provide immutable completed spool and retain R1 during parsing; dependency check
+does not solve concurrent file deletion/replacement or bound filesystem scans.
+Capture publication/retention and bounded-scan behavior remain separate gates
+before live use.
+
+### R04d neutral importer startup — 2026-09-20
+
+R1/R2 characterization: ordered imports and R2-first with both files retained
+produce R1=3,R2=5,R0=8 kills; journal contains only rounds1/2. If R1 file arrives
+after R2 was imported, R2 stays orphan_r2 with raw8 kills and successful marker;
+ordinary retry returns Already processed even after R1 arrives. Confirmed with
+real isolated PG and observer rows, not a proposed policy. This is an activation
+gap: next capture layer must defer R2 until dependency is available or implement
+an explicitly designed repair; do not silently change parser semantics here.
+63 combined cases pass0skips2existingwarnings. Removing orphan flag fails status
+assertion; restored/cmp. Temporary PG stopped. Test quoting collection error
+was corrected before evidence runs. No production code changes in follow-up.
+
+Actual-PG follow-up: fresh subprocess with Discord/config/logging imports blocked
+ran canonical parser and process_file, with no mocked persistence methods.
+Private disposable PG schema bootstrapped explicitly by test only; observer
+connection confirmed one R1 round/player (3 kills), event and successful marker.
+COUNT and fetched rows agree; repeated file adds no player/event, borrowed pool
+remains usable. Synthetic single-player fixture, NOT R2/capture/cutover proof.
+Initial assertion expected32-char GUID; canonical parser short_guid proved8,
+so corrected test, not code. Disabling event emission caused actual-PG assertion
+failure; restored/cmp, combined60 cases pass0skips2existingwarnings. Test PG
+stopped, shutdown log/status agree; random schemas removed. No live DB changes.
+
+Follow-up preflight lifecycle proof: three fresh subprocesses invoke real
+process_file with a caller-owned protocol-test pool: duplicate, query outage,
+and cancellation. They assert lease release, retained pool identity, retryable
+outage and propagated cancellation, with setup/presentation imports forbidden.
+36 focused cases pass. Adding disconnect to the duplicate branch fails the
+success contract (borrowed pool close raises); restored/cmp. This is NOT a real
+PostgreSQL commit proof and does not cover the full successful write path yet.
+
+Branch feat/db-runtime-import-startup-r04d builds on #1057 at908d238e and
+cherry-picks #1056 parser-only slice65f5cbac as aaee6c52 (not its cache stack).
+Parser/test contents unchanged; progress notes from both sides preserved.
+Manager import no longer mutates sys.path, loads dotenv or configures logging.
+Explicit configuration uses neutral emitters; default constructor's load_config
+seam delegates to lazy legacy startup, dotenv before log-path selection and
+logging setup once under a lock. Configuration reloads on each default call.
+Import/logging failures now propagate rather than selecting a silent no-op
+logging fallback. This intentionally changes import-only side effects; callers
+needing legacy setup must construct with defaults, not merely import the module.
+
+78 selected regression cases pass, no skips, two existing websockets warnings.
+Fresh subprocess proves neutral parsing/validation, no config/Discord imports,
+environment/path/cwd/root-handler changes, log files or connections. Another
+process verifies legacy dotenv-before-file-logging and stable repeat handlers.
+Forbidden bot.config import mutation failed, restored/cmp. Initial legacy proof
+failed missing BOT_ENVIRONMENT; fixed test setup with explicit dev, not the guard.
+No services/DB touched. This is construction/startup, NOT full independent ingest.
+Next: reviews and canonical process_file proof with owned/injected pool, followed
+by capture cadence, source retention, single-writer cutover and failure matrix.
+
+
+2026-09-20 checkpoint: owner-approved #1058 merged as b5e20c9d after prescribed
+cycle (0 red/threads/behind, unchanged SHA). Squash tree equals da1a5136.
+Fresh14 logging/retry cases passed before merge. R04b synced main normally;
+both progress sections retained in documentation conflicts, no constructor
+changes. Older approval/CI notes below are historical. #1057 not approved.
+Next startup contract: /tmp/slomix-r04d-startup-contract-2026-09-20.md (local).
+
+### R04a parser presentation boundary — 2026-09-19
+
+Branch feat/db-runtime-parser-boundary-r04a, parent #1055 at5b0d305f.
+Move Discord import into create_stylish_round_embed only; parsing and R2 logic
+unchanged. Separate subprocesses compare full parser/differential output with
+Discord preloaded versus forbidden (also forbid bot.config/dotenv/website).
+Clock frozen in proof to avoid comparing two generation timestamps. Existing
+committed sample files produce zero parsed players; explicitly recorded, not
+treated as player coverage. Valid synthetic player lines separately prove one
+player and differential kills8-3=5; real Discord Embed rendering remains covered.
+
+151 parser/helper/R2/import-journal/retry/replay cases passed, zero skips, two
+existing warnings. Ruff clean. Restoring eager import as a mutation caused
+ModuleNotFoundError: Presentation/config dependency forbidden: discord; restored
+apply_patch/cmp, then full151 passed. No network, database or service activation.
+
+Discovery correction: manager load_config constructs BotConfig but does NOT
+call its token validator. Importing bot.config still loads dotenv, and the
+manager initializes logging at module import. Neutral config extraction must
+preserve explicit legacy logging/config behavior; deferred to its own slice.
+This prerequisite does not make the canonical importer or ingestion independent.
+Original R04 capture/cadence/metadata/single-writer acceptance gates remain open.
+
+### R03d independent cache-consumer process — 2026-09-19
+
+
+### R04b explicit importer constructor configuration — 2026-09-19
+
+Independent branch feat/db-runtime-import-config-r04b based on main2518735f;
+does not depend on R03 cache consumers or R04a parser import changes. Add a
+keyword-only config argument to the canonical PostgreSQLDatabaseManager. Only
+None invokes the existing loader; explicit configuration retains object identity,
+including falsey objects, and the PostgreSQL-only check remains. Existing callers
+and load/config/logging order are unchanged. No pool/connect/migrate on creation.
+
+Seven boundary cases and expanded154 parser/journal/retry/replay cases passed,
+zero skips, two existing warnings. Actual subprocess supplies configuration while
+ambient loader and pool creation are forbidden, then exercises canonical player
+validation. Mutation config-or-loader rejected a falsey supplied config and
+failed; restored apply_patch/cmp, expanded154 rerun passed. New tests lint clean;
+manager's20 pre-existing Ruff diagnostics match baseline by code/message.
+Unit harness probes the stopped disposable PG socket (FileNotFoundError); no
+live-DB fallback, no PG restarted for this slice and no DB-ingestion claim.
+
+Limits: bot.config module still loads dotenv; manager still initializes logging
+at import, parser still imports Discord on this independent main-based branch
+(separately addressed by #1056). This isolates construction, not all module side
+effects. Next separate explicit startup/logging ownership while preserving legacy
+behavior; then R04 source/cadence/metadata/single-writer acceptance proofs. No
+activation, service operation, production changes or new merge permission.
 
 ### R03d independent cache-consumer process — 2026-09-19
 

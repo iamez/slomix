@@ -1,11 +1,66 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-09-28 #1066 normal main4de6f07e synchronization retains both import and
+> worker histories, with byte-identical respective source/test inputs. Combined
+> 167 cases pass35.09s including45worker cases; Ruff clean. No PG/service/remote
+> actions. Next: root publishes for fresh review; original runtime plan retained.
+
+> 2026-09-28 #1066 review boundary repaired locally: selected R1 receives the
+> same calendar/year admission as current input, even with trusted matching
+> content. Actual midnight parser/filesystem reproduction failed on old code;
+> 122 focused cases and independent DBless runtime probe now pass. Mutation
+> seen failing and restored/cmp. PG proof remains pending an owner-started
+> isolated service; old SQL evidence does not cover this new guard. Resume
+> exact-head review/queue gates, then the unchanged runtime v2 plan.
+
 > Pravilo za skoke: ko uporabnik vpraša nekaj IZVEN trenutnega taska,
 > najprej TUKAJ zapiši, kje si ostal; po fixu se vrni in vpiši, kaj si
 > spremenil — tudi če si kaj pokvaril. Commit po vsakem zaključenem
 > koraku, ne na koncu dneva.
 
 ## Trenutna pozicija
+
+- (Astra, 2026-09-28) #1066 verified-entry terminal filename contract corrected:
+  validate before I/O and return failed with capture_status=None (unmeasured).
+  Three unit/one actual PG regressions failed before fix; 199 combined pass81.01s.
+  Guard mutation fails actual PG case, restored/cmp. Fresh review still required.
+
+- (Astra, 2026-09-28) #1066 P1/P2 reproduced with real payload/SQL, then fixed:
+  selected R1 needs independent source size/SHA admission; dependency conflict
+  cannot contaminate valid R2. Shared importer calendar/name admission precedes
+  canonical dedup for both halves. Invalid inputs return failed/no marker.
+  Prior malformed-payload calendar proof was insufficient; actual validpayload
+  duplicate bypass reproduced and closed. 163 cases pass73.79s incl9PGcases;
+  three guard mutations fail/restored/cmp, schemas absent by count/list. No
+  production callers need migration; future verified R2 supplies expected_r1.
+  Original runtime1986d671 and immutable-source requirements remain intact.
+
+- (Astra, 2026-09-28) #1066 final main sync 86b83475 after #1067 retains
+  verified-import bytes and both doc histories. 175 cases pass in 49.28s with
+  all seven isolated PG scenarios and SSH identity tests; schema cleanup proven
+  by count and list. Publish for new exact-head review under owner queue approval.
+
+- (Astra, 2026-09-28)1066 missing SQL proof completed on verified isolatedPG:
+  clean142cases pass54.89s, all7PGscenarios; guard mutation failed/restored/cmp.
+  Initial overlapped run discarded as final evidence; zero temporary schemas
+  remain by count/list. Publish current head for newreview/CI, no merge approval.
+
+- (Astra, 2026-09-27)1066 local preparation5e8b769d retains both calendar and
+  spool-only R1 guards across parent1065 merge.54local cases pass, guard mutation
+  fails/restored/cmp. Full PostgreSQL proof waits owner-started disposable service;
+  never substitute application DB. No push/retarget/merge; wait1065 actual main.
+
+- (Astra, 2026-09-20) Priority #1066 review detour: verified import now requires
+  spool-only parser; legacy cwd/local_stats fallback and R1 symlinks cannot supply
+  runtime differential. 153 tests pass, actual-PG fallback mutation fails/restored.
+  Invalid '..' names leave waiting path; prose nits addressed. Resume hard SSH
+  worker deadline design, then source identity and single-writer gates.
+
+- (Astra, 2026-09-20) R04k integration branch combines #1065 and #1060 without
+  changing either foundation implementation. Verified local content gates
+  canonical importer; 137 unit/actual-PG cases pass, conflict-gate mutation fails
+  and restores/cmp. PG stopped. Next connection/source identity and review;
+  no deployment, services, source deletion or automatic scheduler.
 
 - (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
   and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual
@@ -215,6 +270,7 @@
   No source acknowledgement/deletion, scheduler, SSH or service activation.
 
 
+
 - (Astra, 2026-09-27)1064 Codex4116756259 verified/fixed: umask0277 produces
  0400; inspector now permits0400/0600 without broadening permissions.75real
   filesystem/local socket tests pass; oldmodeguard mutation fails then restored
@@ -272,6 +328,64 @@
 - (Astra, 2026-09-20) While #1059/#1060 await CI/review, independent R04f
   implements atomic no-clobber completed-file publication. No SSH integration
   or services. #1060 plan-staleness finding4056273674 fixed in1f636253 and replied.
+- (Astra, 2026-09-20) #1060 cross-half dedupe review: canonical hash lookup
+  now scopes R1/R2 separately, not only the runtime waiting guard. Actual-PG
+  zero-delta R2 proof and failing/restored SQL mutation verify the root fix.
+  Historical repairs and full source identity are separate, not silently done.
+
+- (Astra, 2026-09-20) #1060 calendar review fixed: impossible R2 timestamps no
+  longer wait for R1. 23 unit/PG cases pass, 7 calendar mutations fail/restored.
+  Resume bounded stream capture on the #1062 stack; no live activation.
+
+- (Astra, 2026-09-20) Review detour after opening integrity PR #1062:
+  #1060 now preserves renamed payload deduplication after R1 removal and routes
+  malformed R2 names to canonical failure.14 unit/PG cases pass; mutations fail
+  and restore/cmp. Disposable PG stopped. Resume bounded capture after review.
+
+- (Astra, 2026-09-20) R04e caller-driven dependency guard implemented: missing
+  R1 defers R2 without terminal marker;69 combined tests including actual PG
+  pass; guard mutation observed/restored. Immutable spool is a precondition,
+  not implemented transport/retention. Next bounded capture/publication design.
+  Owner-approved overall scope now includes full new-site audit after runtime.
+
+- (Astra, 2026-09-20) Real PG R1/R2 ordering characterized;63 tests pass.
+  Activation gap confirmed: late R1 does not repair already-marked orphan R2.
+  Next priority dependency-aware capture scheduling, not more unrelated refactors.
+
+- (Astra, 2026-09-20) #1059 now includes real-PG neutral R1 import proof:
+  canonical parser/writes/event/marker, observer connection, duplicate retry,
+  caller pool still usable.60 combined tests pass; missing-event mutation caught.
+  Disposable PG stopped. Next R2/late arrival and single-writer/capture work.
+
+- (Astra, 2026-09-20) #1059 strengthened with neutral process_file preflight
+  lifecycle subprocess proofs (duplicate/outage/cancel),36 focused cases pass.
+  Unwanted disconnect mutation failed/restored. Next real PG successful-write
+  proof remains pending; no application database or service touched.
+
+- (Astra, 2026-09-20) R04d implemented on separate worktree, based on #1057
+  plus unchanged parser slice from #1056. Neutral import/construction and lazy
+  default setup proven in subprocesses;78 regressions pass; mutation restored.
+  No full-ingestion claim or activation. Next process_file/pool ownership proof.
+
+
+- (Astra, 2026-09-19) Independent R04b constructor-config prerequisite over
+  main2518735f;154 cases pass, actual subprocess and falsey-config mutation proof.
+  Separate open stack #1051–#1056 remains intact. #1055 review findings fixed in
+  847c1b7d and synced to #1056 at74408882; both threads answered/resolved, fresh CI
+  required. Resume config/logging startup boundary after review, no activation.
+
+- (Astra, 2026-09-19) R04a isolates parser's Discord presentation dependency;
+  actual subprocess parity and real embed proof, observed eager-import mutation
+  restored/cmp;151 tests pass. Neutral manager config/logging boundary remains
+  next. No claim of independent ingestion, no service or live database changes.
+
+- (Astra, 2026-09-19) R03d adds independent dev-only cache consumer entrypoint,
+  not ingestion. Default OFF; one owned pool/task, signal shutdown, safe JSON
+  health. Actual isolated PG subprocess catch-up/blocked shutdown pass; observed
+  dev-guard mutation restored/cmp. Expanded200 passed; publish/review next.
+  #1054 nine exact-head checks green and both external reviews no findings.
+  No merge approval for #1050 or later; no service/production activation.
+
 
 - (Astra, 2026-09-19) #1055 review follow-up: pre-drain shutting_down health,
   explicit localhost override documentation; real PG signal proof and failed/

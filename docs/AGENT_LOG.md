@@ -1,5 +1,32 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-09-28 · Validate selected dependencies as well as current inputs.**
+  The earliest supported R2 can select a previous-year R1 across midnight;
+  matching trusted bytes do not establish calendar admission. Both import
+  paths reuse current-input validation for selected R1 before canonical calls.
+  Verified capture remains match while dependency=invalid is terminal, not a
+  fabricated content conflict. Prove this with the actual filesystem selector,
+  not only a mock returning an invalid name; DBless proof is not SQL proof.
+
+- **2026-09-28 · Validate terminal input before stricter lower-layer validation.**
+  Verified import called spool inspection before filename admission, so malformed
+  names raised instead of returning the promised failed result. Move shared
+  validation first and label capture_status=None as unmeasured, not a match or
+  absence. Actual valid-payload PostgreSQL regression proves rejection; unit
+  spies additionally prove no filesystem inspection or importer call occurred.
+
+- **2026-09-28 · A dependency is not admitted by verifying its consumer.**
+  A retained conflicting R1 inside a private spool contaminated verified R2.
+  Why: path isolation does not certify dependency content. Apply: validate the
+  parser-selected R1 against independent trusted source size/SHA metadata before
+  canonical import, and expose dependency state separately from R2 capture.
+
+- **2026-09-28 · Malformed payloads cannot prove filename admission.**
+  Prior calendar tests failed on payload parsing, while valid duplicate content
+  bypassed canonical filename validation and gained a success marker. Apply:
+  validate filename/calendar before dedup for both halves and test actual valid
+  payloads already present in the DB. Terminal admission failure has no marker.
+
 - **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
   After a usage-limit pause, the previously clean frontend lock had newly
   observed undici and brace-expansion findings. Refresh the advisory result
@@ -42,8 +69,10 @@
   Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
   dependency admission now matches the canonical2020-2035 year range without
   importing presentation/configuration. Tests cover outside years, both accepted
-  bounds, and a real PG terminal failed marker for0001. Do not treat calendar
-  parsing alone as proof that downstream date arithmetic is safe.
+  bounds. Correction2026-09-28: the old PG0001 fixture had invalid contents;
+  its failed marker did not prove valid-payload admission. Shared importer
+  admission now rejects0001 before dedup with failed/no marker, proven using
+  valid payloads. Do not treat calendar parsing alone as arithmetic safety.
 
 - **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
   #1059 base changed from a feature branch to main. Its push CI passed, but the
@@ -57,6 +86,14 @@ Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
+
+- **2026-09-20 · Verified R2 bytes do not isolate the parser's R1 search.**
+  The legacy finder also searches cwd/local_stats. Construct runtime managers
+  with allow_legacy_r1_fallback=False; import_verified_file requires this mode.
+  Exact/same-day/midnight searches then remain in the input directory and reject
+  symlink R1 entries. Retained immutable R1 remains a caller precondition.
+  Actual-PG proof must include a plausible external R1, not merely an empty cwd.
+
 
 - **2026-09-20 · STATS_READY is round timing, not exact-file completion.**
   Repository webhook defaults to immediate intermission emission; stats writer
@@ -133,6 +170,26 @@ data here.
   snapshot, not from the just-received bytes. Without it the API remains
   size-only; the optional parameter is not evidence of transport integration.
   Test equal-length corruption and compare successful output by another tool.
+- **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
+  A neutral real-PG fixture supplied 32 hex characters but the canonical regular
+  stats parser stored 8 via short_guid. The first test's 32-character assertion
+  was wrong; corrected after inspecting the actual parser and observing DB rows.
+  Do not change persistence semantics to satisfy a mistaken test expectation.
+
+- **2026-09-20 · Explicit configuration is not enough if imports initialize the process.**
+  The manager previously imported dotenv and configured root logging before its
+  constructor could inspect supplied config. R04d moves legacy setup behind
+  the default loader while preserving dotenv-before-log-path selection. Test in
+  fresh processes with forbidden imports; also pin unchanged sys.path and root
+  handlers. Import-only callers intentionally no longer initialize logging.
+
+
+- **2026-09-20 · Header-free payload equality is not cross-half identity.**
+  An unchanged cumulative R2 has the same payload hash as R1. Canonical import
+  and neutral duplicate preflight must scope successful hashes by half before
+  treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
+  removing the SQL half filter loses that half. Same-half cross-match identity
+  still needs a stronger source contract; do not infer it from this narrow fix.
 
 - **2026-09-19 · A neutral process needs neutral configuration.**
   shared.config reexports BotConfig and its validation requires Discord. The
