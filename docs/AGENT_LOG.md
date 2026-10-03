@@ -36,6 +36,13 @@
   tree entry is not an index leaf: restore selected descendant blobs instead.
   Reject duplicate area identities and empty/exclusion-only pathspecs before
   Git's implicit whole-tree selection or dictionary replacement loses scope.
+
+- **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
+  After a usage-limit pause, the previously clean frontend lock had newly
+  observed undici and brace-expansion findings. Refresh the advisory result
+  before merge, retain its date, and independently prove installed guard behavior.
+  Run mutation probes in isolated copies, not packages used by concurrent tests.
+
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
   and loop. Correction after follow-up review: installing cleanup deferral itself
