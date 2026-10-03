@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1071 actual-parent checkpoint 2026-10-03: #1070 merged194b1e6e at04:21:17Z
+> after owner confirmation and420s gates. Reviewed/squash treesfd38bcde match.
+> Normal actual-main merge retains every stability test and both histories;
+> runtime source/tests byte-identical toa1ead937. Repeat focused gates, retarget
+> to main and publish for fresh review/CI. No approval inferred for1071 merge.
+
 > #1071 security-baseline refresh 2026-10-03: normal parent965a2494 merge
 > includes actualmaincc6b0a4d. Both histories retained; runtime source/tests
 > unchanged from2915eae9 and dependency manifests match main exactly.
