@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · Read-only ACL checks need more than table privileges.**
+  PostgreSQL documents column ACLs separately and allows NOINHERIT memberships
+  to remain reachable through SET ROLE. PG16 separates SET from MEMBER; earlier
+  versions use MEMBER for SET reachability. PG17 adds MAINTAIN. Inspect effective
+  table/column/sequence rights and ownership of every reachable role; do not
+  "repair" unrelated roles globally. New coverage is prepared, not runtime-proven
+  while the disposable proof service is stopped (see PLAN checkpoint).
+
 - **2026-10-03 · GRANT SELECT does not make existing permissions read-only.**
   Default ACLs are copied onto newly created tables/sequences. Runtime migration
   tests with a pristine role missed DEV's pre-existing website CRUD defaults.

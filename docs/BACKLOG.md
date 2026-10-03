@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Astra helper, 2026-10-03) #1078 review follow-up prepared: column ACLs,
+  version-gated MAINTAIN and transitive SET ROLE/ownership checks. Proof service
+  expired, so new PG cases/mutations are explicitly pending; no service start,
+  live DB fallback or existing restored-copy ledger change. Repeat093 acceptance
+  on fresh disposable restore after owner restart. Original roadmap unchanged.
+
 - (Astra helper, 2026-10-03) DEV permission rehearsal exposed inherited runtime
   CRUD/sequence grants. New093 narrows only runtime object ACLs; real isolated
   tests verify denied writes, generation read, unchanged legacy/default grants,

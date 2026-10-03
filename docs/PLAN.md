@@ -1,5 +1,27 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 2026-10-03 #1078 review4172501633/636/639 follow-up, PREPARED NOT PG-VERIFIED:
+> unmerged093 now also rejects effective column privileges, PostgreSQL17 MAINTAIN,
+> and table/sequence rights or ownership reachable through transitive SET ROLE.
+> Version-specific reachability uses PG16+ SET and PG14/15 MEMBER; unrelated
+> role grants remain untouched. Official references:
+> https://www.postgresql.org/docs/14/functions-info.html and
+> https://www.postgresql.org/docs/16/functions-info.html distinguish membership
+> semantics; https://www.postgresql.org/docs/17/functions-info.html documents
+> column privileges/MAINTAIN; https://www.postgresql.org/docs/17/role-membership.html
+> explains SET versus INHERIT. Added isolated regression fixtures for column
+> PUBLIC/group grants, real session-authenticated two-hop NOINHERIT role changes,
+> owner-with-revoked-grants, MAINTAIN and PG16 non-SET membership compatibility.
+> Proof service expired before these changes: no restart or fallback connection
+> attempted. Static registration/Ruff/whitespace pass; actual PG tests and guard
+> mutations are PENDING owner restart. PG16/17-specific cases require that actual
+> server version, not simulated version strings. Only PG14 is installed locally.
+> Prior093 restore/checksum proof below describes older SQL, not this revision;
+> repeat on a fresh disposable restore, never edit the old migration ledger.
+> Root reports live DEV has no additional SET-reachable website roles; these
+> bypasses are regression/contract risks, not newly observed live grants.
+> Original runtime plan remains preserved; do not deploy or merge on this note.
+
 > Root's independent restored-DEV rehearsal, 2026-10-03: official migration
 > runner as etlegacy_user applied exact093 from6396b222 (unchanged in subsequent
 > test/docs commits), checksum verified. Ledger95; rounds3474/playerrows22501
