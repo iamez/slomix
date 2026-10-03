@@ -1,5 +1,23 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Security refresh2026-10-03: live npm audit found two affected package groups,
+> undici7.29.0 and brace-expansion2.1.4, despite September28's audit0. Narrow
+> lock patch advances only these entries to7.29.1/2.1.7 with registry integrity;
+> existing jsdom^7.24.5/minimatch^2.0.1 ranges permit them, no overrides or
+> unrelated metadata changes. Clean npm ci --ignore-scripts succeeds; separate
+> npm audit JSON reports0 across268 dependencies. Fresh typecheck,70files/
+>845tests259.88s(singleworker), SPA build2.58s pass; generated API SHA61f4c4a5
+> unchanged. Actual BalancedPool factory receives original TLS identity callback
+> without network requests; actual brace expansion preserves ordinary output and
+> bounds nesting. Isolated-copy guard mutations each fail, restored/cmp and pass.
+> Initial brace probe incorrectly expected[] instead of literal fallback; corrected
+> from installed implementation, not counted as a security regression failure.
+> Proof script remains local in slomix-runtime-audit-20260927-dkSfCn.
+> Upstream sources: github.com/nodejs/undici/security/advisories/GHSA-w293-vg96-wgc3
+> and github.com/juliangruber/brace-expansion/security/advisories/GHSA-qhr7-859c-m2p7.
+> These are development dependencies; no live production exploit claim. No service,
+> browser or deployment. Fresh exact-head CI/review required; runtime plan intact.
+
 > Recovery checkpoint 2026-10-03, #1027: resumed the interrupted normal
 > merge of actual main19e65354 after the usage-limit interruption. Both
 > documentation histories retained; no source changes lost.

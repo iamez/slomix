@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-03) Newly observed undici/brace-expansion advisories repaired
+  narrowly in1027. Cleaninstall/audit0/typecheck/845tests/SPA build succeed;
+  actual package probes and failing/restored isolated mutations verified. No
+  service/deploy. Publish fresh head, never reuse September's clean-audit claim.
+
 - (Astra, 2026-10-03) Recovered interrupted #1027 main19e65354 merge,
   retaining both histories. Focused checks repeated; fresh publication gates
   still required. No service restart or production changes.
