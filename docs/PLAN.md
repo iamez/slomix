@@ -1,5 +1,10 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #1072 reviewed-parent refresh 2026-10-03: normal parente5621f2f merge
+> retains actualmain194b1e6e and both histories. Runtime/Lua bytes unchanged
+> from3cce1ed1; root45 Lua/capture/Node/plan cases pass10.84s. Await1071 actual
+> merge, final main sync and fresh review before publication. No service action.
+
 > #1072 security-baseline refresh 2026-10-03: normal parenta1ead937 merge
 > retains actualmaincc6b0a4d and both documentation histories. Runtime/Lua
 > source/tests unchanged from7bb3e57d;45 executable Lua/capture/Node/plan
@@ -29,6 +34,12 @@
 > Lua-completion plus SSH/stability tests pass10.85s offline; no game server,
 > source activation, real SSH or service changes. Grace callers remain compatible.
 > Root owns final main-sync/publication gates; original runtime1986d671 preserved.
+
+> #1071 actual-parent checkpoint 2026-10-03: #1070 merged194b1e6e at04:21:17Z
+> after owner confirmation and420s gates. Reviewed/squash treesfd38bcde match.
+> Normal actual-main merge retains every stability test and both histories;
+> runtime source/tests byte-identical toa1ead937. Repeat focused gates, retarget
+> to main and publish for fresh review/CI. No approval inferred for1071 merge.
 
 > #1071 security-baseline refresh 2026-10-03: normal parent965a2494 merge
 > includes actualmaincc6b0a4d. Both histories retained; runtime source/tests
