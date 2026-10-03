@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #966 root follow-up checkpoint 2026-10-03: normal main194b1e6e merge
+> retains both histories and exact guard repair4827760a source/tests. Root
+> independently passes61 disposable Git/Node/plan cases17.02s; Ruff clean.
+> Actual review/tracking ref digest3214c396 remains unchanged. Publish fixes
+> for fresh exact-head review/CI; no966 merge approval or service action.
+
 > #966 follow-up review repair (2026-10-03): disable ambient diff.orderFile
 > for partitioning, tree validation and commit-date extraction. Real Git with
 > reversed 26-file ordering previously changed immutable part identities;
@@ -139,6 +145,69 @@
 >unchanged before/after; no snapshot operation ran against this repository.
 >Await1055 merge and final sync before publishing for fresh review/CI; no966
 >merge approval. Original runtime work and all NEVER MERGE snapshots preserved.
+
+> #1070 main refresh 2026-10-03: #1027 mergedcc6b0a4d through420s gates;
+> reviewed/squash trees a7f31e32 match. Inherit its dependency patches with
+> both document histories retained. Runtime source/tests unchanged from72b2cd06;
+> rerun focused gates before fresh review/CI. No service or deployment action.
+
+> Review follow-up 2026-10-03 for #1070: remove only the duplicated
+> 2026-09-20 content-reconciliation lesson from AGENT_LOG; preserve its earlier
+> identical entry and every distinct lesson. Runtime code and tests unchanged.
+> Fresh exact-head review and CI remain required before merge.
+
+> Actual-main checkpoint2026-10-03 for1070: #1069 mergedb25d4020
+> at02:58:00Z after420s gates; reviewed/squash treesd2482893 match exactly.
+> Normal merge retains both documentation histories. Source/tests byte-identical to55cd33dc after conflict resolution; earlier68-case and restored guard proof remain applicable.
+> Publish for fresh exact-head review/CI. No service or production action;
+> original runtime roadmap, NEVER MERGE exclusions and held956 unchanged.
+
+> Current1070 preparation2026-10-03: normal merge of reviewed1069 head3e2ffad5
+> retains both documentation histories and exact supervised/worker/test bytes
+> from539f77fc. Root68combined cases pass44.01s, including actual owned child
+> timeout, cleanup and filesystem retry evidence. Disabling existing-content
+> admission fails both match/conflict cases with "Existing content must not
+> spawn capture"; restored/cmp. Actual1069 squash-main sync still required
+> before publication and fresh exact-head review. No live SSH, DB or services.
+> Original runtime plan and bounded queue authority retained; no SaaS expansion.
+
+> #1070 actual-main propagation 2026-09-28: normal parent09a62009 merge
+> incorporates #1068 squash4de6f07e, retaining both doc histories and unchanged
+> runtime source/tests from28271ad8. Prior19case9.80s proof applies to identical
+> code; combined downstream rerun follows. Runtime1986d671 preserved, no remote
+> or service action. Fresh exact-head review remains a separate publication gate.
+
+> #1070 published-parent refresh 2026-09-28: merged #1069 4007e597 with
+> published worker e8f05dbd and both doc histories. Nineteen composed capture/
+> plan cases pass9.80s; worker bytes remain unchanged. No network/DB/services.
+> Original runtime1986d671 preserved; actual #1068 squash-main sync and fresh
+> exact-head review remain root publication gates, not completed by this merge.
+
+> #1070 local parent propagation 2026-09-28: normally merged #1069 local593edbbc,
+> retaining final worker90026032 bytes and both histories. Seventeen supervised
+> SSH-capture cases pass9.98s, including real bounded children; configured0.2s
+> grace/default compatible with minimum0.01s. Root owns later actual-main sync,
+> publication/review. No remote/service/network/DB changes; runtime1986d671 kept.
+
+> Current #1070 checkpoint, 2026-09-28: normal parent merge bda56937 retains
+> final SSH identity e22ae27c and worker fixes 86c69e39. Combined 150 cases pass
+> in 23.00s: real child outcomes remain separate from observed content, retries
+> do not re-read already matching content, and procfs/active_children confirm
+> cleanup. Actual supervised tests live in test_runtime_ssh_capture.py, not a
+> separate supervised test file. Local preparation only; actual main sync and
+> fresh exact-head gates still required after #1069. No services or live SSH.
+
+>1070 local refresh2026-09-27: live sourcef4d11cb6/base1069 normally merged
+>prepared1069 at8501f7b9 as5d2971f7. Both documentation histories retained;
+>spool conflicts preserve0400 inspection fix; worker/auth/source tests match
+>parent.141offline tests pass23.35s, including actual child/filesystem retries:
+>failed/missing and timed_out/missing retry once; timed_out/match skips recapture.
+>Independent sha256sum confirms retained final bytes; procfs and active_children
+>confirm reaping. Disabling existing-content guard fails2cases with forbidden
+>spawn assertion; restored/cmp, Ruff clean. No live network/service/DB changes.
+>BLOCK publication until the newly reported1067 implicit key certificate-sidecar
+>loading fix propagates through1068/1069, followed by actual main sync and fresh
+>exact-head review/CI. No1070 merge permission inferred. Original plan preserved.
 
 > Actual-main checkpoint2026-10-03 for1027: #1069 mergedb25d4020
 > at02:58:00Z after420s gates; reviewed/squash treesd2482893 match exactly.
@@ -800,6 +869,26 @@ permission for #966. Current authorized batch is #1076/#1057/#962 only. Original
 runtime resume remains #1077 completion delivery/snapshot sealing after this
 consolidation detour, then new-site audit and approved reversible DEV transition.
 
+### R04o supervised capture reconciliation — 2026-09-20
+
+Normal ancestry merge combines #1069 with #1064; documentation conflicts retain
+both tracks. capture_ssh_once inspects first, skips match/conflict without spawn,
+otherwise supervises one SSH task and inspects again only after the child is
+reaped. Result preserves observed content and child outcome independently:
+timed_out+match is possible and is not converted into worker success. No source
+ack, deletion, retry loop, import or service activation. Inspection remains a
+byte-bounded local filesystem operation outside the child deadline; no overall
+wall-clock bound is claimed. Caller must keep private spool/snapshot immutable.
+117 combined tests pass. Real child/filesystem with offline SSH seam proves
+retry after corruption/interrupted read succeeds without touching orphan parts;
+retry after close timeout reuses verified final without a new child. Existing
+conflict remains unchanged. Disabling preinspection short-circuit fails two
+tests with Existing content must not spawn capture; restored/cmp, Ruff clean.
+#1069 all reported checks green; no individual merge permission inferred.
+Next trusted source metadata/discovery and integration with verified importer;
+single-writer handoff/dev failure matrix remain gates. New-site audit follows
+runtime completion as originally planned; production remains untouched.
+
 ### R04n concrete SSH capture task — 2026-09-20
 
 On #1068: picklable SSHCaptureTask carries only explicit configuration into the
@@ -942,6 +1031,27 @@ Verified53 combined capture/spool/integrity cases pass. Real local sockets prove
 success and stalled-EOF cleanup. Disabling post-read deadline fails DID NOT RAISE;
 restored/cmp. Ruff clean. No remote SSH, database or service changes. Next integrate
 connection lifecycle and explicit source identity/reconciliation before activation.
+
+### R04i read-only spool reconciliation — 2026-09-20
+
+Review 4056550742: wrong-size entries now skip reads but still pass descriptor/
+name stability checks before conflict. All 49 filesystem tests pass. Restoring
+the early return fails replacement-after-open regression; restored/cmp. Ruff
+clean. Review 4056550740 case-count spacing corrected. Fresh CI required.
+
+Contract: inspect a caller-retained immutable private spool entry against required
+size and SHA-256, returning missing/match/conflict. Missing is only final-entry
+ENOENT; directory/access/I/O failures propagate. Never delete/replace files or
+write DB markers. Open no-follow/nonblocking, require owned regular0600 file,
+bound reads and compare descriptor/name identity before certifying content.
+Match does not certify durability after failed fsync or import completion.
+This is a primitive, not automatic retry policy, full source identity or transport
+activation. Verify actual post-link-fsync failure, conflicts and replacement race.
+Verified 48 combined filesystem cases pass: actual directory-fsync failure still
+permits content inspection, wrong same-size bytes conflict, symlink/FIFO/unsafe
+entries rejected and I/O errors propagate. Removing digest and identity guards
+fails 2 cases, restored/cmp. Ruff/whitespace clean. This does not yet implement
+retry scheduling or make ambiguous durability safe for source deletion.
 
 ### R04g capture integrity contract — 2026-09-20
 
