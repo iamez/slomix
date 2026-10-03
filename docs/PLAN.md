@@ -1,5 +1,103 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Actual-main checkpoint2026-10-03 for1027: #1069 mergedb25d4020
+> at02:58:00Z after420s gates; reviewed/squash treesd2482893 match exactly.
+> Normal merge retains both documentation histories. All frontend/API inputs byte-identical toef1410b9 and its845-test/build proof; six Node/plan contracts freshly pass0.36s.
+> Publish for fresh exact-head review/CI. No service or production action;
+> original runtime roadmap, NEVER MERGE exclusions and held956 unchanged.
+
+> Security refresh2026-10-03: live npm audit found two affected package groups,
+> undici7.29.0 and brace-expansion2.1.4, despite September28's audit0. Narrow
+> lock patch advances only these entries to7.29.1/2.1.7 with registry integrity;
+> jsdom's undici^7.24.5 and minimatch's brace-expansion^2.0.1 permit them;
+> no overrides or
+> unrelated metadata changes. Clean npm ci --ignore-scripts succeeds; separate
+> npm audit JSON reports0 across268 dependencies. Fresh typecheck,70files/
+>845tests259.88s(singleworker), SPA build2.58s pass; generated API SHA61f4c4a5
+> unchanged. Actual BalancedPool factory receives original TLS identity callback
+> without network requests; actual brace expansion preserves ordinary output and
+> bounds nesting. Isolated-copy guard mutations each fail, restored/cmp and pass.
+> Initial brace probe incorrectly expected[] instead of literal fallback; corrected
+> from installed implementation, not counted as a security regression failure.
+> Proof script remains local in slomix-runtime-audit-20260927-dkSfCn.
+> Upstream sources: github.com/nodejs/undici/security/advisories/GHSA-w293-vg96-wgc3
+> and github.com/juliangruber/brace-expansion/security/advisories/GHSA-qhr7-859c-m2p7.
+> These are development dependencies; no live production exploit claim. No service,
+> browser or deployment. Fresh exact-head CI/review required; runtime plan intact.
+
+> Recovery checkpoint 2026-10-03, #1027: resumed the interrupted normal
+> merge of actual main19e65354 after the usage-limit interruption. Both
+> documentation histories retained; no source changes lost.
+> 54 Node/watchdog/plan tests pass1.34s. All frontend/API inputs remain identical to022f1115; earlier845-test evidence is historical, not a fresh full-suite claim.
+> Fresh exact-head review/CI required after publication. Original runtime
+> roadmap and local-only1986d671 retained; no service/deployment action.
+
+> Current #1027 checkpoint 2026-09-28: normal actual-main4de6f07e integration
+> preserves both histories. All frontend/API inputs still byte-identical to
+> 022f1115's845-test/build proof; not claiming that suite rerun. Fresh typecheck
+> passes; generated API SHA remains61f4c4a5b04489b01fe4913df6ac43ef1474a262f0dc873076acea0463ade05d.
+> Root repeats bounded actual installed YAML/nanoid probes successfully and50
+> plan/watchdog contracts pass0.68s. No service/browser/deployment action.
+> Publish for fresh exact-head gates; original runtime1986d671 remains queued.
+
+> #1027 actual-main synchronization, 2026-09-28: normally merged ec8ec7ed
+> as0ee8e3e6, preserving both document histories. Explicit git diff from845-test
+> head022f1115 over ALL website/frontend and docs/api/openapi.json is empty;
+> previous845-test and real SPA build evidence applies to identical inputs, not
+> a freshly rerun full suite. No unmerged Node-pin branch imported; local proof
+> uses22.23.2 while current workflow remains22.x. Fresh typecheck succeeds,
+> regenerated API types cmp/SHA match original baseline61f4c4a5, and50 focused
+> plan/watchdog tests pass0.60s. Whitespace clean. Dependency and artifact proof
+> scripts safely copied/cmp-verified to the local durable runtime audit directory;
+> temporary fixtures retained. Parent owns publication and fresh exact-SHA gates.
+
+> #1027 completed local dependency proof, 2026-09-28: Node22.23.2/npm10.9.8,
+> npm ci --ignore-scripts, typecheck and 70 files/845 Vitest tests pass (single
+> worker, 273.39s). build:app succeeds in 2.33s; offline HTML validation resolves
+> all six referenced local assets as nonempty files. This is not a browser/live
+> deployment proof. Existing Vite future-native-loader and Tailwind sourcemap
+> warnings remain; jsdom emitted canvas/navigation warnings, no failed tests.
+> npm audit JSON twice reports zero vulnerabilities; npm ls/explain independently
+> confirms core1.34.20, YAML4.3.2, nanoid3.3.19 and Vitest/mocker4.1.11.
+> Original-lock API generation equals patched output byte-for-byte. Actual
+> installed-package guard mutations reproduce missing YAML budget exception and
+> nanoid zero-size subprocess timeout (1s, child reaped); both restored with cmp,
+> then both bounded probes pass. No tracked generated artifacts or service changes.
+> Local proof script: /tmp/slomix-deps-security-proof-20260928.cjs; baseline install
+> /tmp/slomix-deps-baseline-5lbaDz. Next actual-main synchronization and fresh
+> exact-head review/CI; original runtime plan follows queue consolidation.
+
+> #1027 follow-up, 2026-09-28: upstream nanoid3.3.19 is compatible with
+> postcss8.5.25's existing ^3.3.16 range, removing the remaining high advisory
+> https://github.com/advisories/GHSA-2v37-7h3g-55p8 . Targeted lock-only update
+> and restored unrelated libc metadata leave exactly three changed lock entries
+> against original f0d263c2: core, YAML and nanoid; package.json remains identical.
+> Node22.23.2/npm10.9.8 clean install and audit report zero vulnerabilities;
+> npm explain independently confirms the expected installed dependency paths.
+> Same committed OpenAPI JSON generates byte-identical types with original and
+> patched locks (cmp and SHA25661f4c4a5b04489b01fe4913df6ac43ef1474a262f0dc873076acea0463ade05d).
+> Temporary no-save downgrade failed with npm's `Cannot read properties of null
+> (reading 'edgesOut')`; no concurrent/partial-install comparison is credited.
+> Reinstalled patched lock, then used separate original-lock npm ci for the
+> comparison. Bounded original-package probes reproduce YAML merge-budget bypass
+> and nanoid zero-size timeout; patched probes pass. Typecheck passes. Full tests
+> and SPA build remain pending at this checkpoint; no server/browser/deployment.
+
+> #1027 dependency preparation, 2026-09-28: Node22.23.2/npm10.9.8 targeted
+> lock-only/ignore-scripts update advances @redocly/openapi-core1.34.19->1.34.20
+> and js-yaml4.3.1->4.3.2 without overrides. openapi-typescript7.13.0 already
+> permits core^1.34.6; registry metadata shows unchanged engine/dependency
+> requirements except the YAML patch, and upstream core has no source changes.
+> npm10 stripped18 unrelated libc selectors; restored those exactly from HEAD.
+> Structural lock comparison proves only the two intended package entries differ;
+> package.json and Vitest/mocker4.1.11 retained. No node_modules installation.
+> Sources: https://redocly.com/docs/cli/v1/changelog and
+> https://github.com/nodeca/js-yaml/security/advisories/GHSA-2883-xcg3-v3hh .
+> Fresh npm audit removes those YAML/Vitest findings but reports one remaining
+> high nanoid<3.3.18 advisory GHSA-2v37-7h3g-55p8; audit is NOT clean. No blanket
+> audit fix applied. Next owner/root decision on narrow additional patch, then
+> npm ci, generator output comparison, typecheck/test/build:app and fresh CI.
+
 > Recovery checkpoint 2026-10-03, #1069: resumed the interrupted normal
 > merge of actual main19e65354 after the usage-limit interruption. Both
 > documentation histories retained; no source changes lost.

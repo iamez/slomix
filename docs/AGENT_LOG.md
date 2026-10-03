@@ -1,5 +1,11 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
+  After a usage-limit pause, the previously clean frontend lock had newly
+  observed undici and brace-expansion findings. Refresh the advisory result
+  before merge, retain its date, and independently prove installed guard behavior.
+  Run mutation probes in isolated copies, not packages used by concurrent tests.
+
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
   and loop. Correction after follow-up review: installing cleanup deferral itself
