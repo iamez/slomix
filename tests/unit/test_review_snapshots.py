@@ -156,6 +156,82 @@ def test_diff_algorithm_does_not_change_snapshot_partition(repo):
     assert sum(int(n) for row in rows.splitlines() for n in row.split()[:2]) == 8000
 
 
+def test_diff_order_file_does_not_change_snapshot_partition(repo):
+    names = [f"file-{number:02}.py" for number in range(26)]
+    commit(repo, dict.fromkeys(names, "value = 1\n"))
+    run(repo, "cut")
+    expected = snapshots(repo)
+    order = repo.parent / "reverse-order"
+    order.write_text("\n".join(reversed(names)) + "\n")
+    git(repo, "config", "diff.orderFile", str(order))
+    # Establish that actual Git observes the ambient configuration.
+    measured = git(repo, "diff", "--name-only", "v1.39.0", "HEAD").splitlines()
+    assert measured == list(reversed(names))
+    run(repo, "cut")
+    assert snapshots(repo) == expected
+    assert len(expected.splitlines()) == 4
+    order.unlink()
+    run(repo, "cut")
+    assert snapshots(repo) == expected
+
+
+@pytest.mark.parametrize("hook_mode", ["absent", "disabled", "unrelated", "missing-order"])
+def test_bundled_guard_blocks_history_without_installed_guard(repo, hook_mode):
+    commit(repo, {"z-archive.db": "historical forbidden data\n", "a.py": "old\n"})
+    git(repo, "tag", "archived-baseline")
+    commit(repo, {"z-archive.db": "", "a.py": "new\n"})
+    hook = repo.parent / "hooks/pre-push"
+    if hook_mode in ("absent", "missing-order"):
+        hook.unlink()
+    elif hook_mode == "disabled":
+        hook.chmod(0o644)
+    else:
+        hook.write_text("#!/bin/sh\nexit 0\n")
+    if hook_mode == "missing-order":
+        git(repo, "config", "diff.orderFile", str(repo.parent / "missing-order"))
+    result = run(repo, "--base", "archived-baseline", "--area", "bad|z-archive.db",
+                 "cut", "--push", area="safe|a.py", check=False)
+    assert result.returncode != 0
+    assert "repository publication guard failed" in result.stderr
+    assert snapshots(repo) == snapshots(repo.parent / "remote.git") == ""
+    assert not (repo.parent / "hook-calls").exists()
+
+
+def test_bundled_guard_allows_safe_publication_without_installed_hook(repo):
+    commit(repo, {"a.py": "value = 1\n"})
+    (repo.parent / "hooks/pre-push").unlink()
+    run(repo, "cut", "--push")
+    assert len(snapshots(repo).splitlines()) == 2
+    assert snapshots(repo) == snapshots(repo.parent / "remote.git")
+
+
+def test_missing_bundled_guard_fails_before_any_ref_creation(repo):
+    commit(repo, {"a.py": "value = 1\n"})
+    standalone = repo.parent / "review_snapshots.py"
+    shutil.copyfile(SCRIPT, standalone)
+    result = subprocess.run([sys.executable, str(standalone), "--source", "HEAD",
+                             "--area", "safe|a.py", "cut", "--push"],
+                            cwd=repo, text=True, capture_output=True)
+    assert result.returncode != 0
+    assert "repository publication guard failed" in result.stderr
+    assert snapshots(repo) == snapshots(repo.parent / "remote.git") == ""
+    assert not (repo.parent / "hook-calls").exists()
+
+
+def test_missing_scanner_fails_closed(repo, monkeypatch):
+    commit(repo, {"a.py": "value = 1\n"})
+    tools = repo.parent / "limited-tools"
+    tools.mkdir()
+    for command in ("bash", "git", "head", "tr", "sort", "comm"):
+        (tools / command).symlink_to(shutil.which(command))
+    (repo.parent / "hooks/pre-push").unlink()
+    monkeypatch.setenv("PATH", str(tools))
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0
+    assert "requires all inspection tools" in result.stderr
+    assert snapshots(repo) == snapshots(repo.parent / "remote.git") == ""
+
+
 def test_failed_remote_probe_does_not_expose_destination_credentials(repo):
     commit(repo, {"a.py": "value = 1\n"})
     marker = "synthetic-marker-only"
@@ -346,10 +422,12 @@ def test_real_secret_scanner_refuses_pair_atomically(repo):
     commit(repo, {"bad.py": "connect()\n"})
     result = run(repo, "--base", "archived-baseline", "cut", "--push", check=False)
     assert result.returncode != 0
-    assert "git push failed" in result.stderr
-    assert "remote diagnostics withheld" in result.stderr
+    assert "repository publication guard failed" in result.stderr
+    assert "diagnostics withheld" in result.stderr
+    assert "abcdef" * 3 not in result.stdout + result.stderr
     assert "review" not in git(repo, "ls-remote", "origin")
-    assert (repo.parent / "hook-calls").read_text() == "called\n"
+    assert not (repo.parent / "hook-calls").exists()
+    assert snapshots(repo) == ""
 
 
 def test_deleted_files_spaces_and_binary_fail_closed(repo):

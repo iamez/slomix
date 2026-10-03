@@ -1,5 +1,20 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · Snapshot determinism includes order files; hooks are local.**
+  Pin diff ordering as well as its algorithm, including metadata-only git show:
+  it still fails on a missing configured order file. A fresh clone does not
+  inherit active hooks, and an arbitrary executable hook proves nothing about
+  protection. Snapshot publication now directly executes the bundled guard for
+  all proposed create-only refs before the first write, then keeps normal push
+  hooks enabled. Require inspection tools first: suppressed missing-grep errors
+  otherwise turn an unperformed scan into apparent success. Override order-file
+  config inside the direct guard too: its suppressed diff errors otherwise
+  skip inspection entirely (measured unsafe publication in a local fixture).
+  Capture guard
+  diagnostics because they can contain the very content being blocked. This
+  retains the existing guard's documented detection limits, not a complete
+  history/credential audit or protection against a malicious local checkout.
+
 - **2026-10-03 · Snapshot partition identity includes the diff algorithm.**
   Pin Myers for both planned numstat and generated-tree validation; otherwise
   the same source/base pair can produce different boundaries and false conflicts.

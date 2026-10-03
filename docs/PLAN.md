@@ -1,5 +1,24 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> #966 follow-up review repair (2026-10-03): disable ambient diff.orderFile
+> for partitioning, tree validation and commit-date extraction. Real Git with
+> reversed 26-file ordering previously changed immutable part identities;
+> even metadata-only git show reads a missing order file unless reset.
+> Before any local ref creation or remote publication, execute the bundled
+> repository pre-push guard on all prospective create-only updates, retaining
+> normal push hooks. Missing inspection tools or guard fail closed; captured
+> scanner diagnostics cannot print prohibited content. Fresh clones no longer
+> depend on an installed hook. Original runtime roadmap unchanged; no real
+> review refs, services, production, pushes or merges in this repair.
+> Proof: 61 snapshot/Node/plan cases pass (17.19s), Ruff and whitespace pass.
+> Actual disposable Git CLI tests verify reversed/missing order configuration,
+> absent/disabled/unrelated hooks, missing bundled guard/scanner, and a safe
+> first pair followed by a prohibited second pair with zero refs published.
+> Removing ordering/preflight caused five failures (1.91s); removing tool check
+> caused one failure (0.48s); omitting guard config override caused one unsafe
+> publication failure (0.57s). All mutations restored with apply_patch and cmp.
+> Real review-ref digest remains d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+
 > #966 main refresh 2026-10-03: #1027 mergedcc6b0a4d through420s gates;
 > reviewed/squash trees a7f31e32 match. Preserve both document histories and
 > exact snapshot scripts/tests from2c5c32d5. Fresh exact-head gates follow.

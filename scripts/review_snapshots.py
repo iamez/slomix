@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -55,7 +56,7 @@ def partition(base, source, areas, exclusions):
         specs = specs.split()
         if not any(positive_pathspec(spec) for spec in specs):
             raise ValueError("area requires a positive pathspec")
-        records = git("diff", "--diff-algorithm=myers", "--no-ext-diff", "--no-textconv", "--no-renames",
+        records = git("diff", "-O/dev/null", "--diff-algorithm=myers", "--no-ext-diff", "--no-textconv", "--no-renames",
                       "--numstat", "-z", base, source, "--", *specs,
                       *exclusions).split(b"\0")
         chunks, current, total = [], [], 0
@@ -107,7 +108,7 @@ def positive_pathspec(spec):
 
 def validate_snapshot(tree, source, paths):
     """Index D/F replacement can change unselected paths: verify actual trees."""
-    records = git("diff", "--diff-algorithm=myers", "--no-ext-diff", "--no-textconv", "--no-renames",
+    records = git("diff", "-O/dev/null", "--diff-algorithm=myers", "--no-ext-diff", "--no-textconv", "--no-renames",
                   "--numstat", "-z", tree, source).split(b"\0")
     actual, lines = set(), 0
     for record in filter(None, records):
@@ -142,7 +143,7 @@ def snapshot(base, source, paths, name):
                 git("update-index", "-z", "--index-info", data=update, env=env)
         tree = git("write-tree", env=env).decode().strip()
     validate_snapshot(tree, source, paths)
-    date = git("show", "-s", "--format=%cI", source).decode().strip()
+    date = git("show", "-O/dev/null", "-s", "--format=%cI", source).decode().strip()
     env = dict(os.environ, GIT_AUTHOR_NAME="Review snapshot",
                GIT_AUTHOR_EMAIL="review@invalid", GIT_COMMITTER_NAME="Review snapshot",
                GIT_COMMITTER_EMAIL="review@invalid", GIT_AUTHOR_DATE=date,
@@ -177,6 +178,35 @@ def assert_compatible(expected, existing):
     for ref, sha in expected.items():
         if ref in existing and existing[ref] != sha:
             raise ValueError(f"immutable snapshot conflict: {ref}; no refs updated")
+
+
+def preflight_publication(refs, remote):
+    """Run the bundled guard even in fresh clones with no installed Git hook.
+
+    Feed the same create-only ref tuples the eventual push supplies. Check all
+    pairs before publishing the first; normal Git hooks still run on each push.
+    Diagnostics may quote prohibited content and must never reach the terminal.
+    """
+    updates = [f"{ref} {sha} {ref} {'0' * len(sha)}\n"
+               for ref, sha in refs.items() if ref not in remote]
+    if not updates:
+        return
+    # The shell guard's pipelines suppress scanner stderr; missing tools could
+    # otherwise turn an unperformed inspection into a successful empty result.
+    if any(shutil.which(tool) is None for tool in ("bash", "git", "grep", "head", "tr", "sort", "comm")):
+        raise ValueError("repository publication guard requires all inspection tools")
+    guard = Path(__file__).resolve().parent / "git-hooks" / "pre-push"
+    # Guard diff failures are intentionally quiet. An inaccessible ambient
+    # order file must not silently turn its changed-file set into an empty set.
+    env = dict(os.environ)
+    count = int(env.get("GIT_CONFIG_COUNT", "0"))
+    env.update({"GIT_CONFIG_COUNT": str(count + 1),
+                f"GIT_CONFIG_KEY_{count}": "diff.orderFile",
+                f"GIT_CONFIG_VALUE_{count}": "/dev/null"})
+    result = subprocess.run(["bash", str(guard)], input="".join(updates).encode(),
+                            capture_output=True, env=env)
+    if result.returncode:
+        raise ValueError("repository publication guard failed; diagnostics withheld")
 
 
 def main():
@@ -218,6 +248,7 @@ def main():
                 # Git can elide a same-OID push, including its lease check.
                 # Never complete a partial pair against an unchecked member.
                 raise ValueError("partial remote snapshot pair; publication blocked")
+        preflight_publication(refs, remote)
     creates = [f"create {ref} {sha}" for ref, sha in refs.items() if ref not in existing]
     if creates:
         git("update-ref", "--stdin", data=("start\n" + "\n".join(creates)

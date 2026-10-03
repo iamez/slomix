@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Codex, 2026-10-03) #966 follow-up: ambient order-file partition drift and
+  missing-hook publication repaired. Direct bundled guard preflight covers
+  every proposed pair before any publication; original runtime work preserved.
+  Parent review and fresh exact-head CI/review remain required before merge.
+
 - (Codex, 2026-10-03) #966 repairs four fresh findings: diff algorithm pinned,
   remote diagnostics withheld, legacy body generator retired, partial remote
   pairs rejected before publication. Nine guard mutations fail/restored/cmp in
