@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra helper, 2026-10-03) DEV permission rehearsal exposed inherited runtime
+  CRUD/sequence grants. New093 narrows only runtime object ACLs; real isolated
+  tests verify denied writes, generation read, unchanged legacy/default grants,
+  and fail-closed PUBLIC/wrong-role cases.19 tests pass5.23s; observed mutation
+  failure restored/cmp. No application DB changes. Root owns restored-backup
+  rehearsal and review/merge gates; original runtime queue remains preserved.
+
 - (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
   and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual
   child lifecycle and independent file/hash/reaping evidence. EOF guard mutation

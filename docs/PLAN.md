@@ -1,5 +1,22 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 2026-10-03 DEV rehearsal follow-up: inherited default ACLs grant website_app
+> CRUD on newly created runtime tables and rights on their sequences; migration
+> 092's additive SELECT grant does not restrict them. New093 revokes only six
+> runtime table grants and their owned serial/identity sequences, then grants
+> generation SELECT. Legacy and default ACLs remain unchanged. Effective-grant
+> assertions fail closed on PUBLIC/inherited privileges or a wrong runner role.
+> Real private-PG tests reproduce083-092 with permissive defaults, prove old
+> generation INSERT succeeds, and verify093 via catalog permissions plus actual
+> denied SQL. Transaction-owned fixtures roll back fully; root's restored copy
+> and live databases were not touched.19 focused PG/journal/plan tests pass5.23s;
+> disabled093 mutation fails runtime_events SELECT permission, restored/cmp.
+> Fixture corrections: SET LOCAL ROLE survives successful savepoints (RESET ROLE
+> required); identity-column UPDATE is rejected before ACL checks, so use a
+> nonidentity column to prove authorization. Existing083-092 remain immutable.
+> Next: root independently rehearses093 on the restored backup, fresh PR/CI/review
+> and specific merge permission before DEV deployment. Runtime roadmap unchanged.
+
 > #1071 actual-parent checkpoint 2026-10-03: #1070 merged194b1e6e at04:21:17Z
 > after owner confirmation and420s gates. Reviewed/squash treesfd38bcde match.
 > Normal actual-main merge retains every stability test and both histories;

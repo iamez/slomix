@@ -1,5 +1,14 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · GRANT SELECT does not make existing permissions read-only.**
+  Default ACLs are copied onto newly created tables/sequences. Runtime migration
+  tests with a pristine role missed DEV's pre-existing website CRUD defaults.
+  Reproduce inherited grants before migration; revoke only scoped runtime
+  objects, retain legacy/default ACLs, and verify effective rights through both
+  catalog queries and actual denied SQL. Fail closed if unrelated PUBLIC or
+  inherited role privileges still authorize writes; do not revoke those globally.
+  Test SET LOCAL ROLE must be RESET before releasing a successful savepoint.
+
 - **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
   After a usage-limit pause, the previously clean frontend lock had newly
   observed undici and brace-expansion findings. Refresh the advisory result
