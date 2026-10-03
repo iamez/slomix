@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-03) Recovered interrupted #1027 main19e65354 merge,
+  retaining both histories. Focused checks repeated; fresh publication gates
+  still required. No service restart or production changes.
+
 - (Astra, 2026-09-28) #1027 actualmain4de6f07e integrated, frontend inputs
   unchanged from845-test/build proof. Fresh typecheck, API hash, actual installed
   YAML/nanoid guard probes and50plan/watchdog cases pass. No deployment.
@@ -33,6 +37,19 @@
   Existing Vitest4.1.11 preserved. npm audit still finds high nanoid<3.3.18,
   so no clean-audit/readiness claim. No npm ci or runtime validation yet;
   next controlled dependency decision and frontend validation, no deployment.
+- (Astra, 2026-09-28) #969 integrated actual worker main4de6f07e normally;
+  both histories retained, Node/CI/PyYAML bytes unchanged. Root99combined
+  cases pass34.80s, including actual child cleanup. No service action.
+
+- (Astra, 2026-09-28) #969 normal main1f4a388d refresh: six node/plan contracts
+  pass; isolated22.23.2 binary verified by two version paths. Old22.13.1 pin
+  mutation fails, restored/cmp. No install/build/browser/service/lock change.
+  Root owns remote review/merge; original runtime1986d671 plan preserved.
+
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
 
 - (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
   installed before spawn through close; custom side effects replay even with
