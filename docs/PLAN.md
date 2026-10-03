@@ -1,5 +1,21 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Result2026-10-03: owner restarted proofPG. Actual canonical parser + adapter
+>on private restored cloneC passed receipt-python and receipt-sql failures AFTER
+>vehicle INSERT visible inside transaction/invisible to observer. Both return
+>failure with0rows/0receipts; retry commits1vehicle/1receipt; repeat unchanged.
+>Initial measurement failed before injection because synthetic vehicle identity
+>collided with earlier proof (unique key excludes map_name). Distinct fixture
+>vehicle names corrected; no real data or schema changed to accommodate test.
+>Added permanent test_proximity_receipt_failure_pg.py: real transactions and
+>observer, synthetic data step plus canonical receipt/import control flow;
+>Python/SQL failures and simulated missing receipt capability. Combined suite
+>18passed3.61s, zero skips; removing both guards gives3PG failures, restored/cmp.
+>New integration test Ruff clean. Existing parser DTZ warnings remain baseline.
+>This closes bounded receipt-failure proof, NOT all-section/concurrency/source
+>replacement or standalone worker acceptance. Next review/publish this slice,
+>then adopt boundary with durable retry/linkage ownership; original plan intact.
+
 > Continuation2026-10-03: proof service rechecked, MainPID0/failed/timeout.
 >Prepared private proximity_acceptance.py receipt-python and receipt-sql modes,
 >each with separate synthetic filename/map. Injection asserts actual vehicle

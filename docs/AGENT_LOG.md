@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-03 · Receipt failure can lie about committed ingestion.**
+  Proximity receipt errors were swallowed. A Python failure could commit data
+  without a receipt; a SQL failure could roll back while import_file returned
+  success. Propagate receipt failure through the transaction and require an
+  observer-based post-write failure/retry proof. In synthetic vehicle fixtures,
+  changing map alone does not avoid the unique key: session/date/start/vehicle
+  identity must differ. Assert the data write actually happened before injecting.
+
 - **2026-10-03 · Read-only ACL checks need more than table privileges.**
   PostgreSQL documents column ACLs separately and allows NOINHERIT memberships
   to remain reachable through SET ROLE. PG16 separates SET from MEMBER; earlier

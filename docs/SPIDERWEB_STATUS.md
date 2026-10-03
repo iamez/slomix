@@ -6,9 +6,13 @@ Private PostgreSQL proof now covers one synthetic vehicle: failed write leaves
 zero rows/receipts, retry commits one of each, repeat does not duplicate. Imports
 of Discord/website/config are forbidden in that process. The synthetic map has
 no canonical round, so this is not round-linkage or complete Spiderweb proof.
-Receipt-error propagation still needs a dedicated test: the existing parser's
-`_mark_file_processed` catches exceptions. Do not equate parser success with
-durable acknowledgment until that path is verified and addressed.
+Receipt-error propagation is now corrected on this development branch (not yet
+merged/deployed): missing receipt capability or a failed write aborts the import.
+Private restored-DB proof covers Python and SQL failures after a vehicle INSERT,
+zero remaining rows/receipts, successful retry and unchanged repeat. Permanent
+PostgreSQL regressions also cover simulated missing receipt capability; reverting
+the guards fails all three cases. This does not prove concurrent-writer safety or
+file-replacement identity. Those remain gates before standalone worker adoption.
 
 The completed SW-2/SW-3/SW-4 work below must not be rebuilt or confused with
 runtime independence. The automatic ingestion and relinking loops still live
