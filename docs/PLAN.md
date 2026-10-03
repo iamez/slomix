@@ -3,7 +3,8 @@
 > Security refresh2026-10-03: live npm audit found two affected package groups,
 > undici7.29.0 and brace-expansion2.1.4, despite September28's audit0. Narrow
 > lock patch advances only these entries to7.29.1/2.1.7 with registry integrity;
-> existing jsdom^7.24.5/minimatch^2.0.1 ranges permit them, no overrides or
+> jsdom's undici^7.24.5 and minimatch's brace-expansion^2.0.1 permit them;
+> no overrides or
 > unrelated metadata changes. Clean npm ci --ignore-scripts succeeds; separate
 > npm audit JSON reports0 across268 dependencies. Fresh typecheck,70files/
 >845tests259.88s(singleworker), SPA build2.58s pass; generated API SHA61f4c4a5
