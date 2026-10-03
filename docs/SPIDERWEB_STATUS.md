@@ -1,5 +1,31 @@
 # Spider web — status for reviewers (2026-09-06)
 
+## Runtime independence checkpoint (2026-10-03)
+
+The completed SW-2/SW-3/SW-4 work below must not be rebuilt or confused with
+runtime independence. The automatic ingestion and relinking loops still live
+in `ProximityCog`; ingestion's `before_scan` awaits `bot.wait_until_ready()`.
+Turning Discord off is therefore **not an accepted Spiderweb operating mode**.
+
+The first extraction is `shared/proximity_import.py`: explicit resolved session
+date, file, gametimes directory and caller-owned transactional adapter; canonical
+parser reuse, no connection/config/Discord startup and no local acknowledgment.
+This new entry point is not yet wired into a worker or the legacy cog. It does
+not establish a single-writer lease or cure parser receipt/concurrency semantics.
+
+Before the runtime cutover, the plan must prove these separately:
+
+1. Capture complete proximity files with durable source identity and bounded retries.
+2. Import with one writer; prove commit/rollback and restart deduplication on PostgreSQL.
+3. Preserve midnight/session/round linking, late stats arrival and correlation delivery.
+4. Keep ingesting with Discord AND the website stopped; compare stored tracks,
+   events, linkage and receipts through independent queries, not process liveness.
+5. Restart the website and verify real Spiderweb snapshots, POV information limits,
+   absent/unavailable states, freshness and historical-data compatibility.
+
+Do not publish a layer-4 score just because the ingestion path changes. Existing
+scientific verdicts and withheld metrics below remain unchanged.
+
 The "spider web" is the owner's name for the whole project's end state: every
 statistic connected to every other through **position × time × player state ×
 event**, so that a positional score can say not only *what* a player did but

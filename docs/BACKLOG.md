@@ -1,5 +1,10 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-03 Spiderweb detour after successful DEV preflight: added neutral import
+>boundary and explicit runtime acceptance gates; existing scene/LOS/research
+>work preserved. Actual PG proof pending isolated service restart. No deployment
+>or Discord shutdown. Return to original runtime sequence after this slice.
+
 > Pravilo za skoke: ko uporabnik vpraša nekaj IZVEN trenutnega taska,
 > najprej TUKAJ zapiši, kje si ostal; po fixu se vrni in vpiši, kaj si
 > spremenil — tudi če si kaj pokvaril. Commit po vsakem zaključenem

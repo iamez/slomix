@@ -1,5 +1,20 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Spiderweb runtime slice 2026-10-03 (additive, original roadmap retained):
+>SW-2 scene, SW-3 oracle LOS and SW-4 research protocol already exist on main;
+>do not rebuild them from the older detached checkout's September6 status.
+>Confirmed gap: ProximityCog owns scan/relink tasks, ingestion before_scan waits
+>for Discord readiness. New shared/proximity_import.py establishes explicit
+>caller-owned transactional import, no inferred session/date or default DB.
+>Not wired into worker/cog yet; no runtime-independence or successful PG import
+>claim. Nine boundary tests pass; removing transaction guard produces3failures,
+>restored and cmp checked. Isolated proofPG expired before new importer DB proof.
+>Next prove actual canonical proximity import/rollback/retry on private PG, then
+>adopt boundary preserving legacy behavior; separately extract durable capture,
+>receipt/single-writer ownership, relinking and correlation. Discord+website-OFF
+>ingestion and restarted Spiderweb snapshot acceptance are mandatory before
+>runtime completion. Keep layer4 withheld verdicts unchanged. No live mutations.
+
 > 2026-10-03 #1078 CI coverage: retain exactly the existing two Python check
 > names/jobs, pairing Python3.11 with PostgreSQL14 and Python3.13 with PostgreSQL17
 > (not a cross product). No triggers or extra jobs added. Images pinned to root's
