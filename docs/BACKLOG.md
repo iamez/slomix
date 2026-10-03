@@ -85,6 +85,10 @@
   writes final name directly, so stable metadata is NOT proof of producer close.
   Trusted completion/manifest remains a gate; no remote/service changes.
 
+- (Astra, 2026-10-03) Prepared1070 on reviewed1069, preserving source and
+  both documentation histories.68tests pass; two deliberate guard failures
+  observed then restored/cmp. Await actual parent merge, no live service action.
+
 - (Astra, 2026-09-28) #1070 local bda56937 includes final SSH sidecar guard
   and preserved worker fixes. 150 combined cases pass in 23.00s including
   timeout with present final content and safe retries. Await #1069 actual main.
@@ -100,6 +104,46 @@
   retries recover missing content and skip already-complete/conflicting content.
   Mutation fails/restores. No orphan deletion or source acknowledgement. Next
   source metadata/discovery and verified importer integration; no services changed.
+
+- (Astra, 2026-10-03) Newly observed undici/brace-expansion advisories repaired
+  narrowly in1027. Cleaninstall/audit0/typecheck/845tests/SPA build succeed;
+  actual package probes and failing/restored isolated mutations verified. No
+  service/deploy. Publish fresh head, never reuse September's clean-audit claim.
+
+- (Astra, 2026-10-03) Recovered interrupted #1027 main19e65354 merge,
+  retaining both histories. Focused checks repeated; fresh publication gates
+  still required. No service restart or production changes.
+
+- (Astra, 2026-09-28) #1027 actualmain4de6f07e integrated, frontend inputs
+  unchanged from845-test/build proof. Fresh typecheck, API hash, actual installed
+  YAML/nanoid guard probes and50plan/watchdog cases pass. No deployment.
+
+- (Astra, 2026-09-28) #1027 main ec8ec7ed integrated normally as0ee8e3e6.
+  All frontend/API inputs identical to022f1115's845-test proof; fresh typecheck,
+  API generationcmp and50plan/watchdogtests pass. No Nodebranch mixed in.
+  Proof scripts copied to durable local audit path, cmp verified; root publishes.
+
+- (Astra, 2026-09-28) #1027 local dependency proof complete: zero audit findings,
+  identical original/patched generated API types, typecheck, 845 tests/70 files
+  and SPA build succeed. Six built HTML asset references resolve offline.
+  Actual YAML/nanoid guard mutations fail, restored/cmp and probes pass; no
+  browser/server/deploy. Ready for parent-led main sync, publication and review.
+
+- (Astra, 2026-09-28) #1027 compatible nanoid3.3.19 lock patch removes last
+  audit finding; original/patched OpenAPI output identical and typecheck passes.
+  Bounded old dependency probes fail, patched probes pass. Full single-worker
+  Vitest run in progress; SPA build next. Only three package entries changed
+  versus original PR lock; no runtime server or production action.
+
+- (Astra, 2026-09-28) #1027 lock-only upstream security patch prepared:
+  core1.34.20/YAML4.3.2 only; unrelated npm10 libc metadata loss restored.
+  Existing Vitest4.1.11 preserved. npm audit still finds high nanoid<3.3.18,
+  so no clean-audit/readiness claim. No npm ci or runtime validation yet;
+  next controlled dependency decision and frontend validation, no deployment.
+
+- (Astra, 2026-10-03) Recovered interrupted #1069 main19e65354 merge,
+  retaining both histories. Focused checks repeated; fresh publication gates
+  still required. No service restart or production changes.
 
 - (Astra, 2026-09-28) #1069 local 005e8d83 includes final SSH identity and
   preserved worker fixes; 144 combined cases pass in 18.35s. Initial wrong
@@ -117,6 +161,21 @@
   pass; offline transport with actual child/filesystem demonstrates timeout can
   leave either partial or final content. Guard mutation fails/restores. Next
   reconciliation composition/source identity; no activation or network claim.
+
+- (Astra, 2026-09-28) #969 integrated actual worker main4de6f07e normally;
+  both histories retained, Node/CI/PyYAML bytes unchanged. Root99combined
+  cases pass34.80s, including actual child cleanup. No service action.
+
+- (Astra, 2026-09-28) #969 normal main1f4a388d refresh: six node/plan contracts
+  pass; isolated22.23.2 binary verified by two version paths. Old22.13.1 pin
+  mutation fails, restored/cmp. No install/build/browser/service/lock change.
+  Root owns remote review/merge; original runtime1986d671 plan preserved.
+
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
+
 - (Astra, 2026-09-28) #1068 fresh signal-lifetime findings fixed: one handler
   installed before spawn through close; custom side effects replay even with
   original error; 0.01s minimum grace rejects unsupported tiny budgets. Every
