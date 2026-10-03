@@ -1,5 +1,9 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-03 receipt failure fix prepared with two failing-before/passing-after
+>tests and restored mutation. Real PG post-write failure/rollback still pending
+>isolated service restart. No deployment or production change.
+
 > 2026-10-03 Spiderweb detour after successful DEV preflight: added neutral import
 >boundary and explicit runtime acceptance gates; existing scene/LOS/research
 >work preserved. Actual PG proof pending isolated service restart. No deployment

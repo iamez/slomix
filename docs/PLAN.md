@@ -1,5 +1,21 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Receipt fix2026-10-03 prepared locally: canonical parser previously returned
+>True after data writes when receipt table was absent or receipt execute raised
+>a Python exception. Regression reaches actual receipt path after synthetic data
+>write; both cases failed on original code (True is False, no rollback).
+>_mark_file_processed now raises on missing table and propagates write failure
+>to import_file's transaction boundary. Same parser line count, no migration.
+>20targeted tests pass; broader selection39pass/1unrelated collection skip.
+>Mutation reverting both lines gives2failures; restored/cmp. Initial test stub
+>was falsely green because it lacked objective_focus; replaced with actual file
+>parsing plus receipt-path reachability assertion. Ruff's DTZ001:718/DTZ007:1584
+>are reproduced unchanged on HEAD; new test lint clean. ActualPG receipt-failure
+>proof PENDING owner restart (proofservice expired), so no push/deploy readiness
+>claim. Existing adapters lacking transactions still cannot guarantee rollback;
+>new runtime boundary requires one. Follow up receipt-read failure/concurrency
+>and worker wiring separately; original Runtimev2 and SaaS scope preserved.
+
 > Result2026-10-03: owner supplied incremental SaaS extraction guidance; no new
 >SaaS product scope. Local ignored docs/research/future-saas-extraction.md records
 >components, game-specific limits, prerequisites and over-engineering risks.

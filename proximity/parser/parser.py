@@ -1739,7 +1739,7 @@ class ProximityParserV4:
         capability_manifest). NULL remains possible and still means "unknown".
         """
         if not await self._table_has_column('proximity_processed_files', 'filename'):
-            return
+            raise RuntimeError("Proximity import receipt table is unavailable")
         try:
             # BOTH 062 columns must exist — a partially-migrated/diverged
             # schema with round_key but not tracker_version would make the
@@ -1808,7 +1808,7 @@ class ProximityParserV4:
                 (filename,),
             )
         except Exception as e:
-            self.logger.warning(f"Could not mark file processed: {e}")
+            raise RuntimeError("Could not persist proximity import receipt") from e
 
     async def _import_engagements(self, session_date: str):
         """Import engagements to combat_engagement table"""
