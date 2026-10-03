@@ -1,5 +1,11 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> Actual-main checkpoint2026-10-03 for1070: #1069 mergedb25d4020
+> at02:58:00Z after420s gates; reviewed/squash treesd2482893 match exactly.
+> Normal merge retains both documentation histories. Source/tests byte-identical to55cd33dc after conflict resolution; earlier68-case and restored guard proof remain applicable.
+> Publish for fresh exact-head review/CI. No service or production action;
+> original runtime roadmap, NEVER MERGE exclusions and held956 unchanged.
+
 > Current1070 preparation2026-10-03: normal merge of reviewed1069 head3e2ffad5
 > retains both documentation histories and exact supervised/worker/test bytes
 > from539f77fc. Root68combined cases pass44.01s, including actual owned child
