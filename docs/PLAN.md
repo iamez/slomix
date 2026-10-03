@@ -1,5 +1,16 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 2026-10-03 #1078 resumed after owner restarted private proof service. On actual
+> PostgreSQL14.24, root suite31passed/4version-skipped24.83s; helper independent
+> repeat31passed/4skipped31.55s. Guard mutations observed: column check removed
+> gives8 DID NOT RAISE failures; reachable-role traversal removed gives3 failures;
+> ownership check alone removed gives1 failure. All three edits restored with
+> apply_patch and cmp against saved exactSQL. Real SESSION AUTHORIZATION website
+> followed by SET ROLE proves two-hop NOINHERIT table/sequence/owner capabilities.
+> All fixtures rolled back in postgres disposable schemas; root's restored DB
+> was untouched. Three MAINTAIN cases and PG16 membership-options case still
+> require real newer PostgreSQL; no PG17 runtime claim or version simulation.
+
 > 2026-10-03 #1078 review4172501633/636/639 follow-up, PREPARED NOT PG-VERIFIED:
 > unmerged093 now also rejects effective column privileges, PostgreSQL17 MAINTAIN,
 > and table/sequence rights or ownership reachable through transitive SET ROLE.

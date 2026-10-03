@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra helper, 2026-10-03) #1078 resumed proof: actualPG14.24 gives31passed,
+  4newer-version skips; twelve observed failures across three guard mutations,
+  all restored/cmp. SQL unchanged from98b92702. Root owns restored-copy rehearsal.
+  Next paired PG14/3.11 and PG17/3.13 CI coverage without extra jobs/triggers.
+
 - (Astra helper, 2026-10-03) #1078 review follow-up prepared: column ACLs,
   version-gated MAINTAIN and transitive SET ROLE/ownership checks. Proof service
   expired, so new PG cases/mutations are explicitly pending; no service start,
