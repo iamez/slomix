@@ -145,3 +145,15 @@ def test_runtime_privilege_migration_registered_and_in_bootstrap():
     assert (ROOT / "migrations" / MIGRATION).read_text().strip() in (
         ROOT / "tools/schema_postgresql.sql"
     ).read_text()
+
+
+async def test_missing_generation_grant_cannot_be_certified(acl_db):
+    """Fault-inject an ineffective GRANT and execute the actual SQL postcondition."""
+    conn = acl_db
+    migration = (ROOT / "migrations" / MIGRATION).read_text()
+    grant = "GRANT SELECT ON runtime_cache_generations TO website_app;"
+    assert migration.count(grant) == 1
+    migration = migration.replace(grant, "NULL;")
+    with pytest.raises(asyncpg.RaiseError, match="lacks runtime generation read privilege"):
+        async with conn.transaction():
+            await conn.execute(migration)

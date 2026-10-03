@@ -1,5 +1,13 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 093 follow-up: require effective generation SELECT as well as denied writes.
+> An attempted no-grants/wrong-role fixture stopped earlier with permission denied
+> for runtime_events, so it did not exercise that positive postcondition. Replaced
+> it with an explicit ineffective-GRANT SQL fault injection; disabling only the
+> positive postcondition then fails DID NOT RAISE, restored/cmp. Final focused
+> suite20 passed6.85s. This fault injection is not a claim of a production GRANT
+> failure. All SQL ran in the explicitly configured disposable cluster only.
+
 > 2026-10-03 DEV rehearsal follow-up: inherited default ACLs grant website_app
 > CRUD on newly created runtime tables and rights on their sequences; migration
 > 092's additive SELECT grant does not restrict them. New093 revokes only six
