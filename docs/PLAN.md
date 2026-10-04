@@ -25,6 +25,11 @@ and unchanged importer/parser/test bytes. Actual964 main7a5ac9c1 is included;
 Combined importer/spool/parser plus snapshot/hook/ledger/handoff/artifact/Node/
 plan suite:259 tests pass49.27s. Actual SQL evidence above belongs to76233b74;
 repeat exact-head CI after final prerequisite synchronization.
+Fresh selected-R1 guard mutation after parent integration: four admission cases
+fail ('imported' instead of 'failed'), plus two actual midnight-parser/filesystem
+cases fail ('imported'/'match' instead of 'failed'/'invalid'). Both source files
+restored using apply_patch and cmp against saved copies; six targeted cases
+pass0.18s. This local mutation proof is DBless; CI SQL evidence remains separate.
 
 ## Inherited snapshot preparation — historical checkpoint on 2026-10-04
 
