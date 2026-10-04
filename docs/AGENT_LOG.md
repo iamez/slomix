@@ -1,5 +1,30 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-05 · Reconcile shared admission APIs, not only conflict markers.**
+  An older runtime slice exported validate_stats_filename for manifest/import
+  callers while proximity publication parameterized the same private helper.
+  Retain the public stats validator and separate proximity admission; choosing
+  either conflict side loses a contract. Run both caller families and composed
+  long-name/read-only retries. Widening stats admission must fail the dedicated
+  test; restore the mutation with apply_patch and verify exact bytes with cmp.
+
+- **2026-10-04 · Private spool is a destination, not a chmod of shared input.**
+  DEV local_proximity is a symlink to the shared legacy source. A default find
+  reported zero files because it did not traverse that command-line symlink;
+  find -H plus independent du apparent-byte census measured1085files/1093542894B.
+  Keep Samba permissions intact and publish verified copies privately. Reuse
+  atomic publication mechanics behind separate explicit filename policies;
+  accepting proximity files must not loosen the community stats allowlist.
+  A post-link fsync error leaves final evidence: reconcile, never overwrite.
+
+- **2026-10-04 · Verify the bytes that the parser actually consumes.**
+  Hashing a path and reopening it leaves a replacement window. Capture bounded
+  bytes, verify trusted size/digest, parse that immutable payload, and commit its
+  identity with the receipt/data. Never stamp today's hash onto an old hashless
+  receipt as proof of yesterday's content. Same-size rapid writes may not change
+  observed metadata; metadata checks are supplementary, not the content proof.
+  Full handover must exclude legacy writers that do not enforce the new digest.
+
 - **2026-10-05 · Separate current instructions from pre-merge history.**
   A new closure paragraph does not make contradictory wait instructions in the
   same current section safe. Put an explicit historical heading before the old

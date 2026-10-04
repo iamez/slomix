@@ -1,6 +1,117 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current #1081 queue gate — 2026-10-05
+## Current #1082 queue gate — 2026-10-05
+
+#1079, #1080 and #1081 are merged. Actual main is
+b59a233648162cd1b005bccaab116d2a28f30afe (#1081, 2026-10-04T23:20:59Z).
+Reviewed 9af897c9 and squash trees are identical (23a8194e). All 14 checks and
+matching Codex 5985473080 passed; eleven ownership and six receipt PG scenarios
+actually PASS on both majors. Mandatory cycle completed with no open findings.
+This #1082 now includes actual main. Squash conflicts preserve digest-on-new-row
+claims, old receipt refusal, both histories and the separate stats validator.
+Next: fresh exact-head CI including seven actual PG source cases and review,
+then the mandatory merge cycle. No service/production/liveDB action. Original runtime roadmap
+remains in latest integration PLAN; all preparation entries below historical.
+
+## Historical #1082 preparation — 2026-10-05
+
+Normal local parent6e1296da integration retains both histories and old repairs.
+Real source conflict in runtime_spool reconciled explicitly: retain public
+validate_stats_filename for existing manifest/import callers and default stats
+publication, while the proximity wrapper selects its separate filename pattern.
+No widened stats admission. Run both filesystem suites and composed long-name/
+0400 receipt retries, not only new proximity tests. Other source/test bytes remain
+a6778f53. Predecessors1079-1081 must merge first, then actual-main sync/fresh
+CI PG14/17/review. No publication yet, no services/live DB/production actions.
+Original roadmap remains in latest integration PLAN at
+/home/samba/share/slomix-astra-runtime-integration-20260926; older entries historical.
+
+Fresh combined path-discovered proximity/capability/manifest/spool/capture/docs
+suite557passed/20pre-existing explicit GUID/Lua skips10.21s. Includes actual
+private publication, concurrent publishers, captured-byte parsing and all3long
+read-only retry compositions. Widening retained stats validator to accept
+proximity names makes test_stats_allowlist_not_widened fail DID NOT RAISE;
+restored with apply_patch/cmp.80focused publication/manifest/retry/stats cases
+then pass0.89s; all touched new code/tests Ruff clean. ActualPG7source cases
+remain fresh CI requirement. No source deletion, overwrite or live permission change.
+
+## Historical private proximity publication follow-up — 2026-10-04
+
+Continue the source-identity slice in PR1082, not a new parallel feature or
+deployment. Preserve community stats filename restrictions; add an explicit
+proximity publisher requiring size AND SHA256, reusing the existing atomic
+no-clobber/fsync primitive. Private destination only; no permission changes to
+the shared legacy source. Contract: no final name until complete verified bytes,
+no overwrite on replay/conflict, post-link fsync failure keeps final evidence.
+Prove streaming failure, digest mismatch, concurrent publication and read-back
+through the verified canonical parser input; rerun existing stats-spool tests.
+This supplies local publication, not remote sealing, a worker or old-receipt
+adoption. Full cutover gates and original runtime/Spiderweb phases remain below.
+
+Result: explicit publish_proximity_file added using the same unchanged link/fsync
+core as publish_stats_file. SHA256 required; community allowlist still rejects
+engagement files.140 focused tests pass; expanded proximity+spool/capture suite
+478passed/20existing explicit skips. Digest-bypass mutation fails the same-size
+corruption test (DID NOT RAISE), restored/cmp. Real canonical parser+two real pools
+on private cloneC prove publication -> verified import -> commit/cancel -> replay:
+1vehicle(distance360)/1receipt/matching digest per fresh synthetic fixture. No
+presentation imports or non-proof sockets. Synthetic maps remain unlinked.
+PR1082 original1f2a32a1 CI succeeded and Codex completed without findings, threads0
+(hasNextPage=false); this follow-up requires new exact-head CI/review before use.
+
+Read-only handover census: shared DEV local_proximity resolves to legacy shared
+directory mode775;1085files,1093542894bytes,max2492374bytes,none above8MiB. Independent
+find-stat and du apparent-byte totals/count/max agree. Do NOT chmod that source.
+Private restored clone (not live DB) has1077receipts:1075hashless+2earlier synthetic
+hashed; grouped and COUNT queries agree. Hashless history is not adopted here.
+
+## Verified proximity runtime source — 2026-10-04
+
+Based on PR1081 follow-up8381da13 (CI successful, new Codex review completed
+without major issues, previous sprint thread answered/resolved). No merge.
+Original runtime plan and deferred Home/Spiderweb phases remain unchanged.
+
+Runtime boundary now REQUIRES caller-supplied expected_size/expected_sha256 from
+a trusted sealed capture. Read an owned 0400/0600 regular file in an owned0700
+directory, no final symlink/FIFO; bound raw bytes (default8MiB, caller configurable),
+check descriptor/name metadata and SHA256, then parse those same immutable bytes.
+Do not reopen the source path after verification. Legacy direct parsing remains
+path-based; in-memory input is an optional canonical parser path, not a rewrite.
+
+Outer transaction claims the receipt, binds hash ONLY on a newly inserted row,
+checks existing identity, then runs canonical import inside its nested transaction.
+Any existing NULL hash (TRUE/FALSE/NULL aggregate flag) is unverified: reject,
+never silently adopt or rewrite historical evidence. A different hash is a
+conflict; identical bytes replay without adding aggregates. Canonical failure
+returns False and rolls back even the outer hash/claim; cancellation propagates.
+Validation/conflicts raise explicitly. No schema migration or historical repair.
+
+Evidence:34 focused tests pass, including7 actual-PG source cases. Expanded
+path-discovered proximity suite345passed/20existing explicit skips. Three guard
+mutations each fail as expected: bypass digest comparison, reopen mutable path,
+ignore stored-hash conflict; restored/cmp. New code/tests lint clean; parser import
+ordering separately checked without suppressing unchanged datetime baseline.
+Full canonical parser+two actual pools on private cloneC prove commit/cancel AFTER
+vehicle INSERT with contender blocked, retry/replay1vehicle(360)/1receipt and
+matching stored hash. Network/presentation imports restricted as before. Synthetic
+maps unlinked; no full session-linkage acceptance claim.
+
+Limits: legacy writers still do not enforce content identity. Runtime activation
+requires their controlled exclusion, not merely new receipt locking. Unknown old
+receipts need an explicitly scoped adoption/reconciliation plan before cutover.
+Same bytes do not prove source authenticity, remote seal, correct session linkage,
+unchanging external gametimes, bounded parser object memory or IO wall time.
+Same-size within-tick metadata changes can evade metadata checks; content identity
+rests on SHA256 and parsing captured bytes. A metadata-guard test initially assumed
+every rapid write changes timestamps; fixed its fixture with an explicit timestamp
+change, without weakening the digest/path-substitution guards.
+The existing stats spool rejects _engagements.txt; its allowlist remains unchanged.
+Validate operational proximity size distribution before adopting the8MiB default.
+Next: review/CI, explicit legacy handover/adoption and capture integration, then
+the original Discord+website-off and recovery gates. No service/deployment/merge.
+
+
+## Historical inherited #1081 queue gate — 2026-10-05
 
 #1079 is merged at 7b9b43a6. #1080 is merged at
 5893826278fcfb4db7d100e0e25f5b464e285785 (2026-10-04T23:04:37Z).

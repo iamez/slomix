@@ -1,6 +1,35 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
-> Current1081queue:1079merged;1080published6e0be64b awaiting fresh gates. This
+> Current1082queue:1079merged;1080freshgates pending,1081prepared. Thislocal
+>parent250d34d7 integration keeps all reviewed fixes and shared-admission lesson.
+>Wait actual1081before final1082publication. Original runtime roadmap unchanged.
+
+## Historical preparation — not current gate instructions
+
+> Historical2026-10-05: #1082 local parent6e1296da merge preserves old public stats
+> filename validator and distinct proximity admission. Fresh combined tests next;
+> wait1079-1081actual merges before final sync/publication. Read latest integration
+> PLAN at /home/samba/share/slomix-astra-runtime-integration-20260926. Original
+> runtime/Spiderweb roadmap unchanged; earlier dated entries historical.
+
+> 2026-10-04 PR1082 follow-up: explicit verified proximity publication into a
+> separate private spool, shared no-clobber/fsync core; stats allowlist unchanged.
+> 478passed/20existing skips including old capture/spool regression coverage;
+> SHA-bypass mutation fails/restored/cmp. Full fresh-fixture private-clone proof
+> covers publication through canonical import and two-pool commit/cancel/replay.
+> Original1082 head CI/review clean; follow-up needs fresh gates. Shared legacy
+> permissions untouched. Next source seal/ownership and forward-only handover;
+> historical unknown hashes are not replay/adoption permission. Original plan
+> preserved, no new parallel PR, no service operation/deployment/merge.
+
+> 2026-10-04 source identity: runtime requires verified private bytes + expected
+> size/SHA256, stores digest only for a new claimed receipt, rejects conflicts and
+> all existing hashless receipts. Captured bytes go to canonical parser; failures
+> roll back outer identity binding.345tests pass/20existing skips;3 mutations
+> fail/restored; actual two-pool clone proof passed. Next review/CI and explicit
+> legacy ownership/adoption/capture contracts; no deployment/merge.
+
+> Historical1081queue:1079merged;1080published6e0be64b awaiting fresh gates. This
 >local preparation retains parent review correction and ownership fixes.
 >Next actual1080squash sync, then fresh1081publication/gates. No services.
 

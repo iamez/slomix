@@ -27,6 +27,7 @@ import re
 from bisect import bisect_left
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from io import StringIO
 from pathlib import Path
 
 from proximity.parser.capability_manifest import (
@@ -806,7 +807,7 @@ class ProximityParserV4:
             self.logger.error(f"Error finding files: {e}")
         return sorted(files)
 
-    def parse_file(self, filepath: str) -> bool:
+    def parse_file(self, filepath: str, *, source_bytes: bytes | None = None) -> bool:
         """Parse an engagement file (v3 or v4 format)"""
         self.metadata = self._metadata_defaults()
         self.sections_with_rows: set[str] = set()
@@ -847,7 +848,8 @@ class ProximityParserV4:
         section_label = ''
 
         try:
-            with open(filepath, encoding='utf-8', errors='replace') as f:
+            with (open(filepath, encoding='utf-8', errors='replace') if source_bytes is None
+                  else StringIO(source_bytes.decode('utf-8', errors='replace'), newline=None)) as f:
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -1565,7 +1567,7 @@ class ProximityParserV4:
         except ValueError as exc:
             self.logger.debug("Skipping invalid reaction metric entry: %s (%s)", line[:120], exc)
 
-    async def import_file(self, filepath: str, session_date) -> bool:
+    async def import_file(self, filepath: str, session_date, *, source_bytes: bytes | None = None) -> bool:
         """Parse and import to database
 
         Args:
@@ -1579,7 +1581,7 @@ class ProximityParserV4:
             self.logger.error("Proximity import requires a transaction-capable adapter")
             return False
 
-        if not self.parse_file(filepath):
+        if not self.parse_file(filepath, source_bytes=source_bytes):
             return False
 
         # Convert string date to date object if needed
