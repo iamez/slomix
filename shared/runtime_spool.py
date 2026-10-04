@@ -15,9 +15,17 @@ _PROXIMITY_NAME = re.compile(
 )
 
 
+def validate_stats_filename(filename: str) -> None:
+    """Shared structural admission; calendar validity belongs to the importer."""
+    if not _NAME.fullmatch(filename) or '..' in filename:
+        raise ValueError('Invalid stats filename')
+
+
 def _validate_metadata(filename, expected_size, max_bytes, expected_sha256, *, name_pattern=_NAME):
     """Apply identical metadata bounds to publication and reconciliation."""
-    if not name_pattern.fullmatch(filename) or '..' in filename:
+    if name_pattern is _NAME:
+        validate_stats_filename(filename)
+    elif not name_pattern.fullmatch(filename) or '..' in filename:
         raise ValueError('Invalid input filename')
     if expected_sha256 is not None and (
         not isinstance(expected_sha256, str)
