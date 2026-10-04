@@ -27,9 +27,9 @@
 
 ## Trenutna pozicija
 
-- (Astra, 2026-10-04) #1075 locally synchronized through prepared89d8d906,
-  retaining previous retry/reader fixes and actual maind3a8f4df. Earlier PRs
-  must merge first; fresh actual-main sync/review/CI remain publication gates.
+- (Astra, 2026-10-04) #1075 synchronized through actual main539db373,
+  retaining previous retry/reader fixes. Earlier approved PRs have merged;
+  fresh exact-head review/CI remain gates before the mandatory merge cycle.
   No source activation, service or deployment; original runtime plan retained.
   Composed200/201/240-byte +0400 publication/retry regression added;119cases
   pass, both historical boundary regressions fail under mutation/restored cmp.
