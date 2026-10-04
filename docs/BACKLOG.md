@@ -1,5 +1,14 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04: runtime linkage gate found same-map source misattribution via end
+> versus start clocks. Unique exact source-start lookup now precedes legacy fallback;
+> duplicate start unresolved; filename-derived starts not promoted to identities.
+> 375unit pass/20existing skips;2mutations fail/restored/cmp; full private-clone
+> canonical parser proof resolves right round+session, synthetic writes rolled back.
+> Corrected test-only PG fixture not yet rerun:60minute proof service expired during
+> full suite (Result=timeout), so no full-green claim. CI and owner restart pending.
+> No historical data repair; original runtime roadmap/capture/handover unchanged.
+
 > 2026-10-04 PR1082 follow-up: explicit verified proximity publication into a
 > separate private spool, shared no-clobber/fsync core; stats allowlist unchanged.
 > 478passed/20existing skips including old capture/spool regression coverage;

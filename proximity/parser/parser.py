@@ -753,7 +753,7 @@ class ProximityParserV4:
         if int(self.metadata.get('round_start_unix') or 0) == 0:
             fallback_ts = self._extract_timestamp_from_filename(filepath)
             if fallback_ts:
-                self.metadata['round_start_unix'] = fallback_ts
+                self.metadata.update(round_start_unix=fallback_ts, round_start_is_fallback=True)
                 self.logger.warning(
                     "[ROUND_START_UNIX FALLBACK] file=%s header=0 fallback=%d",
                     os.path.basename(filepath),
@@ -1203,7 +1203,7 @@ class ProximityParserV4:
             target_dt = datetime.fromtimestamp(round_start_unix)  # noqa: DTZ006 — intentional: same host-local round-trip contract
 
         try:
-            from bot.core.round_linker import resolve_round_id_with_reason
+            from proximity.parser.round_identity import resolve_proximity_round_id
         except Exception as e:
             self.logger.error(
                 f"round_linker import failed — round will be unlinked: {e}",
@@ -1225,13 +1225,13 @@ class ProximityParserV4:
         window_minutes = max(1, min(window_minutes, 180))
 
         try:
-            round_id, diag = await resolve_round_id_with_reason(
+            round_id, diag = await resolve_proximity_round_id(
                 self.db_adapter,
                 map_name,
                 round_number,
                 target_dt=target_dt,
                 round_date=round_date,
-                round_time=None,
+                source_start_unix=0 if self.metadata.get('round_start_is_fallback') else round_start_unix,
                 window_minutes=window_minutes,
             )
         except Exception as exc:

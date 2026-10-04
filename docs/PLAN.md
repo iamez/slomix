@@ -1,5 +1,39 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Runtime proximity round identity — 2026-10-04
+
+New slice based on1082/a6778f53. Actual private-clone characterization reproduced
+wrong round/session when source end is nearer a later same-map/R1 start, despite
+an exact first-round start identity. Synthetic rows rolled back; no history scope
+claim. Regression initially fails102!=101. Contract: prefer a UNIQUE exact match
+of plausible source start + map + round; duplicate identity stays unresolved.
+If no exact identity, retain existing end-target fallback for legacy compatibility.
+No schema or historical repair, no changing generic linker's other callers.
+Original source/ownership/capture and runtime/Spiderweb roadmap remains below.
+
+Implementation: proximity-specific resolver probes indexed map/round/start identity
+(LIMIT2, duplicate -> ambiguous_source_start), then delegates unchanged to the
+legacy linker only if no exact match or implausible/missing start. Filename-derived
+start is explicitly tagged and never promoted into this exact-source probe; parser
+reuse resets metadata provenance. Main parser line count unchanged (4replacements).
+Read-only EXPLAIN on clone confirmed idx_rounds_map_round_start, no new migration.
+
+Proof:375unit tests pass/20existing skips;11focused round-identity tests. Original
+regression102!=101, bypass mutation repeats it; filename-provenance mutation fails
+1789787400!=0. Both restored/cmp. Full canonical parser+real adapter on private
+clone before timeout: single+repeated-map fixtures resolve to expected round and
+session, source start=linked start; all writes rolled back and observer0rows.
+This is linkage mechanism proof, not a committed whole-session import.
+
+PG fixture initially failed DuplicateTableError (journal fixture already creates
+rounds); corrected to ALTER only the test-owned schema. Full rerun interrupted
+at12:39:37CEST by proof service's60minute RuntimeMax, Result=timeout: connection
+was closed in the middle of operation;1failed/394passed/21skips/6errors. Do NOT
+report that run green. Corrected2PG linkage tests still need execution; service
+restart owner-only, no live DB fallback. CI exact-head PG validation required.
+Interrupted fixture teardown may leave a test-owned schema in disposable postgres;
+inspect after restart, do not blindly clean schemas. No live data repair/deploy.
+
 ## Private proximity publication follow-up — 2026-10-04
 
 Continue the source-identity slice in PR1082, not a new parallel feature or

@@ -1,5 +1,16 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Compare the same clock before nearest-round fallback.**
+  Proximity's end timestamp passed as target is compared to rounds.start; a later
+  same-map/R1 round can beat the exact original source start and select a wrong
+  session. Private synthetic clone proof observed this, not historical corruption.
+  Prefer unique exact map/round/header-start identity; ambiguous identity remains
+  unresolved. Do not promote filename-derived fallback starts into header identity.
+  Keep legacy fallback semantics for absent exact matches. Test journal_db already
+  creates a minimal rounds table; extend that private fixture rather than recreate.
+  Check remaining proof-service lifetime before suites: RuntimeMax interrupted a
+  run and its teardown; connection-closed errors are not a successful guard proof.
+
 - **2026-10-04 · Private spool is a destination, not a chmod of shared input.**
   DEV local_proximity is a symlink to the shared legacy source. A default find
   reported zero files because it did not traverse that command-line symlink;
