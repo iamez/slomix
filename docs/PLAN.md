@@ -2,6 +2,16 @@
 
 ## Runtime same-filename ownership — 2026-10-04
 
+Review follow-up: PR1081 CI found one failing existing sprint pipeline test
+(assert False is True); its fake adapter lacked the newly-required transaction.
+Updated only that test adapter with transaction/rollback tracking and write-scope
+assertions. The earlier local test_proximity*.py glob excluded proximity_*_test.py;
+use path-discovered *proximity* tests / full collection, not naming assumptions.
+Production transaction requirement unchanged; fresh exact-head CI/review required.
+Reproduced sprint failure, then passing sprint test. Mutating fake transaction
+activation fails its write-scope guard, restored/cmp. Path-discovered proximity
+selection now320passed/20existing skips; changed fixture lint clean.
+
 Continuation of PR1080 (32e515bd), itself dependent on1079; no merges authorized.
 Original runtime roadmap remains below. Home ideas remain deferred.
 

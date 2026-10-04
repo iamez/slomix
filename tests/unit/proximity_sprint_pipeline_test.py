@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -8,8 +9,26 @@ from proximity.parser.parser import ProximityParserV4
 class _FakeDB:
     def __init__(self):
         self.calls = []
+        self.in_transaction = False
+        self.commits = 0
+
+    @asynccontextmanager
+    async def transaction(self):
+        assert not self.in_transaction
+        self.in_transaction = True
+        start = len(self.calls)
+        try:
+            yield
+        except BaseException:
+            del self.calls[start:]
+            raise
+        else:
+            self.commits += 1
+        finally:
+            self.in_transaction = False
 
     async def execute(self, query, params=None):
+        assert self.in_transaction, 'Import writes must use the transaction'
         self.calls.append((query, params))
 
     async def fetch_one(self, query, params=None):
@@ -74,6 +93,7 @@ async def test_sprint_percentage_propagates_to_player_track_insert(tmp_path):
     ok = await parser.import_file(str(file_path), "2026-02-12")
 
     assert ok is True
+    assert db.commits == 1 and not db.in_transaction
     assert len(parser.player_tracks) == 2
 
     by_guid = {track.guid: track for track in parser.player_tracks}

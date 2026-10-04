@@ -1,5 +1,11 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Prefix-only test selection missed a legacy caller.**
+  test_proximity*.py omits proximity_sprint_pipeline_test.py. A transaction
+  contract change therefore passed the selected315 tests but failed full CI.
+  Discover paths/callers and pytest naming patterns, not only the modern prefix.
+  Update participating test adapters; do not weaken the production guard.
+
 - **2026-10-04 · Lock absent receipts before checking them.**
   Two READ COMMITTED import transactions can both read no receipt and double an
   aggregate while leaving only one receipt. Reserve/lock the filename row with
