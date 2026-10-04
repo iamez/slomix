@@ -6,8 +6,10 @@ Owner approved963/964/966/1066/1072/1073/1074/1075/1077, one at a time with
 fresh exact-head review/CI and postmerge verification. No merge yet.
 963 now changes the historical deployment recipe AND its tests; do not reuse
 33be0bbe or d8238e0c payload-identity claims for the corrected head.
-43 focused tests pass, including actual disposable deploy preflight, and the
+44 focused tests pass, including actual disposable deploy preflight, and the
 omitted-target / historical-scope mutations fail then restore/cmp.
+Fresh review also corrected the historical squash lesson: merged PR status
+alone is insufficient; inspect current affected content and immediate tree identity.
 
 LOCAL-ONLY runtime resume: last saved integration checkpoint8e262684, on branch
 refactor/db-runtime-team-assignment-20260926 in
