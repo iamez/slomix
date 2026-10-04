@@ -613,6 +613,57 @@ def test_conflicting_ref_blocks_without_rewriting_and_new_source_gets_new_refs(r
     assert snapshots(repo) == before
 
 
+def test_safe_published_feature_source_does_not_require_main_identity(repo):
+    commit(repo, {"a.py": "old\n"})
+    baseline = git(repo, "rev-parse", "HEAD")
+    git(repo, "tag", "archived-baseline")
+    commit(repo, {"a.py": "new\n"})
+    source = git(repo, "rev-parse", "HEAD")
+    remote = repo.parent / "remote.git"
+    git(remote, "update-ref", "refs/heads/feature", source)
+    git(remote, "update-ref", "refs/heads/main", baseline)
+    git(repo, "update-ref", "refs/remotes/origin/main", baseline)
+    run(repo, "--base", "archived-baseline", "cut", "--push")
+    assert len(snapshots(remote).splitlines()) == 2
+
+
+@pytest.mark.parametrize("source", ["HEAD", "missing", "0" * 40])
+def test_snapshot_guard_requires_existing_immutable_source_oid(repo, source):
+    result = subprocess.run(["bash", str(HOOK), "--review-source", source],
+                            cwd=repo, input=b"", capture_output=True)
+    assert result.returncode != 0
+    assert b"existing full commit OID" in result.stderr
+
+
+@pytest.mark.parametrize("tracking", ["baseline", "unrelated", "absent"])
+def test_non_main_source_scans_restored_baseline_against_pinned_source(repo, tracking):
+    marker = "abcdef" * 3
+    commit(repo, {"archived.conf": "PGPASSWORD" + "=" + marker + "\n"})
+    baseline = git(repo, "rev-parse", "HEAD")
+    git(repo, "tag", "archived-baseline")
+    commit(repo, {"archived.conf": "removed\n"})
+    source = git(repo, "rev-parse", "HEAD")
+    remote = repo.parent / "remote.git"
+    git(remote, "update-ref", "refs/heads/feature", source)
+    git(remote, "update-ref", "refs/heads/main", baseline)
+    if tracking == "unrelated":
+        git(repo, "checkout", "-b", "other", baseline)
+        commit(repo, {"other.py": "unrelated main change\n"}, published=False)
+        git(repo, "checkout", "main")
+    elif tracking == "absent":
+        git(repo, "update-ref", "-d", "refs/remotes/origin/main")
+    else:
+        git(repo, "update-ref", "refs/remotes/origin/main", baseline)
+    assert git(repo, "rev-parse", "HEAD") == source
+    before = git(repo, "ls-remote", "origin")
+    result = run(repo, "--base", "archived-baseline", "cut", "--push", check=False)
+    assert result.returncode != 0, "non-main source hid restored sensitive content"
+    assert "repository publication guard failed" in result.stderr
+    assert marker not in result.stdout + result.stderr
+    assert snapshots(repo) == snapshots(remote) == ""
+    assert git(repo, "ls-remote", "origin") == before
+
+
 @pytest.mark.parametrize("name", ["PGPASSWORD", "RCON_PASSWORD", "API_KEY"])
 def test_warning_only_credential_scan_blocks_noninteractive_publication(repo, name):
     marker = "abcdef" * 3  # Synthetic fixture, not a credential.

@@ -268,11 +268,12 @@ def commit_direct_refs(updates, refs):
             raise ValueError("local ref transaction failed: " + error.strip())
 
 
-def preflight_publication(refs, remote):
+def preflight_publication(refs, remote, source):
     """Run the bundled guard even in fresh clones with no installed Git hook.
 
-    Feed the same create-only ref tuples the eventual push supplies. Check all
-    pairs before publishing the first; normal Git hooks still run on each push.
+    Feed the same create-only ref tuples the eventual push supplies, comparing
+    against the pinned source rather than ambient origin/main. Check all pairs
+    before publishing the first; normal Git hooks still run on each push.
     Diagnostics may quote prohibited content and must never reach the terminal.
     """
     updates = [f"{ref} {sha} {ref} {'0' * len(sha)}\n"
@@ -291,7 +292,7 @@ def preflight_publication(refs, remote):
     env.update({"GIT_CONFIG_COUNT": str(count + 1),
                 f"GIT_CONFIG_KEY_{count}": "diff.orderFile",
                 f"GIT_CONFIG_VALUE_{count}": "/dev/null"})
-    result = subprocess.run(["bash", str(guard)], input="".join(updates).encode(),
+    result = subprocess.run(["bash", str(guard), "--review-source", source], input="".join(updates).encode(),
                             capture_output=True, env=env)
     # The interactive hook has warning-only detections too. There is no human
     # confirmation step here, so any diagnostic must block before publication.
@@ -341,7 +342,7 @@ def main():
                 # Git can elide a same-OID push, including its lease check.
                 # Never complete a partial pair against an unchecked member.
                 raise ValueError("partial remote snapshot pair; publication blocked")
-        preflight_publication(refs, remote)
+        preflight_publication(refs, remote, source)
     updates = [f"{'verify' if ref in existing else 'create'} {ref} {sha}"
                for ref, sha in refs.items()]
     if updates:

@@ -3,6 +3,14 @@
 ## Current snapshot-security correction — 2026-10-04
 
 Owner explicitly approved966, but new review findings block merge.
+Latest non-main-source correction: pass the pinned source OID explicitly to
+the bundled guard. Its snapshot mode compares against that exact commit and
+does not intersect with ambient origin/main. Normal push-hook behavior remains
+unchanged. Two actual published-feature regressions reproduced the old bypass;
+absent-tracking compatibility and safe feature publication are covered too.
+116 combined tests pass40.21s, Ruff/bash-n/ShellCheck clean. Omitting the pinned
+source argument produces2failures; restored/cmp and7 focused tests pass3.24s.
+This establishes scoped publication guards, not a universal credential detector.
 Latest warning-only finding: a zero-exit bundled hook can still diagnose a
 possible credential. Noninteractive snapshot publication now rejects any guard
 output without exposing it. Three actual disposable Git regressions reproduced

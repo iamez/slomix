@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04)966 follow-up pins source OID for bundled snapshot scans,
+  independent of local origin/main. Two real Git bypasses reproduced;116tests
+  pass, source-argument mutation fails/restored/cmp. Safe published feature
+  sources remain supported. No real review refs or service actions.
+
 - (Astra, 2026-10-04) Additional966 review found hidden warning-only credentials.
   Bundled-guard diagnostics now block noninteractive publication before refs,
   without echoing content. Three local Git regressions reproduced the old leak;

@@ -1,5 +1,11 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Scan synthetic review changes against their pinned source.**
+  A mutable local origin/main can describe another branch and hide restored
+  baseline content from a hook's diff/intersection. Pass the immutable source
+  OID explicitly to snapshot preflight; do not use ambient tracking refs to
+  narrow its changed-file set. Test a published feature with differing main.
+
 - **2026-10-04 · Noninteractive publication must stop on scanner warnings.**
   The interactive hook can return success while warning about an assignment.
   Capturing that diagnostic hides the decision from the owner. Snapshot
