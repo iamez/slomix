@@ -1,7 +1,7 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
 > Current1066 preparation2026-10-04: owner-approved older-first consolidation;
-> importer bytes preserved onmain0b22b014. Offline repeat next, new isolated PG
+> importer bytes preserved onmaina2737e7a. Offline repeat next, new isolated PG
 > proof pending. No restart/live DB fallback. Read latest integration PLAN.
 > Earlier dated entries below are historical, not current merge authority.
 
@@ -24,6 +24,14 @@
 > koraku, ne na koncu dneva.
 
 ## Trenutna pozicija
+
+- (Astra, 2026-10-04) #1066 now includes actual963 maina2737e7a. Runtime
+  importer/parser code retained; isolated PostgreSQL evidence must be refreshed
+  before merge. Retained local integration checkpoint8e262684 is an access anchor:
+  read its latest PLAN. Owner-approved queue order still places964/966 first.
+  No local service restart or application database fallback.
+
+### Historical importer checkpoints
 
 - (Astra, 2026-09-28) #1066 verified-entry terminal filename contract corrected:
   validate before I/O and return failed with capture_status=None (unmeasured).
@@ -66,6 +74,16 @@
   canonical importer; 137 unit/actual-PG cases pass, conflict-gate mutation fails
   and restores/cmp. PG stopped. Next connection/source identity and review;
   no deployment, services, source deletion or automatic scheduler.
+### Inherited handoff checkpoints (historical)
+
+- (Astra, 2026-10-04) #963 review correction: current local integration checkpoint
+  is8e262684 in /home/samba/share/slomix-astra-runtime-integration-20260926;
+  read its latest PLAN rather than resuming from historical1986d671.
+  Owner approved963/964/966/1066/1072-1075/1077 individually subject to fresh
+  gates and older-first order. Correct the historical deployment recipe to pass
+  the exact built commit; no live deployment, service or data action.
+  September28 corrections remain in Git history and the dated PLAN below.
+
 - (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
   unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
   checked against actualPG; deliberately mismatched17/14 fails fixture setup.
@@ -1034,6 +1052,28 @@
   #924–#943 na novi main) — če seja ugasne prej, to naredi Astra ali owner.
   Astra vstopi prek `AGENTS.md` §4 → `docs/HANDOFF-astra.md` §E (prva ura) → §C.
   Bundle NI zgrajen (owner: pozneje); sudo/DB geslo rotacija = owner.
+- (Opus 5, 2026-09-07, 12:10; historical snapshot, not current instructions)
+  **SEJA SE ZAKLJUČUJE — predaja je
+  `docs/HANDOFF-opus5-2026-09-07.md`** (komplementarna k `HANDOFF-astra.md`).
+  Mergano danes: #923, #948, #950, #952, #955, #958 → **endpoint gap 13 → 12**,
+  #952/#955/#958 so prišli po v1.45.0. Takrat odprto: **#912** (arena, CI zelen, ⛔ `arena_acc_log`
+  NEIZMERJEN v živo — manjka en dvoboj na prižganem strežniku; razsodnik je
+  `lua_status` podpis, ne datoteka na disku) in **#962** (watchdog je kazal
+  84,9 % diska, `df` 90 % — prag 85 % se je sprožil šele pri `df` ~89,6 %).
+  ⛔ **Bundle ni zgrajen**: nobena SPA sprememba od 09-06 11:03 ni vidna na
+  `:8000`; corrected repository-root recipe for owner-approved build/deploy:
+  From a clean checkout of the owner-approved target commit:
+  `(cd website/frontend && npm run build:app) && DEV_SRC_DIR="$PWD" scripts/dev_deploy.sh "$(git rev-parse HEAD)"`
+  (restart = ownerjev DA; command not executed here). Prelet faze 7 delen
+  (manifest 32 rut + 20 rut, vse 200, 0 konzolnih napak); celoten čaka RAM.
+  SSD sproščen 90 % → 80 % (nič izbrisano, vse v
+  `share/_from_ssd_tmp_2026-09-07/` in
+  `share/slomix-archive/cleanup-2026-08-26/`). Historical note corrected 2026-09-20:
+  inspect timer state/activation and tmpfiles age rules before proposing changes;
+  static alone does not diagnose failed cleanup. Journal vacuum affects archived
+  files; any owner-approved cleanup needs retention review and rotation, and
+  changed journald limits need explicit owner activation. No cleanup was performed.
+
 - (Fable 5.1, 2026-09-07, 04:30) Predaja projekta Astri: `docs/HANDOFF-astra.md`
   (§A Fable, §B sestra dobesedno, §C delovni paket 1–20, §D ne delaj, §E prva
   ura) + `docs/HANDOFF-astra-inventory.md` (inventar po območjih, §11 ownerjeve
