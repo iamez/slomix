@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Ambiguity must survive every retry path.**
+  Refusing duplicate source identities at ingestion is insufficient if a later
+  relinker invokes a matcher that chooses its first exact/canonical hit. Stop
+  both strict and relaxed duplicate branches before fallback. Tests must force
+  the fallback to return a candidate: an empty fake hid the bypass. New shared
+  adapter-facing receipt SQL uses ?; raw asyncpg fixtures translate through the
+  real adapter converter, rather than constraining production to fixture syntax.
+
 - **2026-10-04 · Compare the same clock before nearest-round fallback.**
   Proximity's end timestamp passed as target is compared to rounds.start; a later
   same-map/R1 round can beat the exact original source start and select a wrong

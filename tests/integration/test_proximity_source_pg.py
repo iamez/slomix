@@ -12,6 +12,7 @@ import pytest
 from proximity.parser import ProximityParserV4
 from shared import proximity_import
 from shared.runtime_spool import publish_proximity_file
+from tests.integration.proximity_adapter_helpers import pg_query
 from tests.integration.test_runtime_events_pg import journal_db  # noqa: F401
 
 
@@ -34,10 +35,10 @@ async def source_import(journal_db, monkeypatch, tmp_path):  # noqa: F811
             yield writer
 
     async def execute(query, params=None):
-        return await writer.execute(query, *(params or ()))
+        return await writer.execute(pg_query(query), *(params or ()))
 
     async def fetch_one(query, params=None):
-        return await writer.fetchrow(query, *(params or ()))
+        return await writer.fetchrow(pg_query(query), *(params or ()))
 
     adapter = SimpleNamespace(transaction=transaction, execute=execute, fetch_one=fetch_one)
 

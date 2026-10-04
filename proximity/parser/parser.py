@@ -1703,7 +1703,7 @@ class ProximityParserV4:
         required table directly and let the import boundary report failure.
         """
         row = await self.db_adapter.fetch_one(
-            "SELECT aggregates_applied FROM proximity_processed_files WHERE filename = $1",
+            "SELECT aggregates_applied FROM proximity_processed_files WHERE filename = ?",
             (filename,),
         )
         return bool(row and row[0])

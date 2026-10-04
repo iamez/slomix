@@ -20,7 +20,7 @@ async def claim_import_receipt(adapter, filename: str, *, source_sha256: str | N
         # receipt whose earlier imported content is unknown.
         await adapter.execute(
             """INSERT INTO proximity_processed_files (filename, aggregates_applied, file_hash)
-               VALUES ($1, FALSE, $2)
+               VALUES (?, FALSE, ?)
                ON CONFLICT (filename) DO UPDATE SET
                    aggregates_applied = proximity_processed_files.aggregates_applied""",
             (filename, source_sha256),
@@ -28,7 +28,7 @@ async def claim_import_receipt(adapter, filename: str, *, source_sha256: str | N
         return
     await adapter.execute(
         """INSERT INTO proximity_processed_files (filename, aggregates_applied)
-           VALUES ($1, FALSE)
+           VALUES (?, FALSE)
            ON CONFLICT (filename) DO UPDATE SET
                aggregates_applied = proximity_processed_files.aggregates_applied""",
         (filename,),

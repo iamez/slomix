@@ -2,6 +2,23 @@
 
 ## Runtime proximity round identity — 2026-10-04
 
+Review follow-up on PR1083:5443c8f1 full CI succeeded, including the corrected PG
+fixture, but Codex found2P1 items. Adapter-facing claim/bind/required receipt-read
+queries now use ?; raw asyncpg proof adapters reuse the production placeholder
+converter. Strict-contract regressions failed before fix for both claim modes.
+Production PostgreSQLAdapter accepts both styles; this fixes the documented
+boundary contract, not evidence that existing PostgreSQL imports failed.
+
+Relinker now stops on multiple strict OR relaxed start identities; it must not
+fall through to a generic matcher that can choose the first exact/canonical hit.
+Old tests merely got no result from their fallback fake; new tests force fallback
+to return an ID and assert it is never called and no writes occur. Both failed
+before fix. Mutating both ambiguity guards plus digest-query placeholder gives
+3failures; restored/cmp.406unit tests pass/20existing skips, new/touched files lint
+clean. Two real-PG candidate-query relinker cases added (discovery injected, no
+service startup), alongside the corrected parser PG cases; latest follow-up still
+needs exact-head CI/review because private service remains expired. No deployment.
+
 New slice based on1082/a6778f53. Actual private-clone characterization reproduced
 wrong round/session when source end is nearer a later same-map/R1 start, despite
 an exact first-round start identity. Synthetic rows rolled back; no history scope

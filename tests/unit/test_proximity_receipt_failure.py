@@ -27,7 +27,7 @@ async def test_receipt_failure_escapes_transaction_and_rolls_back(monkeypatch, m
             raise
 
     async def execute(query, params=None):
-        if 'VALUES ($1, FALSE)' in query:
+        if 'VALUES (?, FALSE)' in query:
             return  # Reservation precedes data; inject only at completion.
         assert 'INSERT INTO proximity_processed_files' in query
         assert stored == ['parsed-data'], 'The receipt failure must happen after a data write'

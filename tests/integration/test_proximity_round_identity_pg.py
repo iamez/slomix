@@ -1,13 +1,17 @@
 """Canonical proximity resolver with real candidate identity rows on private PG."""
 # ruff: noqa: SLF001 -- exercise the canonical parser's internal linkage boundary
 
+import time
 from datetime import date
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from proximity.parser import ProximityParserV4
+from tests.integration.proximity_adapter_helpers import pg_query
 from tests.integration.test_runtime_events_pg import journal_db  # noqa: F401
+from tests.unit.test_relinker_round_number_mismatch import _relinker
 
 
 @pytest.mark.parametrize('second_start,expected', [(1789795260, 101), (1789794600, None)])
@@ -36,3 +40,33 @@ async def test_physical_start_identity_with_real_candidates(journal_db, second_s
     else:
         assert parser._round_link_context['round_link_reason'] == 'ambiguous_source_start'
     assert await observer.fetchval('SELECT count(*) FROM rounds') == 4
+
+
+@pytest.mark.parametrize('strict', [True, False])
+async def test_relinker_preserves_duplicate_pg_identity(journal_db, monkeypatch, strict):  # noqa: F811
+    """Real candidate SQL, injected discovery; no service/Discord connection."""
+    writer, observer = journal_db
+    start = int(time.time()) - 300
+    await writer.execute('ALTER TABLE rounds ADD COLUMN map_name TEXT, ADD COLUMN round_start_unix BIGINT')
+    await writer.executemany('INSERT INTO rounds (id,map_name,round_number,round_start_unix) VALUES ($1,$2,$3,$4)', [
+        (101, 'fixture', 1 if strict else 2, start),
+        (102, 'fixture', 1 if strict else 2, start),
+    ])
+    await writer.execute('CREATE TABLE proof_links (round_id INTEGER)')
+    await writer.execute('INSERT INTO proof_links VALUES (NULL)')
+    queries = []
+    async def fetch_all(query, params=None):
+        if 'SELECT DISTINCT map_name' in query:
+            return [('fixture', 1, start, '2026-10-04')]
+        queries.append(query)
+        return await writer.fetch(pg_query(query), *(params or ()))
+    fallback = AsyncMock(return_value=101)
+    monkeypatch.setattr('bot.core.round_linker.resolve_round_id', fallback)
+    execute = AsyncMock()
+    adapter = SimpleNamespace(fetch_all=fetch_all, execute=execute, fetch_val=execute)
+    await _relinker(adapter)._relink_null_round_ids()
+    fallback.assert_not_awaited()
+    execute.assert_not_awaited()
+    assert len(queries) == (1 if strict else 2)
+    assert await observer.fetchval('SELECT count(*) FROM proof_links WHERE round_id IS NULL') == 1
+    assert [tuple(row) for row in await observer.fetch('SELECT * FROM proof_links')] == [(None,)]

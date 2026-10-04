@@ -11,6 +11,7 @@ import pytest
 
 from proximity.parser import ProximityParserV4
 from proximity.parser.import_receipt import claim_import_receipt
+from tests.integration.proximity_adapter_helpers import pg_query
 from tests.integration.test_runtime_events_pg import connection_options, journal_db  # noqa: F401
 
 
@@ -40,12 +41,12 @@ async def test_same_file_waits_then_rechecks_receipt(journal_db, monkeypatch, tm
                 yield conn
 
         async def fetch_one(query, params):
-            row = await conn.fetchrow(query, *params)
+            row = await conn.fetchrow(pg_query(query), *params)
             reads[index].append(None if row is None else row[0])
             return row
 
         async def execute(query, params=None):
-            return await conn.execute(query, *(params or ()))
+            return await conn.execute(pg_query(query), *(params or ()))
 
         async def engagement(day):
             if index == 0 and not release.is_set():
@@ -136,7 +137,7 @@ async def test_same_file_waits_then_rechecks_receipt(journal_db, monkeypatch, tm
 
 def adapter_for(conn):
     async def execute(query, params=None):
-        return await conn.execute(query, *(params or ()))
+        return await conn.execute(pg_query(query), *(params or ()))
     return SimpleNamespace(execute=execute)
 
 

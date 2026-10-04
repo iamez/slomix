@@ -1,5 +1,11 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04 review follow-up1083: initial5443c8f1 CI succeeded but2P1 findings.
+> Fixed new receipt queries to adapter ? contract, adjusted PG proof shims using
+> real converter; prevented strict/relaxed ambiguous relinker fallback. Four
+> regressions failed before,3mutation failures restored/cmp;406unitpass/20skips.
+> Added real-PG relinker candidate tests; await new exact-head CI/review, no merge.
+
 > 2026-10-04: runtime linkage gate found same-map source misattribution via end
 > versus start clocks. Unique exact source-start lookup now precedes legacy fallback;
 > duplicate start unresolved; filename-derived starts not promoted to identities.

@@ -373,6 +373,10 @@ class _ProximityRelinkerMixin:
                         "ORDER BY id LIMIT 2",
                         (map_name, round_number, exact_start_unix),
                     )
+                    if len(exact_rows) > 1:
+                        failed += 1
+                        logger.warning("Re-linker: ambiguous exact source identity; leaving links unchanged")
+                        continue
                     if len(exact_rows) == 1:
                         exact_row = exact_rows[0]
                         round_id = int(
@@ -407,6 +411,10 @@ class _ProximityRelinkerMixin:
                             "ORDER BY id LIMIT 2",
                             (map_name, exact_start_unix),
                         )
+                        if len(relaxed_rows) > 1:
+                            failed += 1
+                            logger.warning("Re-linker: ambiguous relaxed source identity; leaving links unchanged")
+                            continue
                         if len(relaxed_rows) == 1:
                             relaxed_row = relaxed_rows[0]
                             round_id = int(

@@ -27,6 +27,7 @@ import importlib
 import logging
 import time
 from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -196,3 +197,17 @@ async def test_no_relaxed_candidates_keep_the_old_unresolved_outcome():
     await svc._relink_null_round_ids()
 
     assert not [q for q, _ in db.executed if q.startswith("UPDATE")]
+
+
+@pytest.mark.parametrize('strict', [True, False])
+async def test_ambiguous_identity_never_reaches_fuzzy_fanout(monkeypatch, strict):
+    """A later retry cannot undo the importer's deliberate ambiguous decision."""
+    target_unix, round_date = _recent_identity()
+    db = _MismatchDB(target_unix, round_date,
+                     strict_rows=[(101,), (102,)] if strict else [],
+                     relaxed_rows=[(101, 1), (102, 2)])
+    fallback = AsyncMock(return_value=101)
+    monkeypatch.setattr('bot.core.round_linker.resolve_round_id', fallback)
+    await _relinker(db)._relink_null_round_ids()
+    fallback.assert_not_awaited()
+    assert db.executed == []

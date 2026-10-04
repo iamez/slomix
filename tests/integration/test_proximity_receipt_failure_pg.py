@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from proximity.parser import ProximityParserV4
+from tests.integration.proximity_adapter_helpers import pg_query
 from tests.integration.test_runtime_events_pg import journal_db  # noqa: F401
 
 
@@ -25,6 +26,7 @@ async def test_receipt_failure_then_retry(journal_db, monkeypatch, tmp_path, fai
             yield writer
 
     async def execute(query, params=None):
+        query = pg_query(query)
         if armed and 'VALUES ($1, FALSE)' not in query:
             assert await writer.fetchval('SELECT count(*) FROM proof_data') == 1
             assert await reader.fetchval('SELECT count(*) FROM proof_data') == 0
