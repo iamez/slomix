@@ -2,8 +2,8 @@
 
 ## Current reader preparation — 2026-10-04
 
-Owner approved1074 after older predecessors. Normal local941b5e39 parent merge
-retains actual main5de82cfb and both histories.963/964/966/1066 merged; later parents are
+Owner approved1074 after older predecessors. Normal local5ea7fefd parent merge
+retains actual main67ad2d8c and both histories.963/964/966/1066/1072 merged; later parents are
 local preparations, not presumed merged. Reader/source tests remain
 unchanged fromfa658b12, including prior0400/0600 mode repair. Repeat actual
 filesystem proofs; no receipt changes, service activation or deployment.
@@ -38,9 +38,9 @@ review/CI. Original runtime roadmap remains in the latest local integration PLAN
 > activation. Root handles publication/review; original runtime plan retained.
 ### Parent manifest preparation — 2026-10-04, inherited checkpoint
 
-Owner approved1073 after963/964/966/1066/1072. Local normal parent1cb1da12
-integration includes actual main5de82cfb and retains both histories and manifest
-bytes.963/964/966/1066 merged;1072 remains a prerequisite, not presumed merged.
+Owner approved1073 after963/964/966/1066/1072, all now merged. Normal actual-main
+67ad2d8c integration retains both histories and unchanged manifest bytes.
+Reviewed1072 parent1cb1da12 and actual squash67ad2d8c trees are identical.
 227 combined manifest/Lua/capture/import/spool/parser/document/artifact cases
 pass20.27s; manifest source/tests match prior repairedf20023c9 byte-for-byte.
 Current backlog now explicitly routes to latest integration PLAN/access anchor.
@@ -48,9 +48,10 @@ The previous 200->240 filename fix remains present, not discarded as stale.
 Renewed guard mutation back to200 rejects valid201/240-byte names with
 "Manifest filename must be a bounded string" (2fail/1control pass). Restored
 via apply_patch/cmp;44 manifest/document cases pass0.62s. No mutation committed.
-Repeat actual filesystem/no-clobber/fsync and producer-boundary proofs; this
-is not source activation. Final publication waits for actual earlier merges,
-fresh parent/main synchronization and exact-head CI/review.
+Latest combined pre-squash proof:240 cases pass22.72s. After actual-main sync,
+24 filesystem/no-clobber/fsync and document cases pass0.51s; this is not source
+activation. Fresh exact-head CI/review and prior filename thread revalidation
+remain publication/merge gates, followed by the mandatory420s cycle.
 Original runtime plan: latest local integration PLAN, then capture/sealed-source/
 retry/exclusive handover, usable Spiderweb/proximity and later website work.
 

@@ -28,7 +28,7 @@
 ## Trenutna pozicija
 
 - (Astra, 2026-10-04) #1074 locally retains the prior0400/0600 reader repair
-  while incorporating prepared parent941b5e39 and actual main5de82cfb. Owner-approved,
+  while incorporating prepared parent5ea7fefd and actual main67ad2d8c. Owner-approved,
   but publish/review only after earlier merges and another actual-main sync.
   No service, deployment or source activation; original runtime plan retained.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
@@ -49,8 +49,8 @@
 ### Inherited parent checkpoints
 
 - (Astra, 2026-10-04) #1073 retains prior filename-cap repair and manifest
-  runtime proofs during local parent/main refresh. Approved but waiting for
-  earlier merges and fresh exact-head gates; no activation or deployment.
+  runtime proofs during normal actual-main67ad2d8c refresh. Earlier approved
+  predecessors merged; fresh exact-head gates remain, no activation/deployment.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
   preserved local checkpoint8e262684 is an access anchor, not the latest head.
 
