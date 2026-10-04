@@ -13,6 +13,15 @@ former current section. The pre-merge preparation below is now explicitly
 historical. Do not wait for1079 again: it is merged; next gate is1080fresh
 exact-head CI/review followed by the mandatory settle cycle.
 
+Follow-up4179660774 found a second current-labelled entry point in BACKLOG.
+Its current-position section now routes to this top checkpoint and the latest
+integration PLAN, without maintaining a duplicate numeric PR queue. Original
+queue/anchor evidence remains under a separate historical level-2 heading.
+RCA: both old document tests extracted only the first bullet, missing stale
+prose before it. They now inspect the entire current section; both failed on
+old content. Reinjecting stale queue prose fails the new guard, restored/cmp.
+35focused cases pass after correction. No importer or PG test source change.
+
 ## Historical #1080 local preparation — before #1079 merged
 
 Normal integration of published1079 c5d8fc4e preserves both histories and all
