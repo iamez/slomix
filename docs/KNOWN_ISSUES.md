@@ -1,8 +1,12 @@
 # Known Issues
 
+> **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
+> for current triage and proof obligations. The dated ledger and measurements
+> below are historical evidence, not current approval or deployment instructions.
+
 > **Audit qualification — 2026-09-07, source `4f653c01`.** The August
-> measurements below are historical, not current database counts. Current
-> triage and proof obligations are in PLAN's Astra execution ledger. No data
+> measurements below are historical, not current database counts. PLAN's
+> Astra execution ledger records the triage at that date, not current work. No data
 > repair or deployment is authorized by an old "fix direction".
 
 > **Re-verified against code, database and live logs on 2026-08-11.**

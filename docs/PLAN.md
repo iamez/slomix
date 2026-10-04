@@ -11,8 +11,10 @@ and the earlier ledger fixes. Conflicts retained the already-integrated963 tree
 plus964 additions; no historical fixes dropped. New exact-head gates required.
 964 self-review also routes BOTH the continuation prompt introduction and the
 handoff header to the latest PLAN, not the historical September ledger.
-Combined51 contracts/preflight cases pass8.52s; reverting the introduction to
-the old ledger-first advice fails, restored/cmp and7 ledger contracts pass.
+Combined55 contracts/preflight cases pass8.44s. Review follow-up also removes
+the old operational hash from the ledger preamble and routes KNOWN_ISSUES plus
+all handoff entry points to the latest checkpoint. Four regressions reproduced;
+two deliberate stale-routing mutations fail, restored/cmp and11 ledger cases pass.
 
 LOCAL-ONLY runtime resume: retained integration checkpoint8e262684, on branch
 refactor/db-runtime-team-assignment-20260926 in
@@ -1024,8 +1026,8 @@ NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment action
 ## Astra execution ledger — historical authority at 2026-09-07
 
 Historical ledger through September 8, not current implementation status or
-merge authority. Preserve its obligations; resume from the current checkpoint
-at the top of this plan and runtime commit 1986d671, not the old R01 starting gate.
+merge authority. Preserve its obligations as dated evidence; continue only from
+the latest checkpoint at the top of this plan, not an old runtime hash or R01 gate.
 
 **2026-09-08 evidence refresh:** merged current main and retained Claude's new
 R0 query-audit obligation, modularity progress and live-view work. Endpoint
@@ -1225,7 +1227,7 @@ approved reversible DEV cutover. #963 has no merge permission.
 
 ### Consolidation: preserve execution ledger #964 — 2026-09-20
 
-Historical checkpoint; use the September 28 checkpoint above for current work.
+Historical checkpoint; use the latest checkpoint at the top for current work.
 
 Normal current-main integration preserves the older execution ledger and both
 handoff tracks. Its September7/8 measurements/status are historical, not a reset

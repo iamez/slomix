@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -19,6 +21,23 @@ def test_old_resume_is_explicitly_historical():
     assert "**Resume here:** review current checks/findings on #964" not in plan
     current = plan.split("## Historical checkpoints", 1)[0]
     assert "integration checkpoint8e262684" in current
+    introduction = plan.split('## Astra execution ledger — historical authority', 1)[1].split(
+        '**2026-09-08 evidence refresh:**', 1
+    )[0]
+    assert 'and runtime commit 1986d671' not in introduction
+    assert 'only from the latest checkpoint at the top' in ' '.join(introduction.split())
+
+
+@pytest.mark.parametrize('name', [
+    'KNOWN_ISSUES.md', 'HANDOFF-astra.md', 'HANDOFF-astra-inventory.md', 'HANDOFF-next.md',
+])
+def test_every_ledger_entry_point_routes_to_current_plan(name):
+    text = (ROOT / 'docs' / name).read_text()
+    header = text.split('> **Current routing — 2026-10-04.**', 1)
+    assert len(header) == 2
+    route = header[1].split('\n\n', 1)[0]
+    assert 'latest checkpoint in `docs/PLAN.md`' in ' '.join(route.replace('>', '').split())
+    assert 'historical' in route
 
 
 def test_historical_label_does_not_cover_newer_backlog_entries():

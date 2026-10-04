@@ -1,7 +1,11 @@
 # HANDOFF — Astra: full open-work inventory (2026-09-07)
 
+> **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
+> first. The dated inventory and ledger below are historical evidence, not
+> current approval or deployment instructions; recheck live PR states separately.
+
 > **2026-09-08 intake:** this is the historical inventory, not the execution
-> queue. PLAN's Astra ledger records current dispositions and proof limits.
+> queue. PLAN's Astra ledger recorded dispositions and proof limits at that date.
 > Runtime section 5's Discord-only `round_ended` proposal is superseded by
 > transactional `round_stats_imported` at the canonical importer; consumer
 > activation also needs late-update coverage. No automatic historic replay is

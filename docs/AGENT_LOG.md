@@ -1,5 +1,11 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Historical labels do not repair active continuation links.**
+  A dated ledger can still contain an imperative pointing to an obsolete hash.
+  Keep its evidence, but route every handoff/inventory/known-issues entry point
+  and the ledger preamble to the latest PLAN checkpoint. Test the whole entry
+  set so repairing the top-level prompt does not leave a second stale path.
+
 - **2026-10-03 · Read-only ACL checks need more than table privileges.**
   PostgreSQL documents column ACLs separately and allows NOINHERIT memberships
   to remain reachable through SET ROLE. PG16 separates SET from MEMBER; earlier

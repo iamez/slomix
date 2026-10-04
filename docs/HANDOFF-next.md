@@ -10,8 +10,8 @@
 > completion delivery/sealing after consolidation, then new-site audit and an
 > owner-approved reversible DEV transition. No deployment follows from merge.
 >
-> **Historical handoff override — 2026-09-07, Astra.** Start with the "Astra
-> execution ledger" in `docs/PLAN.md`; the sections below are a historical
+> **Historical handoff override — 2026-09-07, Astra.** The "Astra execution
+> ledger" in `docs/PLAN.md` recorded that day's work; the sections below are a historical
 > snapshot, not the current queue. #955 and #912 are merged at `4f653c01`;
 > #961 merged as `28662f04`; its Claude handoff evidence is now included.
 > Merge, build, active service and runtime proof are separate states.

@@ -1,7 +1,11 @@
 # HANDOFF — Astra (Codex CLI), 7. 9. 2026
 
-> **Execution corrections, Astra 2026-09-08:** use PLAN's Astra execution
-> ledger before the historical work package below. The approved runtime first
+> **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
+> first. The dated ledger, observations and work package below are historical
+> evidence, not current approval or deployment instructions.
+
+> **Historical execution corrections, Astra 2026-09-08:** PLAN's Astra execution
+> ledger recorded the work package at that time. The approved runtime first
 > event is `round_stats_imported` in the canonical `process_file()` transaction,
 > not `round_ended` in a Discord mixin. Consumers wait for late-update coverage.
 > Stability gates development; soak gates activation. Raw Codex input logging
