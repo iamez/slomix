@@ -27,6 +27,11 @@ Latest published-parent9ed9c092 integration:346combined producer/worker/Lua/
 capture/import/receipt/spool/document cases pass61.68s. Worker/source-test bytes
 match main (last worker implementation commit4de6f07e); producer/reservation/Lua
 paths matchae39292f exactly. These confirm retained fixes, not new activation.
+Renewed pre-publication mutations: removing claim O_EXCL yields two concurrent
+winners (assert0==1 failure); dropping generation from Lua completion delivery
+fails the actual interpreter with "unexpected writer outcome: ok". Both restored
+using apply_patch/cmp;34reservation/Lua cases pass0.43s afterward. No mutation
+committed and no real source dispatched; this repeats the retained guard proofs.
 Original runtime delivery/sealed-source/retry/handover and Spiderweb roadmap is
 preserved in the latest local integration PLAN. No service or production action.
 
