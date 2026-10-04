@@ -31,6 +31,8 @@
   retaining previous retry/reader fixes and actual main5de82cfb. Earlier PRs
   must merge first; fresh actual-main sync/review/CI remain publication gates.
   No source activation, service or deployment; original runtime plan retained.
+  Composed200/201/240-byte +0400 publication/retry regression added;119cases
+  pass, both historical boundary regressions fail under mutation/restored cmp.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
   preserved local checkpoint8e262684 is an access anchor, not the latest head.
 

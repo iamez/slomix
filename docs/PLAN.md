@@ -8,11 +8,19 @@ and original retry bytes10d232f1. Repeat real filesystem reconciliation proofs.
 No activation, service, deployment or application DB action. Publish only after
 actual earlier merges and another main sync, exact-head tests/review/CI.
 963/964/966/1066 are merged;1072/1073/1074 preparations do not imply their merge.
-263 combined retry/reader/manifest/Lua/capture/import/spool/parser/document/
-artifact cases pass20.76s. Retry source/tests remain byte-identical to10d232f1.
+Previous baseline:263 combined retry/reader/manifest/Lua/capture/import/spool/
+parser/document/artifact cases pass20.76s. Retry implementation remains byte-
+identical to10d232f1; its original tests are retained and extended below.
 Renewed caller-identity guard mutation fails both size/hash filesystem cases:
 content_present instead of receipt_conflict. Restored with apply_patch/cmp;
 60 receipt/document cases pass1.03s after restoration. No mutation committed.
+New composed regression covers200/201/240-byte names through capture, first
+receipt publication under umask0277, and two unchanged retries. Both files stay
+0400 with identical inode/bytes/mode, no added entries; bytes/stat/hash agree.
+0600-only reader mutation fails all3 cases;200-byte admission mutation fails
+201/240 with200 as control. Both restored/apply_patch/cmp.119combined receipt/
+spool/document cases pass1.65s, Ruff clean. This is local filesystem evidence,
+not producer trust, source activation or a crash-durability acknowledgement.
 Original runtime capture/sealed-source/retry/handover then Spiderweb plan retained
 in the latest local integration PLAN, not replaced by this queue detour.
 
