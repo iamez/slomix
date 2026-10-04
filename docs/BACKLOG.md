@@ -27,8 +27,8 @@
 
 ## Trenutna pozicija
 
-- (Astra, 2026-10-04) #1075 locally synchronized through prepared017492d0,
-  retaining previous retry/reader fixes and actual mainfa40c12e. Earlier PRs
+- (Astra, 2026-10-04) #1075 locally synchronized through prepared5e0929d9,
+  retaining previous retry/reader fixes and actual main5de82cfb. Earlier PRs
   must merge first; fresh actual-main sync/review/CI remain publication gates.
   No source activation, service or deployment; original runtime plan retained.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
@@ -48,7 +48,7 @@
 ### Inherited parent checkpoints
 
 - (Astra, 2026-10-04) #1074 locally retains the prior0400/0600 reader repair
-  while incorporating prepared parent32c2aa31 and actual mainfa40c12e. Owner-approved,
+  while incorporating prepared parent941b5e39 and actual main5de82cfb. Owner-approved,
   but publish/review only after earlier merges and another actual-main sync.
   No service, deployment or source activation; original runtime plan retained.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
@@ -107,10 +107,11 @@
   Next manifest recovery and source collision protocol, no activation.
 ### Inherited parent checkpoint
 
-- (Astra, 2026-10-04) #1072 approved but waits for1066;963/964/966 merged.
+- (Astra, 2026-10-04) #1072 approved;963/964/966/1066 merged and actual main5de82cfb
+  incorporated. Fresh exact-head tests/CI/review required before1072 merge.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
   retained local checkpoint8e262684 is an access anchor, not the latest head.
-  Local parent06e5a20d includes actual mainfa40c12e and pending1066, while
+  Local parent06e5a20d plus its actual squash5de82cfb included, while
   preserving the offline Lua prototype and both histories. No activation/deploy;
   fresh actual-main sync and
   exact-head tests/review/CI remain required after the earlier merges.

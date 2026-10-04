@@ -2,14 +2,17 @@
 
 ## Current retry preparation — 2026-10-04
 
-Owner approved1075 after earlier queue entries. Normal local017492d0 parent
-merge preserves actual mainfa40c12e, both histories, reader0400/0600 handling
+Owner approved1075 after earlier queue entries. Normal local5e0929d9 parent
+merge preserves actual main5de82cfb, both histories, reader0400/0600 handling
 and original retry bytes10d232f1. Repeat real filesystem reconciliation proofs.
 No activation, service, deployment or application DB action. Publish only after
 actual earlier merges and another main sync, exact-head tests/review/CI.
-963/964/966 are merged;1066/1072/1073/1074 preparations do not imply their merge.
+963/964/966/1066 are merged;1072/1073/1074 preparations do not imply their merge.
 263 combined retry/reader/manifest/Lua/capture/import/spool/parser/document/
 artifact cases pass20.76s. Retry source/tests remain byte-identical to10d232f1.
+Renewed caller-identity guard mutation fails both size/hash filesystem cases:
+content_present instead of receipt_conflict. Restored with apply_patch/cmp;
+60 receipt/document cases pass1.03s after restoration. No mutation committed.
 Original runtime capture/sealed-source/retry/handover then Spiderweb plan retained
 in the latest local integration PLAN, not replaced by this queue detour.
 
@@ -33,13 +36,16 @@ in the latest local integration PLAN, not replaced by this queue detour.
 > Root owns review/publication; next1077, original runtime plan unchanged.
 ### Parent reader preparation — 2026-10-04, inherited checkpoint
 
-Owner approved1074 after older predecessors. Normal local32c2aa31 parent merge
-retains actual mainfa40c12e and both histories.963/964/966 merged; later parents are
+Owner approved1074 after older predecessors. Normal local941b5e39 parent merge
+retains actual main5de82cfb and both histories.963/964/966/1066 merged; later parents are
 local preparations, not presumed merged. Reader/source tests remain
 unchanged fromfa658b12, including prior0400/0600 mode repair. Repeat actual
 filesystem proofs; no receipt changes, service activation or deployment.
 253 combined reader/manifest/Lua/capture/import/spool/parser/document/artifact
 cases pass20.70s; reader source/tests byte-identical to repairedfa658b12.
+Renewed0600-only mutation fails real publish/read under restrictive umask0277;
+the reader rejects a safe publisher-created0400 manifest. Restored/apply_patch/
+cmp without widening permissions;52 reader/document cases pass0.72s afterward.
 Publish only after actual1073 merge and fresh main sync, tests and exact-head
 review/CI. Original runtime roadmap remains in the latest local integration PLAN.
 
@@ -67,13 +73,16 @@ review/CI. Original runtime roadmap remains in the latest local integration PLAN
 > activation. Root handles publication/review; original runtime plan retained.
 ### Parent manifest preparation — 2026-10-04, inherited checkpoint
 
-Owner approved1073 after963/964/966/1066/1072. Local normal parentce35b42e
-integration includes actual mainfa40c12e and retains both histories and manifest
-bytes.963/964/966 merged;1066/1072 remain prerequisites, not presumed merged.
+Owner approved1073 after963/964/966/1066/1072. Local normal parent1cb1da12
+integration includes actual main5de82cfb and retains both histories and manifest
+bytes.963/964/966/1066 merged;1072 remains a prerequisite, not presumed merged.
 227 combined manifest/Lua/capture/import/spool/parser/document/artifact cases
 pass20.27s; manifest source/tests match prior repairedf20023c9 byte-for-byte.
 Current backlog now explicitly routes to latest integration PLAN/access anchor.
 The previous 200->240 filename fix remains present, not discarded as stale.
+Renewed guard mutation back to200 rejects valid201/240-byte names with
+"Manifest filename must be a bounded string" (2fail/1control pass). Restored
+via apply_patch/cmp;44 manifest/document cases pass0.62s. No mutation committed.
 Repeat actual filesystem/no-clobber/fsync and producer-boundary proofs; this
 is not source activation. Final publication waits for actual earlier merges,
 fresh parent/main synchronization and exact-head CI/review.
@@ -125,11 +134,21 @@ retry/exclusive handover, usable Spiderweb/proximity and later website work.
 ### Parent completion preparation — 2026-10-04, inherited checkpoint
 
 Owner approved1072 as part of the older queue, after963/964/966/1066.
-Local normal parent06e5a20d integration includes actual966 mainfa40c12e
-and1066 importer fixes; both documentation histories
+Local normal main5de82cfb integration follows1066 merge at20:50:06Z; reviewed
+06e5a20d and squash treec019839c match.1066 passed its exact-head SQL14/17,
+CI/review and420s cycle. Both documentation histories
 retained. Offline completion prototype remains unchanged fromc87a2cb0. No game
 activation, service action or deployment. Repeat Lua/capture/import proofs;
 publish only after preceding actual merges and another main synchronization.
+Actual predecessor synchronization is now complete; fresh1072 CI/review required.
+Renewed Lua short-write guard mutation fails actual harness with
+"unexpected writer outcome: short-write"; restored via apply_patch/cmp and all
+12 Lua scenarios pass0.22s. No game server/network/service activation.
+After actual1066 main synchronization:209 combined Lua/capture/import/spool/
+parser/document/artifact cases pass20.14s. All executable source and tests
+remain byte-identical toce35b42e; only prerequisite ancestry and status changed.
+Historical1072 AvailabilityPage CI failure has no established RCA; fresh
+frontend CI must pass. Do not call that old failure fixed or weaken its test.
 Combined Lua/SSH-capture/import/spool/parser plus ledger/handoff/artifact/Node/
 plan proofs:209 pass19.88s. Initial run caught stale current BACKLOG routing:
 2failed/207passed; corrected the entry to latest integration PLAN and retained
