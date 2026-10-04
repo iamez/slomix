@@ -7,13 +7,13 @@
 
 ## Trenutna pozicija
 
-- (Astra, 2026-09-28) #963 review detour: preserve the September 7 handoff
-  below its later checkpoints, correct repository-root build/deploy paths and
-  reject every timer enable recipe in the historical cleanup guard. PLAN's
-  update date now reflects this change. Runtime resume 1986d671 and the current
-  integration queue remain unchanged; no deployment or historical-data claims.
-  Ten document/plan contracts pass; both actual timer-recipe mutations fail,
-  restored/cmp. Build/deploy command paths checked without running either.
+- (Astra, 2026-10-04) #963 review correction: current local integration checkpoint
+  is8e262684 in /home/samba/share/slomix-astra-runtime-integration-20260926;
+  read its latest PLAN rather than resuming from historical1986d671.
+  Owner approved963/964/966/1066/1072-1075/1077 individually subject to fresh
+  gates and older-first order. Correct the historical deployment recipe to pass
+  the exact built commit; no live deployment, service or data action.
+  September28 corrections remain in Git history and the dated PLAN below.
 - (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
   unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
   checked against actualPG; deliberately mismatched17/14 fails fixture setup.
@@ -933,7 +933,8 @@
   84,9 % diska, `df` 90 % — prag 85 % se je sprožil šele pri `df` ~89,6 %).
   ⛔ **Bundle ni zgrajen**: nobena SPA sprememba od 09-06 11:03 ni vidna na
   `:8000`; corrected repository-root recipe for owner-approved build/deploy:
-  `(cd website/frontend && npm run build:app) && DEV_SRC_DIR="$PWD" scripts/dev_deploy.sh`
+  From a clean checkout of the owner-approved target commit:
+  `(cd website/frontend && npm run build:app) && DEV_SRC_DIR="$PWD" scripts/dev_deploy.sh "$(git rev-parse HEAD)"`
   (restart = ownerjev DA; command not executed here). Prelet faze 7 delen
   (manifest 32 rut + 20 rut, vse 200, 0 konzolnih napak); celoten čaka RAM.
   SSD sproščen 90 % → 80 % (nič izbrisano, vse v

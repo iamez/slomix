@@ -58,7 +58,15 @@ def test_global_plan_date_includes_handoff_review_refresh():
     plan = (ROOT / "docs/PLAN.md").read_text()
     match = re.search(r"\*\*Zadnja posodobitev:\*\* (\d{4}-\d{2}-\d{2})", plan)
     assert match is not None
-    assert match.group(1) >= "2026-09-28"
+    assert match.group(1) >= "2026-10-04"
+
+
+def test_current_backlog_and_historical_scope_are_unambiguous():
+    backlog = (ROOT / "docs/BACKLOG.md").read_text()
+    current = backlog.split("## Trenutna pozicija", 1)[1].split("\n- ", 2)[1]
+    assert "2026-10-04" in current and "8e262684" in current
+    plan = (ROOT / "docs/PLAN.md").read_text()
+    assert "> Historical checkpoint below predates this actual-main synchronization:" not in plan
 
 
 def test_documented_recipe_passes_built_worktree_to_deploy(tmp_path):
@@ -71,15 +79,20 @@ def test_documented_recipe_passes_built_worktree_to_deploy(tmp_path):
     npm.write_text('#!/bin/sh\nprintf "build:%s\\n" "$PWD"\n')
     npm.chmod(0o755)
     deploy = root / "scripts/dev_deploy.sh"
-    deploy.write_text('#!/bin/sh\nprintf "source:%s\\n" "${DEV_SRC_DIR:-wrong-primary-checkout}"\n')
+    deploy.write_text('#!/bin/sh\nprintf "source:%s\\ntarget:%s\\n" "${DEV_SRC_DIR:-wrong-primary-checkout}" "$1"\n')
     deploy.chmod(0o755)
+    git = commands / "git"
+    git.write_text('#!/bin/sh\nprintf "approved-commit\\n"\n')
+    git.chmod(0o755)
     for name in ("HANDOFF-opus5-2026-09-07.md", "BACKLOG.md"):
         text = (ROOT / "docs" / name).read_text()
         recipe = re.search(r'`(\(cd website/frontend && npm run build:app\)[^`]+)`', text).group(1)
         result = subprocess.run(['bash', '-c', recipe], cwd=root, text=True,
                                 capture_output=True, check=True,
                                 env={**os.environ, 'PATH': f'{commands}:{os.environ["PATH"]}'})
-        assert result.stdout.splitlines() == [f'build:{root}/website/frontend', f'source:{root}']
+        assert result.stdout.splitlines() == [
+            f'build:{root}/website/frontend', f'source:{root}', 'target:approved-commit',
+        ]
 
 
 def test_squash_lesson_follows_all_newer_lessons():

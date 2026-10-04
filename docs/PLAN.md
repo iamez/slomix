@@ -1,5 +1,14 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+> 2026-10-04 fresh review correction: owner approved963/964/966/1066/
+>1072-1075/1077 subject to individual fresh gates; do not merge with findings.
+> Runtime integration checkpoint8e262684 supersedes02c160cc; read latest local
+> PLAN in the worktree below. Four reproduced failures cover stale global date,
+> stale backlog and actual deployment-target mismatch in both documented recipes.
+> Pin the exact built HEAD in owner-only deployment advice. Preflight proofs
+> use only disposable clones, actual artifact helper/deploy script and mock Vite,
+> never the live run clone or services. Historical labels have paragraph scope.
+
 > 2026-10-04 older-PR consolidation: #963 refreshed onto actual main0b22b014.
 > Both historical document streams are retained; the handoff and executable
 > recipe contract remain byte-identical to the reviewed33be0bbe. This is not
@@ -48,7 +57,8 @@
 > this documentation detour does not replace the original runtime roadmap.
 > No production, service, real review-ref or remote operations were performed.
 
-> Historical checkpoint below predates this actual-main synchronization:
+> Historical checkpoint: only the immediately following September28 paragraph
+> predates that synchronization; later October checkpoints retain their dates.
 
 > Current checkpoint 2026-09-28: #963 historical handoff corrections are a
 > documentation-only queue detour. Main 9ef42671 contains #1065; #1066 SQL
@@ -946,7 +956,7 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-28 (Astra, historical handoff review corrections)
+**Zadnja posodobitev:** 2026-10-04 (Astra, historical handoff review corrections)
 
 ## Consolidation follow-up: artifact review #979 — 2026-09-20
 
