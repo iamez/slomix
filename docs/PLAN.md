@@ -3,6 +3,14 @@
 ## Current snapshot-security correction — 2026-10-04
 
 Owner explicitly approved966, but new review findings block merge.
+Latest warning-only finding: a zero-exit bundled hook can still diagnose a
+possible credential. Noninteractive snapshot publication now rejects any guard
+output without exposing it. Three actual disposable Git regressions reproduced
+silent publication before the fix; fresh suite/mutation evidence recorded below.
+Final warning-fix suite:109 combined tests pass39.70s. Disabling only diagnostic
+blocking reproduces3 failures; restored/cmp and3 targeted cases pass1.03s.
+An initial suite invocation named nonexistent test_pre_push_hook.py and exited4
+with no tests; corrected selection uses test_pre_push_secret_guard.py above.
 Publication now requires source ancestry already reachable from an advertised
 ordinary branch on the exact push destination; unknown/shallow ancestry fails
 closed. No implicit source upload. Local symbolic refs are rejected again while

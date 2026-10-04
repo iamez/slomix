@@ -1,11 +1,24 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Noninteractive publication must stop on scanner warnings.**
+  The interactive hook can return success while warning about an assignment.
+  Capturing that diagnostic hides the decision from the owner. Snapshot
+  preflight now rejects any bundled-guard diagnostic before creating refs,
+  without echoing its possibly sensitive contents. This is not a complete
+  credential detector; its existing pattern/placeholder limits still apply.
+
 - **2026-10-04 · A bounded review diff does not bound transferred ancestry.**
   A new parent commit transfers its reachable objects too. Require source
   history already reachable on the exact destination before publishing review
-  refs. Check symbolic type under transaction locks: Git2.34 no-deref verify
-  still accepts a matching symbolic OID. Carry NUL filenames through the
-  bundled guard so LF/TAB/quotes cannot silently skip content/raw-data checks.
+  refs; otherwise an unselected file in the parent can also be uploaded.
+
+- **2026-10-04 · No-deref verification alone does not reject symbolic refs.**
+  Git2.34 still accepts a matching symbolic OID. Check symbolic type while
+  transaction locks are held before committing immutable review refs.
+
+- **2026-10-04 · Quoted filenames cannot safely be fed back as Git paths.**
+  LF/TAB/quotes can silently skip content/raw-data checks when Git prints a
+  quoted name. Carry NUL-delimited filenames through enumeration/intersection.
 
 - **2026-10-03 · Immutable snapshots must read real objects and verify refs.**
   A pinned commit OID does not disable refs/replace. Set GIT_NO_REPLACE_OBJECTS

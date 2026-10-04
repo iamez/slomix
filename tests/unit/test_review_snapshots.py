@@ -613,6 +613,23 @@ def test_conflicting_ref_blocks_without_rewriting_and_new_source_gets_new_refs(r
     assert snapshots(repo) == before
 
 
+@pytest.mark.parametrize("name", ["PGPASSWORD", "RCON_PASSWORD", "API_KEY"])
+def test_warning_only_credential_scan_blocks_noninteractive_publication(repo, name):
+    marker = "abcdef" * 3  # Synthetic fixture, not a credential.
+    commit(repo, {"archived.conf": name + "=" + marker + "\n"})
+    git(repo, "tag", "archived-baseline")
+    commit(repo, {"archived.conf": "removed\n"})
+    before = git(repo, "ls-remote", "origin")
+    result = run(repo, "--base", "archived-baseline", "cut", "--push", check=False)
+    assert result.returncode != 0, "warning-only secret was republished silently"
+    assert "repository publication guard failed" in result.stderr
+    assert "diagnostics withheld" in result.stderr
+    assert marker not in result.stdout + result.stderr
+    assert snapshots(repo) == snapshots(repo.parent / "remote.git") == ""
+    assert git(repo, "ls-remote", "origin") == before
+    assert not (repo.parent / "hook-calls").exists()
+
+
 def test_real_secret_scanner_refuses_pair_atomically(repo):
     # Synthetic literal assembled to avoid embedding credentials in this test.
     commit(repo, {"bad.py": "connect(" + "password=" + repr("abcdef" * 3) + ")\n"})

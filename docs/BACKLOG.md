@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) Additional966 review found hidden warning-only credentials.
+  Bundled-guard diagnostics now block noninteractive publication before refs,
+  without echoing content. Three local Git regressions reproduced the old leak;
+  no real credentials/remotes involved. Fresh exact-head gates still required.
+
 - (Astra, 2026-10-04)966security review repaired: published-source admission on
   actual push target, locked symbolic-ref type check and NUL hook filenames.
   106tests pass;6mutant failures restored/cmp. No real review refs or deploy.

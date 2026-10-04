@@ -293,7 +293,10 @@ def preflight_publication(refs, remote):
                 f"GIT_CONFIG_VALUE_{count}": "/dev/null"})
     result = subprocess.run(["bash", str(guard)], input="".join(updates).encode(),
                             capture_output=True, env=env)
-    if result.returncode:
+    # The interactive hook has warning-only detections too. There is no human
+    # confirmation step here, so any diagnostic must block before publication.
+    # Never echo its output: it may include the suspected credential itself.
+    if result.returncode or result.stdout or result.stderr:
         raise ValueError("repository publication guard failed; diagnostics withheld")
 
 
