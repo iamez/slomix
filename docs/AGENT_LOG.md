@@ -1,16 +1,39 @@
 # AGENT_LOG — durable lessons for the next agent
 
-- **2026-09-28 · Build cwd is not necessarily deployment source.**
-  dev_deploy.sh defaults SRC to the primary checkout, even when invoked from
-  a feature worktree. Pass DEV_SRC_DIR="$PWD" from that worktree's root in
-  an owner-approved recipe. Execute the documented recipe against disposable
-  build/deploy probes to prove both paths match; do not deploy to test prose.
+- **2026-10-03 · Read-only ACL checks need more than table privileges.**
+  PostgreSQL documents column ACLs separately and allows NOINHERIT memberships
+  to remain reachable through SET ROLE. PG16 separates SET from MEMBER; earlier
+  versions use MEMBER for SET reachability. PG17 adds MAINTAIN. Inspect effective
+  table/column/sequence rights and ownership of every reachable role; do not
+  "repair" unrelated roles globally. New coverage is prepared, not runtime-proven
+  while the disposable proof service is stopped (see PLAN checkpoint).
+
+- **2026-10-03 · GRANT SELECT does not make existing permissions read-only.**
+  Default ACLs are copied onto newly created tables/sequences. Runtime migration
+  tests with a pristine role missed DEV's pre-existing website CRUD defaults.
+  Reproduce inherited grants before migration; revoke only scoped runtime
+  objects, retain legacy/default ACLs, and verify effective rights through both
+  catalog queries and actual denied SQL. Fail closed if unrelated PUBLIC or
+  inherited role privileges still authorize writes; do not revoke those globally.
+  Test SET LOCAL ROLE must be RESET before releasing a successful savepoint.
+- **2026-10-03 · Artifact provenance does not certify the RUN index.**
+  A clean tracked status can hide locally changed runtime files behind
+  assume-unchanged or skip-worktree. Checkout of a new commit preserves these
+  bytes when its blob is unchanged. Reject both flags across the entire RUN
+  index before status/fetch/staging; parse NUL records and propagate Git errors.
+  Source-only guards cannot protect the separately maintained runtime clone.
 
 - **2026-10-03 · Unchanged lock bytes do not preserve a clean security audit.**
   After a usage-limit pause, the previously clean frontend lock had newly
   observed undici and brace-expansion findings. Refresh the advisory result
   before merge, retain its date, and independently prove installed guard behavior.
   Run mutation probes in isolated copies, not packages used by concurrent tests.
+
+- **2026-09-28 · Build cwd is not necessarily deployment source.**
+  dev_deploy.sh defaults SRC to the primary checkout, even when invoked from
+  a feature worktree. Pass DEV_SRC_DIR="$PWD" from that worktree's root in
+  an owner-approved recipe. Execute the documented recipe against disposable
+  build/deploy probes to prove both paths match; do not deploy to test prose.
 
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
@@ -63,6 +86,35 @@ Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
+
+- **2026-09-20 · Clean Git status does not prove committed build inputs.**
+  assume-unchanged and skip-worktree can hide changed tracked bytes. Reject these
+  flags on provenance inputs or compare exact committed blobs before certification.
+
+- **2026-09-20 · Deployment provenance must identify the executed verifier.**
+  A script launched from another checkout must use the verifier in its configured
+  source, and resolve a default remote target only after refreshing its ref.
+  Keep source-ref refresh distinct from modifying the running clone.
+
+- **2026-09-08 · A non-symlink file can have a symlink parent.** Checking
+  only static/app missed static/ pointing outside the checkout; build cleanup
+  could delete external provenance before rejecting the dirty source. Apply:
+  validate all source/output path components before the first unlink or build,
+  and run website/static parents before activation. The parent-symlink mutation
+  was seen deleting the proof in a disposable fixture; restoration verified.
+- **2026-09-20 · STATS_READY is round timing, not exact-file completion.**
+  Repository webhook defaults to immediate intermission emission; stats writer
+  schedules SaveStats3000ms later and also writes on shutdown. Generic saved log
+  lacks exact file identity. A synthetic open-writer proof retained equal stats
+  and hashes before a later append. Do not promote these hints into completion
+  receipts; require a producer protocol and identify deployed code separately.
+
+- **2026-09-20 · Stable SFTP metadata does not prove producer completion.**
+  Checked-in c0rnp0rn8.lua SaveStats writes final filenames directly. Compare
+  required regular-file mode/size/mtime on handle and path before read and EOF
+  to reject observed drift before publication, but do not infer writer closure
+  or inode identity. Same-size/same-mtime changes can escape metadata checks;
+  trusted digest and immutable-source completion contract are still required.
 
 - **2026-09-20 · Retry result must preserve worker and content separately.**
   A timed-out SSH close can leave verified final bytes; reconciliation must return
@@ -454,6 +506,14 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+- **2026-09-07 · Bundle mtime does not identify its source or target.**
+  A fresh-looking SPA can belong to another commit or contain changed assets;
+  checking after checkout already changes the run tree on failure. Apply:
+  commit before `npm run build:app`, retain generated provenance, and validate
+  exact target/input/output identity in a private staging directory before dev
+  checkout. SKIP_STATIC no longer bypasses this check. Legacy provenance is
+  separate; keep its existing bundle rather than copying unverified bytes.
+
 # 2026-09-27: Cache rollback is an invalidation boundary
 
 Follow-up: isolating only OFF is insufficient. ON/OFF/ON can retain the same

@@ -3,11 +3,13 @@
 import hashlib
 import multiprocessing
 import os
+import stat
 import subprocess
 import time
 from contextlib import contextmanager
 from functools import partial
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
@@ -28,6 +30,15 @@ def _offline_child(task, marker, mode):
         with marker.open('a') as stream:
             stream.write(event + '\n')
 
+    sent = False
+
+    def attributes(named=False):
+        return SimpleNamespace(
+            st_mode=stat.S_IFREG | 0o600,
+            st_size=3 + (1 if sent and mode == 'grow' else 0),
+            st_mtime=100 + (1 if sent and (mode == 'mtime' or (named and mode == 'replace')) else 0),
+        )
+
     class Source:
         def __enter__(self):
             record('file-open')
@@ -42,7 +53,11 @@ def _offline_child(task, marker, mode):
         def settimeout(self, seconds):
             assert 0 < seconds <= task.read_timeout
 
+        def stat(self):
+            return attributes()
+
         def read(self, size):
+            nonlocal sent
             assert 0 < size <= 65536
             if mode == 'read-block':
                 record('read-block')
@@ -50,9 +65,14 @@ def _offline_child(task, marker, mode):
             if self.sent:
                 return b''
             self.sent = True
+            sent = True
             return b'xyz' if mode == 'corrupt' else PAYLOAD
 
     class SFTP:
+        def lstat(self, path):
+            assert path == '/snapshots/' + NAME
+            return attributes(named=True)
+
         def open(self, path, mode):
             assert path == '/snapshots/' + NAME and mode == 'rb'
             return Source()
@@ -79,7 +99,7 @@ def _task(tmp_path, **kwargs):
     )
 
 
-@pytest.mark.parametrize('mode', ['ok', 'corrupt', 'read-block', 'close-block'])
+@pytest.mark.parametrize('mode', ['ok', 'corrupt', 'read-block', 'close-block', 'grow', 'mtime', 'replace'])
 def test_spawned_ssh_capture_lifecycle(tmp_path, mode):
     """Real publication/kill evidence distinguishes absent, partial and final."""
     tmp_path.chmod(0o700)
@@ -123,6 +143,32 @@ def test_relative_spool_rejected(tmp_path):
     task = _task(tmp_path)
     with pytest.raises(ValueError, match='absolute Path'):
         SSHCaptureTask(task.ssh, task.remote_path, Path('relative'), 3, DIGEST)
+
+
+@pytest.mark.parametrize('field,value', [
+    ('st_mode', stat.S_IFLNK | 0o777), ('st_mode', stat.S_IFDIR | 0o700),
+    ('st_mode', None), ('st_size', None), ('st_size', 4),
+    ('st_mtime', None), ('st_mtime', True),
+])
+def test_unusable_source_metadata_rejected_before_open(tmp_path, field, value):
+    """Missing metadata, nonregular paths and wrong sizes cannot begin a read."""
+    attributes = dict(st_mode=stat.S_IFREG | 0o600, st_size=3, st_mtime=100)
+    attributes[field] = value
+
+    class SFTP:
+        def lstat(self, path):
+            return SimpleNamespace(**attributes)
+
+        def open(self, *args):
+            raise AssertionError('Unsafe metadata must not open source')
+
+    @contextmanager
+    def connect(config):
+        yield SFTP()
+
+    with patch('shared.runtime_ssh_capture.open_runtime_sftp', connect), pytest.raises(ValueError):
+        _task(tmp_path)()
+    assert not list(tmp_path.iterdir())
 
 
 @pytest.mark.parametrize('mode', ['ok', 'corrupt', 'read-block', 'close-block'])
