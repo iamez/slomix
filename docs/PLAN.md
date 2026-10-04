@@ -1,5 +1,98 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Current consolidation checkpoint — 2026-10-04
+
+Owner approved963/964/966/1066/1072/1073/1074/1075/1077, one at a time with
+fresh exact-head review/CI and postmerge verification. No merge yet.
+963 now changes the historical deployment recipe AND its tests; do not reuse
+33be0bbe or d8238e0c payload-identity claims for the corrected head.
+44 focused tests pass, including actual disposable deploy preflight, and the
+omitted-target / historical-scope mutations fail then restore/cmp.
+Fresh review also corrected the historical squash lesson: merged PR status
+alone is insufficient; inspect current affected content and immediate tree identity.
+
+LOCAL-ONLY runtime resume: last saved integration checkpoint8e262684, on branch
+refactor/db-runtime-team-assignment-20260926 in
+/home/samba/share/slomix-astra-runtime-integration-20260926.
+Read that worktree's latest PLAN; the local checkpoint is not fetchable from GitHub.
+Read-only verification:
+`git -C /home/samba/share/slomix-astra-runtime-integration-20260926 cat-file -e '8e262684^{commit}'`.
+02c160cc and1986d671 are retained historical checkpoints, not current targets.
+Original runtime capture/retry/handover then Spiderweb/proximity/UI plan unchanged.
+NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment actions.
+
+## Historical checkpoints — superseded, retain evidence as of each date
+
+> 2026-10-04 fresh review correction: owner approved963/964/966/1066/
+>1072-1075/1077 subject to individual fresh gates; do not merge with findings.
+> Runtime integration checkpoint8e262684 supersedes02c160cc; read latest local
+> PLAN in the worktree below. Four reproduced failures cover stale global date,
+> stale backlog and actual deployment-target mismatch in both documented recipes.
+> Pin the exact built HEAD in owner-only deployment advice. Preflight proofs
+> use only disposable clones, actual artifact helper/deploy script and mock Vite,
+> never the live run clone or services. Historical labels have paragraph scope.
+
+> 2026-10-04 older-PR consolidation: #963 refreshed onto actual main0b22b014.
+> At this initial refresh both document streams were retained and payload/test
+> bytes matched33be0bbe. The later06f044a7 recipe/test correction invalidates that
+> payload identity for subsequent heads. This was not a deployment.
+> Integration checkpoint02c160cc was current then, superseded by8e262684 above.
+> Older queue is reviewed before1079-1084. Hold956 and NEVER MERGE924-943/967.
+> Fresh tests, exact-head CI/review and numbered authorization precede merge.
+> Validation:17 focused contracts pass, including execution of the documented
+> recipe against disposable build/deploy probes. Deliberately adding a static
+> timer enable recipe fails the historical-cleanup guard; restored and cmp match.
+> No actual build/deploy/service command executed. Historical handoff/test
+> blobs still match reviewed33be0bbe; current source/runtime behavior is unchanged.
+
+> #963 preservation refresh 2026-10-03: normal main194b1e6e merge retains
+> historical handoff corrections and both histories. Handoff/test bytes unchanged
+> from33be0bbe; root17 executable recipe/Node/plan contracts pass0.49s.
+> No actual deployment, timer or service operation. Await final main sync and
+> fresh review/CI before any separately authorized merge.
+
+> #963 fresh-review correction 2026-09-28: actual main4de6f07e normally
+> integrated with both histories retained. Three new findings independently
+> reproduced and corrected; 13 focused document/plan contracts pass. Actual
+> local resume object/branch/ancestry verified read-only; no claim that the hash
+> is available to a fresh GitHub clone. Document mutations failed and all files
+> restored/cmp. No real deploy, review-ref, service or remote operation. Root
+> owns publication, thread replies and fresh exact-head review/CI gates.
+
+> LOCAL-ONLY runtime resume 1986d671 (2026-09-28 clarification): the retained
+> implementation is on this owner's host at
+> /home/samba/share/slomix-astra-runtime-integration-20260926, branch
+> refactor/db-runtime-team-assignment-20260926. It is not fetchable from GitHub.
+> Read-only identity check on that host:
+> `git -C /home/samba/share/slomix-astra-runtime-integration-20260926 cat-file -e '1986d671^{commit}'`
+> and `git -C /home/samba/share/slomix-astra-runtime-integration-20260926 log -1 --oneline`.
+> Read its latest PLAN before continuing; later commits preserve the checkpoint.
+> A fresh clone without this host must obtain an owner-provided bundle or wait
+> for reviewed slice publication, not pretend this local hash is a public ref.
+> Public queue context is PR #1077 (not equivalent to the later local work).
+
+> Current #963 main-sync checkpoint 2026-09-28: ec8ec7ed normally merged,
+> including reviewed #1067 SSH and #965 watchdog changes; both documentation
+> histories and d8431e06's historical corrections retained. Preserve runtime resume 1986d671.
+> 10 focused document/plan contracts pass; unchanged guard tests retain their
+> earlier observed mutation failure and restored/cmp proof. Historical content
+> is not current host evidence. Root owns publication and fresh review gates;
+> this documentation detour does not replace the original runtime roadmap.
+> No production, service, real review-ref or remote operations were performed.
+
+> Historical checkpoint: only the immediately following September28 paragraph
+> predates that synchronization; later October checkpoints retain their dates.
+
+> Current checkpoint 2026-09-28: #963 historical handoff corrections are a
+> documentation-only queue detour. Main 9ef42671 contains #1065; #1066 SQL
+> proof and #1067 SSH review are recorded in the integration checkpoint.
+> Preserve runtime resume commit 1986d671 and the #1067 → #1068 → #1069 →
+> #1070 dependency chain. No service, production or NEVER MERGE action.
+> Earlier dated checkpoints below describe their date, not current authority.
+> Verification: 10 document/plan contracts pass; actual historical-document
+> mutations adding timer enable recipes with --dry-run and --now each fail the
+> cleanup guard, restored with byte-for-byte cmp. Build recipe paths validated
+> without executing build/deploy; no current host-data measurement is claimed.
 > 2026-10-03 #1078 CI coverage: retain exactly the existing two Python check
 > names/jobs, pairing Python3.11 with PostgreSQL14 and Python3.13 with PostgreSQL17
 > (not a cross product). No triggers or extra jobs added. Images pinned to root's
@@ -886,7 +979,7 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
+**Zadnja posodobitev:** 2026-10-04 (Astra, historical handoff review corrections)
 
 ## Consolidation follow-up: artifact review #979 — 2026-09-20
 
@@ -953,6 +1046,23 @@ both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
 
+### Consolidation: historical Opus handoff #963 — 2026-09-20
+
+Historical checkpoint only; current queue and authority are recorded above.
+
+Preserve historical measurements, not obsolete operating instructions. Normal
+main integration restores the tracked docs/HANDOFF-astra.md reference. Correct
+release attribution (#952/#955/#958 after1.45.0), timer static-state inference,
+journal rotation/config activation advice and bundled lessons. Local journalctl
+manual confirms vacuum handles archived files and rotation precedes vacuum when
+combined; no cleanup or service action executed. Git ancestry independently
+confirms the release sequence; GitHub confirms #912 merged2026-09-07.
+#912's historical live arena duel caveat is not proven resolved by its merge:
+owner-controlled live verification remains separate. #962 is approved in the
+consolidation queue, with current-main checks/runtime proof required before merge.
+All host measurements in the old handoff remain explicitly historical. Original
+runtime resume is #1077 completion delivery/sealing, then new-site audit and
+approved reversible DEV cutover. #963 has no merge permission.
 ### R04p source stability parent refresh — 2026-09-28
 
 Local normal merge of reviewed capture parent bda56937 into #1071 preserves

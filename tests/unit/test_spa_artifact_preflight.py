@@ -67,6 +67,45 @@ def build(source, check=True):
     return result
 
 
+@pytest.mark.parametrize("document", ["HANDOFF-opus5-2026-09-07.md", "BACKLOG.md"])
+def test_historical_recipe_pins_built_commit_in_actual_preflight(fixture, document):
+    import re
+
+    source, run = fixture
+    deploy = source / "scripts/dev_deploy.sh"
+    deploy.write_bytes(DEPLOY.read_bytes())
+    deploy.chmod(0o755)
+    git(source, "add", "scripts/dev_deploy.sh")
+    git(source, "commit", "-m", "feature deployment recipe")
+    # The published main remains older than the built feature HEAD.
+    git(source, "remote", "add", "origin", str(run))
+    head = git(source, "rev-parse", "HEAD")
+    before = git(run, "rev-parse", "HEAD")
+    assert head != before
+    old_asset = (run / "website/static/app/app.html").read_bytes()
+    commands = source.parent / "recipe-tools"
+    commands.mkdir()
+    npm = commands / "npm"
+    npm.write_text('#!/bin/sh\nexec "' + sys.executable +
+                   '" ../../scripts/spa_artifact.py build --source ../..\n')
+    npm.chmod(0o755)
+    for command in ("sudo", "systemctl"):
+        sentinel = commands / command
+        sentinel.write_text("#!/bin/sh\nexit 89\n")
+        sentinel.chmod(0o755)
+    text = (ROOT / "docs" / document).read_text()
+    recipe = re.search(r'`(\(cd website/frontend && npm run build:app\)[^`]+)`', text).group(1)
+    result = subprocess.run(
+        ["bash", "-c", recipe], cwd=source, text=True, capture_output=True,
+        env={**os.environ, "DEV_PREFLIGHT_ONLY": "1", "DEV_RUN_DIR": str(run),
+             "PATH": f'{commands}:{os.environ["PATH"]}'},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "preflight passed" in result.stdout
+    assert git(run, "rev-parse", "HEAD") == before
+    assert (run / "website/static/app/app.html").read_bytes() == old_asset
+
+
 def preflight(source, run, target="HEAD", extra=None, allow_source_fetch=False):
     # A real git wrapper records any forbidden preflight mutation before failing.
     mocks = source.parent / "mocks"
