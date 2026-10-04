@@ -1,5 +1,14 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04: owner restarted isolated PG. Late-parent clone proof confirmed
+> successful replay can leave NULL vehicle links. Added opt-in strict parent gate
+> at runtime boundary; defer instead of writing orphan data. Full real-parser/adapter
+> proof now waits for parent/session, links once on repeat, rolls everything back.
+> Three guard mutations fail/restored/cmp. No history repair, service change or
+> worker activation. Parent1083 exact-head CI/Codex green, threads resolved; no
+> numbered merge approval. Remaining capture/retry/handover and original roadmap
+> unchanged. Interrupted old private test schema retained, not blindly deleted.
+
 > 2026-10-04 review follow-up1083: initial5443c8f1 CI succeeded but2P1 findings.
 > Fixed new receipt queries to adapter ? contract, adjusted PG proof shims using
 > real converter; prevented strict/relaxed ambiguous relinker fallback. Four

@@ -1,5 +1,48 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Runtime late-parent gate — 2026-10-04
+
+Parent PR1083/67a39a09 now has successful CI and matching Codex review with no
+major issues; both fixed threads resolved,0unresolved/full pagination. This slice
+continues from that exact head, without merging or changing any running service.
+
+Actual isolated-clone characterization: importing before the parent, then adding
+the parent and replaying returned success twice but left vehicle.round_id/session
+NULL. Resolver independently found the correct parent. All synthetic writes were
+rolled back and checked by a separate observer. Not a historical corruption count.
+
+Chosen forward-only policy: import_proximity_file(require_linked_parent=True)
+defers ingestion until unique exact map/R1-or-R2/header-start AND non-null session.
+Pending reasons distinguish missing parent/session from ambiguous or unavailable
+source identity; none acknowledges work. Database failures propagate as failures.
+Receipt claim/digest/data share a transaction; pending/failure rolls back that
+attempt. Existing parent is SHARE-locked through parsing; final identity and
+canonical parser context must still match. No nearest/date fallback in this mode.
+Default remains false for compatibility; NO worker/cog wiring or deployment here.
+
+Full canonical parser + real PostgreSQLAdapter clone proof: parent_missing and
+session_missing each leave0vehicles/receipts; parent+session arrival then import
+and replay yield1vehicle linked to expected round/session, equal physical starts,
+one verified receipt. Enclosing proof transaction rolled back; observer0rows.
+This is mechanism proof, not a committed whole-session cutover acceptance.
+Path-discovered proximity/relinker/spool/capture suite499passed/20existing skips;
+focused boundary+PG40passed; changed Python lint and whitespace clean. Exact-head
+CI/review remain publication gates, not inferred from these local results.
+Three guard mutations observed failing (pending admission, final parser identity,
+parent SHARE lock), restored/cmp. First mutation initially exposed an incomplete
+test schema; extended only the fixture, repeated and observed false success=True.
+
+Caller contract remains essential: retain sealed source, bounded retry for missing
+parent/session, reconcile ambiguous/missing-header sources without guessing. Use
+only after exclusive forward-only handover; existing permissive/hashless receipts
+are NOT evidence of linked ingestion. This does not repair old unlinked rows or
+provide durable correlation delivery. SHARE locks do not prevent future duplicate
+inserts; post-check detects observed duplicates, not a database uniqueness promise.
+Double parsing uses the same verified bytes; no new path reopen, memory/latency
+guarantee or scheduler. Next: exact-head checks/review; capture seal, durable retry,
+exclusive handover and full Discord/website-off recovery proof. Then usable
+Spiderweb/full proximity audit, later Home design; original plan preserved below.
+
 ## Runtime proximity round identity — 2026-10-04
 
 Review follow-up on PR1083:5443c8f1 full CI succeeded, including the corrected PG

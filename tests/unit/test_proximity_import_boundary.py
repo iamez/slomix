@@ -1,4 +1,5 @@
 """The runtime boundary owns neither Discord, connections nor acknowledgments."""
+# ruff: noqa: SLF001 -- exercise the private strict-parent guard directly
 
 import hashlib
 import os
@@ -13,6 +14,51 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from shared import proximity_import
+
+
+@pytest.mark.parametrize(('metadata', 'rows', 'reason'), [
+    ({'round_start_is_fallback': True}, [(10, 20)], 'source_identity_unavailable'),
+    ({'round_start_unix': True}, [(10, 20)], 'source_identity_unavailable'),
+    ({'round_start_unix': 1}, [(10, 20)], 'source_identity_unavailable'),
+    ({'round_start_unix': 999999999999}, [(10, 20)], 'source_identity_unavailable'),
+    ({'round_num': 0}, [(10, 20)], 'source_identity_unavailable'),
+    ({'round_num': True}, [(10, 20)], 'source_identity_unavailable'),
+    ({'map_name': ''}, [(10, 20)], 'source_identity_unavailable'),
+    ({}, [], 'parent_missing'),
+    ({}, [(10, 20), (11, 20)], 'parent_ambiguous'),
+    ({}, [(10, None)], 'session_missing'),
+])
+async def test_strict_parent_does_not_guess(metadata, rows, reason):
+    source = {'map_name': 'fixture', 'round_num': 1, 'round_start_unix': 1789794600}
+    source.update(metadata)
+    adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=rows))
+    with pytest.raises(proximity_import._ParentPending, match=reason):
+        await proximity_import._linked_parent(adapter, source)
+    if reason == 'source_identity_unavailable':
+        adapter.fetch_all.assert_not_awaited()
+    else:
+        query, params = adapter.fetch_all.call_args.args
+        assert params == ('fixture', 1, 1789794600)
+        assert 'LIMIT 2 FOR SHARE' in query
+        assert '$' not in query
+
+
+async def test_strict_parent_database_failure_is_not_missing_data():
+    adapter = SimpleNamespace(fetch_all=AsyncMock(side_effect=RuntimeError('database unavailable')))
+    with pytest.raises(RuntimeError, match='database unavailable'):
+        await proximity_import._linked_parent(adapter, {
+            'map_name': 'fixture', 'round_num': 2, 'round_start_unix': 1789794600,
+        })
+
+
+@pytest.mark.parametrize('flag', ['false', 'true', 0, 1, None])
+async def test_strict_parent_policy_requires_actual_boolean(flag, tmp_path):
+    with pytest.raises(TypeError, match='must be a boolean'):
+        await proximity_import.import_proximity_file(
+            tmp_path / 'missing', adapter=None, session_date=date(2026, 10, 4),
+            gametimes_dir=tmp_path, expected_size=1, expected_sha256='a' * 64,
+            require_linked_parent=flag,
+        )
 
 
 @pytest.mark.parametrize('day', [None, '2026-10-03', datetime(2026, 10, 3, tzinfo=timezone.utc)])

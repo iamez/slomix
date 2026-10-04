@@ -1,5 +1,16 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Successful replay is not proof of repaired linkage.**
+  Vehicle ON CONFLICT DO NOTHING preserves an earlier NULL round_id even when
+  replay resolves the correct parent. A fresh forward-only runtime can defer
+  initial import until an exact parent/session exists, instead of inheriting
+  Discord's broad historical relinker. Pending is not acknowledgment; retain
+  sealed input and distinguish retryable absence from ambiguous identity and
+  query failure. This policy cannot adopt already-unlinked permissive receipts.
+  Test fixtures must support the failure branch too: missing fallback columns
+  initially made a mutation fail from SQL abort, not from the intended false
+  success; add those fixture columns and prove the actual acceptance failure.
+
 - **2026-10-04 · Ambiguity must survive every retry path.**
   Refusing duplicate source identities at ingestion is insufficient if a later
   relinker invokes a matcher that chooses its first exact/canonical hit. Stop
