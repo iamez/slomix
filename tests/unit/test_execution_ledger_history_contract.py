@@ -17,7 +17,8 @@ def test_old_resume_is_explicitly_historical():
     plan = (ROOT / "docs/PLAN.md").read_text()
     assert "**Historical resume instructions (2026-09-08, superseded):**" in plan
     assert "**Resume here:** review current checks/findings on #964" not in plan
-    assert "runtime resume 1986d671" in plan[:1500]
+    current = plan.split("## Historical checkpoints", 1)[0]
+    assert "integration checkpoint8e262684" in current
 
 
 def test_historical_label_does_not_cover_newer_backlog_entries():
@@ -60,9 +61,11 @@ def test_handoff_preserves_narrow_review_exception_without_authorizing_execution
 
 def test_resume_explicitly_identifies_local_only_retrieval():
     plan = (ROOT / 'docs/PLAN.md').read_text()
-    current = plan.split('> Historical checkpoint below', 1)[0]
+    boundary = '## Historical checkpoints — superseded, retain evidence as of each date'
+    assert boundary in plan
+    current = plan.split(boundary, 1)[0]
     assert 'LOCAL-ONLY runtime resume' in current
     assert '/home/samba/share/slomix-astra-runtime-integration-20260926' in current
     assert 'refactor/db-runtime-team-assignment-20260926' in current
-    assert 'git -C' in current and '1986d671^{commit}' in current
+    assert 'git -C' in current and '8e262684^{commit}' in current
     assert 'not fetchable from GitHub' in current
