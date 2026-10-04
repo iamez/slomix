@@ -1,7 +1,7 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
 > Current1084queue:1079merged;1080freshgates and prepared1081-1083remain.
->Parentcbcbca77 integrated locally. Next actual1083squash, final1084sync/gates.
+>Parent02cc9307 integrated locally. Next actual1083squash, final1084sync/gates.
 >094notlive-applied; no services/production changes. Original roadmap retained.
 
 ## Historical preparation — not current gate instructions
@@ -35,7 +35,7 @@
 > unchanged. Interrupted old private test schema retained, not blindly deleted.
 
 > Current1083queue:1079merged;1080freshgates and prepared1081/1082predecessors
->remain. Parent1b5466cd incorporated locally. After actual1082merge, final1083
+>remain. Parent3739dd5a incorporated locally. After actual1082merge, final1083
 >sync/publication/gates. Original runtime roadmap and no-service boundaries retained.
 
 ## Historical preparation — not current gate instructions
@@ -61,10 +61,8 @@
 > full suite (Result=timeout), so no full-green claim. CI and owner restart pending.
 > No historical data repair; original runtime roadmap/capture/handover unchanged.
 
-> Current2026-10-05: #1082 local parent6e1296da merge preserves old public stats
-
 > Current1082queue:1079merged;1080freshgates pending,1081prepared. Thislocal
->parent7a882cf1 integration keeps all reviewed fixes and shared-admission lesson.
+>parent250d34d7 integration keeps all reviewed fixes and shared-admission lesson.
 >Wait actual1081before final1082publication. Original runtime roadmap unchanged.
 
 ## Historical preparation — not current gate instructions
@@ -92,7 +90,7 @@
 > fail/restored; actual two-pool clone proof passed. Next review/CI and explicit
 > legacy ownership/adoption/capture contracts; no deployment/merge.
 
-> Current1081queue:1079merged;1080published959cb109 awaiting fresh gates. This
+> Historical1081queue:1079merged;1080published6e0be64b awaiting fresh gates. This
 >local preparation retains parent review correction and ownership fixes.
 >Next actual1080squash sync, then fresh1081publication/gates. No services.
 
@@ -178,7 +176,15 @@
 
 ## Trenutna pozicija
 
-Current queue is #1079 through #1084. The #1077 paragraph below is historical:
+Read the latest PLAN: use the latest checkpoint at the top of `docs/PLAN.md`
+for this branch's queue gate. The original runtime roadmap and cross-branch
+execution ledger remain in the latest PLAN at
+`/home/samba/share/slomix-astra-runtime-integration-20260926`.
+Do not derive current merge instructions from the dated evidence below.
+
+## Historical queue evidence
+
+At the earlier checkpoint the queue was #1079 through #1084. The #1077 paragraph below is historical:
 #1077 merged as95758cc7 and is not awaiting another merge.
 
 - (Astra, 2026-10-04) #1077 actual-main8f298662 refresh keeps old producer
