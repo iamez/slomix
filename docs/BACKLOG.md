@@ -14,6 +14,69 @@
   No deployment, service action, live-data repair or snapshot change.
   Five document/plan contracts pass; obsolete-resume mutation fails and is
   restored/cmp. The four historical lesson bodies are retained verbatim.
+- (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
+  unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
+  checked against actualPG; deliberately mismatched17/14 fails fixture setup.
+  YAML/major guards observed failing and restored/cmp. Await actualPG17 CI proof.
+
+- (Astra helper, 2026-10-03) #1078 resumed proof: actualPG14.24 gives31passed,
+  4newer-version skips; twelve observed failures across three guard mutations,
+  all restored/cmp. SQL unchanged from98b92702. Root owns restored-copy rehearsal.
+  Next paired PG14/3.11 and PG17/3.13 CI coverage without extra jobs/triggers.
+
+- (Astra helper, 2026-10-03) #1078 review follow-up prepared: column ACLs,
+  version-gated MAINTAIN and transitive SET ROLE/ownership checks. Proof service
+  expired, so new PG cases/mutations are explicitly pending; no service start,
+  live DB fallback or existing restored-copy ledger change. Repeat093 acceptance
+  on fresh disposable restore after owner restart. Original roadmap unchanged.
+
+- (Astra helper, 2026-10-03) DEV permission rehearsal exposed inherited runtime
+  CRUD/sequence grants. New093 narrows only runtime object ACLs; real isolated
+  tests verify denied writes, generation read, unchanged legacy/default grants,
+  and fail-closed PUBLIC/wrong-role cases.19 tests pass5.23s; observed mutation
+  failure restored/cmp. No application DB changes. Root owns restored-backup
+  rehearsal and review/merge gates; original runtime queue remains preserved.
+- (Astra helper, 2026-10-03) #979 RUN index flags review4172412989 repaired:
+  four old-guard failures and four deliberate mutation failures, restored/cmp;
+  50 focused tests pass11.44s. Disposable checkout independently reproduces hidden
+  runtime-byte survival. No live changes; root continues exact-SHA rebuild/review
+  and dev restoration rehearsal before returning to the original runtime plan.
+
+- (Astra, 2026-10-03) DEV-only authorization received. Read-only Samba preflight
+  identifies old75ee10b5 deployment and ten pending main migrations. Refreshing
+  #979 on5e948f0b preserves artifact safeguards and both histories. No deployment
+  yet; return to original runtime queue after safe deployment preparation.
+
+- (Astra, 2026-09-28) #979 real Node22.23.2 wrappedbuild/provenance verified:
+  137outputs hashes by two paths; actual preflight only in disposable clone
+  preserves HEAD/tree/assets/inodes/mtimes. In-process HTTP200 HTML+6assets
+  equalsdisk, no server/browser/DEVdeployment.23guards pass5.63s; corruption
+  mutation fails/restored/cmp. Final docscommit requires rebuilt exactSHA;
+  root owns actual parent merge synchronization and remote review/CI.
+
+- (Astra, 2026-09-20) #979 consolidation review: fixed stale default source ref,
+  wrong-checkout verifier and hidden-index input flags, with four failing/restored
+  regressions and23passing fixture tests. No real deploy. Branch refresh/CI and
+  PR-specific permission remain gates. Runtime resume remains #1077 after detour.
+
+- (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
+  and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual
+  child lifecycle and independent file/hash/reaping evidence. EOF guard mutation
+  fails all three drift scenarios; restored/cmp and three passes. No remote
+  writes or activation; trusted completion remains a gate. Ready for parent-led
+  publication/review, not a claim of operational runtime completion.
+
+- (Astra, 2026-09-20) Source-completion investigation: round notification can
+  precede file write; generic saved log and delayed file-created notifier are not
+  exact durable receipts. Local runtime counterexample confirms equal metadata
+  and hashes while writer remains open (7bytes then18). Next owner decision on
+  offline source-producer protocol vs retaining source freeze; no deployment.
+
+- (Astra, 2026-09-20) R04p adds fail-closed source metadata checks before read
+  and before local publication. 127 combined cases pass; disabling EOF guard
+  fails three real-child/offline-transport proofs, restored/cmp. Checked-in Lua
+  writes final name directly, so stable metadata is NOT proof of producer close.
+  Trusted completion/manifest remains a gate; no remote/service changes.
 
 - (Astra, 2026-10-03) Prepared1070 on reviewed1069, preserving source and
   both documentation histories.68tests pass; two deliberate guard failures
@@ -178,6 +241,16 @@
   pass,Ruff clean. Wait for #962 disk fix before combined verification. #965 has
   no merge permission. Runtime resume #1077 c015270b: completion delivery/sealing,
   then new-site audit and approved DEV transition. NEVER MERGE unchanged.
+
+- (Astra, 2026-09-28) #969 normal main1f4a388d refresh: six node/plan contracts
+  pass; isolated22.23.2 binary verified by two version paths. Old22.13.1 pin
+  mutation fails, restored/cmp. No install/build/browser/service/lock change.
+  Root owns remote review/merge; original runtime1986d671 plan preserved.
+
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
 - (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
   certificate discovery. Public typed file-object private-key loaders preserve
   five tested key encodings; certificate paths unsupported, no ambient cert or
@@ -454,6 +527,24 @@
   dev-guard mutation restored/cmp. Expanded200 passed; publish/review next.
   #1054 nine exact-head checks green and both external reviews no findings.
   No merge approval for #1050 or later; no service/production activation.
+
+- (Astra, 2026-09-28) #1027 local dependency proof complete: zero audit findings,
+  identical original/patched generated API types, typecheck, 845 tests/70 files
+  and SPA build succeed. Six built HTML asset references resolve offline.
+  Actual YAML/nanoid guard mutations fail, restored/cmp and probes pass; no
+  browser/server/deploy. Ready for parent-led main sync, publication and review.
+
+- (Astra, 2026-09-28) #1027 compatible nanoid3.3.19 lock patch removes last
+  audit finding; original/patched OpenAPI output identical and typecheck passes.
+  Bounded old dependency probes fail, patched probes pass. Full single-worker
+  Vitest run in progress; SPA build next. Only three package entries changed
+  versus original PR lock; no runtime server or production action.
+
+- (Astra, 2026-09-28) #1027 lock-only upstream security patch prepared:
+  core1.34.20/YAML4.3.2 only; unrelated npm10 libc metadata loss restored.
+  Existing Vitest4.1.11 preserved. npm audit still finds high nanoid<3.3.18,
+  so no clean-audit/readiness claim. No npm ci or runtime validation yet;
+  next controlled dependency decision and frontend validation, no deployment.
 
 - (Astra, 2026-09-20) R04u independent main-based source generation reservation:
   16 focused cases pass, same-token concurrency has one winner, existing entries
