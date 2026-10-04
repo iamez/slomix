@@ -3,19 +3,18 @@
 ## Current consolidation checkpoint — 2026-10-04
 
 Owner approved963/964/966/1066/1072/1073/1074/1075/1077, one at a time with
-fresh exact-head review/CI and postmerge verification. No merge yet.
-963 now changes the historical deployment recipe AND its tests; do not reuse
-33be0bbe or d8238e0c payload-identity claims for the corrected head.
-44 focused tests pass, including actual disposable deploy preflight, and the
-omitted-target / historical-scope mutations fail then restore/cmp.
-Fresh review also corrected the historical squash lesson: merged PR status
-alone is insufficient; inspect current affected content and immediate tree identity.
+fresh exact-head review/CI and postmerge verification.963 mergeda2737e7a after
+14 successful checks, matching Codex review,8answered threads and420s cycle.
+REST confirms merge; reviewedce5f7252 and squash tree771ed168 match exactly.
+964 now normally incorporates that actual main, preserving its entire content
+and the earlier ledger fixes. Conflicts retained the already-integrated963 tree
+plus964 additions; no historical fixes dropped. New exact-head gates required.
 964 self-review also routes BOTH the continuation prompt introduction and the
 handoff header to the latest PLAN, not the historical September ledger.
 Combined51 contracts/preflight cases pass8.52s; reverting the introduction to
 the old ledger-first advice fails, restored/cmp and7 ledger contracts pass.
 
-LOCAL-ONLY runtime resume: last saved integration checkpoint8e262684, on branch
+LOCAL-ONLY runtime resume: retained integration checkpoint8e262684, on branch
 refactor/db-runtime-team-assignment-20260926 in
 /home/samba/share/slomix-astra-runtime-integration-20260926.
 Read that worktree's latest PLAN; the local checkpoint is not fetchable from GitHub.

@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) #963 mergeda2737e7a with exact reviewed/squash tree
+  identity771ed168,14green checks, all8threads answered and420s cycle. #964
+  normally integrated actual main with both histories preserved.51 local cases
+  and current-plan routing mutation proof; publish for fresh review/CI next.
+  Retained integration checkpoint8e262684 is a local access anchor: read its
+  worktree's latest PLAN, not a historical queue. No service/deployment action.
+
 - (Astra, 2026-10-04) #963 review correction: current local integration checkpoint
   is8e262684 in /home/samba/share/slomix-astra-runtime-integration-20260926;
   read its latest PLAN rather than resuming from historical1986d671.
