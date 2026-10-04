@@ -13,7 +13,7 @@ from tests.integration.test_runtime_events_pg import connection_options
 
 @pytest.mark.parametrize('scenario', [
     'single', 'ordered_pair', 'r2_first', 'late_r1', 'deferred_r1', 'zero_delta', 'verified_spool',
-    'conflicting_r1', 'invalid_name_payload',
+    'conflicting_r1', 'invalid_name_payload', 'invalid_selected_r1',
 ])
 def test_neutral_import_commits_player_event_and_retry(tmp_path, scenario):
     """Real parser, SQL and commit work with presentation/setup imports blocked."""
@@ -82,6 +82,34 @@ async def main():
         await admin.execute((Path(sys.argv[2]) / 'migrations/083_runtime_events.sql').read_text())
         manager.event_stream_enabled = True
         scenario = sys.argv[3]
+        if scenario == 'invalid_selected_r1':
+            original_r1 = Path(sys.argv[1])
+            original_r2 = original_r1.with_name('2026-09-20-121000-goldrush-round-2.txt')
+            r1 = original_r1.with_name('2019-12-31-235500-goldrush-round-1.txt')
+            r2 = original_r1.with_name('2020-01-01-000500-goldrush-round-2.txt')
+            r1.write_bytes(original_r1.read_bytes())
+            r2.write_bytes(original_r2.read_bytes())
+            r1.chmod(0o600)
+            r2.chmod(0o600)
+            assert manager.parser.find_corresponding_round_1_file(str(r2)) == str(r1)
+            plain = await import_ready_file(manager, r2)
+            assert plain.status == 'failed', plain
+            assert plain.message == 'Invalid R1 dependency: Invalid stats timestamp', plain
+            payload, dependency = r2.read_bytes(), r1.read_bytes()
+            checked = await import_verified_file(
+                manager, r2.parent, r2.name, expected_size=len(payload),
+                expected_sha256=hashlib.sha256(payload).hexdigest(),
+                expected_r1={r1.name: ExpectedStatsIdentity(
+                    len(dependency), hashlib.sha256(dependency).hexdigest())},
+            )
+            assert checked.capture_status == 'match', checked
+            assert checked.dependency_status == 'invalid', checked
+            assert checked.import_result.status == 'failed', checked
+            for table in ('rounds', 'player_comprehensive_stats', 'processed_files', 'runtime_events'):
+                assert await admin.fetchval(f'SELECT count(*) FROM {table}') == 0
+                assert await admin.fetch(f'SELECT * FROM {table}') == []
+            print('Neutral PG proof: selected previous-year R1 rejected; no rows/markers/events')
+            return
         if scenario in {'conflicting_r1', 'invalid_name_payload'}:
             r1 = Path(sys.argv[1])
             r2 = r1.parent / '2026-09-20-121000-goldrush-round-2.txt'

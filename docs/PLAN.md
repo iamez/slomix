@@ -7,6 +7,14 @@ maina2737e7a refresh preserves reviewed815af476 importer/parser bytes and
 both document histories. No new SQL proof: private PG service timed out and
 must not fall back to the application database. Repeat offline contracts;
 actual isolated PG proof and final parent/main sync remain merge gates.
+Preparation for explicit CI proof: add selected previous-year R1 scenario to
+the existing canonical PostgreSQL fixture. Real parser must select2019 R1 for
+2020 R2; both entry points reject it and independent SQL count/list prove no
+rows, markers or events. Locally only collection/embedded-child compilation
+are checked; do not label this new SQL scenario passed until actual CI logs.
+Offline combined170 cases pass (including actual parser/filesystem and artifact
+preflight); importer code remains unchanged. Publishing now for earlier CI
+evidence does not change merge order:964 then966 then1066, each actual-main sync.
 Current runtime plan is in the latest local integration PLAN, not an older
 resume hash quoted below. No service/deploy/production or NEVER MERGE changes.
 
