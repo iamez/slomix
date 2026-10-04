@@ -1,9 +1,9 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
 > Current1066 preparation2026-10-04: owner-approved older-first consolidation;
-> importer bytes preserved onmaina2737e7a. CI PG14/17 now proves all10 isolated
-> importer cases on76233b74; local966 preparation3501fe88 incorporated, full
-> actual-main sync and fresh gates remain. No restart/live DB fallback.
+> importer bytes preserved on actual mainfa40c12e after963/964/966 merged.
+> CI PG14/17 proves all10 isolated importer cases on76233b74; fresh exact-head
+> CI/SQL/review required again after this actual-main sync. No restart/live DB fallback.
 > Read latest integration PLAN.
 > Earlier dated entries below are historical, not current merge authority.
 
@@ -27,8 +27,8 @@
 
 ## Trenutna pozicija
 
-- (Astra, 2026-10-04) #1075 locally synchronized through prepared218c288a,
-  retaining previous retry/reader fixes and actual main7a5ac9c1. Earlier PRs
+- (Astra, 2026-10-04) #1075 locally synchronized through prepared017492d0,
+  retaining previous retry/reader fixes and actual mainfa40c12e. Earlier PRs
   must merge first; fresh actual-main sync/review/CI remain publication gates.
   No source activation, service or deployment; original runtime plan retained.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
@@ -48,7 +48,7 @@
 ### Inherited parent checkpoints
 
 - (Astra, 2026-10-04) #1074 locally retains the prior0400/0600 reader repair
-  while incorporating prepared parentb2c2c703 and actual main7a5ac9c1. Owner-approved,
+  while incorporating prepared parent32c2aa31 and actual mainfa40c12e. Owner-approved,
   but publish/review only after earlier merges and another actual-main sync.
   No service, deployment or source activation; original runtime plan retained.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
@@ -107,10 +107,10 @@
   Next manifest recovery and source collision protocol, no activation.
 ### Inherited parent checkpoint
 
-- (Astra, 2026-10-04) #1072 approved but waits for older966/1066;963/964 merged.
+- (Astra, 2026-10-04) #1072 approved but waits for1066;963/964/966 merged.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
   retained local checkpoint8e262684 is an access anchor, not the latest head.
-  Local parent4b66761e includes actual main7a5ac9c1 and pending966/1066, while
+  Local parent06e5a20d includes actual mainfa40c12e and pending1066, while
   preserving the offline Lua prototype and both histories. No activation/deploy;
   fresh actual-main sync and
   exact-head tests/review/CI remain required after the earlier merges.
@@ -131,15 +131,15 @@
   collisions remain next. Owner allowed local development, no deployment.
 ### Inherited main checkpoints (historical)
 
-- (Astra, 2026-10-04) #1066 now includes actual963 maina2737e7a. Runtime
+- (Astra, 2026-10-04) #1066 now includes actual966 mainfa40c12e. Runtime
   importer/parser code retained; isolated PostgreSQL evidence must be refreshed
   before merge. Retained local integration checkpoint8e262684 is an access anchor:
-  read its latest PLAN. Owner-approved queue order still places964/966 first.
+  read its latest PLAN. Owner-approved predecessors963/964/966 are now merged.
   No local service restart or application database fallback.
   Added real-PG selected-R1 calendar scenario for CI; local collection/child
   compilation is not SQL proof. Offline138 tests pass9.29s; later CI PG14/17
-  per-scenario logs prove all10cases. Actual964/966 synchronization and fresh
-  exact-head gates still block merge.
+  per-scenario logs prove all10cases. Actual964/966 synchronization is complete;
+  fresh exact-head gates still block merge.
 
 ### Historical importer checkpoints
 
