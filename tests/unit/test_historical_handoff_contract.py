@@ -63,8 +63,11 @@ def test_global_plan_date_includes_handoff_review_refresh():
 
 def test_current_backlog_and_historical_scope_are_unambiguous():
     backlog = (ROOT / "docs/BACKLOG.md").read_text()
-    current = backlog.split("## Trenutna pozicija", 1)[1].split("\n- ", 2)[1]
-    assert "2026-10-04" in current and "8e262684" in current
+    current = backlog.split("## Trenutna pozicija", 1)[1].split("\n## ", 1)[0]
+    assert "latest checkpoint at the top" in current
+    assert "Historical queue evidence" not in current
+    historical = backlog.split("## Historical queue evidence", 1)[1]
+    assert "2026-10-04" in historical and "8e262684" in historical
     plan = (ROOT / "docs/PLAN.md").read_text()
     assert "> Historical checkpoint below predates this actual-main synchronization:" not in plan
 
