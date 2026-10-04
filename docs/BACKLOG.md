@@ -31,7 +31,7 @@
   read its latest PLAN. Owner-approved queue order still places964/966 first.
   No local service restart or application database fallback.
   Added real-PG selected-R1 calendar scenario for CI; local collection/child
-  compilation is not SQL proof. Offline170 tests pass; final CI log verification
+  compilation is not SQL proof. Offline138 tests pass9.29s; final CI log verification
   and actual964/966 synchronization still gate merge.
 
 ### Historical importer checkpoints

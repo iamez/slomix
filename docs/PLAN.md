@@ -12,7 +12,7 @@ the existing canonical PostgreSQL fixture. Real parser must select2019 R1 for
 2020 R2; both entry points reject it and independent SQL count/list prove no
 rows, markers or events. Locally only collection/embedded-child compilation
 are checked; do not label this new SQL scenario passed until actual CI logs.
-Offline combined170 cases pass (including actual parser/filesystem and artifact
+Offline combined138 cases pass9.29s (including actual parser/filesystem and artifact
 preflight); importer code remains unchanged. Publishing now for earlier CI
 evidence does not change merge order:964 then966 then1066, each actual-main sync.
 Current runtime plan is in the latest local integration PLAN, not an older
