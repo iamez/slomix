@@ -4,19 +4,71 @@
 
 Owner approved1066 after963/964/966 and fresh individual gates. Local normal
 maina2737e7a refresh preserves reviewed815af476 importer/parser bytes and
-both document histories. No new SQL proof: private PG service timed out and
-must not fall back to the application database. Repeat offline contracts;
-actual isolated PG proof and final parent/main sync remain merge gates.
+both document histories. Local proof service timed out; no application DB
+fallback. CI run37230517327 now proves all10 neutral importer scenarios on
+both PostgreSQL14 and17 (jobs111519006384/111519006487 inspected). Full suites
+7528pass/157skip and7532pass/153skip; matching76233b74 Codex review has no major
+issues. Final actual-main synchronization after964/966 and fresh gates remain.
 Preparation for explicit CI proof: add selected previous-year R1 scenario to
 the existing canonical PostgreSQL fixture. Real parser must select2019 R1 for
 2020 R2; both entry points reject it and independent SQL count/list prove no
 rows, markers or events. Locally only collection/embedded-child compilation
-are checked; do not label this new SQL scenario passed until actual CI logs.
+were checked; the later CI logs above provide the actual SQL execution proof.
 Offline combined138 cases pass9.29s (including actual parser/filesystem and artifact
 preflight); importer code remains unchanged. Publishing now for earlier CI
 evidence does not change merge order:964 then966 then1066, each actual-main sync.
 Current runtime plan is in the latest local integration PLAN, not an older
 resume hash quoted below. No service/deploy/production or NEVER MERGE changes.
+Local integration now includes966 preparation3501fe88 with both document streams
+and unchanged importer/parser/test bytes. This is not a claim of966 merge.
+Combined importer/spool/parser plus snapshot/hook/ledger/handoff/artifact/Node/
+plan suite:259 tests pass49.27s. Actual SQL evidence above belongs to76233b74;
+repeat exact-head CI after final prerequisite synchronization.
+
+## Inherited snapshot preparation — historical checkpoint on 2026-10-04
+
+Owner explicitly approved966.9648fa41 has14successful checks, matching Codex
+no-major-issues review and all5answered threads resolved. Local preparation now
+integrates reviewed964/bf8c42a1, preserving both histories and source/hook bytes.
+Combined snapshot/hook/ledger/handoff/artifact/Node/plan proofs:169 pass46.98s.
+Actual964 squash/main sync and fresh exact-head gates still block966 merge.
+Latest non-main-source correction: pass the pinned source OID explicitly to
+the bundled guard. Its snapshot mode compares against that exact commit and
+does not intersect with ambient origin/main. Normal push-hook behavior remains
+unchanged. Two actual published-feature regressions reproduced the old bypass;
+absent-tracking compatibility and safe feature publication are covered too.
+116 combined tests pass40.21s, Ruff/bash-n/ShellCheck clean. Omitting the pinned
+source argument produces2failures; restored/cmp and7 focused tests pass3.24s.
+This establishes scoped publication guards, not a universal credential detector.
+Latest warning-only finding: a zero-exit bundled hook can still diagnose a
+possible credential. Noninteractive snapshot publication now rejects any guard
+output without exposing it. Three actual disposable Git regressions reproduced
+silent publication before the fix; fresh suite/mutation evidence recorded below.
+Final warning-fix suite:109 combined tests pass39.70s. Disabling only diagnostic
+blocking reproduces3 failures; restored/cmp and3 targeted cases pass1.03s.
+An initial suite invocation named nonexistent test_pre_push_hook.py and exited4
+with no tests; corrected selection uses test_pre_push_secret_guard.py above.
+Publication now requires source ancestry already reachable from an advertised
+ordinary branch on the exact push destination; unknown/shallow ancestry fails
+closed. No implicit source upload. Local symbolic refs are rejected again while
+no-deref transaction locks are held: Git2.34 still resolved symbolic OIDs during
+verify, so no-deref alone failed both real races. No existing ref is overwritten.
+Bundled hook carries NUL-delimited filenames through enumeration/intersection,
+including LF/TAB/quotes. Fixture setup explicitly seeds only disposable remotes.
+106 combined snapshot/hook/Node/plan tests pass38.46s; initial6security cases
+failed against old code,2new transaction races failed against the first fix.
+Disabling three final guards produces6failures; restored/cmp and6pass.
+Actual local Git/remote/hook/object proofs only; no real snapshot refs changed.
+Ruff, bash-n and ShellCheck pass. Earlier byte-identity claims below describe
+their prior heads, not this changed security implementation. Fresh review/CI
+and actual964 main synchronization remain required before966 merge.
+963 merged as a2737e7a and is now normally integrated with both histories;
+its reviewed/squash trees matched771ed168. No real review refs changed.
+After this actual-main merge:158 combined snapshot/hook/handoff/artifact/Node/
+plan tests pass47.01s. Source/hook/snapshot tests remain byte-identical to16b37b78.
+Remote advertisement is an observation, not a lock against later remote removal.
+Sources: https://git-scm.com/docs/git-push,
+https://git-scm.com/docs/git-update-ref, https://git-scm.com/docs/git-ls-remote.
 
 LOCAL-ONLY runtime resume: retained integration checkpoint8e262684 on branch
 refactor/db-runtime-team-assignment-20260926 in
@@ -147,17 +199,219 @@ Original capture/sealed-source/retry/handover then Spiderweb plan is retained.
 >publishing/fresh review. Original runtime roadmap preserved, no1066 approval.
 
 ### Inherited handoff checkpoint — 2026-10-04, before963 merge
+Read-only access check:
+`git -C /home/samba/share/slomix-astra-runtime-integration-20260926 cat-file -e '8e262684^{commit}'`.
+Original runtime capture/sealed-source/retry/handover then Spiderweb plan retained.
+NEVER MERGE924-943/967 and held956 remain excluded; no services or deployments.
+
+## Historical checkpoints — superseded, retain evidence as of each date
+
+> 2026-10-04 #966 older-first consolidation: normal main0b22b014 integration
+> retains both histories and unchanged reviewed a6cea132 tooling/tests.
+> No real review refs are published or changed. NEVER MERGE924-943/967 and
+> held release956 remain untouched. Current runtime continuation lives in the
+> local integration worktree; this is a queue detour, not a runtime reset.
+> Fresh disposable Git proofs, exact-head CI/review and numbered permission
+> remain merge gates. Later963/964 squash merges require another main refresh.
+> Root75 focused tests pass28.55s, exercising actual local Git repositories,
+> bare remotes, object/ref inspection and publication hooks, never real review
+> refs. Disabling replacement-object suppression produces the observed failure
+> "replacement hid the raw binary object from admission"; restored/cmp.
+
+> #966 root verification 2026-10-03: normal main5e948f0b sync preserves both
+> histories and exact repair29c8fbba scripts/tests. Root75 disposable Git/Node/
+> plan cases pass28.77s. Existing local refs verified atomically; actual object
+> bytes checked with replacement suppression; signed dates remain clean.
+> Publish for fresh review/CI, no merge approval. No real snapshot refs changed.
+
+> #966 ambient-object and local-transaction repair (2026-10-03): verify every
+> already-existing local ref in the same update-ref transaction as creates,
+> including an all-existing invocation. Actual races against either member now
+> abort the whole operation before remote publication. Disable replacement
+> objects in all Git subprocess environments, including the direct bundled
+> guard and ordinary push hooks. Raw NUL-bearing blobs on both sides are an
+> unconditional binary veto, scanned in bounded-memory chunks independently of
+> attributes/drivers; Git numstat remains an additional veto for non-NUL content.
+> This does not promise every binary classification/configuration is invariant:
+> a local binary=true can still conservatively reject otherwise textual content.
+> Metadata extraction explicitly disables log.showSignature. A real disposable
+> SSH-signed commit proves date extraction and immutable identities survive it.
+> Proof: 75 snapshot/Node/plan cases pass28.81s, Ruff clean; 11 expected failures
+> after four guard mutations (7.03s), plus one raw cat-file replacement failure
+> (0.56s). Restored with apply_patch and cmp. Two replacement-tree/blob controls
+> passed the first mutation run and are not counted as mutation failures.
+> Independent bare-remote object reads preserve the original source tree and
+> bytes. Local ref verification protects the transaction, not later external
+> writes; complete existing remote pairs remain observations only. No real
+> snapshot refs, pushes, services or production changes. A metadata-only probe
+> of actual signed194b1e6e incidentally made GPG initialize an empty user config
+> directory/keybox; no key was imported, signature trust was not established,
+> and those files were not subsequently changed or removed. Original runtime
+> roadmap unchanged; parent owns actual-main synchronization and publication.
+
+> #966 root follow-up checkpoint 2026-10-03: normal main194b1e6e merge
+> retains both histories and exact guard repair4827760a source/tests. Root
+> independently passes61 disposable Git/Node/plan cases17.02s; Ruff clean.
+> Actual review/tracking ref digest3214c396 remains unchanged. Publish fixes
+> for fresh exact-head review/CI; no966 merge approval or service action.
+
+> #966 follow-up review repair (2026-10-03): disable ambient diff.orderFile
+> for partitioning, tree validation and commit-date extraction. Real Git with
+> reversed 26-file ordering previously changed immutable part identities;
+> even metadata-only git show reads a missing order file unless reset.
+> Before any local ref creation or remote publication, execute the bundled
+> repository pre-push guard on all prospective create-only updates, retaining
+> normal push hooks. Missing inspection tools or guard fail closed; captured
+> scanner diagnostics cannot print prohibited content. Fresh clones no longer
+> depend on an installed hook. Original runtime roadmap unchanged; no real
+> review refs, services, production, pushes or merges in this repair.
+> Proof: 61 snapshot/Node/plan cases pass (17.19s), Ruff and whitespace pass.
+> Actual disposable Git CLI tests verify reversed/missing order configuration,
+> absent/disabled/unrelated hooks, missing bundled guard/scanner, and a safe
+> first pair followed by a prohibited second pair with zero refs published.
+> Removing ordering/preflight caused five failures (1.91s); removing tool check
+> caused one failure (0.48s); omitting guard config override caused one unsafe
+> publication failure (0.57s). All mutations restored with apply_patch and cmp.
+> Real review-ref digest remains d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+
+> #966 main refresh 2026-10-03: #1027 mergedcc6b0a4d through420s gates;
+> reviewed/squash trees a7f31e32 match. Preserve both document histories and
+> exact snapshot scripts/tests from2c5c32d5. Fresh exact-head gates follow.
+> No real snapshot refs, services or production changes.
+
+> #966 review repair checkpoint (2026-10-03): pin Myers in both partition and
+> generated-tree validation; actual fixture differs by 72 versus 104 lines under
+> Myers/Patience and previously changed an 8000-line part into 7928 + 104.
+> Capture remote Git output on success and failure, exposing only operation and
+> exit status: URLs, transport stderr and hook output may contain credentials.
+> Retire the obsolete area-body generator explicitly; historical bodies remain.
+> Reject partial remote pairs before local ref writes or publication. A same-OID
+> push can omit its lease check; do not claim this locks an existing pair.
+> Complete absent pairs retain atomic create-only leases; complete existing pairs
+> are observations, not protection against subsequent unrelated remote writers.
+> Nine deliberate guard regressions fail in disposable Git repos, restored/cmp.
+> Includes races after ls-remote changing either existing member and real hooks
+> emitting a synthetic credential marker on both successful and rejected pushes.
+> All 49 CLI/plan cases pass13.31s; after normal main19e65354 integration,
+> all 53 snapshot/plan/Node cases pass13.63s, Ruff and whitespace clean.
+> Both documentation histories and repair e9124506 source/test bytes retained.
+> No real snapshot cut,
+> remote publication, service action or production change. Root owns fresh gates.
+
+> #966 configuration review checkpoint (2026-09-28): disposable Git repos
+> reproduced detached/no-local-branch failure, fetch/push URL mismatch, and
+> commitEncoding-dependent false immutable conflicts. Enumerate with for-each-ref;
+> pin commit-tree UTF-8; resolve exactly one origin push URL and use that same
+> destination for preflight and publication. Multiple push URLs fail before local
+> ref creation: cross-remote atomic publication is deliberately unsupported.
+> Existing create-only leases, atomic pairs, hooks and scope guards remain.
+> Five configuration guard mutations fail, restored/cmp. Normal main4de6f07e
+> merge preserves both doc histories and repairf0497399 source/test bytes.
+> Forty real disposable CLI/plan cases pass10.24s; Ruff/whitespace clean. Separate
+> push target independently has both exact expected OIDs by local for-each-ref
+> and remote ls-remote; hook count2 remains unchanged on retry. Actual commit
+> objects omit encoding header despite local ISO-8859-1. Real Slomix review-ref
+> digest unchanged: d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> No real snapshot cuts/pushes, service actions or remote settings changes.
+> Root owns publication/fresh review; original runtime1986d671 plan retained.
+
+> #966 actual-main sync 2026-09-28: normally merged ec8ec7ed after #965;
+> both documentation histories retained. Snapshot source/tests remain byte-equal
+> to 57cf5e3b, whose create-only guard mutation was seen failing/restored/cmp.
+> All 83 combined contracts pass in 10.14s: 35 snapshot/plan and 48 watchdog
+> cases using only disposable repositories/files and mocked webhook delivery.
+> No actual review refs, service or remote writes; runtime 1986d671 preserved.
+> Root owns fresh exact-head publication/review/merge gates.
+
+> #966 concurrency checkpoint 2026-09-28: three actual disposable bare-Git
+> regressions reproduced an ancestor ref created after ls-remote being silently
+> fast-forward overwritten (review-base, review, or both). Atomic pair pushes
+> now attach an explicit empty-expect lease to each missing ref: create-only
+> compare-and-swap, not overwrite permission or a hook bypass. The raced refs
+> retain their exact ancestor OIDs and an absent counterpart remains absent.
+> All 33 CLI cases plus two plan contracts pass (20.72s), including normal hook,
+> secret rejection and idempotence proofs. Removing leases fails all three race
+> cases; restored/cmp. Installed git-push manual confirms empty expected value
+> requires an absent ref. Ruff/whitespace clean; actual review-ref digest remains
+> d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> Local-only; root owns publication/review. Runtime 1986d671 remains the resume
+> anchor. Earlier checkpoints are retained history, not fresh merge evidence.
+
+> #966 follow-up 2026-09-28: actual disposable CLI regressions reproduced both
+> fresh findings: unmatched/fully excluded area silently omitted, and a plain
+> --exclude argument selected additional files. Preflight now rejects empty
+> selected areas and requires explicit nonempty Git exclusion magic; CLI help
+> describes this contract. Both guards run before any snapshot refs are written.
+> Six old-code regressions failed; disabling the guards again fails six cases,
+> restored/cmp. Thirty real CLI cases plus two plan contracts pass in 6.44s;
+> positive short/long exclusions preserve only the selected file in local remote.
+> Ruff and whitespace clean. Real review-ref digest remains d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> Fresh publication/review required. No historical review refs, real snapshot
+> pushes, services or production changed; original runtime 1986d671 preserved.
+
+> Current #966 checkpoint 2026-09-28: normally integrated actual main 1f4a388d
+> after #1067 merged, preserving cd483737's three guard fixes and both histories.
+> Snapshot scripts/tests unchanged from 79a7e2d1. Twenty disposable local-Git CLI
+> cases pass; combined with plan contracts, 22 pass in 4.85s. Disabling actual
+> generated-tree validation fails all three file/line/scope collateral cases;
+> restored/cmp. Real review/review-base ref digest unchanged before/after:
+> d9daf0a97a3fcc403b6bfed1d2584d86f22a45b4231ad164b654464964a8eda7.
+> No real review refs, remote configuration, service or billing changed. Root
+> owns publication and fresh merge gates. Runtime resume 1986d671 preserved;
+> earlier checkpoints below are dated history, not current queue authority.
+
+> Current966 checkpoint2026-09-27: approved1061 merged8afc46b1 at15:56:34Z,
+>0failed/0threads/0behind/unchanged head; squash tree equals d00f5de2. This
+>branch integrates that main normally; implementation/test bytes preserved.
+>Publish now for fresh exact-head CI/review; no966 merge permission and no
+>service or production changes. Earlier waiting checkpoints are historical.
+
+>966 review follow-up2026-09-27: fixed all three new findings on4f5a2f24.
+>Reject duplicate area names and missing positive pathspecs; validate actual
+>private-index tree diff against exact selected paths and25-file/8000-line caps
+>before any refs are written. Unsafe D/F splits fail closed; complete bounded
+>pairs work in both directions (tree entries are not restored as index leaves).
+>20 disposable Git CLI tests pass4.84s, including real local pushes/hooks; ten
+>regressions failed before fixes and under deliberate guard removal, restored/cmp.
+>Ruff and whitespace clean. One exploratory reverse-exclusion rejection assertion
+>was incorrect: its actual one-file diff is safe; replaced with exact-scope proof.
+>No real review refs, service actions, pushes or merges. Runtime roadmap preserved;
+>parent continues numbered PR consolidation, then returns to original runtime work.
+
+> Current966 checkpoint2026-09-27: approved1055 merged194993f7; exact tree
+>matches reviewed0e66f238. This branch now normally integrates that main,
+>preserving source/test bytes and both documentation histories. 7focused
+>tests rerun after sync. Publish for fresh exact-head CI/review; no966 merge
+>approval, service activation or NEVER MERGE changes. Earlier waiting notes
+>below are historical; original runtime roadmap remains unchanged.
+
+>966 preservation checkpoint2026-09-27: normally integrated current main as
+>30dbcfa3, retaining both documentation histories. Source/test bytes unchanged
+>from a05bbf39. Seven real-CLI tests pass2.60s in disposable repositories/local
+>remotes, exercising actual pre-push hook and immutable conflict refusal.
+>Disabling conflict guard fails remote-conflict test (exit0 instead of refusal),
+>restored/cmp. Ruff/whitespace clean. Actual Slomix review/review-base ref digest
+>unchanged before/after; no snapshot operation ran against this repository.
+>Await1055 merge and final sync before publishing for fresh review/CI; no966
+>merge approval. Original runtime work and all NEVER MERGE snapshots preserved.
+
+### Inherited handoff/ledger preparation — 2026-10-04, before964 merge
 
 Owner approved963/964/966/1066/1072/1073/1074/1075/1077, one at a time with
-fresh exact-head review/CI and postmerge verification. No merge yet.
-963 now changes the historical deployment recipe AND its tests; do not reuse
-33be0bbe or d8238e0c payload-identity claims for the corrected head.
-44 focused tests pass, including actual disposable deploy preflight, and the
-omitted-target / historical-scope mutations fail then restore/cmp.
-Fresh review also corrected the historical squash lesson: merged PR status
-alone is insufficient; inspect current affected content and immediate tree identity.
+fresh exact-head review/CI and postmerge verification.963 mergeda2737e7a after
+14 successful checks, matching Codex review,8answered threads and420s cycle.
+REST confirms merge; reviewedce5f7252 and squash tree771ed168 match exactly.
+964 now normally incorporates that actual main, preserving its entire content
+and the earlier ledger fixes. Conflicts retained the already-integrated963 tree
+plus964 additions; no historical fixes dropped. New exact-head gates required.
+964 self-review also routes BOTH the continuation prompt introduction and the
+handoff header to the latest PLAN, not the historical September ledger.
+Combined55 contracts/preflight cases pass8.44s. Review follow-up also removes
+the old operational hash from the ledger preamble and routes KNOWN_ISSUES plus
+all handoff entry points to the latest checkpoint. Four regressions reproduced;
+two deliberate stale-routing mutations fail, restored/cmp and11 ledger cases pass.
 
-LOCAL-ONLY runtime resume: last saved integration checkpoint8e262684, on branch
+LOCAL-ONLY runtime resume: retained integration checkpoint8e262684, on branch
 refactor/db-runtime-team-assignment-20260926 in
 /home/samba/share/slomix-astra-runtime-integration-20260926.
 Read that worktree's latest PLAN; the local checkpoint is not fetchable from GitHub.
@@ -199,7 +453,24 @@ NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment action
 
 > #963 fresh-review correction 2026-09-28: actual main4de6f07e normally
 > integrated with both histories retained. Three new findings independently
-> reproduced and corrected; 13 focused document/plan contracts pass. Actual
+> reproduced and corrected; 13 focused document/plan contracts pass. Actual local
+> resume object/branch/ancestry were verified read-only, not public availability.
+> Mutations failed/restored/cmp; no service or remote operation at that checkpoint.
+
+> 2026-10-04 #964 prepared on actualmain0b22b014, retaining both histories and
+> original ledger corrections. Local runtime resume 1986d671 is historical;
+> integration checkpoint02c160cc was current then;8e262684 supersedes it above.
+> Older-first queue precedes1079-1084. Hold956 and NEVER MERGE924-943/967.
+> Not a deployment; fresh exact-head review/CI and numbered permission required.
+
+> #964 preservation refresh 2026-10-03: normal main194b1e6e merge retains
+> both histories and unchanged ledger contract518522be. Root12 history/Node/plan
+> cases pass0.44s. Local preparation, not fresh published review or permission;
+> await final main sync and exact-head gates. No service or database action.
+
+> #964 fresh-review correction 2026-09-28: actual main4de6f07e normally
+> integrated with both histories retained. Three new findings independently
+> reproduced and corrected; 8 focused document/plan contracts pass. Actual
 > local resume object/branch/ancestry verified read-only; no claim that the hash
 > is available to a fresh GitHub clone. Document mutations failed and all files
 > restored/cmp. No real deploy, review-ref, service or remote operation. Root
@@ -220,7 +491,13 @@ NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment action
 > Current #963 main-sync checkpoint 2026-09-28: ec8ec7ed normally merged,
 > including reviewed #1067 SSH and #965 watchdog changes; both documentation
 > histories and d8431e06's historical corrections retained. Preserve runtime resume 1986d671.
-> 10 focused document/plan contracts pass; unchanged guard tests retain their
+> 10 focused document/plan contracts passed; prior mutation proof remained
+> historical evidence. Original runtime roadmap retained; no service operation.
+
+> Current #964 main-sync checkpoint 2026-09-28: ec8ec7ed normally merged,
+> including reviewed #1067 SSH and #965 watchdog changes; both documentation
+> histories and 3e9e89c3's historical corrections retained. Preserve runtime resume 1986d671.
+> 5 focused document/plan contracts pass; unchanged guard tests retain their
 > earlier observed mutation failure and restored/cmp proof. Historical content
 > is not current host evidence. Root owns publication and fresh review gates;
 > this documentation detour does not replace the original runtime roadmap.
@@ -240,6 +517,19 @@ NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment action
 > cleanup guard, restored with byte-for-byte cmp. Build recipe paths validated
 > without executing build/deploy; no current host-data measurement is claimed.
 
+> Historical checkpoint: only the following September28 paragraph predates
+> that synchronization; later October entries retain their stated dates.
+
+> Current checkpoint 2026-09-28: #964 is a historical-document consolidation
+> detour, not a return to unimplemented R01. Preserve runtime resume 1986d671
+> and the current integration queue (#1066 verified import; #1067 SSH followed
+> by #1068/#1069/#1070). Main 9ef42671 already contains #1065. The September
+> 7/8 execution ledger below records its date only. Continue reviewed dependency
+> consolidation, then original runtime development, new-site audit and eventual
+> owner-operated DEV cutover. Production and NEVER MERGE snapshots unchanged.
+> Verification: five document/plan contracts pass. Restoring the obsolete live
+> resume instruction fails the history guard; restored/cmp. Four original dated
+> lesson bodies remain unchanged. No endpoint, service or data-repair claim.
 > 2026-10-03 #1078 CI coverage: retain exactly the existing two Python check
 > names/jobs, pairing Python3.11 with PostgreSQL14 and Python3.13 with PostgreSQL17
 > (not a cross product). No triggers or extra jobs added. Images pinned to root's
@@ -1127,7 +1417,126 @@ NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment action
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-10-04 (Astra, historical handoff review corrections)
+**Zadnja posodobitev:** 2026-10-04 (Astra, historical execution ledger corrections)
+
+## Astra execution ledger — historical authority at 2026-09-07
+
+Historical ledger through September 8, not current implementation status or
+merge authority. Preserve its obligations as dated evidence; continue only from
+the latest checkpoint at the top of this plan, not an old runtime hash or R01 gate.
+
+**2026-09-08 evidence refresh:** merged current main and retained Claude's new
+R0 query-audit obligation, modularity progress and live-view work. Endpoint
+counts below come from this checkout, not the old handoff. Read-only live proof:
+dev `4bc00b1f`, bot/web process starts 2026-09-07 23:41 CEST, app.html mtime
+23:40, /api/build agrees, /health and database ok. This supersedes "never
+rebuilt" but does not prove bundle/source identity or latest-main deployment.
+Agent-only Python 3.13 environment is now independent of the service venv;
+pip check and 38 watchdog / 7 review tests pass there. Service venv links remain
+unchanged. Node PR #969 now declares PyYAML directly (4 contract tests, mutation
+proved); no reliance on pre-commit's transitive YAML dependency.
+Artifact PR #979 has 19 behavioral tests including parent symlinks; no real
+build/deploy performed. Watchdog review's failed-heartbeat midnight edge is
+fixed in `16383281`: 40 tests pass, mutation failed then restored/cmp. Review
+replies on #964/#965/#969 are answered with commits and evidence. PR review/CI
+and exact owner merge decisions remain outstanding; runtime v2 is not built.
+
+**Historical resume instructions (2026-09-08, superseded):** review checks/findings on #964 (handoff), #965
+(delivery), #966 (immutable reviews), #969 (Node pin), #979 (artifact preflight).
+Keep these independent slices; merge only an explicitly authorized PR number.
+Next stability work is service-package isolation, owner-reviewed hook trust,
+remaining relevant review findings and approved live proof. Revalidate current
+dev/source identities before any new measurement. Then R01 below; do not
+activate consumers or claim complete handoff/stability from these unit tests.
+
+Owner approved implementation after the handoff audit. Order: handoff and
+necessary stability/security fixes, then isolated runtime v2 development.
+One to two weeks of observation gate activation, not development. Production
+remains frozen at v1.39.0. No merge, service restart, deploy, browser or agent
+server permission is implied. Instructions in AGENTS.md still apply.
+
+This section supersedes historical priorities/statuses below, not their
+evidence. Read `HANDOFF-next.md` first; Claude's PR #961 is an additional
+source, not an execution authority. Recheck its latest revision before intake.
+No private memory, raw terminal transcript or credential is copied here.
+
+Status vocabulary: **code / merged / built / active / runtime-proven / deferred**
+are separate facts. `unmeasured` is not `ok`. Owner below means the person or
+agent responsible for the next step, not permission to execute protected work.
+
+| ID | Source / state at audit | Owner / next action and required evidence |
+|---|---|---|
+| A01 handoff | Ledger saved, PR #964; Claude #961 merged as `28662f04`, both sets of lessons preserved | Astra: continue obligation-by-obligation reconciliation and current PR intake; #963 adds the sister session report. |
+| A02 Codex safeguards | Local hardening implemented: no raw hook input logging/echo; 194 credential-assignment rules removed from active approvals, recoverable private backup; 4 test methods pass | Astra: normalization mutation produced 7 expected failures, restored/cmp; strict config and execpolicy load. hooks/list STILL says untrusted for both hooks. Owner reviews /hooks trust and credential rotation; broader approvals/complex-shell coverage still open. |
+| A03 development dependencies | PR #969 pins Node 22.23.2 and both CI jobs; 3 tests/mutations pass. Portable private toolchain verified by official SHA256, node reports v22.23.2/npm 10.9.8; system Node unchanged | Astra: frontend build remains unproven; use private toolchain explicitly, no global PATH edit. Prepare independent Python/service environments; owner activates services. Never install into shared running venv. |
+| A04 review safety | PR #966: immutable refs, <=25 files/8000 lines; 7 real-hook integration tests pass, mutation restored/cmp | Astra: review replacement, not existing review snapshots. #961 added a narrowly scoped legacy exception in AGENTS; it is preserved, not exercised. Owner-approved plan selected preparing this replacement; existing review vehicles remain NEVER MERGE. |
+| A05 artifact identity | PR #979: exact target/input/output provenance and staging before active-tree changes, 19 behavioral tests pass | Astra: review stricter SKIP_STATIC/env policy and preserved legacy behavior before owner activation. Parent-symlink and corruption mutations failed/restored/cmp. Current dev was rebuilt separately, but candidate provenance has not been built/deployed there; no browser run by Astra. |
+| A06 watchdog delivery | PR #965, latest correction `16383281`: post-delivery ACK, retries across midnight, non-writing dry-run; 40 tests pass | Astra: root reran tests; failed-POST ACK/midnight mutations failed/restored/cmp; run/send functions exercised with in-process transport stubs. Await review/owner merge. Real Discord message and activation still require permission. |
+| A07 watchdog measurement | #962 disk metric OPEN at refresh; timer 5 min, web/Lua require two failures | Astra: review #962 without duplicating it. Keep cadence; expected detection around 10 min plus scheduling/probe time, NOT <=2 min. SSH probes are a separate follow-up. |
+| A08 open-code intake | #955 MERGED `07d332ca`; #912 MERGED `4f653c01`; #958/#960/#961 merged; #962/#963/#956 open at refresh | Astra: review current diff/checks/threads and separate merge from runtime evidence. Arena ACC runtime proof remains unmeasured; no arena activation required for runtime development. Release PR is not deploy authority. |
+| A09 observations | New-import time_played_percent and v6.14 evening frame-health observations pending | Astra: read-only next-session evidence after checking running revision; historical destroyed_count repair and production migration 082 require separate owner action. |
+| A10 future features | twins r4, user layouts, spiderweb layers 3/4, remaining endpoint gaps and broad typing/modularity work | Astra: prioritized BACKLOG entries, not pre-runtime implementation blockers. Relevant correctness/security findings still enter stability triage. |
+
+### Runtime v2 contract and stages
+
+**R01 — first executable slice, after necessary stability/review gates:**
+new immutable migration (next unused number), durable event journal and
+neutral emitter using the EXISTING asyncpg connection inside canonical
+`postgresql_database_manager.process_file()` transaction, after validated
+player/weapon writes. All paths through that importer are covered, including
+SSH, STATS_READY, filename webhook, manual sync and CLI/bulk; do not attach
+the emitter only to the Discord mixin, which owns no canonical transaction.
+
+First event: `round_stats_imported`, versioned contract with event ID, round ID,
+gaming_session_id and source/import identity metadata, no raw stats payload.
+Unique initial event per round/event type, R1/R2 only (no R0), so a crash
+after commit but before `processed_files` does not duplicate the initial event.
+Use transaction-local `pg_notify` with only event ID as wake-up; the table is
+the durable source. `EVENT_STREAM_ENABLED=false` by default, isolated test DB
+only initially, no historical backfill, consumer, Discord publication or HTTP
+API change. A first import is NOT a final `round_ended` event.
+
+**R02 — before consumers:** map post-commit teams/correlation, Lua overrides,
+timing/DPM reconciliation, endstats and proximity writers to their transactions.
+Add versioned updates for actual changes, including older-round repairs during
+new imports. Identical input is idempotent; parser-version reimports remain
+distinguishable. Initial events alone do not cover these changes.
+
+**R03 — consumers:** NOTIFY plus reconnect and durable periodic catch-up;
+acknowledge only successful handling. Never assume sequence IDs follow commit
+order (`id > last_max_id` can miss a late commit). Use per-consumer/event
+receipts; each process with a memory cache needs independent handling. Start
+with existing global HTTP invalidation, cover relevant inner caches before
+claiming page freshness, conservatively flush on reconnect/startup. Measure
+browser Cache-Control/refetch separately. No pruning in the first slice.
+
+**R04 — independent Linux Python ingest:** extract fetch/retry, canonical
+import, Lua capture/reconciliation and endstats/proximity from Discord lifecycle.
+Replace Discord-dependent metadata intake with durable recovery before claiming
+full independence. Keep bot/web separate. Publication is another slice; a send
+followed by a crash before ACK does not provide exactly-once Discord delivery.
+
+### Proofs and exit criteria
+
+- Each code slice: focused tests, real runtime log/response in an isolated
+  harness, a guard mutation seen failing and restoration verified with `cmp`.
+- Event tests: rollback; crash after commit/before processed marker; duplicate
+  SSH/webhook inputs; CLI without Lua timestamps; R0 exclusion; repeated maps,
+  midnight and orphan R2 reconciliation. Compare eligible rounds and events
+  independently, not against webhook counts.
+- Consumer gates: lower ID commits last; missed NOTIFY/reconnect; handler
+  failure; warmed inner/HTTP caches followed by import then late Lua change;
+  multiple memory-cache workers. Test failed imports and recovery beyond the
+  existing 168-hour file cutoff; current code does not prove replayability.
+- Record hot/cold and source-to-commit/event/consumer/browser latencies
+  separately. Every known obligation needs an explicit disposition; no claim
+  of 100% absence of unknown bugs.
+- One branch/PR per slice, named staging, commit completed steps, <=25 files,
+  self-review after push, answer review threads, wait for exact owner merge
+  permission. At most two helpers, separate writer worktrees, no parallel
+  browser runs. Stop completed helpers; preserve foreign dirty work/stashes.
+
+### Historical tracks (read with the ledger above)
 
 ## Consolidation follow-up: artifact review #979 — 2026-09-20
 
@@ -1232,6 +1641,14 @@ Bypassing conflict gate fails the actual-PG assertion, restored/cmp. New files
 Ruff clean. Imported foundation code byte-identical to both parent branches;
 only new composition/tests/docs added. Disposable PG stopped; no application
 DB/service or source transport activation. Fresh CI/review required.
+### Consolidation: preserve immutable-review tooling #966 — 2026-09-20
+
+Normal main integration retained this older tooling proposal. Seven disposable
+repository CLI tests plus two plan contracts pass; Ruff clean. Tests use local
+fixture remotes only; actual NEVER MERGE refs/PRs remain untouched. No merge
+permission for #966. Current authorized batch is #1076/#1057/#962 only. Original
+runtime resume remains #1077 completion delivery/snapshot sealing after this
+consolidation detour, then new-site audit and approved reversible DEV transition.
 
 ### Consolidation: historical Opus handoff #963 — 2026-09-20
 
@@ -1251,6 +1668,18 @@ All host measurements in the old handoff remain explicitly historical. Original
 runtime resume is #1077 completion delivery/sealing, then new-site audit and
 approved reversible DEV cutover. #963 has no merge permission.
 
+### Consolidation: preserve execution ledger #964 — 2026-09-20
+
+Historical checkpoint; use the latest checkpoint at the top for current work.
+
+Normal current-main integration preserves the older execution ledger and both
+handoff tracks. Its September7/8 measurements/status are historical, not a reset
+of runtime work completed since then. Dead-hours code diagnosis remains only in
+the closure ledger; historical orphan data backlog remains an unmeasured open
+obligation. No data repair or live deployment is inferred. Current queue: #1076
+merged1a78b713; owner approved #1057/#962 subject to gates. #964 has no merge
+permission. Resume runtime at #1077 completion delivery/snapshot sealing after
+consolidation, then new-site audit and approved reversible DEV transition.
 ### R04p source stability parent refresh — 2026-09-28
 
 Local normal merge of reviewed capture parent bda56937 into #1071 preserves
@@ -3383,6 +3812,39 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
 - hosting ticket, če watcher potrdi populacijo B (host stall).
 
+## Astra — immutable review snapshot safety (2026-09-07)
+
+- Implemented locally on `fix/ci-immutable-review-snapshots`; not pushed,
+  merged or deployed. Existing review PRs #924–943 remain NEVER MERGE and
+  their refs are not modified. Source examined: `4f653c01`.
+- `review_slices.sh` delegates to a private-index snapshot builder: pin source
+  and baseline commits once, partition at 25 files / 8,000 changed lines
+  (also below the 500-file reviewer cap), preflight all areas before refs or
+  remote writes, reject oversize single files and unmeasurable binary files.
+- SHA-versioned base/head pairs have deterministic commits. Existing identical
+  refs are reused; conflicting refs block. No checkout, fetch, worktree removal,
+  forced push or hook bypass. Explicit `cut --push` uses ordinary atomic Git
+  pushes per pair; a later pair failure can leave earlier pairs published,
+  and retry reuses them. Historical credential-scanner hits remain blockers.
+- `prs` now refuses automatic PR creation. For a new generation, create draft
+  NEVER MERGE PRs explicitly using the emitted immutable base/head refs and
+  measured part sizes; old generated area bodies are historical context, not
+  current per-part measurements. Fetch explicitly before choosing the source.
+- Evidence: seven disposable-repository CLI tests passed, including a local
+  bare remote and the actual pre-push hook: two guarded pushes for 26 files,
+  no pushes on identical rerun, historical credential rejection, unsplit
+  26-file rejection, local/remote conflict rejection, oversize/binary preflight,
+  preserved dirty/untracked files, deletion and space-containing paths.
+- Mutation `MAX_FILES=26` was seen failing the 25+1 split assertion, then
+  restored; `cmp` against the saved original passed and all seven tests passed
+  again. Ruff and shell syntax checks passed. This is CLI runtime proof with
+  synthetic repositories, not evidence of GitHub publication or live services.
+- Read-only real-repo measurement yielded 26 parts at the examined source.
+  First area: 23 files / 8,094 lines, independently confirmed by direct Git
+  numstat; split into 22 / 7,868 and 1 / 226. No real snapshot refs created.
+- Next: parent review, ordinary feature PR through real pre-push protections,
+  then owner-specific merge decision. No permission to publish review snapshots
+  or merge any review vehicle is implied by this implementation.
 ## Astra — SPA artifact provenance before dev mutation (2026-09-07)
 
 Follow-up 2026-09-08: root completed the interrupted helper's parent-symlink

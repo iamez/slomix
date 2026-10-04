@@ -1,8 +1,10 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
 > Current1066 preparation2026-10-04: owner-approved older-first consolidation;
-> importer bytes preserved onmaina2737e7a. Offline repeat next, new isolated PG
-> proof pending. No restart/live DB fallback. Read latest integration PLAN.
+> importer bytes preserved onmaina2737e7a. CI PG14/17 now proves all10 isolated
+> importer cases on76233b74; local966 preparation3501fe88 incorporated, full
+> actual-main sync and fresh gates remain. No restart/live DB fallback.
+> Read latest integration PLAN.
 > Earlier dated entries below are historical, not current merge authority.
 
 > 2026-09-28 #1066 normal main4de6f07e synchronization retains both import and
@@ -31,8 +33,9 @@
   read its latest PLAN. Owner-approved queue order still places964/966 first.
   No local service restart or application database fallback.
   Added real-PG selected-R1 calendar scenario for CI; local collection/child
-  compilation is not SQL proof. Offline138 tests pass9.29s; final CI log verification
-  and actual964/966 synchronization still gate merge.
+  compilation is not SQL proof. Offline138 tests pass9.29s; later CI PG14/17
+  per-scenario logs prove all10cases. Actual964/966 synchronization and fresh
+  exact-head gates still block merge.
 
 ### Historical importer checkpoints
 
@@ -78,6 +81,86 @@
   and restores/cmp. PG stopped. Next connection/source identity and review;
   no deployment, services, source deletion or automatic scheduler.
 ### Inherited handoff checkpoints (historical)
+- (Astra, 2026-10-04)966 follow-up pins source OID for bundled snapshot scans,
+  independent of local origin/main. Two real Git bypasses reproduced;116tests
+  pass, source-argument mutation fails/restored/cmp. Safe published feature
+  sources remain supported.963 is mergeda2737e7a; this normal main refresh
+  preserves both histories. Retained local integration checkpoint8e262684:
+  read its latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926.
+  No real review refs or service actions;964 must still merge before966.
+
+### Historical snapshot checkpoints
+
+- (Astra, 2026-10-04) Additional966 review found hidden warning-only credentials.
+  Bundled-guard diagnostics now block noninteractive publication before refs,
+  without echoing content. Three local Git regressions reproduced the old leak;
+  no real credentials/remotes involved. Fresh exact-head gates still required.
+
+- (Astra, 2026-10-04)966security review repaired: published-source admission on
+  actual push target, locked symbolic-ref type check and NUL hook filenames.
+  106tests pass;6mutant failures restored/cmp. No real review refs or deploy.
+  Await963/964 consolidation and fresh current-head gates before merging966.
+
+- (Codex, 2026-10-03) #966 four fresh findings repaired: transaction verify for
+  existing local refs, raw binary admission independent of forced-text drivers,
+  replacement-object suppression across Git/hook subprocesses, and signed
+  commit date extraction. 75 disposable Git/Node/plan cases pass28.81s; twelve
+  measured mutation failures restored/cmp. No real review refs or services
+  changed; parent handles main synchronization, fresh CI/review and publication.
+  Original runtime development plan remains unchanged.
+
+- (Codex, 2026-10-03) #966 follow-up: ambient order-file partition drift and
+  missing-hook publication repaired. Direct bundled guard preflight covers
+  every proposed pair before any publication; original runtime work preserved.
+  Parent review and fresh exact-head CI/review remain required before merge.
+
+- (Codex, 2026-10-03) #966 repairs four fresh findings: diff algorithm pinned,
+  remote diagnostics withheld, legacy body generator retired, partial remote
+  pairs rejected before publication. Nine guard mutations fail/restored/cmp in
+  actual disposable Git repos. Existing complete pairs are observed, not locked;
+  no same-OID lease guarantee. Normal main19e65354 merge retains both histories
+  and repair e9124506 source/test bytes;53 snapshot/plan/Node cases pass13.63s.
+  Ruff/whitespace clean; root owns
+  publication. Original runtime roadmap and real review refs remain untouched.
+
+- (Astra, 2026-09-28) #966 three configuration findings reproduced/fixed:
+  empty branch enumeration, actual push-destination preflight, deterministic
+  UTF-8 commit objects. Reject multiple push URLs before refs; preserve existing
+  CAS/pathspec/no-empty/hook protections. Five mutations fail/restored/cmp;
+  40 disposable Git CLI/plan cases pass10.24s after normal main4de6f07e merge.
+  Independent remote OID/object proofs pass, real review refs unchanged.
+  No real publication/services; fresh review next, original runtime plan intact.
+
+- (Astra, 2026-09-28) #966 fresh review scope fixes: reject an area selecting
+  no changes and --exclude without actual nonempty exclusion magic. Six
+  disposable CLI failures reproduced, guards mutated/failing/restored/cmp;
+  32 combined cases pass6.44s. Real review refs unchanged. Await fresh review.
+
+- (Astra, 2026-09-28) #966 integrated actual main 1f4a388d; all three cd483737
+  guard fixes retained, scripts/tests unchanged from 79a7e2d1. Twenty real CLI
+  cases in disposable local repositories plus two plan contracts pass. Actual
+  tree-validation mutation fails three cases, restored/cmp; real review-ref
+  digest unchanged. No real remote/service operation. Root owns publication,
+  exact-head review and merge gates; original runtime 1986d671 unchanged.
+
+- (Astra, 2026-09-27)966 follow-up: three review findings fixed locally;20real
+  disposable Git CLI tests pass. Duplicate/missing-positive areas fail preflight;
+  generated tree diff catches D/F collateral and actual bounds before ref writes.
+  Both bounded transition directions proven;10regressions fail under mutation,
+  restored/cmp. No real review refs or services touched, no push/merge. Original
+  runtime continuation remains preserved while parent consolidates existing PRs.
+
+- (Astra, 2026-09-20) #966 refreshed against main;9snapshot/plan tests pass,
+  Ruff clean. Actual review-snapshot refs and NEVER MERGE PRs unchanged. Keep
+  this older tooling proposal for review, not authorized for merge. Runtime
+  resume #1077 completion delivery/sealing remains after consolidation.
+### Inherited handoff checkpoints (historical)
+- (Astra, 2026-10-04) #963 mergeda2737e7a with exact reviewed/squash tree
+  identity771ed168,14green checks, all8threads answered and420s cycle. #964
+  normally integrated actual main with both histories preserved.51 local cases
+  and current-plan routing mutation proof; publish for fresh review/CI next.
+  Retained integration checkpoint8e262684 is a local access anchor: read its
+  worktree's latest PLAN, not a historical queue. No service/deployment action.
 
 - (Astra, 2026-10-04) #963 review correction: current local integration checkpoint
   is8e262684 in /home/samba/share/slomix-astra-runtime-integration-20260926;
@@ -87,6 +170,12 @@
   the exact built commit; no live deployment, service or data action.
   September28 corrections remain in Git history and the dated PLAN below.
 
+- (Astra, 2026-10-04) #964 review correction: continue from the latest PLAN in
+  /home/samba/share/slomix-astra-runtime-integration-20260926 (checkpoint8e262684
+  at this audit, superseding02c160cc/1986d671). September7/8 execution entries
+  and the four dated lessons remain historical, not instructions to restartR01.
+  Numbered merge approval received; finish963 then synchronize964 to actualmain
+  and repeat all gates before merge. No deployment/service/live-data operation.
 - (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
   unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
   checked against actualPG; deliberately mismatched17/14 fails fixture setup.
@@ -987,6 +1076,42 @@
   lokalni `docs/research/DATAPOINT_AUDIT_2026-09-07.md`; agenti zaprti.
   Odprto po vrsti: #980 (drift tipov + 11 niti), #981 vrata, veji
   `feat/live-ticker-reads-its-events` in `feat/profile-long-tail` za PR.
+- (Astra, 2026-09-20) Historical consolidation checkpoint: preserve #964 historical execution ledger
+  and current-main runtime track together. September7/8 entries below describe
+  then, not the current runtime implementation. #1076 merged; #1057/#962 approved
+  conditionally; #964 not approved. Resume #1077 delivery/sealing after detour.
+
+- **2026-09-08 (Astra, resume checkpoint):** first implementation slices are
+  published as #964/#965/#966/#969/#979; see PLAN's current ledger. Targeted
+  tests pass per slice (2/40/7/4/19), not a combined whole-project proof.
+  Review corrections: closed issue moved to closure ledger, YAML dependency
+  declared directly, failed heartbeat retained across midnight. Helpers stopped
+  after their bounded tasks; local agent Node/Python tools persist separately
+  from services. No merge/deploy/browser/live-data mutation by Astra. Runtime
+  R01 remains gated by necessary stability/review work; it is not implemented.
+
+- **2026-09-07 (Astra):** owner approved the reconciled implementation plan.
+  Current authority: PLAN's "Astra execution ledger" (A01–A10, R01–R04).
+  Source `4f653c01`: #955 and #912 are now merged; runtime proof is separate.
+  Handoff saved in PR #964; watchdog delivery in #965; immutable review
+  snapshot candidate tested separately. Node/CI pin alignment is the next slice.
+  No service, deployment, browser, live-data write or merge performed by Astra.
+  Next: finish these stability slices, Codex/local environment safeguards and
+  artifact identity; isolated event-journal development follows the gate.
+
+**Only the September 7/8 entries immediately above are historical, not current action instructions.** In
+particular, Astra has not executed `review_slices.sh cut --push`: #961 added a
+narrow AGENTS exception for the legacy script while our approved plan prepares
+an immutable replacement. Preserve that exception pending owner review; do not
+apply it to any other push. Old advice to delete generated OpenAPI types is superseded
+by npm `pre*` hooks (`generate:api` before bare `npx`). Prior "install/restart
+watchdog" notes are not proof that installation is still pending.
+
+Deferred, not forgotten: twins r4/puran test, user layouts, spiderweb layer 3
+rendering/layer 4, endpoint-gap features, broad response typing and modular UI
+work. Data repairs, production migration and real alert delivery have their
+own permission gates. Read PLAN A09/A10 before reopening old research.
+
 - (Fable 5.1, 2026-09-07, 22:05) Owner: »poglej live mode kot obiskovalec«
   — pregledano med živo igro na produkciji (legacy `#/live`, v1.39.0):
   deset vrzeli (L1–L10) in osem rezin v LOKALNEM
