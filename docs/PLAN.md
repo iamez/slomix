@@ -2,9 +2,9 @@
 
 ## Current reader preparation — 2026-10-04
 
-Owner approved1074 after older predecessors. Normal local5ea7fefd parent merge
-retains actual main67ad2d8c and both histories.963/964/966/1066/1072 merged; later parents are
-local preparations, not presumed merged. Reader/source tests remain
+Owner approved1074 after older predecessors. Normal actual-maind3a8f4df merge
+retains both histories;963/964/966/1066/1072/1073 are merged. Reviewed1073 parent
+5ea7fefd and squashd3a8f4df trees are identical. Reader/source tests remain
 unchanged fromfa658b12, including prior0400/0600 mode repair. Repeat actual
 filesystem proofs; no receipt changes, service activation or deployment.
 253 combined reader/manifest/Lua/capture/import/spool/parser/document/artifact
@@ -12,8 +12,10 @@ cases pass20.70s; reader source/tests byte-identical to repairedfa658b12.
 Renewed0600-only mutation fails real publish/read under restrictive umask0277;
 the reader rejects a safe publisher-created0400 manifest. Restored/apply_patch/
 cmp without widening permissions;52 reader/document cases pass0.72s afterward.
-Publish only after actual1073 merge and fresh main sync, tests and exact-head
-review/CI. Original runtime roadmap remains in the latest local integration PLAN.
+Post-sync combined reader/capture/import/spool/document suite:266pass23.56s.
+Reader source/tests remain byte-identical tofa658b12; Ruff/whitespace clean.
+Publish after post-sync tests, then require fresh exact-head review/CI and
+mandatory420s cycle. Original runtime roadmap remains in latest integration PLAN.
 
 ## Historical reader and parent checkpoints — superseded status, retained evidence
 

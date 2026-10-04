@@ -28,8 +28,8 @@
 ## Trenutna pozicija
 
 - (Astra, 2026-10-04) #1074 locally retains the prior0400/0600 reader repair
-  while incorporating prepared parent5ea7fefd and actual main67ad2d8c. Owner-approved,
-  but publish/review only after earlier merges and another actual-main sync.
+  while incorporating actual merged parent/main d3a8f4df. Owner-approved;
+  earlier predecessors merged, fresh exact-head review/CI remain merge gates.
   No service, deployment or source activation; original runtime plan retained.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
   retained checkpoint8e262684 is a local access anchor, not the latest head.
