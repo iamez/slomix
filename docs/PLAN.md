@@ -3,11 +3,21 @@
 ## Current completion preparation — 2026-10-04
 
 Owner approved1072 as part of the older queue, after963/964/966/1066.
-Local normal parent06e5a20d integration includes actual966 mainfa40c12e
-and1066 importer fixes; both documentation histories
+Local normal main5de82cfb integration follows1066 merge at20:50:06Z; reviewed
+06e5a20d and squash treec019839c match.1066 passed its exact-head SQL14/17,
+CI/review and420s cycle. Both documentation histories
 retained. Offline completion prototype remains unchanged fromc87a2cb0. No game
 activation, service action or deployment. Repeat Lua/capture/import proofs;
 publish only after preceding actual merges and another main synchronization.
+Actual predecessor synchronization is now complete; fresh1072 CI/review required.
+Renewed Lua short-write guard mutation fails actual harness with
+"unexpected writer outcome: short-write"; restored via apply_patch/cmp and all
+12 Lua scenarios pass0.22s. No game server/network/service activation.
+After actual1066 main synchronization:209 combined Lua/capture/import/spool/
+parser/document/artifact cases pass20.14s. All executable source and tests
+remain byte-identical toce35b42e; only prerequisite ancestry and status changed.
+Historical1072 AvailabilityPage CI failure has no established RCA; fresh
+frontend CI must pass. Do not call that old failure fixed or weaken its test.
 Combined Lua/SSH-capture/import/spool/parser plus ledger/handoff/artifact/Node/
 plan proofs:209 pass19.88s. Initial run caught stale current BACKLOG routing:
 2failed/207passed; corrected the entry to latest integration PLAN and retained

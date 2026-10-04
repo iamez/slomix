@@ -27,10 +27,11 @@
 
 ## Trenutna pozicija
 
-- (Astra, 2026-10-04) #1072 approved but waits for1066;963/964/966 merged.
+- (Astra, 2026-10-04) #1072 approved;963/964/966/1066 merged and actual main5de82cfb
+  incorporated. Fresh exact-head tests/CI/review required before1072 merge.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
   retained local checkpoint8e262684 is an access anchor, not the latest head.
-  Local parent06e5a20d includes actual mainfa40c12e and pending1066, while
+  Local parent06e5a20d plus its actual squash5de82cfb included, while
   preserving the offline Lua prototype and both histories. No activation/deploy;
   fresh actual-main sync and
   exact-head tests/review/CI remain required after the earlier merges.
