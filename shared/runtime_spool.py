@@ -12,10 +12,15 @@ from typing import Literal
 _NAME = re.compile(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-[12]\.txt', re.ASCII)
 
 
-def _validate_metadata(filename, expected_size, max_bytes, expected_sha256):
-    """Apply identical metadata bounds to publication and reconciliation."""
+def validate_stats_filename(filename: str) -> None:
+    """Shared structural admission; calendar validity belongs to the importer."""
     if not _NAME.fullmatch(filename) or '..' in filename:
         raise ValueError('Invalid stats filename')
+
+
+def _validate_metadata(filename, expected_size, max_bytes, expected_sha256):
+    """Apply identical metadata bounds to publication and reconciliation."""
+    validate_stats_filename(filename)
     if expected_sha256 is not None and (
         not isinstance(expected_sha256, str)
         or re.fullmatch(r'[0-9a-f]{64}', expected_sha256, re.ASCII) is None
