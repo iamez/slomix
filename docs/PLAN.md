@@ -2,12 +2,12 @@
 
 ## Current retry preparation — 2026-10-04
 
-Owner approved1075 after earlier queue entries. Normal local5e0929d9 parent
-merge preserves actual main5de82cfb, both histories, reader0400/0600 handling
+Owner approved1075 after earlier queue entries. Normal local89d8d906 parent
+merge preserves actual maind3a8f4df, both histories, reader0400/0600 handling
 and original retry bytes10d232f1. Repeat real filesystem reconciliation proofs.
 No activation, service, deployment or application DB action. Publish only after
 actual earlier merges and another main sync, exact-head tests/review/CI.
-963/964/966/1066 are merged;1072/1073/1074 preparations do not imply their merge.
+963/964/966/1066/1072/1073 are merged;1074 preparation does not imply its merge.
 Previous baseline:263 combined retry/reader/manifest/Lua/capture/import/spool/
 parser/document/artifact cases pass20.76s. Retry implementation remains byte-
 identical to10d232f1; its original tests are retained and extended below.
@@ -21,6 +21,8 @@ receipt publication under umask0277, and two unchanged retries. Both files stay
 201/240 with200 as control. Both restored/apply_patch/cmp.119combined receipt/
 spool/document cases pass1.65s, Ruff clean. This is local filesystem evidence,
 not producer trust, source activation or a crash-durability acknowledgement.
+After normal89d8d906 parent refresh,279combined retry/reader/Lua/capture/import/
+spool/document cases pass22.65s; all implementation and new test bytes retained.
 Original runtime capture/sealed-source/retry/handover then Spiderweb plan retained
 in the latest local integration PLAN, not replaced by this queue detour.
 
@@ -44,9 +46,9 @@ in the latest local integration PLAN, not replaced by this queue detour.
 > Root owns review/publication; next1077, original runtime plan unchanged.
 ### Parent reader preparation — 2026-10-04, inherited checkpoint
 
-Owner approved1074 after older predecessors. Normal local941b5e39 parent merge
-retains actual main5de82cfb and both histories.963/964/966/1066 merged; later parents are
-local preparations, not presumed merged. Reader/source tests remain
+Owner approved1074 after older predecessors. Normal actual-maind3a8f4df merge
+retains both histories;963/964/966/1066/1072/1073 are merged. Reviewed1073 parent
+5ea7fefd and squashd3a8f4df trees are identical. Reader/source tests remain
 unchanged fromfa658b12, including prior0400/0600 mode repair. Repeat actual
 filesystem proofs; no receipt changes, service activation or deployment.
 253 combined reader/manifest/Lua/capture/import/spool/parser/document/artifact
@@ -54,8 +56,10 @@ cases pass20.70s; reader source/tests byte-identical to repairedfa658b12.
 Renewed0600-only mutation fails real publish/read under restrictive umask0277;
 the reader rejects a safe publisher-created0400 manifest. Restored/apply_patch/
 cmp without widening permissions;52 reader/document cases pass0.72s afterward.
-Publish only after actual1073 merge and fresh main sync, tests and exact-head
-review/CI. Original runtime roadmap remains in the latest local integration PLAN.
+Post-sync combined reader/capture/import/spool/document suite:266pass23.56s.
+Reader source/tests remain byte-identical tofa658b12; Ruff/whitespace clean.
+Publish after post-sync tests, then require fresh exact-head review/CI and
+mandatory420s cycle. Original runtime roadmap remains in latest integration PLAN.
 
 ## Historical reader and parent checkpoints — superseded status, retained evidence
 
@@ -81,9 +85,9 @@ review/CI. Original runtime roadmap remains in the latest local integration PLAN
 > activation. Root handles publication/review; original runtime plan retained.
 ### Parent manifest preparation — 2026-10-04, inherited checkpoint
 
-Owner approved1073 after963/964/966/1066/1072. Local normal parent1cb1da12
-integration includes actual main5de82cfb and retains both histories and manifest
-bytes.963/964/966/1066 merged;1072 remains a prerequisite, not presumed merged.
+Owner approved1073 after963/964/966/1066/1072, all now merged. Normal actual-main
+67ad2d8c integration retains both histories and unchanged manifest bytes.
+Reviewed1072 parent1cb1da12 and actual squash67ad2d8c trees are identical.
 227 combined manifest/Lua/capture/import/spool/parser/document/artifact cases
 pass20.27s; manifest source/tests match prior repairedf20023c9 byte-for-byte.
 Current backlog now explicitly routes to latest integration PLAN/access anchor.
@@ -91,9 +95,10 @@ The previous 200->240 filename fix remains present, not discarded as stale.
 Renewed guard mutation back to200 rejects valid201/240-byte names with
 "Manifest filename must be a bounded string" (2fail/1control pass). Restored
 via apply_patch/cmp;44 manifest/document cases pass0.62s. No mutation committed.
-Repeat actual filesystem/no-clobber/fsync and producer-boundary proofs; this
-is not source activation. Final publication waits for actual earlier merges,
-fresh parent/main synchronization and exact-head CI/review.
+Latest combined pre-squash proof:240 cases pass22.72s. After actual-main sync,
+24 filesystem/no-clobber/fsync and document cases pass0.51s; this is not source
+activation. Fresh exact-head CI/review and prior filename thread revalidation
+remain publication/merge gates, followed by the mandatory420s cycle.
 Original runtime plan: latest local integration PLAN, then capture/sealed-source/
 retry/exclusive handover, usable Spiderweb/proximity and later website work.
 
