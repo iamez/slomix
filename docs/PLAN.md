@@ -1,6 +1,79 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current proximity boundary consolidation — 2026-10-05
+## Current #1080 consolidation — 2026-10-05
+
+Actual-main checkpoint:1079 merged7b9b43a6 at2026-10-04T22:36:46Z. Reviewed
+c5d8fc4e and squash trees744f0475 identical; all14checks, matching Codex5985124334,
+zero threads, actual3receipt cases PASS on both CI majors. Mandatory cycle clean.
+This normal main sync retains already-integrated parent evidence and1080work;
+only documentation conflicts, no source changes. Fresh final-head gates next.
+
+Review4179646678 correctly identified conflicting predecessor status in the
+former current section. The pre-merge preparation below is now explicitly
+historical. Do not wait for1079 again: it is merged; next gate is1080fresh
+exact-head CI/review followed by the mandatory settle cycle.
+
+Follow-up4179660774 found a second current-labelled entry point in BACKLOG.
+Its current-position section now routes to this top checkpoint and the latest
+integration PLAN, without maintaining a duplicate numeric PR queue. Original
+queue/anchor evidence remains under a separate historical level-2 heading.
+RCA: both old document tests extracted only the first bullet, missing stale
+prose before it. They now inspect the entire current section; both failed on
+old content. Reinjecting stale queue prose fails the new guard, restored/cmp.
+35focused cases pass after correction. No importer or PG test source change.
+
+## Historical #1080 local preparation — before #1079 merged
+
+Normal integration of published1079 c5d8fc4e preserves both histories and all
+older merged fixes. #1079 is awaiting fresh gates, not merged yet; only after
+its actual squash will1080 receive final actual-main synchronization and fresh
+publication/review. Receipt-read source/tests retain32e515bd bytes. Repeat
+local guard proof and require actual PG14/17 CI cases on the final head.
+Original runtime roadmap remains in the latest integration PLAN at
+/home/samba/share/slomix-astra-runtime-integration-20260926. No services,
+production, live database or NEVER MERGE action; dated statuses below historical.
+
+Fresh receipt/boundary/capability/document selection:67passed1.14s. Mutation
+swallowing receipt read exceptions produces4failures/5passing controls, including
+both transactional and compatibility callers; restored via apply_patch/cmp.
+New tests lint clean. Parser and receipt-read test bytes remain32e515bd.
+Actual PG14/17 proof must be checked on final published CI head, not inferred
+from mocks or the dated private proof below. No local proof service restart.
+
+## Historical runtime receipt-read checkpoint — 2026-10-04
+
+Disk safety detour is complete: owner verified the Windows backup copies and
+expanded VM300 root32->64GiB online. Home modernization is a deferred design idea,
+not active development. Resume the original runtime acceptance sequence.
+
+Current slice, based on PR1079 head97a39263: required receipt reads now run inside
+the import transaction before data writes. Query/schema failures abort import
+instead of authorizing aggregates. This does NOT serialize concurrent importers
+or establish stable source identity; those remain next, with two-writer proofs.
+Focused unit/parser suite49passed; nine new tests failed on the original code.
+Swallow-error mutation produced4failed/5passed, restored with cmp, then49passed.
+Owner restarted the private proof service. Actual PostgreSQL14.24 read failures
+(missing table, missing column, SQL error) and prior receipt-write rollback cases
+all pass6/6. Observer counts and fetched rows agree: failure writes0, repaired
+retry/replay aggregate1 and receipt1. Swallow-error mutation fails all3 new PG
+cases, restored/cmp. Expanded proximity selection304passed/20explicit skips
+(existing GUID/Lua coverage exclusions), no receipt-proof skips. New tests lint
+clean; parser has two unchanged baseline DTZ001/DTZ007 findings.
+Full canonical parser+PostgreSQLAdapter also proved Python/SQL receipt-read
+failures on private restored cloneC: failure0vehicles/0receipts, retry and repeat
+1vehicle(distance360)/1receipt. Network audit allows only the proof UNIX socket;
+Discord/website/config imports forbidden. Synthetic maps remain unlinked, so
+this is NOT round-linkage, concurrent-writer or full runtime acceptance proof.
+The first pytest collection attempted localhost etlegacy_test authentication
+and was rejected (InvalidAuthorizationSpecificationError). Follow-up runs pin
+both POSTGRES_TEST_* and RUNTIME_EVENTS_TEST_SOCKET to the private cluster;
+the general conftest probe is separate from the journal fixture's safe routing.
+No deployment, service operation or production write by the agent.
+Keep this slice separate from the integration branch's older unmerged changes.
+After real-PG verification, review and PR gates, continue concurrency/source
+identity and the original capture/linkage/Discord+website-off acceptance gates.
+
+## Historical inherited #1079 boundary consolidation — 2026-10-05
 
 All nine approved older PRs (963/964/966/1066/1072/1073/1074/1075/1077) are
 merged and their reviewed/squash trees verified identical. This #1079 branch

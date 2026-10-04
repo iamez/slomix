@@ -1,6 +1,28 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
-> Current2026-10-05: older nine approved PRs merged with tree verification.
+> Current2026-10-05 00:37CEST:1079merged7b9b43a6, tree matches reviewedc5d8fc4e.
+>1080normal actual-main sync retains prepared history; fresh publication/gates
+>next. Earlier "wait1079" statuses are historical. Original runtime plan retained.
+
+## Historical preparation notes — not current merge instructions
+
+> Historical2026-10-05, before1079merge: #1080 local preparation incorporates published1079c5d8fc4e.
+> Wait1079actual squash, then sync/fresh gates; no1080publication yet. Read
+> latest integration PLAN at /home/samba/share/slomix-astra-runtime-integration-20260926.
+> Original runtime roadmap retained. Earlier statuses below are historical.
+
+> 2026-10-04: disk backup/online root expansion completed; Home ideas deferred.
+> Runtime resumed with required receipt-read fail-closed regression fix.
+> 49 focused tests pass, swallow-error mutation fails4 and restored/cmp passes.
+> Owner restarted proof service:6/6 read+write PG cases pass; read mutation3fail,
+> restored/cmp. Expanded proximity suite304passed/20existing explicit skips.
+> Full canonical parser+adapter on private cloneC also proved Python/SQL read
+> failure0writes and successful retry/replay1vehicle/1receipt; synthetic maps
+> remain unlinked. Next: review/publish slice, then concurrency and stable source
+> identity. No merge/deploy; both pytest connection selectors now explicitly
+> target private PG to avoid the general collection probe's localhost default.
+
+> Historical1079preparation2026-10-05: older nine approved PRs merged with tree verification.
 > #1079 normally integrates actual main95758cc7; fresh local/CI/review gates
 > pending, then1080-1084 in order. Read latest integration PLAN at
 > /home/samba/share/slomix-astra-runtime-integration-20260926. Original runtime
@@ -44,7 +66,15 @@
 
 ## Trenutna pozicija
 
-Current queue is #1079 through #1084. The #1077 paragraph below is historical:
+Read the latest PLAN: use the latest checkpoint at the top of `docs/PLAN.md`
+for this branch's queue gate. The original runtime roadmap and cross-branch
+execution ledger remain in the latest PLAN at
+`/home/samba/share/slomix-astra-runtime-integration-20260926`.
+Do not derive current merge instructions from the dated evidence below.
+
+## Historical queue evidence
+
+At the earlier checkpoint the queue was #1079 through #1084. The #1077 paragraph below is historical:
 #1077 merged as95758cc7 and is not awaiting another merge.
 
 - (Astra, 2026-10-04) #1077 actual-main8f298662 refresh keeps old producer

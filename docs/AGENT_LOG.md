@@ -1,5 +1,31 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-05 · Separate current instructions from pre-merge history.**
+  A new closure paragraph does not make contradictory wait instructions in the
+  same current section safe. Put an explicit historical heading before the old
+  preparation text and state the next actual PR gate once. Preserve evidence,
+  but never leave both "merged" and "wait for this merge" as current directions.
+  The guard must inspect the entire current section, not just its first bullet:
+  stale queue prose before that bullet previously escaped both document tests.
+  BACKLOG current position now routes to PLAN instead of duplicating PR numbers;
+  old queue/anchor evidence is retained under its own historical level-2 heading.
+
+- **2026-10-04 · Unknown receipt state is not an absent receipt.**
+  The proximity optional-column helper swallows schema-query errors; the old
+  receipt read also swallowed query failures. Both could authorize aggregate
+  updates after an outage. Read the required receipt directly, inside the import
+  transaction before writes; let failure abort import. Receipt-write tests that
+  mock this read cannot prove the read boundary. New regression tests and a
+  restored swallow-error mutation demonstrate this distinction; real-PG tests
+  and canonical parser+adapter clone proof now pass. Transaction placement alone
+  is not concurrent serialization.
+
+- **2026-10-04 · Pytest has two independent connection selectors.**
+  The private journal fixture uses RUNTIME_EVENTS_TEST_SOCKET, but the global
+  collection hook probes POSTGRES_TEST_* with a localhost default. Pin both to
+  the approved disposable cluster for local integration runs. An authentication
+  rejection during collection is not evidence that the private PG fixture failed.
+
 - **2026-10-04 · Recheck repaired boundaries through their composition.**
   Filename length and restrictive-umask admission had separate regressions.
   A capture -> receipt -> repeated retry proof now combines200/201/240-byte
