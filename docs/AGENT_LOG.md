@@ -223,6 +223,11 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Check ET write counts before signalling writer completion.**
+  Local and upstream g_lua.c return FS_Write byte count, but FCloseFile returns
+  no durability status. Offline prototype rejects short/missing counts and signals
+  only after close returns. This does not establish fsync, exclusive filenames or
+  durable receipts; those need separate protocols before enabling source capture.
 - **2026-09-20 · Verified R2 bytes do not isolate the parser's R1 search.**
   The legacy finder also searches cwd/local_stats. Construct runtime managers
   with allow_legacy_r1_fallback=False; import_verified_file requires this mode.

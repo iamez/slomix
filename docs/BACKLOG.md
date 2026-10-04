@@ -27,6 +27,30 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) #1072 approved;963/964/966/1066 merged and actual main5de82cfb
+  incorporated. Fresh exact-head tests/CI/review required before1072 merge.
+  Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
+  retained local checkpoint8e262684 is an access anchor, not the latest head.
+  Local parent06e5a20d plus its actual squash5de82cfb included, while
+  preserving the offline Lua prototype and both histories. No activation/deploy;
+  fresh actual-main sync and
+  exact-head tests/review/CI remain required after the earlier merges.
+
+### Historical branch checkpoints
+
+- (Astra, 2026-09-28) #1072 locally refreshed on #1071 head 97db51fa with
+  both histories retained. 172 combined offline tests pass in 28.00s, zero
+  skips; real Lua/filesystem completion proof and failing/restored write-count
+  mutation verified. Lua parse/Ruff clean. Review API has zero threads, not
+  fresh-review approval. No remote writes or activation; ready for parent-led
+  publication, followed by durable completion/manifest work in the runtime plan.
+
+- (Astra, 2026-09-20) R04q offline producer helper/proof, not game integration.
+  139 combined tests pass; short-write mutation emits false completion and fails,
+  restored/cmp. Fresh name/single writer required; durable receipt, digest and
+  collisions remain next. Owner allowed local development, no deployment.
+### Inherited main checkpoints (historical)
+
 - (Astra, 2026-10-04) #1066 now includes actual966 mainfa40c12e. Runtime
   importer/parser code retained; isolated PostgreSQL evidence must be refreshed
   before merge. Retained local integration checkpoint8e262684 is an access anchor:
@@ -220,6 +244,7 @@
   wrong-checkout verifier and hidden-index input flags, with four failing/restored
   regressions and23passing fixture tests. No real deploy. Branch refresh/CI and
   PR-specific permission remain gates. Runtime resume remains #1077 after detour.
+
 
 - (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
   and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual

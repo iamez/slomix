@@ -1,6 +1,79 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current ingest preparation — 2026-10-04
+## Current completion preparation — 2026-10-04
+
+Owner approved1072 as part of the older queue, after963/964/966/1066.
+Local normal main5de82cfb integration follows1066 merge at20:50:06Z; reviewed
+06e5a20d and squash treec019839c match.1066 passed its exact-head SQL14/17,
+CI/review and420s cycle. Both documentation histories
+retained. Offline completion prototype remains unchanged fromc87a2cb0. No game
+activation, service action or deployment. Repeat Lua/capture/import proofs;
+publish only after preceding actual merges and another main synchronization.
+Actual predecessor synchronization is now complete; fresh1072 CI/review required.
+Renewed Lua short-write guard mutation fails actual harness with
+"unexpected writer outcome: short-write"; restored via apply_patch/cmp and all
+12 Lua scenarios pass0.22s. No game server/network/service activation.
+After actual1066 main synchronization:209 combined Lua/capture/import/spool/
+parser/document/artifact cases pass20.14s. All executable source and tests
+remain byte-identical toce35b42e; only prerequisite ancestry and status changed.
+Historical1072 AvailabilityPage CI failure has no established RCA; fresh
+frontend CI must pass. Do not call that old failure fixed or weaken its test.
+Combined Lua/SSH-capture/import/spool/parser plus ledger/handoff/artifact/Node/
+plan proofs:209 pass19.88s. Initial run caught stale current BACKLOG routing:
+2failed/207passed; corrected the entry to latest integration PLAN and retained
+8e262684 access anchor. Lua and importer payload bytes match their respective
+parents. Recursive merge's intermediate spool conflicts resolved automatically;
+final spool/reconcile test bytes compare exactly with parent4b66761e.
+Current runtime roadmap lives in the latest PLAN under
+/home/samba/share/slomix-astra-runtime-integration-20260926, local branch
+refactor/db-runtime-team-assignment-20260926. Original capture/sealed-source/
+retry/exclusive handover, then Spiderweb/proximity/UI sequence is unchanged.
+
+## Historical completion and main checkpoints — superseded status, retained evidence
+
+> #1072 actual-parent checkpoint 2026-10-03: #1071 merged5e948f0b at05:07:24Z
+> after explicit permission and420s gates; reviewed/squash trees5d47e81e match.
+> Normal actual-main merge retains both histories and exact runtime/Lua bytes
+> fromf90c37f7. Root45 Lua/capture/Node/plan cases pass10.75s. Retarget main,
+> publish for fresh exact-head review/CI; no1072 merge permission or deployment.
+
+> #1072 reviewed-parent refresh 2026-10-03: normal parente5621f2f merge
+> retains actualmain194b1e6e and both histories. Runtime/Lua bytes unchanged
+> from3cce1ed1; root45 Lua/capture/Node/plan cases pass10.84s. Await1071 actual
+> merge, final main sync and fresh review before publication. No service action.
+
+> #1072 security-baseline refresh 2026-10-03: normal parenta1ead937 merge
+> retains actualmaincc6b0a4d and both documentation histories. Runtime/Lua
+> source/tests unchanged from7bb3e57d;45 executable Lua/capture/Node/plan
+> cases pass10.86s. Local preparation only: parent merges and fresh exact-head
+> review remain required. No service changes or producer activation.
+
+> #1072 local refresh 2026-10-03: normal merge of parent2915eae9 preserves
+> both documentation histories and prior runtime/Lua bytes111bc694. Inherited
+> Node pin contracts are new from main. Root45 Lua completion/capture/Node/plan
+> cases pass10.86s, including executable Lua harnesses and actual child/filesystem
+> behavior. No game-server or service activation. Await parent merges and fresh
+> main sync before publication; original runtime roadmap remains unchanged.
+
+> #1072 actual-main propagation 2026-09-28: normal parente3c2e2f5 merge
+> incorporates4de6f07e, preserving both histories and source/tests6a229f75.
+> Prior41case10.66s Lua/capture proof remains applicable; combined repeat follows.
+> Runtime1986d671 retained; no remote/services and no implied fresh review.
+
+> #1072 published-parent refresh 2026-09-28: normally merged #1071 44a05106;
+> both histories and final worker e8f05dbd bytes retained. Forty-one actual Lua
+> harness/capture/plan cases pass10.66s; no remote/network/DB/service actions.
+> Original runtime1986d671 retained. Actual #1068 squash-main sync and fresh
+> exact-head publication/review remain root gates, not inferred from local tests.
+
+> #1072 local parent propagation 2026-09-28: normal #1071 localdd0b16f0 merge
+> retains final worker90026032 source/tests and both histories. Thirty-nine
+> Lua-completion plus SSH/stability tests pass10.85s offline; no game server,
+> source activation, real SSH or service changes. Grace callers remain compatible.
+> Root owns final main-sync/publication gates; original runtime1986d671 preserved.
+
+### Inherited main history
+## Inherited ingest preparation — historical checkpoint on 2026-10-04
 
 Owner approved1066 after963/964/966 and fresh individual gates. Local normal
 mainfa40c12e refresh preserves reviewed815af476 importer/parser bytes and
@@ -672,6 +745,7 @@ NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment action
 > not live deployment acceptance. Rebuild/reverify after this documentation
 > commit because exact-SHA provenance must change even for documentation commits.
 > Parent must integrate actual merged #969/#1027, then fresh CI/review/merge cycle.
+
 > #1071 actual-parent checkpoint 2026-10-03: #1070 merged194b1e6e at04:21:17Z
 > after owner confirmation and420s gates. Reviewed/squash treesfd38bcde match.
 > Normal actual-main merge retains every stability test and both histories;
@@ -1618,6 +1692,39 @@ Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
 both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
+
+### R04q offline producer completion prototype — 2026-09-20
+
+Refresh checkpoint (2026-09-28): normal merge of #1071 head 97db51fa retains
+both document histories and all worker/strict SSH key-loading fixes. No code
+changes were needed in this prototype. 172 combined offline cases pass in
+28.00s with zero skips, including 12 real Lua 5.4/filesystem scenarios and
+inherited spawned-child proofs. Independent bytes/stat/sha256sum agree for
+completed files. Weakening write-count equality fails the short-write harness
+with `unexpected writer outcome: short-write`; restored/cmp and all 12 pass.
+Both Lua files parse; Ruff and whitespace pass. Review API currently has zero
+threads with no further page; this is not a fresh exact-head review approval.
+No service, game server, SSH, deployment or remote PR mutations performed.
+Next publish/review after the parent, then durable completion/manifest slices;
+the helper remains unwired and is not a durability or activation claim.
+
+Owner continuation accepted offline producer-protocol development, NOT deployment.
+New standalone Lua helper (not wired into SaveStats/game modules) validates a
+bounded chunk payload/name, checks each engine write count, attempts close even
+on write error and notifies only after all writes and close return. Callback
+failure propagates with completed bytes retained. Receipt binds filename/size
+and writer_closed state, not digest/fsync durability or import acknowledgement.
+FS_WRITE is not exclusive creation: caller-reserved fresh immutable name and
+single writer are explicit preconditions. Collision prevention, durable receipt,
+trusted digest and integration in both SaveStats paths remain activation gates.
+ET write-count/void-close semantics checked in local engine source and upstream
+g_lua.c; deployed engine remains unverified. No game/SSH/service/DB changes.
+139 combined tests pass0skips: real Lua interpreter and temp filesystem include
+short/missing-count writes, open/write/close/notify failures and invalid payloads.
+Bytes/stat/hash agree for completed files. Weakening write-count equality emits
+a false receipt and fails short-write proof; restored/cmp. Lua parse/Ruff clean.
+Next durable receipt and collision-safe snapshot design before producer wiring;
+original runtime/new-site audit/reversible dev order remains unchanged.
 
 ### R04k verified spool to canonical import — 2026-09-20
 
