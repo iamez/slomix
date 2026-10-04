@@ -2,11 +2,11 @@
 
 ## Current #1082 queue gate — 2026-10-05
 
-#1079 is merged. #1080published6e0be64b awaits fresh gates; #1081local250d34d7
-incorporates its documentation correction. This1082local merge preserves that
-history and the reconciled stats/proximity validation boundary. Next actual
-1080/1081merges, then final1082main sync, CI/SQL/review before publication/merge.
-No re-waiting1079 or service/production/liveDB action. Original runtime roadmap
+#1079 and #1080 are merged; actual main is 58938262. #1081 published 9af897c9
+is undergoing fresh exact-head CI/review. This local #1082 incorporates that
+parent and preserves the reconciled stats/proximity validation boundary.
+Next: actual #1081 merge, then final #1082 main sync, CI/SQL/review gates.
+Do not publish this preparation before #1081 merges. No service/production/liveDB action. Original runtime roadmap
 remains in latest integration PLAN; all preparation entries below historical.
 
 ## Historical #1082 preparation — 2026-10-05
