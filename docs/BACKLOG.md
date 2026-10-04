@@ -4,6 +4,8 @@
 >1080normal actual-main sync retains prepared history; fresh publication/gates
 >next. Earlier "wait1079" statuses are historical. Original runtime plan retained.
 
+## Historical preparation notes — not current merge instructions
+
 > Historical2026-10-05, before1079merge: #1080 local preparation incorporates published1079c5d8fc4e.
 > Wait1079actual squash, then sync/fresh gates; no1080publication yet. Read
 > latest integration PLAN at /home/samba/share/slomix-astra-runtime-integration-20260926.
@@ -20,7 +22,7 @@
 > identity. No merge/deploy; both pytest connection selectors now explicitly
 > target private PG to avoid the general collection probe's localhost default.
 
-> Current2026-10-05: older nine approved PRs merged with tree verification.
+> Historical1079preparation2026-10-05: older nine approved PRs merged with tree verification.
 > #1079 normally integrates actual main95758cc7; fresh local/CI/review gates
 > pending, then1080-1084 in order. Read latest integration PLAN at
 > /home/samba/share/slomix-astra-runtime-integration-20260926. Original runtime

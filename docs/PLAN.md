@@ -64,7 +64,7 @@ Keep this slice separate from the integration branch's older unmerged changes.
 After real-PG verification, review and PR gates, continue concurrency/source
 identity and the original capture/linkage/Discord+website-off acceptance gates.
 
-## Inherited #1079 boundary consolidation — 2026-10-05
+## Historical inherited #1079 boundary consolidation — 2026-10-05
 
 All nine approved older PRs (963/964/966/1066/1072/1073/1074/1075/1077) are
 merged and their reviewed/squash trees verified identical. This #1079 branch
