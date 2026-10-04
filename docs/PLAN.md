@@ -1,6 +1,66 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current completion preparation — 2026-10-04
+## Current manifest preparation — 2026-10-04
+
+Owner approved1073 after963/964/966/1066/1072, all now merged. Normal actual-main
+67ad2d8c integration retains both histories and unchanged manifest bytes.
+Reviewed1072 parent1cb1da12 and actual squash67ad2d8c trees are identical.
+227 combined manifest/Lua/capture/import/spool/parser/document/artifact cases
+pass20.27s; manifest source/tests match prior repairedf20023c9 byte-for-byte.
+Current backlog now explicitly routes to latest integration PLAN/access anchor.
+The previous 200->240 filename fix remains present, not discarded as stale.
+Renewed guard mutation back to200 rejects valid201/240-byte names with
+"Manifest filename must be a bounded string" (2fail/1control pass). Restored
+via apply_patch/cmp;44 manifest/document cases pass0.62s. No mutation committed.
+Latest combined pre-squash proof:240 cases pass22.72s. After actual-main sync,
+24 filesystem/no-clobber/fsync and document cases pass0.51s; this is not source
+activation. Fresh exact-head CI/review and prior filename thread revalidation
+remain publication/merge gates, followed by the mandatory420s cycle.
+Original runtime plan: latest local integration PLAN, then capture/sealed-source/
+retry/exclusive handover, usable Spiderweb/proximity and later website work.
+
+## Historical branch and parent checkpoints — superseded status, retained evidence
+
+> #1073 security-baseline refresh 2026-10-03: normal parent3cce1ed1 merge
+> retains actualmaincc6b0a4d and both document histories; runtime/Lua source
+> unchanged froma222a558. Root63 manifest/Lua/capture/Node/plan cases pass11.10s
+> with actual file publication and executable Lua proofs. Local preparation,
+> not producer activation; await actual parent merges and fresh review gates.
+
+> #1073 actual-main checkpoint 2026-09-28: normal parent111bc694 merge
+> incorporates #1068 squash4de6f07e; both histories and source/tests552820a3
+> preserved byte-for-byte. Final combined266case gate passes47.87s, including
+> worker lifecycle, synthetic SSH capture, Lua harness, manifest and mocked
+> watchdog delivery. Ruff/whitespace clean. No network/DB/service/remote writes.
+> Original runtime1986d671 retained; root owns fresh exact-head publication and
+> review. Prior local proofs do not imply downstream PRs are already reviewed.
+
+> #1073 published-parent refresh 2026-09-28: normally merged #1072 6a229f75;
+> both histories and final worker e8f05dbd source/test bytes retained. All266
+> worker/SSH/capture/spool/Lua/manifest/watchdog/plan contracts pass47.35s with
+> real owned children and Lua harness, only local fixture sources/mock delivery.
+> No remote/network/DB/service actions. Original runtime1986d671 preserved;
+> actual #1068 squash-main integration and fresh exact-head review still needed.
+
+> #1073 final worker propagation 2026-09-28: normal parent #1072 localf5091b81
+> retains final worker90026032 and both histories. Chain localheads: #1069
+> 593edbbc, #1070 d4c0f5b8, #1071 dd0b16f0, #1072 f5091b81. Exact worker and
+> worker-test bytes agree at every head. Final combined218cases pass47.43s,
+> including45real-child workers, offline SSH identity/capture/stability, Lua
+> completion and manifest publication, plus plan contracts. Grace callers use
+> 0.2s/default; only rejected tiny-budget regression remains, no weakened tests.
+> Original runtime1986d671 unchanged. Root owns later actual-main resync and
+> fresh exact-head review/publication; no remote/services/network/DB changes.
+
+> Worker repair propagation checkpoint, 2026-09-28: normal sequential parent
+> merges carry final worker 3fa2280f through #1069 3698e7de, #1070 9c63f046,
+> #1071 360667b8, #1072 f072786c and #1073 667089af. At each head both worker
+> source and tests compare byte-for-byte with 3fa2280f; document conflicts retain
+> both histories. Final #1073 combined offline gate: 203 passed in 31.02s, zero
+> skips, including actual children, SIGINT fault injection, Lua interpreter and
+> manifest filesystem proofs. Ruff/whitespace clean. Local preparation only;
+> actual-main synchronization, fresh CI/review and merge cycles remain required.
+### Parent completion preparation — 2026-10-04, inherited checkpoint
 
 Owner approved1072 as part of the older queue, after963/964/966/1066.
 Local normal main5de82cfb integration follows1066 merge at20:50:06Z; reviewed
@@ -41,6 +101,7 @@ retry/exclusive handover, then Spiderweb/proximity/UI sequence is unchanged.
 > retains actualmain194b1e6e and both histories. Runtime/Lua bytes unchanged
 > from3cce1ed1; root45 Lua/capture/Node/plan cases pass10.84s. Await1071 actual
 > merge, final main sync and fresh review before publication. No service action.
+
 
 > #1072 security-baseline refresh 2026-10-03: normal parenta1ead937 merge
 > retains actualmaincc6b0a4d and both documentation histories. Runtime/Lua
@@ -1692,6 +1753,50 @@ Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
 both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
+
+### R04r completion manifest refresh — 2026-09-28
+
+Normal merge of #1072 head 4a764f1c preserves both histories and all inherited
+source/worker/SSH guards. 190 combined offline cases pass in 24.41s, no skips.
+Real filesystem proof verifies receipt bytes/stat/SHA agreement, file fsync
+before no-clobber publication and directory fsync afterwards. Failures retain
+only complete visible receipts, with no overwrite of existing entries.
+Existing review thread PRRT_kwDOP4ZX3s6kKUAS concerns the already-fixed filename
+cap: actual 200/201/240-byte filenames pass and 241 is rejected. Reintroducing
+the 200 cap fails both 201/240 cases; bypassing content agreement separately
+fails the wrong-digest guard. Restored/cmp, all 18 manifest cases pass; Ruff and
+whitespace clean. The thread remains unresolved remotely for the publishing
+agent to answer with fresh evidence; no remote mutations performed here.
+Trusted writer receipt and immutable payload remain caller preconditions;
+manifest fsync does not establish payload durability or producer authenticity.
+Next parent-led publication/review, then recovery reader/retry composition.
+
+### R04r durable completion manifest — 2026-09-20
+
+Review4057411193 fixed: manifest basename limit now matches producer240 ASCII
+bytes, not200. Real filesystem cases cover200/201/240, reject241; maximum final
+name254bytes checked against pathconf NAME_MAX. Restoring old200limit fails201
+and240 cases with Manifest filename must be a bounded string; restored/cmp.
+157 combined tests pass0skips, Ruff clean. Parent1072 exact-SHA verification run
+35522307960 succeeded. Fresh CI/review required for this follow-up; no merge
+permission inferred. Resume manifest reader/recovery after review correction.
+
+Persist a caller-authenticated writer_closed receipt only after size/SHA256 match
+the immutable local capture. Strict v1 schema; private0700 directory, temp0600,
+file fsync, no-clobber hard link, directory fsync. Existing identical/conflicting
+receipts and symlinks are never replaced. Post-link fsync failure can leave final
+visible; propagate and reconcile, do not blindly rewrite. This persists the
+manifest, not a producer trust proof, source reservation, payload fsync or import
+acknowledgement. No producer wiring/deployment. Caller retains immutable snapshot.
+153 combined tests pass0skips. Real filesystem shows sync order, exact receipt
+content/size/hash, duplicate/symlink refusal and pre/post-link error outcomes.
+Allowing mismatched content causes wrong-digest test DID NOT RAISE; restored/cmp.
+Ruff clean. Next receipt recovery/reader and collision-safe source reservation.
+Original runtime-first/new-site audit/reversible dev sequence remains intact.
+CI follow-up: #1071 retry succeeded without code changes. #1072 had no Actions
+run because feat/lua-runtime-* is outside push filter and base is a feature
+branch. Push same cba88132 to feat/db-runtime-completion-proof-r04q for exact-SHA
+verification; alias has no independent changes. No merge approval inferred.
 
 ### R04q offline producer completion prototype — 2026-09-20
 

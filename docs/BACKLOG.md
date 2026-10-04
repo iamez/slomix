@@ -27,6 +27,43 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) #1073 retains prior filename-cap repair and manifest
+  runtime proofs during normal actual-main67ad2d8c refresh. Earlier approved
+  predecessors merged; fresh exact-head gates remain, no activation/deployment.
+  Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
+  preserved local checkpoint8e262684 is an access anchor, not the latest head.
+
+### Historical manifest checkpoints
+
+- (Astra, 2026-09-28) Propagated final worker90026032 through local #1069–#1073
+  by normal merges, retaining both histories and exact worker/source-test bytes.
+  Combined218cases pass47.43s. Minimum-grace compatible with existing callers;
+  no fixture weakening. No remote/service/DB action. Root handles actual-main
+  sync/publication and original runtime1986d671 remains the development resume.
+
+- (Astra, 2026-09-28) Final worker repair 3fa2280f propagated by normal merges
+  through prepared #1069-#1073; worker source/tests identical at every head.
+  Final manifest/inherited offline suite passes 203 cases in 31.02s, no skips.
+  Both documentation histories preserved; no remote writes or activation.
+
+- (Astra, 2026-09-28) #1073 refreshed locally on 4a764f1c; 190 offline cases
+  pass in 24.41s. Filesystem/fsync/no-clobber proof and two mutation experiments
+  verified; restored/cmp, 18 manifest cases pass. Existing filename-cap review
+  is fixed and reverified but remains unresolved remotely. No service/SSH/PR
+  changes. Next publish/review after parent, then reader/recovery slices.
+
+- (Astra, 2026-09-20) #1073 review4057411193 corrected manifest name cap200->240
+  to match Lua producer. Real-file boundary tests and old-limit mutation verified;
+  157 combined tests pass. #1072 verification-alias CI succeeded at exactcba88132.
+  Next resume reader/recovery; no service/deployment or source changes.
+
+- (Astra, 2026-09-20) R04r persists verified completion manifests without
+  overwrite;153 combined tests pass, content-guard mutation fails/restored.
+  #1071 retry succeeded. #1072 lacked Actions due to branch filter; same-SHA
+  verification alias uses existing feat/db-runtime-* trigger. No code bypass.
+  Next manifest recovery and source collision protocol, no activation.
+### Inherited parent checkpoint
+
 - (Astra, 2026-10-04) #1072 approved;963/964/966/1066 merged and actual main5de82cfb
   incorporated. Fresh exact-head tests/CI/review required before1072 merge.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
@@ -37,6 +74,7 @@
   exact-head tests/review/CI remain required after the earlier merges.
 
 ### Historical branch checkpoints
+
 
 - (Astra, 2026-09-28) #1072 locally refreshed on #1071 head 97db51fa with
   both histories retained. 172 combined offline tests pass in 28.00s, zero
