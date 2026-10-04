@@ -1,5 +1,25 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Runtime receipt-read checkpoint — 2026-10-04
+
+Disk safety detour is complete: owner verified the Windows backup copies and
+expanded VM300 root32->64GiB online. Home modernization is a deferred design idea,
+not active development. Resume the original runtime acceptance sequence.
+
+Current slice, based on PR1079 head97a39263: required receipt reads now run inside
+the import transaction before data writes. Query/schema failures abort import
+instead of authorizing aggregates. This does NOT serialize concurrent importers
+or establish stable source identity; those remain next, with two-writer proofs.
+Focused unit/parser suite49passed; nine new tests failed on the original code.
+Swallow-error mutation produced4failed/5passed, restored with cmp, then49passed.
+Three real-PG failure/retry cases collected but NOT executed: isolated proof
+service reports ActiveState=failed, Result=timeout. Owner restart is needed;
+no fallback to the live database. New tests lint clean; parser has two unchanged
+baseline DTZ001/DTZ007 findings. No merge, push, deployment or service operation.
+Keep this slice separate from the integration branch's older unmerged changes.
+After real-PG verification, review and PR gates, continue concurrency/source
+identity and the original capture/linkage/Discord+website-off acceptance gates.
+
 > Result2026-10-03: owner restarted proofPG. Actual canonical parser + adapter
 >on private restored cloneC passed receipt-python and receipt-sql failures AFTER
 >vehicle INSERT visible inside transaction/invisible to observer. Both return

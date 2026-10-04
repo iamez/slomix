@@ -1,5 +1,13 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04: disk backup/online root expansion completed; Home ideas deferred.
+> Runtime resumed with required receipt-read fail-closed regression fix.
+> 49 focused tests pass, swallow-error mutation fails4 and restored/cmp passes.
+> Real-PG missing-table/missing-column/query-error and retry proof is prepared,
+> not executed while isolated proof service is failed/timeout. Next: owner starts
+> slomix-runtime-proof-20260925.service, run private-socket integration suite;
+> then continue concurrency and stable source identity. No merge/deploy.
+
 > 2026-10-03 receipt failure fix prepared with two failing-before/passing-after
 >tests and restored mutation. Real PG post-write failure/rollback still pending
 >isolated service restart. No deployment or production change.

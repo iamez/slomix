@@ -1,5 +1,14 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Unknown receipt state is not an absent receipt.**
+  The proximity optional-column helper swallows schema-query errors; the old
+  receipt read also swallowed query failures. Both could authorize aggregate
+  updates after an outage. Read the required receipt directly, inside the import
+  transaction before writes; let failure abort import. Receipt-write tests that
+  mock this read cannot prove the read boundary. New regression tests and a
+  restored swallow-error mutation demonstrate this distinction; real-PG proof
+  remains pending. Transaction placement alone is not concurrent serialization.
+
 - **2026-10-03 · Receipt failure can lie about committed ingestion.**
   Proximity receipt errors were swallowed. A Python failure could commit data
   without a receipt; a SQL failure could roll back while import_file returned

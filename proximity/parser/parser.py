@@ -1585,10 +1585,12 @@ class ProximityParserV4:
 
         await self._resolve_round_link_context(session_date)
 
-        # Check if this file was already imported (reimport idempotency)
-        aggregates_already_applied = await self._check_processed_file(os.path.basename(filepath))
-
         async def _run_import_steps():
+            # A missing receipt permits aggregation; an unreadable receipt does
+            # not. Read before writes and inside the import transaction when
+            # available. This alone does not serialize concurrent importers.
+            aggregates_already_applied = await self._check_processed_file(os.path.basename(filepath))
+
             # Import engagements (ON CONFLICT DO NOTHING — safe for reimport)
             await self._import_engagements(session_date)
 
@@ -1694,18 +1696,17 @@ class ProximityParserV4:
             return False
 
     async def _check_processed_file(self, filename: str) -> bool:
-        """Check if file was already imported and aggregates applied."""
-        if not await self._table_has_column('proximity_processed_files', 'filename'):
-            return False
-        try:
-            row = await self.db_adapter.fetch_one(
-                "SELECT aggregates_applied FROM proximity_processed_files WHERE filename = $1",
-                (filename,),
-            )
-            return bool(row and row[0])
-        except Exception as e:
-            self.logger.debug(f"_check_processed_file query failed for {filename}: {e}")
-            return False
+        """Read the required receipt; schema/query failures must abort import.
+
+        The optional-column probe intentionally tolerates errors, so it cannot
+        establish that this correctness-critical receipt is absent. Query the
+        required table directly and let the import boundary report failure.
+        """
+        row = await self.db_adapter.fetch_one(
+            "SELECT aggregates_applied FROM proximity_processed_files WHERE filename = $1",
+            (filename,),
+        )
+        return bool(row and row[0])
 
     def build_capability_manifest(self) -> dict:
         """The manifest for the file just parsed.
