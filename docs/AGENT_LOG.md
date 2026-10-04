@@ -1,5 +1,82 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Historical labels do not repair active continuation links.**
+  A dated ledger can still contain an imperative pointing to an obsolete hash.
+  Keep its evidence, but route every handoff/inventory/known-issues entry point
+  and the ledger preamble to the latest PLAN checkpoint. Test the whole entry
+  set so repairing the top-level prompt does not leave a second stale path.
+
+- **2026-10-04 · Scan synthetic review changes against their pinned source.**
+  A mutable local origin/main can describe another branch and hide restored
+  baseline content from a hook's diff/intersection. Pass the immutable source
+  OID explicitly to snapshot preflight; do not use ambient tracking refs to
+  narrow its changed-file set. Test a published feature with differing main.
+
+- **2026-10-04 · Noninteractive publication must stop on scanner warnings.**
+  The interactive hook can return success while warning about an assignment.
+  Capturing that diagnostic hides the decision from the owner. Snapshot
+  preflight now rejects any bundled-guard diagnostic before creating refs,
+  without echoing its possibly sensitive contents. This is not a complete
+  credential detector; its existing pattern/placeholder limits still apply.
+
+- **2026-10-04 · A bounded review diff does not bound transferred ancestry.**
+  A new parent commit transfers its reachable objects too. Require source
+  history already reachable on the exact destination before publishing review
+  refs; otherwise an unselected file in the parent can also be uploaded.
+
+- **2026-10-04 · No-deref verification alone does not reject symbolic refs.**
+  Git2.34 still accepts a matching symbolic OID. Check symbolic type while
+  transaction locks are held before committing immutable review refs.
+
+- **2026-10-04 · Quoted filenames cannot safely be fed back as Git paths.**
+  LF/TAB/quotes can silently skip content/raw-data checks when Git prints a
+  quoted name. Carry NUL-delimited filenames through enumeration/intersection.
+
+- **2026-10-03 · Immutable snapshots must read real objects and verify refs.**
+  A pinned commit OID does not disable refs/replace. Set GIT_NO_REPLACE_OBJECTS
+  for every Git subprocess, including direct blob reads and publication hooks.
+  Numstat binary classification can be forced to text by attributes/drivers;
+  reject raw NUL-bearing blobs on both sides independently, retaining numstat
+  as an additional conservative veto, not claiming all configuration invariant.
+  Metadata-only git show can emit signature diagnostics under log.showSignature;
+  explicitly suppress signature display for date extraction. Verify existing
+  local refs inside the same update-ref transaction as creates, even when none
+  are new. A preflight dictionary alone races; the transaction protects only
+  that operation, not later external writers. See primary Git documentation:
+  https://git-scm.com/docs/git-update-ref,
+  https://git-scm.com/docs/git-replace,
+  https://git-scm.com/docs/git-show,
+  https://git-scm.com/docs/gitattributes.
+
+- **2026-10-03 · Snapshot determinism includes order files; hooks are local.**
+  Pin diff ordering as well as its algorithm, including metadata-only git show:
+  it still fails on a missing configured order file. A fresh clone does not
+  inherit active hooks, and an arbitrary executable hook proves nothing about
+  protection. Snapshot publication now directly executes the bundled guard for
+  all proposed create-only refs before the first write, then keeps normal push
+  hooks enabled. Require inspection tools first: suppressed missing-grep errors
+  otherwise turn an unperformed scan into apparent success. Override order-file
+  config inside the direct guard too: its suppressed diff errors otherwise
+  skip inspection entirely (measured unsafe publication in a local fixture).
+  Capture guard
+  diagnostics because they can contain the very content being blocked. This
+  retains the existing guard's documented detection limits, not a complete
+  history/credential audit or protection against a malicious local checkout.
+
+- **2026-10-03 · Snapshot partition identity includes the diff algorithm.**
+  Pin Myers for both planned numstat and generated-tree validation; otherwise
+  the same source/base pair can produce different boundaries and false conflicts.
+  Consumer formats must migrate with producers: the old area-body generator
+  silently converted immutable -pNNN measurements to zeros and is now retired.
+
+- **2026-10-03 · Remote Git diagnostics and partial pairs fail closed.**
+  Capture stdout/stderr on remote operations, including successful pushes:
+  transport and hook messages may echo URL credentials. Report operation/exit
+  status only; this deliberately sacrifices raw hook diagnostics. Reject partial
+  remote pairs before any local refs or push: Git may elide an unchanged ref and
+  its lease check. Create absent pairs atomically with absence leases; existing
+  complete pairs are only observed, never guaranteed against external writers.
+
 - **2026-10-03 · Read-only ACL checks need more than table privileges.**
   PostgreSQL documents column ACLs separately and allows NOINHERIT memberships
   to remain reachable through SET ROLE. PG16 separates SET from MEMBER; earlier
@@ -16,6 +93,7 @@
   catalog queries and actual denied SQL. Fail closed if unrelated PUBLIC or
   inherited role privileges still authorize writes; do not revoke those globally.
   Test SET LOCAL ROLE must be RESET before releasing a successful savepoint.
+
 - **2026-10-03 · Artifact provenance does not certify the RUN index.**
   A clean tracked status can hide locally changed runtime files behind
   assume-unchanged or skip-worktree. Checkout of a new commit preserves these
@@ -35,6 +113,60 @@
   Actual publish/read proof verifies unchanged mode/inode/bytes; group/other,
   executable and special-bit modes remain rejected. Apply the publisher/reader
   boundary check to metadata receipts as well as payload spool entries.
+
+- **2026-09-28 · Validate selected dependencies as well as current inputs.**
+  The earliest supported R2 can select a previous-year R1 across midnight;
+  matching trusted bytes do not establish calendar admission. Both import
+  paths reuse current-input validation for selected R1 before canonical calls.
+  Verified capture remains match while dependency=invalid is terminal, not a
+  fabricated content conflict. Prove this with the actual filesystem selector,
+  not only a mock returning an invalid name; DBless proof is not SQL proof.
+
+- **2026-09-28 · Validate terminal input before stricter lower-layer validation.**
+  Verified import called spool inspection before filename admission, so malformed
+  names raised instead of returning the promised failed result. Move shared
+  validation first and label capture_status=None as unmeasured, not a match or
+  absence. Actual valid-payload PostgreSQL regression proves rejection; unit
+  spies additionally prove no filesystem inspection or importer call occurred.
+
+- **2026-09-28 · A dependency is not admitted by verifying its consumer.**
+  A retained conflicting R1 inside a private spool contaminated verified R2.
+  Why: path isolation does not certify dependency content. Apply: validate the
+  parser-selected R1 against independent trusted source size/SHA metadata before
+  canonical import, and expose dependency state separately from R2 capture.
+
+- **2026-09-28 · Malformed payloads cannot prove filename admission.**
+  Prior calendar tests failed on payload parsing, while valid duplicate content
+  bypassed canonical filename validation and gained a success marker. Apply:
+  validate filename/calendar before dedup for both halves and test actual valid
+  payloads already present in the DB. Terminal admission failure has no marker.
+
+- **2026-09-28 · Snapshot identity and remote admission depend on Git configuration.**
+  show-ref exits1 for an empty branch set; for-each-ref gives a valid empty set.
+  Origin's fetch URL need not be its push URL: resolve one push destination and
+  inspect/publish that same endpoint, retaining create-only CAS for races. Fail
+  before ref writes for multiple URLs rather than promise cross-remote atomicity.
+  Pin commit-tree UTF-8: i18n.commitEncoding otherwise changes commit headers
+  and OIDs for identical source/base inputs. Test with actual disposable Git
+  repos, genuine hooks, distinct bare remotes and independent object inspection.
+
+- **2026-09-28 · A flag named exclude does not make a Git pathspec negative.**
+  Passing a plain path through --exclude expanded snapshot selection; accepting
+  an empty area silently lost requested coverage. Validate actual exclusion
+  magic and nonempty measured changes before all ref writes. Disposable local
+  remotes prove rejection without refs/push hooks, and exact successful scope.
+
+- **2026-09-28 · Build cwd is not necessarily deployment source.**
+  dev_deploy.sh defaults SRC to the primary checkout, even when invoked from
+  a feature worktree. Pass DEV_SRC_DIR="$PWD" from that worktree's root in
+  an owner-approved recipe. Execute the documented recipe against disposable
+  build/deploy probes to prove both paths match; do not deploy to test prose.
+
+- **2026-09-28 · A local resume hash is not a public handoff reference.**
+  Preserve unpublished work with its exact host worktree, branch and read-only
+  object/ancestry checks. A fresh remote clone must obtain owner-provided source
+  or wait for reviewed publication; an older public PR is context, not the same
+  implementation. Separate first-session onboarding from approved continuation.
 
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
@@ -63,6 +195,14 @@
   pending-warning bit per key until warning ACK or superseding nonwarn data;
   keep latest payloads and delivery history separate, without a historical queue.
 
+- **2026-09-27 · Planned Git path slices are not actual tree differences.**
+  Restoring a file over a source directory can implicitly remove unselected
+  children. Validate generated trees against the exact selected path set and
+  line/file limits before publishing refs; reject unsafe D/F splits. A baseline
+  tree entry is not an index leaf: restore selected descendant blobs instead.
+  Reject duplicate area identities and empty/exclusion-only pathspecs before
+  Git's implicit whole-tree selection or dictionary replacement loses scope.
+
 - **2026-09-27 · Publication modes are filtered by the process umask.**
   open(mode=0600) under umask0277 creates0400, still readable by its owner.
   Reconciliation must accept that safe publisher output without chmod widening;
@@ -72,8 +212,10 @@
   Year0001 passes strptime but subtracting a day can raise OverflowError. Runtime
   dependency admission now matches the canonical2020-2035 year range without
   importing presentation/configuration. Tests cover outside years, both accepted
-  bounds, and a real PG terminal failed marker for0001. Do not treat calendar
-  parsing alone as proof that downstream date arithmetic is safe.
+  bounds. Correction2026-09-28: the old PG0001 fixture had invalid contents;
+  its failed marker did not prove valid-payload admission. Shared importer
+  admission now rejects0001 before dedup with failed/no marker, proven using
+  valid payloads. Do not treat calendar parsing alone as arithmetic safety.
 
 - **2026-09-26 · Retargeting a stacked PR does not necessarily start required CI.**
   #1059 base changed from a feature branch to main. Its push CI passed, but the
@@ -117,6 +259,13 @@ data here.
   no durability status. Offline prototype rejects short/missing counts and signals
   only after close returns. This does not establish fsync, exclusive filenames or
   durable receipts; those need separate protocols before enabling source capture.
+- **2026-09-20 · Verified R2 bytes do not isolate the parser's R1 search.**
+  The legacy finder also searches cwd/local_stats. Construct runtime managers
+  with allow_legacy_r1_fallback=False; import_verified_file requires this mode.
+  Exact/same-day/midnight searches then remain in the input directory and reject
+  symlink R1 entries. Retained immutable R1 remains a caller precondition.
+  Actual-PG proof must include a plausible external R1, not merely an empty cwd.
+
 
 - **2026-09-20 · Clean Git status does not prove committed build inputs.**
   assume-unchanged and skip-worktree can hide changed tracked bytes. Reject these
@@ -178,6 +327,19 @@ data here.
   do not prove account billing is disabled; verify separately, and do not
   mistake a budget notification for an enforced usage stop.
 
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
+
+- **2026-09-20 · Squash merge status is not an ancestry predicate.**
+  The historical handoff in docs/HANDOFF-opus5-2026-09-07.md reported seven
+  false negatives from ancestry-only checks. Verify the PR's merged state and
+  main's actual content before declaring old work missing. Artifact identity,
+  cold-cache sampling, directory mtime and shared stash ownership each retain
+  their separate dated entries below; do not combine them into one lesson.
+
 - **2026-09-07 · Measurement is not delivery acknowledgement.** Watchdog
   observations/failure streaks must persist even when the notification fails,
   but alert timestamps, recovery reset and daily heartbeat dedup advance only
@@ -208,6 +370,26 @@ data here.
   snapshot, not from the just-received bytes. Without it the API remains
   size-only; the optional parameter is not evidence of transport integration.
   Test equal-length corruption and compare successful output by another tool.
+- **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
+  A neutral real-PG fixture supplied 32 hex characters but the canonical regular
+  stats parser stored 8 via short_guid. The first test's 32-character assertion
+  was wrong; corrected after inspecting the actual parser and observing DB rows.
+  Do not change persistence semantics to satisfy a mistaken test expectation.
+
+- **2026-09-20 · Explicit configuration is not enough if imports initialize the process.**
+  The manager previously imported dotenv and configured root logging before its
+  constructor could inspect supplied config. R04d moves legacy setup behind
+  the default loader while preserving dotenv-before-log-path selection. Test in
+  fresh processes with forbidden imports; also pin unchanged sys.path and root
+  handlers. Import-only callers intentionally no longer initialize logging.
+
+
+- **2026-09-20 · Header-free payload equality is not cross-half identity.**
+  An unchanged cumulative R2 has the same payload hash as R1. Canonical import
+  and neutral duplicate preflight must scope successful hashes by half before
+  treating them as mirrors. A disposable-PG test proves R2=0 plus its own event;
+  removing the SQL half filter loses that half. Same-half cross-match identity
+  still needs a stronger source contract; do not infer it from this narrow fix.
 
 - **2026-09-19 · A neutral process needs neutral configuration.**
   shared.config reexports BotConfig and its validation requires Discord. The
@@ -235,12 +417,6 @@ data here.
   alone also allows late old requests to insert again. Bound count and retained
   string bytes, prune expired entries on writes, and test late old-epoch writes.
   State per-worker storage limits separately from RSS and serialization peaks.
-
-- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
-  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
-  Explicitly disable SSH and automation in the child; test true/false parent
-  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
-  Removing child isolation reproduces the guard failure. Production code unchanged.
 
 - **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
   A neutral real-PG fixture supplied32 hex characters but the canonical regular
@@ -411,6 +587,29 @@ data here.
   events are not final-round events: validation warnings and post-commit
   correlation/Lua/endstats changes remain distinct facts.
 
+- **2026-09-07 · Commit, artifact, process and data are separate evidence.**
+  The handoff audit found merged SPA source newer than the served bundle.
+  Why: a healthy endpoint and matching git revision do not identify static
+  assets. Apply: record source/build identities and process start time before
+  live proof; never close a runtime obligation from a merge alone.
+- **2026-09-07 · Canonical import is earlier than data finalization.**
+  At the 2026-09-07 audit, `process_file()` committed stats before later updates;
+  `processed_files` is also written after that commit. Why: a Discord-only
+  emitter misses other inputs and a first event cannot promise final stats.
+  Apply: emit transactionally in the canonical importer, deduplicate the first
+  event durably and cover late changes before enabling consumers.
+- **2026-09-07 · Record the safety-policy snapshot when reviewing tooling.**
+  At `4f653c01` the review cutter contradicted the general force/no-verify ban;
+  #961 subsequently added a narrow legacy-script exception. Why: simultaneous
+  handoffs change policy while audits run. Apply: preserve the written exception
+  without extending it; the approved Astra plan prepares an immutable replacement
+  with ordinary hooks. Do not confuse preparing the replacement with deploying it.
+- **2026-09-07 · Configured Codex hooks are not necessarily active.**
+  The local hook was hardened and credential-bearing saved approvals sanitized,
+  but hooks/list still reports both hooks untrusted. Apply: owner reviews /hooks;
+  never claim lifecycle enforcement from synthetic subprocess tests, and never
+  log real tool input to prove integration. Rotation remains a separate action.
+
 - **2026-09-07 · A directory's mtime is not its contents' mtime.** `ls -la
   <dir>` reports when the directory entry list last changed (a file added or
   removed), not when files inside were written; a rebuilt bundle that reuses
@@ -530,6 +729,13 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+- **2026-09-07 · Review snapshots are not exempt from publishing guards.**
+  Restoring a historical baseline can reintroduce a credential even when the
+  source is already public. Apply: SHA-versioned review refs, at most 25 files
+  and 8,000 changed lines per part, normal Git push with the real hook; scanner
+  rejection blocks publication. Never refresh old review PR refs or bypass a
+  scanner because a snapshot will not be merged. Local integration tests prove
+  historical literal rejection; they do not certify all repository history.
 - **2026-09-07 · Bundle mtime does not identify its source or target.**
   A fresh-looking SPA can belong to another commit or contain changed assets;
   checking after checkout already changes the run tree on failure. Apply:
@@ -553,6 +759,19 @@ isolates OFF workers; do not claim shared OFF cache reuse. Two ASGI proofs retai
 the backend across both same-app toggles and app recreation. Both fail without
 the namespace guard; source restored and cmp verified. Full cached HTTP/browser
 TTL behavior and actual Redis restart behavior remain separate activation checks.
+# 2026-09-28 — Immutable remote creation requires an atomic absence precondition
+
+An ls-remote preflight followed by ordinary push is not create-only: a racer
+can create an ancestor ref between the commands and the push will fast-forward
+overwrite it. Reproduced using real disposable bare repositories for either or
+both members of a review pair. Use an explicit empty expected value per missing
+ref (`--force-with-lease=<ref>:`) together with atomic pair push. Despite the
+option name this permits creation only, never replacement; all hooks remain
+enabled. Installed git-push documentation states the named ref must not exist.
+Regressions verify unchanged raced OIDs and no partial counterpart publication;
+removing leases fails all three cases, then restoration is checked by cmp.
+Do not replace this with generic force or a tracking-ref-inferred lease.
+
 # 2026-09-27 — Explicit key-only SSH must reject partial authentication
 
 Paramiko5 legacy SSHClient authentication can invoke auth_interactive_dumb
