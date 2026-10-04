@@ -2,10 +2,15 @@
 
 ## Current #1083 queue gate — 2026-10-05
 
-#1079 through #1081 are merged (main b59a2336). #1082 published c934a36a awaits
-fresh review/CI. This normal published-parent merge retains all fixes and
-documentation. Next actual #1082 merge, then #1083 final main sync and fresh
-CI/SQL/review before publication/merge.
+#1079 through #1082 are merged. Actual main is
+47ac2440b701cae6b8640698b57ae73e0782e8e0 (#1082, 2026-10-04T23:36:06Z).
+Reviewed c934a36a and squash trees match (24f420fe); all 14 checks, matching
+Codex 5985572595 and mandatory settle passed. Seven source and seventeen prior
+receipt/ownership PG cases actually PASS on both CI majors.
+This #1083 now includes actual main. Squash conflicts preserve adapter-contract
+question-mark placeholders and their actual-PG translation helpers; source/tests
+remain identical to 67a39a09. Next fresh exact-head CI/review, including four
+round/relinker PG cases and all predecessor cases, before the merge cycle.
 No source changes, services, live relinking or production actions. Original
 runtime roadmap retained in latest integration PLAN. All entries below are
 historical preparation evidence, not additional current wait instructions.
