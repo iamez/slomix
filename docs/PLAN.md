@@ -3,14 +3,14 @@
 ## Current producer preparation — 2026-10-04
 
 Owner approved1077 after older963/964/966/1066/1072-1075. Local normal parent
-7e5af473 integration preserves both histories, incorporated maind3a8f4df and original producer
+9ed9c092 integration preserves both histories, incorporated main539db373 and original producer
 bytesae39292f, including merged1076 reservation and current worker repairs.
 Repeat offline child/Lua/filesystem proofs, not a deployed producer claim.
 Previous combined run:166 tests pass45.71s, including actual owned children,
 filesystem reservation/receipt operations and offline Lua harness. Worker and
 worker-test blobs match actual main; producer/reservation/Lua blobs matchae39292f.
 Publish only after actual earlier merges and fresh main synchronization;
-963/964/966/1066/1072/1073 merged; later prerequisite preparations do not imply their merge.
+963/964/966/1066/1072/1073/1074 merged;1075 preparation does not imply its merge.
 Fresh combined producer/reservation/worker/Lua/capture/import/manifest/spool/
 parser/document/artifact suite:330 pass54.86s. Producer/reservation/Lua bytes
 still matchae39292f and worker/source-test bytes match actual main. Actual owned
@@ -20,9 +20,13 @@ cases pass37.39s with actual owned children and filesystem operations. Parent
 code/test bytes retained; the only conflict was documentation, histories kept.
 exact-head review/CI and answering old worker threads remain merge gates.
 Inherited1075 composed filename/umask retry tests retained. Latest actual main
-isd3a8f4df; another actual predecessor/main sync is required before publication.
+is539db373; another actual predecessor/main sync is required before publication.
 After inheriting those tests:142 producer/worker/Lua/receipt/document cases pass
 35.70s, implementation bytes still unchanged from6902bbd8.
+Latest published-parent9ed9c092 integration:346combined producer/worker/Lua/
+capture/import/receipt/spool/document cases pass61.68s. Worker/source-test bytes
+match main (last worker implementation commit4de6f07e); producer/reservation/Lua
+paths matchae39292f exactly. These confirm retained fixes, not new activation.
 Original runtime delivery/sealed-source/retry/handover and Spiderweb roadmap is
 preserved in the latest local integration PLAN. No service or production action.
 
@@ -53,12 +57,13 @@ preserved in the latest local integration PLAN. No service or production action.
 > beyond this queue (delivery/sealing/import composition) remains preserved.
 ### Parent retry preparation — 2026-10-04, inherited checkpoint
 
-Owner approved1075 after earlier queue entries. Normal local89d8d906 parent
-merge preserves actual maind3a8f4df, both histories, reader0400/0600 handling
+Owner approved1075 after earlier queue entries. Normal actual-main539db373
+merge preserves both histories, reader0400/0600 handling
 and original retry bytes10d232f1. Repeat real filesystem reconciliation proofs.
-No activation, service, deployment or application DB action. Publish only after
-actual earlier merges and another main sync, exact-head tests/review/CI.
-963/964/966/1066/1072/1073 are merged;1074 preparation does not imply its merge.
+No activation, service, deployment or application DB action. Earlier approved
+963/964/966/1066/1072/1073/1074 are merged; current exact-head tests/review/CI
+and mandatory420s cycle remain merge gates. Reviewed89d8d906 and actual1074
+squash539db373 trees are identical, before normal synchronization here.
 Previous baseline:263 combined retry/reader/manifest/Lua/capture/import/spool/
 parser/document/artifact cases pass20.76s. Retry implementation remains byte-
 identical to10d232f1; its original tests are retained and extended below.
@@ -74,6 +79,8 @@ spool/document cases pass1.65s, Ruff clean. This is local filesystem evidence,
 not producer trust, source activation or a crash-durability acknowledgement.
 After normal89d8d906 parent refresh,279combined retry/reader/Lua/capture/import/
 spool/document cases pass22.65s; all implementation and new test bytes retained.
+After actual1074squash539db373 synchronization,119receipt/spool/document cases
+pass1.62s; only documentation changed, implementation/new tests retained.
 Original runtime capture/sealed-source/retry/handover then Spiderweb plan retained
 in the latest local integration PLAN, not replaced by this queue detour.
 
