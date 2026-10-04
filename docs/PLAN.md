@@ -3,7 +3,7 @@
 ## Current producer preparation — 2026-10-04
 
 Owner approved1077 after older963/964/966/1066/1072-1075. Local normal parent
-9ce21e0d integration preserves both histories, actual main5de82cfb and original producer
+afb05413 integration preserves both histories, incorporated main5de82cfb and original producer
 bytesae39292f, including merged1076 reservation and current worker repairs.
 Repeat offline child/Lua/filesystem proofs, not a deployed producer claim.
 Previous combined run:166 tests pass45.71s, including actual owned children,
@@ -19,6 +19,10 @@ Latest parent9ce21e0d refresh:139 producer/reservation/worker/Lua/receipt/docume
 cases pass37.39s with actual owned children and filesystem operations. Parent
 code/test bytes retained; the only conflict was documentation, histories kept.
 exact-head review/CI and answering old worker threads remain merge gates.
+Inherited1075 composed filename/umask retry tests retained. Latest actual main
+is67ad2d8c; another actual predecessor/main sync is required before publication.
+After inheriting those tests:142 producer/worker/Lua/receipt/document cases pass
+35.70s, implementation bytes still unchanged from6902bbd8.
 Original runtime delivery/sealed-source/retry/handover and Spiderweb roadmap is
 preserved in the latest local integration PLAN. No service or production action.
 
@@ -55,11 +59,19 @@ and original retry bytes10d232f1. Repeat real filesystem reconciliation proofs.
 No activation, service, deployment or application DB action. Publish only after
 actual earlier merges and another main sync, exact-head tests/review/CI.
 963/964/966/1066 are merged;1072/1073/1074 preparations do not imply their merge.
-263 combined retry/reader/manifest/Lua/capture/import/spool/parser/document/
-artifact cases pass20.76s. Retry source/tests remain byte-identical to10d232f1.
+Previous baseline:263 combined retry/reader/manifest/Lua/capture/import/spool/
+parser/document/artifact cases pass20.76s. Retry implementation remains byte-
+identical to10d232f1; its original tests are retained and extended below.
 Renewed caller-identity guard mutation fails both size/hash filesystem cases:
 content_present instead of receipt_conflict. Restored with apply_patch/cmp;
 60 receipt/document cases pass1.03s after restoration. No mutation committed.
+New composed regression covers200/201/240-byte names through capture, first
+receipt publication under umask0277, and two unchanged retries. Both files stay
+0400 with identical inode/bytes/mode, no added entries; bytes/stat/hash agree.
+0600-only reader mutation fails all3 cases;200-byte admission mutation fails
+201/240 with200 as control. Both restored/apply_patch/cmp.119combined receipt/
+spool/document cases pass1.65s, Ruff clean. This is local filesystem evidence,
+not producer trust, source activation or a crash-durability acknowledgement.
 Original runtime capture/sealed-source/retry/handover then Spiderweb plan retained
 in the latest local integration PLAN, not replaced by this queue detour.
 

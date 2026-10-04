@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Recheck repaired boundaries through their composition.**
+  Filename length and restrictive-umask admission had separate regressions.
+  A capture -> receipt -> repeated retry proof now combines200/201/240-byte
+  names with0400 payload/manifest files, preserving bytes/inodes/modes. Both
+  old200-byte and0600-only guards fail this composed proof when reintroduced.
+  Keep component tests and add the cross-boundary case; green components alone
+  do not establish caller compatibility or authenticated source provenance.
+
 - **2026-10-04 · Historical labels do not repair active continuation links.**
   A dated ledger can still contain an imperative pointing to an obsolete hash.
   Keep its evidence, but route every handoff/inventory/known-issues entry point

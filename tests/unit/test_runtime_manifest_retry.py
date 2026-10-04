@@ -82,3 +82,37 @@ def test_invalid_caller_not_hidden_by_valid_receipt(spool):
     record_completion_once(spool, RECEIPT, expected_sha256=HASH)
     with pytest.raises(ValueError):
         record_completion_once(spool, {**RECEIPT, 'version': True}, expected_sha256=HASH)
+
+
+@pytest.mark.parametrize('length', [200, 201, 240])
+def test_retry_preserves_long_read_only_publications(tmp_path, length):
+    """Producer filename bounds and restrictive umask compose through retry."""
+    tmp_path.chmod(0o700)
+    prefix, suffix = '2026-09-20-120000-', '-round-1.txt'
+    name = prefix + 'a' * (length - len(prefix) - len(suffix)) + suffix
+    receipt = {**RECEIPT, 'filename': name}
+    previous = os.umask(0o277)
+    try:
+        publish_stats_file(tmp_path, name, [b'abc'], expected_size=3, expected_sha256=HASH)
+        assert record_completion_once(tmp_path, receipt, expected_sha256=HASH) == 'published'
+    finally:
+        os.umask(previous)
+
+    assert len(name.encode('ascii')) == length
+    manifest = tmp_path / (name + '.complete.json')
+    assert len(manifest.name.encode('ascii')) <= os.pathconf(tmp_path, 'PC_NAME_MAX')
+    before = {
+        p.name: (p.stat().st_ino, stat.S_IMODE(p.stat().st_mode), p.read_bytes())
+        for p in tmp_path.iterdir()
+    }
+    assert set(before) == {name, manifest.name}
+    assert all(mode == 0o400 for _, mode, _ in before.values())
+    assert (tmp_path / name).stat().st_size == len(before[name][2]) == receipt['bytes']
+    assert hashlib.sha256(before[name][2]).hexdigest() == HASH
+    for _ in range(2):
+        assert record_completion_once(tmp_path, receipt, expected_sha256=HASH) == 'content_present'
+        assert {
+            p.name: (p.stat().st_ino, stat.S_IMODE(p.stat().st_mode), p.read_bytes())
+            for p in tmp_path.iterdir()
+        } == before
+    print(f'Composed retry proof: {length}-byte name, private 0400 files, unchanged repeat')
