@@ -100,6 +100,7 @@ MIGRATIONS=(
   "090_lua_correction_attempts.sql"
   "091_runtime_cache_consumer.sql"
   "092_runtime_cache_generation_read_grant.sql"
+  "093_runtime_website_least_privilege.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"
