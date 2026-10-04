@@ -1,5 +1,16 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Lock absent receipts before checking them.**
+  Two READ COMMITTED import transactions can both read no receipt and double an
+  aggregate while leaving only one receipt. Reserve/lock the filename row with
+  an UPSERT that preserves the flag, then read and write within the same TX.
+  Unlike SELECT FOR UPDATE on an absent row, reservation creates something to
+  serialize on. Real-PG proofs must observe pg_blocking_pids, cancellation,
+  outer transaction lifetime and actual observer rows, not elapsed sleep alone.
+  Higher isolation can raise serialization failure; retry the whole transaction.
+  Nontransactional and old-version writers cannot participate safely. This is
+  filename concurrency protection, not content identity or a general lease.
+
 - **2026-10-04 · Unknown receipt state is not an absent receipt.**
   The proximity optional-column helper swallows schema-query errors; the old
   receipt read also swallowed query failures. Both could authorize aggregate

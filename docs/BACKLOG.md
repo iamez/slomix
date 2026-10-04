@@ -1,5 +1,14 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04: same-filename concurrent import fix in separate branch based1080.
+> Transaction-owned receipt row claim precedes reads; nontransactional import
+> rejected. Real-PG owner commit/rollback/cancel, canceled waiter/nested lifetime,
+> timeout retry, distinct-file and stale-snapshot proofs added. No-op mutation
+> fails3 original concurrency regressions; restored/cmp. Full canonical parser
+> +two actual pooled adapters proved post-write cancel/commit and replay on cloneC.
+> Next: exact-head review/CI, then stable source-content identity and original
+> runtime acceptance. No deployment/merge; older writers still require cutover.
+
 > 2026-10-04: disk backup/online root expansion completed; Home ideas deferred.
 > Runtime resumed with required receipt-read fail-closed regression fix.
 > 49 focused tests pass, swallow-error mutation fails4 and restored/cmp passes.

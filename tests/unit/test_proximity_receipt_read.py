@@ -55,7 +55,8 @@ async def test_failed_receipt_read_prevents_all_import_writes(monkeypatch, tmp_p
             raise asyncio.CancelledError()
         raise ConnectionError('injected receipt read outage')
 
-    adapter = SimpleNamespace(fetch_one=fetch_one)
+    claim = AsyncMock()
+    adapter = SimpleNamespace(fetch_one=fetch_one, execute=claim)
     if transactional:
         adapter.transaction = transaction
     parser = ProximityParserV4(db_adapter=adapter)
@@ -68,12 +69,13 @@ async def test_failed_receipt_read_prevents_all_import_writes(monkeypatch, tmp_p
         call = AsyncMock()
         monkeypatch.setattr(parser, method, call)
         writes.append(call)
-    if cancelled:
+    if cancelled and transactional:
         with pytest.raises(asyncio.CancelledError):
             await parser.import_file(str(source), date(2026, 10, 4))
     else:
         assert await parser.import_file(str(source), date(2026, 10, 4)) is False
-    assert reads == [(transactional, (source.name,))]
+    assert reads == ([(True, (source.name,))] if transactional else [])
     assert rollbacks == ([True] if transactional else [])
+    assert claim.await_count == int(transactional)
     for write in writes:
         write.assert_not_awaited()

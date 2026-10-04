@@ -1,5 +1,51 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Runtime same-filename ownership — 2026-10-04
+
+Continuation of PR1080 (32e515bd), itself dependent on1079; no merges authorized.
+Original runtime roadmap remains below. Home ideas remain deferred.
+
+Contract: canonical imports require a transaction-capable adapter. Inside that
+transaction, reserve/lock the filename receipt BEFORE reading aggregates_applied;
+retain ownership through final receipt and outer commit/rollback. Existing flag
+and metadata must remain unchanged during reservation. A new FALSE reservation
+is uncommitted and rolls back on failure. Same-filename contenders wait and recheck;
+distinct filenames can proceed. Failure/cancellation/lock timeout never authorize
+aggregate writes; stricter-isolation serialization errors require whole-TX retry.
+
+Implementation uses a parameterized receipt-row UPSERT, preserving its flag;
+no hash-derived advisory lock, new table or migration. PostgreSQL documents atomic
+ON CONFLICT behavior and stricter snapshot conflicts:
+https://www.postgresql.org/docs/14/sql-insert.html
+https://www.postgresql.org/docs/14/transaction-iso.html
+Shared claim helper lives in proximity/parser/import_receipt.py; canonical parser
+shrinks2lines. The unsafe no-transaction fallback is now explicitly rejected.
+Actual cog supplies the transaction-capable bot DB adapter; runtime boundary
+already requires transactions; parse-only entry point remains unaffected.
+
+Evidence: original race fails3 ownership tests; implemented claim passes them.
+No-op claim mutation reproduces3 failures, restored/cmp. Private-PG tests also
+cover existing TRUE/FALSE/NULL flag+metadata, distinct filenames, repeatable-read
+and serializable stale snapshots, nested transaction lifetime, canceled waiter
+and lock timeout recovery. Full canonical parser+two real PostgreSQLAdapter pools
+on private restored cloneC observed second backend blocked before receipt read:
+first commit or cancel AFTER vehicle INSERT -> contender/replay1vehicle(360)/
+1receipt. Separate observer COUNT and rows agree; no presentation imports or
+non-proof socket connections allowed. Synthetic maps are unlinked, not a linkage
+acceptance proof. Prior failure tests now distinguish reservation from completion
+so their failure injection still occurs AFTER actual data writes.
+Final local selection315passed/20existing explicit skips, including11 new PG
+ownership cases. New helper and touched test files lint clean; parser datetime
+lint findings are unchanged baseline. Full-proof logs and fixtures remain private.
+
+Limit: all overlapping writers must use this protocol. Old deployed writers are
+not protected by this new code; no simultaneous runtime activation allowed.
+Filename is still legacy receipt identity: changed content, alternate filenames,
+multi-source namespacing and capture sealing remain next separate gates. Do not
+claim general exactly-once ingestion. Waiting policy/timeouts remain caller-owned;
+the tests prove configured timeout recovery, not a global production timeout.
+No deployment, service change, production write or merge performed.
+
 ## Runtime receipt-read checkpoint — 2026-10-04
 
 Disk safety detour is complete: owner verified the Windows backup copies and

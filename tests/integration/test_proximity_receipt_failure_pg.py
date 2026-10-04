@@ -25,7 +25,7 @@ async def test_receipt_failure_then_retry(journal_db, monkeypatch, tmp_path, fai
             yield writer
 
     async def execute(query, params=None):
-        if armed:
+        if armed and 'VALUES ($1, FALSE)' not in query:
             assert await writer.fetchval('SELECT count(*) FROM proof_data') == 1
             assert await reader.fetchval('SELECT count(*) FROM proof_data') == 0
             injected.append(True)

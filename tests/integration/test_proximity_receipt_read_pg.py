@@ -60,14 +60,15 @@ async def test_receipt_read_failure_then_retry(journal_db, monkeypatch, tmp_path
     for method in ('_update_crossfire_pairs', '_import_heatmaps'):
         monkeypatch.setattr(parser, method, AsyncMock())
     assert await parser.import_file(str(source), date(2026, 10, 4)) is False
-    assert reads == [True]
+    # Missing schema now fails even earlier, while acquiring the receipt row.
+    assert reads == ([True] if failure == 'sql' else [])
     assert writes == []
     assert await reader.fetchval('SELECT count(*) FROM proof_data') == 0
     assert await reader.fetch('SELECT * FROM proof_data') == []
     assert not writer.is_in_transaction()
     expected_error = {
         'missing_table': 'relation "proximity_processed_files" does not exist',
-        'missing_column': 'column "aggregates_applied" does not exist',
+        'missing_column': 'column "aggregates_applied" of relation "proximity_processed_files" does not exist',
         'sql': 'division by zero',
     }[failure]
     assert f'Import error: {expected_error}' in caplog.text
@@ -85,5 +86,5 @@ async def test_receipt_read_failure_then_retry(journal_db, monkeypatch, tmp_path
         assert await reader.fetchval('SELECT count(*) FROM proximity_processed_files') == 1
         assert [tuple(r) for r in await reader.fetch('SELECT * FROM proximity_processed_files')] == [(source.name, True)]
     assert writes == ['engagement', 'aggregate', 'engagement']
-    assert len(reads) == 3
+    assert len(reads) == (3 if failure == 'sql' else 2)
     print(f'Receipt read proof: {failure}, failed writes=0, retry applied=1, replay applied=1, receipts=1')

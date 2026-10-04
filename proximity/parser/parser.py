@@ -35,6 +35,7 @@ from proximity.parser.capability_manifest import (
     build_manifest,
     parse_declaration,
 )
+from proximity.parser.import_receipt import claim_import_receipt
 
 PROXIMITY_FILENAME_ROUND_RE = re.compile(r"-round-(\d+)_engagements\.txt$", re.IGNORECASE)
 GAMETIME_FILENAME_RE = re.compile(r"^gametime-(?P<map>.+)-R(?P<round>\d+)-(?P<ts>\d+)\.json$")
@@ -1574,6 +1575,9 @@ class ProximityParserV4:
         if not self.db_adapter:
             self.logger.error("No database adapter")
             return False
+        if not callable(getattr(self.db_adapter, "transaction", None)):
+            self.logger.error("Proximity import requires a transaction-capable adapter")
+            return False
 
         if not self.parse_file(filepath):
             return False
@@ -1586,9 +1590,7 @@ class ProximityParserV4:
         await self._resolve_round_link_context(session_date)
 
         async def _run_import_steps():
-            # A missing receipt permits aggregation; an unreadable receipt does
-            # not. Read before writes and inside the import transaction when
-            # available. This alone does not serialize concurrent importers.
+            # Ownership must precede this read and persist through commit.
             aggregates_already_applied = await self._check_processed_file(os.path.basename(filepath))
 
             # Import engagements (ON CONFLICT DO NOTHING — safe for reimport)
@@ -1680,12 +1682,8 @@ class ProximityParserV4:
             await self._mark_file_processed(os.path.basename(filepath), session_date)
 
         try:
-            tx_context = getattr(self.db_adapter, "transaction", None)
-            if callable(tx_context):
-                async with tx_context():
-                    await _run_import_steps()
-            else:
-                self.logger.warning("DB adapter has no transaction() context; import is non-transactional")
+            async with self.db_adapter.transaction():
+                await claim_import_receipt(self.db_adapter, os.path.basename(filepath))
                 await _run_import_steps()
 
             self.logger.info(f"Successfully imported {filepath}")
