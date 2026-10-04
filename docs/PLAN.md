@@ -2,6 +2,11 @@
 
 ## Current #1081 preparation — 2026-10-05
 
+Latest parent checkpoint:1079 merged7b9b43a6;1080published5a714cba now pending
+fresh gates. Normal published-parent integration retains all feature bytes and
+evidence. Wait actual1080squash before final publication; older statuses below
+predate this update. No source change or new runtime activation.
+
 Normal local parent033a4f4f integration preserves source/tests8381da13 and all
 older merged fixes. #1079 is in its fresh merge gates; #1080 is local-prepared.
 Publish1081 only after predecessors merge, actual-main synchronization and fresh
@@ -75,6 +80,12 @@ the tests prove configured timeout recovery, not a global production timeout.
 No deployment, service change, production write or merge performed.
 
 ## Inherited #1080 preparation — 2026-10-05
+
+Actual-main checkpoint:1079 merged7b9b43a6 at2026-10-04T22:36:46Z. Reviewed
+c5d8fc4e and squash trees744f0475 identical; all14checks, matching Codex5985124334,
+zero threads, actual3receipt cases PASS on both CI majors. Mandatory cycle clean.
+This normal main sync retains already-integrated parent evidence and1080work;
+only documentation conflicts, no source changes. Fresh final-head gates next.
 
 Normal integration of published1079 c5d8fc4e preserves both histories and all
 older merged fixes. #1079 is awaiting fresh gates, not merged yet; only after

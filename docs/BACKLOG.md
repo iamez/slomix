@@ -14,6 +14,10 @@
 > Next: exact-head review/CI, then stable source-content identity and original
 > runtime acceptance. No deployment/merge; older writers still require cutover.
 
+> Current2026-10-05 00:37CEST:1079merged7b9b43a6, tree matches reviewedc5d8fc4e.
+>1080normal actual-main sync retains prepared history; fresh publication/gates
+>next. Earlier "wait1079" statuses are historical. Original runtime plan retained.
+
 > Current2026-10-05: #1080 local preparation incorporates published1079c5d8fc4e.
 > Wait1079actual squash, then sync/fresh gates; no1080publication yet. Read
 > latest integration PLAN at /home/samba/share/slomix-astra-runtime-integration-20260926.
