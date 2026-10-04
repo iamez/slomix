@@ -30,6 +30,10 @@
   same current section safe. Put an explicit historical heading before the old
   preparation text and state the next actual PR gate once. Preserve evidence,
   but never leave both "merged" and "wait for this merge" as current directions.
+  The guard must inspect the entire current section, not just its first bullet:
+  stale queue prose before that bullet previously escaped both document tests.
+  BACKLOG current position now routes to PLAN instead of duplicating PR numbers;
+  old queue/anchor evidence is retained under its own historical level-2 heading.
 
 - **2026-10-04 · Prefix-only test selection missed a legacy caller.**
   test_proximity*.py omits proximity_sprint_pipeline_test.py. A transaction

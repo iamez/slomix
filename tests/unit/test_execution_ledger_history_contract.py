@@ -1,5 +1,6 @@
 """Keep the preserved execution ledger subordinate to current runtime work."""
 
+import re
 from pathlib import Path
 
 import pytest
@@ -9,10 +10,12 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_backlog_current_position_uses_latest_local_plan():
     text = (ROOT / "docs/BACKLOG.md").read_text()
-    first = text.split("## Trenutna pozicija", 1)[1].split("\n- ", 2)[1]
-    assert "2026-10-04" in first
-    assert "latest PLAN" in first
-    assert "PLAN resumes at 1986d671" not in first
+    current = text.split("## Trenutna pozicija", 1)[1].split("\n## ", 1)[0]
+    assert "latest PLAN" in current
+    assert "latest checkpoint at the top" in current
+    assert "/home/samba/share/slomix-astra-runtime-integration-20260926" in current
+    assert not re.search(r"#\d+", current), "Current position must route to PLAN, not duplicate a stale PR queue"
+    assert "1986d671" not in current and "8e262684" not in current
 
 
 def test_old_resume_is_explicitly_historical():
