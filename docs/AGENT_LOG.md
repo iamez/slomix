@@ -45,6 +45,14 @@
   Check remaining proof-service lifetime before suites: RuntimeMax interrupted a
   run and its teardown; connection-closed errors are not a successful guard proof.
 
+- **2026-10-05 · Reconcile shared admission APIs, not only conflict markers.**
+  An older runtime slice exported validate_stats_filename for manifest/import
+  callers while proximity publication parameterized the same private helper.
+  Retain the public stats validator and separate proximity admission; choosing
+  either conflict side loses a contract. Run both caller families and composed
+  long-name/read-only retries. Widening stats admission must fail the dedicated
+  test; restore the mutation with apply_patch and verify exact bytes with cmp.
+
 - **2026-10-04 · Private spool is a destination, not a chmod of shared input.**
   DEV local_proximity is a symlink to the shared legacy source. A default find
   reported zero files because it did not traverse that command-line symlink;
@@ -61,6 +69,12 @@
   receipt as proof of yesterday's content. Same-size rapid writes may not change
   observed metadata; metadata checks are supplementary, not the content proof.
   Full handover must exclude legacy writers that do not enforce the new digest.
+
+- **2026-10-05 · Separate current instructions from pre-merge history.**
+  A new closure paragraph does not make contradictory wait instructions in the
+  same current section safe. Put an explicit historical heading before the old
+  preparation text and state the next actual PR gate once. Preserve evidence,
+  but never leave both "merged" and "wait for this merge" as current directions.
 
 - **2026-10-04 · Prefix-only test selection missed a legacy caller.**
   test_proximity*.py omits proximity_sprint_pipeline_test.py. A transaction

@@ -1,6 +1,15 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current #1084 preparation — 2026-10-05
+## Current #1084 queue gate — 2026-10-05
+
+#1079 is merged. #1080 latest959cb109 awaits fresh gates;1081-1083are locally
+prepared. This normal parentcbcbca77 merge preserves all source/migration fixes
+and the corrected separation of current versus historical instructions. Next
+actual1083merge, then1084final sync, CI/SQL/review.094notlive-applied; no services,
+production or historical data repair. Original runtime roadmap retained in
+latest integration PLAN. Everything below records historical preparation only.
+
+## Historical #1084 preparation — 2026-10-05
 
 Normal local parentdc31f859 integration preserves parent-gate/provenance fixes
 7071a20b and all earlier repairs, including the reconciled stats/proximity spool.
@@ -91,7 +100,17 @@ guarantee or scheduler. Next: exact-head checks/review; capture seal, durable re
 exclusive handover and full Discord/website-off recovery proof. Then usable
 Spiderweb/full proximity audit, later Home design; original plan preserved below.
 
-## Inherited #1083 preparation — 2026-10-05
+
+## Historical inherited #1083 queue gate — 2026-10-05
+
+#1079 is merged. #1080 latest959cb109 awaits review/CI;1081/1082remain locally
+prepared. This normal parent1b5466cd merge retains their fixes and documentation
+correction. Next actual1082merge, then1083final sync and fresh CI/SQL/review.
+No source changes, services, live relinking or production actions. Original
+runtime roadmap retained in latest integration PLAN. All entries below are
+historical preparation evidence, not additional current wait instructions.
+
+## Historical #1083 preparation — 2026-10-05
 
 Normal local parent4859d660 integration retains round/linker source/tests67a39a09
 and the reconciled1082stats/proximity spool boundary. Original histories remain.
@@ -161,7 +180,17 @@ restart owner-only, no live DB fallback. CI exact-head PG validation required.
 Interrupted fixture teardown may leave a test-owned schema in disposable postgres;
 inspect after restart, do not blindly clean schemas. No live data repair/deploy.
 
-## Inherited #1082 preparation — 2026-10-05
+
+## Historical inherited #1082 queue gate — 2026-10-05
+
+#1079 is merged. #1080published959cb109 awaits fresh gates; #1081local7a882cf1
+incorporates its documentation correction. This1082local merge preserves that
+history and the reconciled stats/proximity validation boundary. Next actual
+1080/1081merges, then final1082main sync, CI/SQL/review before publication/merge.
+No re-waiting1079 or service/production/liveDB action. Original runtime roadmap
+remains in latest integration PLAN; all preparation entries below historical.
+
+## Historical #1082 preparation — 2026-10-05
 
 Normal local parent6e1296da integration retains both histories and old repairs.
 Real source conflict in runtime_spool reconciled explicitly: retain public
@@ -258,7 +287,24 @@ Validate operational proximity size distribution before adopting the8MiB default
 Next: review/CI, explicit legacy handover/adoption and capture integration, then
 the original Discord+website-off and recovery gates. No service/deployment/merge.
 
-## Inherited #1081 preparation — 2026-10-05
+
+## Historical inherited #1081 queue gate — 2026-10-05
+
+#1079 is merged7b9b43a6. #1080 latest published959cb109 addresses review4179646678
+and awaits fresh CI/review. This1081local tree incorporates that parent while
+preserving ownership source/tests8381da13. Next: finish1080gates/actual merge,
+then synchronize1081 with that squash and obtain fresh exact-head proofs/review.
+Do not re-wait1079; do not publish1081before1080. No service/liveDB/production
+actions. Original runtime roadmap remains in latest integration PLAN at
+/home/samba/share/slomix-astra-runtime-integration-20260926. All entries below
+are historical evidence, not additional current wait instructions.
+
+## Historical #1081 preparation — 2026-10-05
+
+Latest parent checkpoint:1079 merged7b9b43a6;1080published5a714cba now pending
+fresh gates. Normal published-parent integration retains all feature bytes and
+evidence. Wait actual1080squash before final publication; older statuses below
+predate this update. No source change or new runtime activation.
 
 Normal local parent033a4f4f integration preserves source/tests8381da13 and all
 older merged fixes. #1079 is in its fresh merge gates; #1080 is local-prepared.
@@ -332,7 +378,20 @@ claim general exactly-once ingestion. Waiting policy/timeouts remain caller-owne
 the tests prove configured timeout recovery, not a global production timeout.
 No deployment, service change, production write or merge performed.
 
-## Inherited #1080 preparation — 2026-10-05
+## Historical inherited #1080 consolidation — 2026-10-05
+
+Actual-main checkpoint:1079 merged7b9b43a6 at2026-10-04T22:36:46Z. Reviewed
+c5d8fc4e and squash trees744f0475 identical; all14checks, matching Codex5985124334,
+zero threads, actual3receipt cases PASS on both CI majors. Mandatory cycle clean.
+This normal main sync retains already-integrated parent evidence and1080work;
+only documentation conflicts, no source changes. Fresh final-head gates next.
+
+Review4179646678 correctly identified conflicting predecessor status in the
+former current section. The pre-merge preparation below is now explicitly
+historical. Do not wait for1079 again: it is merged; next gate is1080fresh
+exact-head CI/review followed by the mandatory settle cycle.
+
+## Historical #1080 local preparation — before #1079 merged
 
 Normal integration of published1079 c5d8fc4e preserves both histories and all
 older merged fixes. #1079 is awaiting fresh gates, not merged yet; only after
@@ -383,7 +442,7 @@ Keep this slice separate from the integration branch's older unmerged changes.
 After real-PG verification, review and PR gates, continue concurrency/source
 identity and the original capture/linkage/Discord+website-off acceptance gates.
 
-## Inherited #1079 boundary consolidation — 2026-10-05
+## Historical inherited #1079 boundary consolidation — 2026-10-05
 
 All nine approved older PRs (963/964/966/1066/1072/1073/1074/1075/1077) are
 merged and their reviewed/squash trees verified identical. This #1079 branch
