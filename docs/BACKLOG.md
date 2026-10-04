@@ -1,5 +1,12 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04:1084 initialCI green but review found normalized-map mismatch and
+> permissive-receipt adoption. Fixed both; new094 records strict provenance on
+> fresh INSERT only, old receipts remainFALSE.540tests/20skips,60focused;2more
+> mutations fail/restored. Full normalized-parent and old-adoption rejection
+> clone proofs with094 rolled back including schema; no live migration/history
+> repair. Fresh review/CI required; do not merge initial932905e1 as reviewed-green.
+
 > 2026-10-04: owner restarted isolated PG. Late-parent clone proof confirmed
 > successful replay can leave NULL vehicle links. Added opt-in strict parent gate
 > at runtime boundary; defer instead of writing orphan data. Full real-parser/adapter

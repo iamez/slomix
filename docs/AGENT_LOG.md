@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Receipt provenance is enforced state, not a caller warning.**
+  A matching hash proves source bytes, not whether earlier ingestion enforced
+  parent linkage. Strict replay of permissive ON CONFLICT imports can falsely
+  succeed while stored links remain NULL. Migration094 defaults old receipts
+  to FALSE; strict insertion stamps TRUE atomically, never upgrades on conflict.
+  Require that persisted provenance before accepting strict replay. Normalized
+  map identity must also agree across preflight, parser and later relinker.
+
 - **2026-10-04 · Successful replay is not proof of repaired linkage.**
   Vehicle ON CONFLICT DO NOTHING preserves an earlier NULL round_id even when
   replay resolves the correct parent. A fresh forward-only runtime can defer

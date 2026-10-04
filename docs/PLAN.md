@@ -2,6 +2,26 @@
 
 ## Runtime late-parent gate — 2026-10-04
 
+Review follow-up: initial932905e1 CI passed, but Codex found2issues. Addressed
+normalized map identity in BOTH runtime gate and canonical exact-start resolver.
+Migration094/bootstrap add runtime_parent_gate FALSE by default; only a strict
+new receipt INSERT sets TRUE, within the same import transaction. Conflict keeps
+existing provenance; strict replay rejects old permissive receipts even with a
+valid hash. Documentation-only forward-handover assumptions were insufficient.
+Strict mode requires094; missing column fails closed. Legacy/default mode works
+without094. No existing migration changed; no live migration/backfill/deployment.
+
+540tests pass/20existing skips including migration-runner tests;60focused pass.
+Two additional mutations failed/restored/cmp (provenance acceptance and normalized
+parser identity). Actual clone proofs rerun with migration in outer rollback TX:
+normalized parent/session/replay correct and strict adoption of an old permissive
+vehicle import rejected, originalNULL link/provenance unchanged. Independent
+observer verifies no committed fixture rows; schema change also rolled back.
+Normalized query still uses idx_rounds_map_round_start for round/start; sampled
+30.434ms first read with disk reads versus0.106ms warm/all hits, not an SLA or a
+like-for-like speedup. No speculative new index. Fresh exact-head CI/review needed;
+review replies precede thread closure. Next gates below remain unchanged.
+
 Parent PR1083/67a39a09 now has successful CI and matching Codex review with no
 major issues; both fixed threads resolved,0unresolved/full pagination. This slice
 continues from that exact head, without merging or changing any running service.

@@ -40,7 +40,7 @@ async def _linked_parent(adapter, metadata):
             or not isinstance(map_name, str) or not map_name.strip()):
         raise _ParentPending('source_identity_unavailable')
     rows = await adapter.fetch_all(
-        'SELECT id, gaming_session_id FROM rounds WHERE map_name = ? '
+        'SELECT id, gaming_session_id FROM rounds WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) '
         'AND round_number = ? AND round_start_unix = ? ORDER BY id LIMIT 2 FOR SHARE',
         (map_name, number, start),
     )
@@ -85,8 +85,9 @@ async def import_proximity_file(
     forward-only handover. Pending results are NOT acknowledgments: retain the
     sealed source and retry missing parents/sessions with bounded scheduling;
     ambiguous/missing source identity needs reconciliation, not a guessed link.
-    This mode defers first ingestion, rather than repairing previously imported
-    unlinked history. Do not adopt receipts created by the permissive path.
+    This mode requires migration094 and defers first ingestion, rather than
+    repairing history. Receipts created by the permissive path are rejected:
+    the persisted runtime_parent_gate must prove strict first ingestion.
     Default preserves the existing low-level boundary for compatibility. No cog
     or worker is activated here. Successful results remain caller-transaction
     scoped, not evidence that an enclosing transaction has committed.
@@ -110,7 +111,10 @@ async def import_proximity_file(
         return ProximityImportResult(False, None)
     try:
         async with adapter.transaction():
-            await claim_import_receipt(adapter, filepath.name, source_sha256=expected_sha256)
+            await claim_import_receipt(
+                adapter, filepath.name, source_sha256=expected_sha256,
+                require_linked_parent=require_linked_parent,
+            )
             await bind_proximity_source(adapter, filepath.name, expected_sha256)
             if require_linked_parent:
                 parent = await _linked_parent(adapter, parser.metadata)

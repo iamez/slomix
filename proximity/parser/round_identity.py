@@ -20,7 +20,7 @@ async def resolve_proximity_round_id(
     if (type(source_start_unix) is int
             and 1577836800 < source_start_unix <= int(time.time()) + 86400):
         rows = await adapter.fetch_all(
-            'SELECT id FROM rounds WHERE map_name = ? AND round_number = ? '
+            'SELECT id FROM rounds WHERE LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) AND round_number = ? '
             'AND round_start_unix = ? ORDER BY id LIMIT 2',
             (map_name, round_number, source_start_unix),
         )

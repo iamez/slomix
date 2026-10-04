@@ -3027,7 +3027,8 @@ CREATE TABLE public.proximity_processed_files (
     imported_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     tracker_version text,
     round_key text,
-    capabilities jsonb
+    capabilities jsonb,
+    runtime_parent_gate boolean DEFAULT false NOT NULL
 );
 
 
