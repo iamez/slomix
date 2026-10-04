@@ -28,8 +28,8 @@
 ## Trenutna pozicija
 
 - (Astra, 2026-10-04) #1073 retains prior filename-cap repair and manifest
-  runtime proofs during local parent/main refresh. Approved but waiting for
-  earlier merges and fresh exact-head gates; no activation or deployment.
+  runtime proofs during normal actual-main67ad2d8c refresh. Earlier approved
+  predecessors merged; fresh exact-head gates remain, no activation/deployment.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
   preserved local checkpoint8e262684 is an access anchor, not the latest head.
 
