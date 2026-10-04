@@ -10,7 +10,12 @@
 - (Astra, 2026-10-04)966 follow-up pins source OID for bundled snapshot scans,
   independent of local origin/main. Two real Git bypasses reproduced;116tests
   pass, source-argument mutation fails/restored/cmp. Safe published feature
-  sources remain supported. No real review refs or service actions.
+  sources remain supported.963 is mergeda2737e7a; this normal main refresh
+  preserves both histories. Retained local integration checkpoint8e262684:
+  read its latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926.
+  No real review refs or service actions;964 must still merge before966.
+
+### Historical snapshot checkpoints
 
 - (Astra, 2026-10-04) Additional966 review found hidden warning-only credentials.
   Bundled-guard diagnostics now block noninteractive publication before refs,
@@ -75,6 +80,16 @@
   Ruff clean. Actual review-snapshot refs and NEVER MERGE PRs unchanged. Keep
   this older tooling proposal for review, not authorized for merge. Runtime
   resume #1077 completion delivery/sealing remains after consolidation.
+### Inherited handoff checkpoints (historical)
+
+- (Astra, 2026-10-04) #963 review correction: current local integration checkpoint
+  is8e262684 in /home/samba/share/slomix-astra-runtime-integration-20260926;
+  read its latest PLAN rather than resuming from historical1986d671.
+  Owner approved963/964/966/1066/1072-1075/1077 individually subject to fresh
+  gates and older-first order. Correct the historical deployment recipe to pass
+  the exact built commit; no live deployment, service or data action.
+  September28 corrections remain in Git history and the dated PLAN below.
+
 - (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
   unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
   checked against actualPG; deliberately mismatched17/14 fails fixture setup.
@@ -984,6 +999,28 @@
   #924–#943 na novi main) — če seja ugasne prej, to naredi Astra ali owner.
   Astra vstopi prek `AGENTS.md` §4 → `docs/HANDOFF-astra.md` §E (prva ura) → §C.
   Bundle NI zgrajen (owner: pozneje); sudo/DB geslo rotacija = owner.
+- (Opus 5, 2026-09-07, 12:10; historical snapshot, not current instructions)
+  **SEJA SE ZAKLJUČUJE — predaja je
+  `docs/HANDOFF-opus5-2026-09-07.md`** (komplementarna k `HANDOFF-astra.md`).
+  Mergano danes: #923, #948, #950, #952, #955, #958 → **endpoint gap 13 → 12**,
+  #952/#955/#958 so prišli po v1.45.0. Takrat odprto: **#912** (arena, CI zelen, ⛔ `arena_acc_log`
+  NEIZMERJEN v živo — manjka en dvoboj na prižganem strežniku; razsodnik je
+  `lua_status` podpis, ne datoteka na disku) in **#962** (watchdog je kazal
+  84,9 % diska, `df` 90 % — prag 85 % se je sprožil šele pri `df` ~89,6 %).
+  ⛔ **Bundle ni zgrajen**: nobena SPA sprememba od 09-06 11:03 ni vidna na
+  `:8000`; corrected repository-root recipe for owner-approved build/deploy:
+  From a clean checkout of the owner-approved target commit:
+  `(cd website/frontend && npm run build:app) && DEV_SRC_DIR="$PWD" scripts/dev_deploy.sh "$(git rev-parse HEAD)"`
+  (restart = ownerjev DA; command not executed here). Prelet faze 7 delen
+  (manifest 32 rut + 20 rut, vse 200, 0 konzolnih napak); celoten čaka RAM.
+  SSD sproščen 90 % → 80 % (nič izbrisano, vse v
+  `share/_from_ssd_tmp_2026-09-07/` in
+  `share/slomix-archive/cleanup-2026-08-26/`). Historical note corrected 2026-09-20:
+  inspect timer state/activation and tmpfiles age rules before proposing changes;
+  static alone does not diagnose failed cleanup. Journal vacuum affects archived
+  files; any owner-approved cleanup needs retention review and rotation, and
+  changed journald limits need explicit owner activation. No cleanup was performed.
+
 - (Fable 5.1, 2026-09-07, 04:30) Predaja projekta Astri: `docs/HANDOFF-astra.md`
   (§A Fable, §B sestra dobesedno, §C delovni paket 1–20, §D ne delaj, §E prva
   ura) + `docs/HANDOFF-astra-inventory.md` (inventar po območjih, §11 ownerjeve

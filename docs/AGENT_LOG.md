@@ -122,6 +122,12 @@
   before merge, retain its date, and independently prove installed guard behavior.
   Run mutation probes in isolated copies, not packages used by concurrent tests.
 
+- **2026-09-28 · Build cwd is not necessarily deployment source.**
+  dev_deploy.sh defaults SRC to the primary checkout, even when invoked from
+  a feature worktree. Pass DEV_SRC_DIR="$PWD" from that worktree's root in
+  an owner-approved recipe. Execute the documented recipe against disposable
+  build/deploy probes to prove both paths match; do not deploy to test prose.
+
 - **2026-09-28 · Cleanup ownership includes loop control and handle close.**
   Guarding process calls alone leaves SIGINT windows in the supervising clock
   and loop. Correction after follow-up review: installing cleanup deferral itself
@@ -234,6 +240,19 @@ data here.
   do not prove account billing is disabled; verify separately, and do not
   mistake a budget notification for an enforced usage stop.
 
+- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
+  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
+  Explicitly disable SSH and automation in the child; test true/false parent
+  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
+  Removing child isolation reproduces the guard failure. Production code unchanged.
+
+- **2026-09-20 · Squash merge status is not an ancestry predicate.**
+  The historical handoff in docs/HANDOFF-opus5-2026-09-07.md reported seven
+  false negatives from ancestry-only checks. Verify the PR's merged state and
+  main's actual content before declaring old work missing. Artifact identity,
+  cold-cache sampling, directory mtime and shared stash ownership each retain
+  their separate dated entries below; do not combine them into one lesson.
+
 - **2026-09-07 · Measurement is not delivery acknowledgement.** Watchdog
   observations/failure streaks must persist even when the notification fails,
   but alert timestamps, recovery reset and daily heartbeat dedup advance only
@@ -291,12 +310,6 @@ data here.
   alone also allows late old requests to insert again. Bound count and retained
   string bytes, prune expired entries on writes, and test late old-epoch writes.
   State per-worker storage limits separately from RSS and serialization peaks.
-
-- **2026-09-25 · Logging subprocess tests must disable unrelated SSH behavior.**
-  A fresh checkout exposed inherited SSH_ENABLED=true in a dev logging fixture.
-  Explicitly disable SSH and automation in the child; test true/false parent
-  values. Do not enable SSH_ENABLED_DEV_OVERRIDE or weaken the application guard.
-  Removing child isolation reproduces the guard failure. Production code unchanged.
 
 - **2026-09-20 · Verify importer identifiers from the parser, not helper prose.**
   A neutral real-PG fixture supplied32 hex characters but the canonical regular
