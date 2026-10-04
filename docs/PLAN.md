@@ -12,10 +12,23 @@ instead of authorizing aggregates. This does NOT serialize concurrent importers
 or establish stable source identity; those remain next, with two-writer proofs.
 Focused unit/parser suite49passed; nine new tests failed on the original code.
 Swallow-error mutation produced4failed/5passed, restored with cmp, then49passed.
-Three real-PG failure/retry cases collected but NOT executed: isolated proof
-service reports ActiveState=failed, Result=timeout. Owner restart is needed;
-no fallback to the live database. New tests lint clean; parser has two unchanged
-baseline DTZ001/DTZ007 findings. No merge, push, deployment or service operation.
+Owner restarted the private proof service. Actual PostgreSQL14.24 read failures
+(missing table, missing column, SQL error) and prior receipt-write rollback cases
+all pass6/6. Observer counts and fetched rows agree: failure writes0, repaired
+retry/replay aggregate1 and receipt1. Swallow-error mutation fails all3 new PG
+cases, restored/cmp. Expanded proximity selection304passed/20explicit skips
+(existing GUID/Lua coverage exclusions), no receipt-proof skips. New tests lint
+clean; parser has two unchanged baseline DTZ001/DTZ007 findings.
+Full canonical parser+PostgreSQLAdapter also proved Python/SQL receipt-read
+failures on private restored cloneC: failure0vehicles/0receipts, retry and repeat
+1vehicle(distance360)/1receipt. Network audit allows only the proof UNIX socket;
+Discord/website/config imports forbidden. Synthetic maps remain unlinked, so
+this is NOT round-linkage, concurrent-writer or full runtime acceptance proof.
+The first pytest collection attempted localhost etlegacy_test authentication
+and was rejected (InvalidAuthorizationSpecificationError). Follow-up runs pin
+both POSTGRES_TEST_* and RUNTIME_EVENTS_TEST_SOCKET to the private cluster;
+the general conftest probe is separate from the journal fixture's safe routing.
+No deployment, service operation or production write by the agent.
 Keep this slice separate from the integration branch's older unmerged changes.
 After real-PG verification, review and PR gates, continue concurrency/source
 identity and the original capture/linkage/Discord+website-off acceptance gates.

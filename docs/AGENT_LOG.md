@@ -6,8 +6,15 @@
   updates after an outage. Read the required receipt directly, inside the import
   transaction before writes; let failure abort import. Receipt-write tests that
   mock this read cannot prove the read boundary. New regression tests and a
-  restored swallow-error mutation demonstrate this distinction; real-PG proof
-  remains pending. Transaction placement alone is not concurrent serialization.
+  restored swallow-error mutation demonstrate this distinction; real-PG tests
+  and canonical parser+adapter clone proof now pass. Transaction placement alone
+  is not concurrent serialization.
+
+- **2026-10-04 · Pytest has two independent connection selectors.**
+  The private journal fixture uses RUNTIME_EVENTS_TEST_SOCKET, but the global
+  collection hook probes POSTGRES_TEST_* with a localhost default. Pin both to
+  the approved disposable cluster for local integration runs. An authentication
+  rejection during collection is not evidence that the private PG fixture failed.
 
 - **2026-10-03 · Receipt failure can lie about committed ingestion.**
   Proximity receipt errors were swallowed. A Python failure could commit data

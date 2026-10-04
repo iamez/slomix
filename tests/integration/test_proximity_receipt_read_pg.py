@@ -12,7 +12,7 @@ from tests.integration.test_runtime_events_pg import journal_db  # noqa: F401
 
 
 @pytest.mark.parametrize('failure', ['missing_table', 'missing_column', 'sql'])
-async def test_receipt_read_failure_then_retry(journal_db, monkeypatch, tmp_path, failure):  # noqa: F811
+async def test_receipt_read_failure_then_retry(journal_db, monkeypatch, tmp_path, caplog, failure):  # noqa: F811
     writer, reader = journal_db
     await writer.execute('CREATE TABLE proof_data (id INTEGER PRIMARY KEY, applied INTEGER NOT NULL)')
     if failure != 'missing_table':
@@ -65,6 +65,12 @@ async def test_receipt_read_failure_then_retry(journal_db, monkeypatch, tmp_path
     assert await reader.fetchval('SELECT count(*) FROM proof_data') == 0
     assert await reader.fetch('SELECT * FROM proof_data') == []
     assert not writer.is_in_transaction()
+    expected_error = {
+        'missing_table': 'relation "proximity_processed_files" does not exist',
+        'missing_column': 'column "aggregates_applied" does not exist',
+        'sql': 'division by zero',
+    }[failure]
+    assert f'Import error: {expected_error}' in caplog.text
 
     if failure == 'missing_table':
         await writer.execute('CREATE TABLE proximity_processed_files (filename TEXT PRIMARY KEY, aggregates_applied BOOLEAN)')
@@ -76,4 +82,8 @@ async def test_receipt_read_failure_then_retry(journal_db, monkeypatch, tmp_path
         assert await reader.fetchval('SELECT applied FROM proof_data WHERE id=1') == 1
         assert [tuple(r) for r in await reader.fetch('SELECT * FROM proof_data')] == [(1, 1)]
         assert await reader.fetchval('SELECT aggregates_applied FROM proximity_processed_files WHERE filename=$1', source.name) is True
+        assert await reader.fetchval('SELECT count(*) FROM proximity_processed_files') == 1
+        assert [tuple(r) for r in await reader.fetch('SELECT * FROM proximity_processed_files')] == [(source.name, True)]
     assert writes == ['engagement', 'aggregate', 'engagement']
+    assert len(reads) == 3
+    print(f'Receipt read proof: {failure}, failed writes=0, retry applied=1, replay applied=1, receipts=1')

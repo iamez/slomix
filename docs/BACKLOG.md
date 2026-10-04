@@ -3,10 +3,13 @@
 > 2026-10-04: disk backup/online root expansion completed; Home ideas deferred.
 > Runtime resumed with required receipt-read fail-closed regression fix.
 > 49 focused tests pass, swallow-error mutation fails4 and restored/cmp passes.
-> Real-PG missing-table/missing-column/query-error and retry proof is prepared,
-> not executed while isolated proof service is failed/timeout. Next: owner starts
-> slomix-runtime-proof-20260925.service, run private-socket integration suite;
-> then continue concurrency and stable source identity. No merge/deploy.
+> Owner restarted proof service:6/6 read+write PG cases pass; read mutation3fail,
+> restored/cmp. Expanded proximity suite304passed/20existing explicit skips.
+> Full canonical parser+adapter on private cloneC also proved Python/SQL read
+> failure0writes and successful retry/replay1vehicle/1receipt; synthetic maps
+> remain unlinked. Next: review/publish slice, then concurrency and stable source
+> identity. No merge/deploy; both pytest connection selectors now explicitly
+> target private PG to avoid the general collection probe's localhost default.
 
 > 2026-10-03 receipt failure fix prepared with two failing-before/passing-after
 >tests and restored mutation. Real PG post-write failure/rollback still pending
