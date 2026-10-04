@@ -103,9 +103,10 @@ Spiderweb/full proximity audit, later Home design; original plan preserved below
 
 ## Historical inherited #1083 queue gate — 2026-10-05
 
-#1079 is merged. #1080 latest6e0be64b awaits review/CI;1081/1082remain locally
-prepared. This normal parent3739dd5a merge retains their fixes and documentation
-correction. Next actual1082merge, then1083final sync and fresh CI/SQL/review.
+#1079 and #1080 are merged (main 58938262). #1081 published 9af897c9 awaits
+fresh review/CI; #1082 is locally prepared at d159f915. This normal parent merge
+retains their fixes and documentation. Next actual #1081 then #1082 merges,
+then #1083 final main sync and fresh CI/SQL/review before publication/merge.
 No source changes, services, live relinking or production actions. Original
 runtime roadmap retained in latest integration PLAN. All entries below are
 historical preparation evidence, not additional current wait instructions.
@@ -183,11 +184,11 @@ inspect after restart, do not blindly clean schemas. No live data repair/deploy.
 
 ## Historical inherited #1082 queue gate — 2026-10-05
 
-#1079 is merged. #1080published6e0be64b awaits fresh gates; #1081local250d34d7
-incorporates its documentation correction. This1082local merge preserves that
-history and the reconciled stats/proximity validation boundary. Next actual
-1080/1081merges, then final1082main sync, CI/SQL/review before publication/merge.
-No re-waiting1079 or service/production/liveDB action. Original runtime roadmap
+#1079 and #1080 are merged; actual main is 58938262. #1081 published 9af897c9
+is undergoing fresh exact-head CI/review. This local #1082 incorporates that
+parent and preserves the reconciled stats/proximity validation boundary.
+Next: actual #1081 merge, then final #1082 main sync, CI/SQL/review gates.
+Do not publish this preparation before #1081 merges. No service/production/liveDB action. Original runtime roadmap
 remains in latest integration PLAN; all preparation entries below historical.
 
 ## Historical #1082 preparation — 2026-10-05
@@ -290,12 +291,16 @@ the original Discord+website-off and recovery gates. No service/deployment/merge
 
 ## Historical inherited #1081 queue gate — 2026-10-05
 
-#1079 is merged7b9b43a6. #1080 latest published6e0be64b addresses4179646678/4179660774
-and awaits fresh CI/review. This1081local tree incorporates that parent while
-preserving ownership source/tests8381da13 and full-section document guards. Next: finish1080gates/actual merge,
-then synchronize1081 with that squash and obtain fresh exact-head proofs/review.
-Do not re-wait1079; do not publish1081before1080. No service/liveDB/production
-actions. Original runtime roadmap remains in latest integration PLAN at
+#1079 is merged at 7b9b43a6. #1080 is merged at
+5893826278fcfb4db7d100e0e25f5b464e285785 (2026-10-04T23:04:37Z).
+The reviewed 6e0be64b and actual squash have identical tree 92d674b5;
+all 14 checks, matching Codex review, resolved threads and mandatory settle passed.
+This #1081 tree now includes actual main. Squash-induced conflicts retained the
+already-integrated parent plus ownership changes: transaction-required imports,
+claim before read, and schema-failure tests expecting failure during reservation.
+Ownership source/tests remain identical to 8381da13. Next: fresh exact-head CI,
+all eleven real-PG ownership scenarios on both CI majors, and review before merge.
+No service/liveDB/production actions. Original runtime roadmap remains in latest integration PLAN at
 /home/samba/share/slomix-astra-runtime-integration-20260926. All entries below
 are historical evidence, not additional current wait instructions.
 
