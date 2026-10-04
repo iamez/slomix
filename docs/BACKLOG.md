@@ -1,5 +1,11 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> Current1081queue:1079merged;1080published959cb109 awaiting fresh gates. This
+>local preparation retains parent review correction and ownership fixes.
+>Next actual1080squash sync, then fresh1081publication/gates. No services.
+
+## Historical queue preparation — superseded instructions retained as evidence
+
 > Current2026-10-05: #1081 local parent033a4f4f reconciliation only; wait1079/1080
 > actual merges before publication. Read latest integration PLAN at
 > /home/samba/share/slomix-astra-runtime-integration-20260926. Runtime roadmap
@@ -18,7 +24,9 @@
 >1080normal actual-main sync retains prepared history; fresh publication/gates
 >next. Earlier "wait1079" statuses are historical. Original runtime plan retained.
 
-> Current2026-10-05: #1080 local preparation incorporates published1079c5d8fc4e.
+## Historical preparation notes — not current merge instructions
+
+> Historical2026-10-05, before1079merge: #1080 local preparation incorporates published1079c5d8fc4e.
 > Wait1079actual squash, then sync/fresh gates; no1080publication yet. Read
 > latest integration PLAN at /home/samba/share/slomix-astra-runtime-integration-20260926.
 > Original runtime roadmap retained. Earlier statuses below are historical.
@@ -34,7 +42,7 @@
 > identity. No merge/deploy; both pytest connection selectors now explicitly
 > target private PG to avoid the general collection probe's localhost default.
 
-> Current2026-10-05: older nine approved PRs merged with tree verification.
+> Historical1079preparation2026-10-05: older nine approved PRs merged with tree verification.
 > #1079 normally integrates actual main95758cc7; fresh local/CI/review gates
 > pending, then1080-1084 in order. Read latest integration PLAN at
 > /home/samba/share/slomix-astra-runtime-integration-20260926. Original runtime

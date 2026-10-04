@@ -1,6 +1,17 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current #1081 preparation — 2026-10-05
+## Current #1081 queue gate — 2026-10-05
+
+#1079 is merged7b9b43a6. #1080 latest published959cb109 addresses review4179646678
+and awaits fresh CI/review. This1081local tree incorporates that parent while
+preserving ownership source/tests8381da13. Next: finish1080gates/actual merge,
+then synchronize1081 with that squash and obtain fresh exact-head proofs/review.
+Do not re-wait1079; do not publish1081before1080. No service/liveDB/production
+actions. Original runtime roadmap remains in latest integration PLAN at
+/home/samba/share/slomix-astra-runtime-integration-20260926. All entries below
+are historical evidence, not additional current wait instructions.
+
+## Historical #1081 preparation — 2026-10-05
 
 Latest parent checkpoint:1079 merged7b9b43a6;1080published5a714cba now pending
 fresh gates. Normal published-parent integration retains all feature bytes and
@@ -79,13 +90,20 @@ claim general exactly-once ingestion. Waiting policy/timeouts remain caller-owne
 the tests prove configured timeout recovery, not a global production timeout.
 No deployment, service change, production write or merge performed.
 
-## Inherited #1080 preparation — 2026-10-05
+## Historical inherited #1080 consolidation — 2026-10-05
 
 Actual-main checkpoint:1079 merged7b9b43a6 at2026-10-04T22:36:46Z. Reviewed
 c5d8fc4e and squash trees744f0475 identical; all14checks, matching Codex5985124334,
 zero threads, actual3receipt cases PASS on both CI majors. Mandatory cycle clean.
 This normal main sync retains already-integrated parent evidence and1080work;
 only documentation conflicts, no source changes. Fresh final-head gates next.
+
+Review4179646678 correctly identified conflicting predecessor status in the
+former current section. The pre-merge preparation below is now explicitly
+historical. Do not wait for1079 again: it is merged; next gate is1080fresh
+exact-head CI/review followed by the mandatory settle cycle.
+
+## Historical #1080 local preparation — before #1079 merged
 
 Normal integration of published1079 c5d8fc4e preserves both histories and all
 older merged fixes. #1079 is awaiting fresh gates, not merged yet; only after
@@ -136,7 +154,7 @@ Keep this slice separate from the integration branch's older unmerged changes.
 After real-PG verification, review and PR gates, continue concurrency/source
 identity and the original capture/linkage/Discord+website-off acceptance gates.
 
-## Inherited #1079 boundary consolidation — 2026-10-05
+## Historical inherited #1079 boundary consolidation — 2026-10-05
 
 All nine approved older PRs (963/964/966/1066/1072/1073/1074/1075/1077) are
 merged and their reviewed/squash trees verified identical. This #1079 branch
