@@ -2,10 +2,11 @@
 
 ## Current #1084 queue gate — 2026-10-05
 
-#1079 is merged. #1080 latest6e0be64b awaits fresh gates;1081-1083are locally
-prepared. This normal parent02cc9307 merge preserves all source/migration fixes
-and the corrected separation of current versus historical instructions. Next
-actual1083merge, then1084final sync, CI/SQL/review.094notlive-applied; no services,
+#1079 and #1080 are merged (main 58938262). #1081 published 9af897c9 awaits
+fresh gates; #1082 and #1083 remain locally prepared. This normal parent0d66b2d1
+merge preserves all source/migration fixes and current/historical routing.
+Next actual #1081 -> #1082 -> #1083 merges, then #1084 final sync, CI/SQL/review.
+Do not publish this preparation yet. Migration 094 is not live-applied; no services,
 production or historical data repair. Original runtime roadmap retained in
 latest integration PLAN. Everything below records historical preparation only.
 
