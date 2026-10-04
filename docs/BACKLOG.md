@@ -7,13 +7,12 @@
 
 ## Trenutna pozicija
 
-- (Astra, 2026-09-28) #964 review detour: September 7/8 execution entries and
-  four dated lessons retained behind newer checkpoints. Historical-only wording
-  applies to those entries, not later runtime work. PLAN resumes at 1986d671 and
-  current dependency consolidation; no reimplementation of completed R01 work.
-  No deployment, service action, live-data repair or snapshot change.
-  Five document/plan contracts pass; obsolete-resume mutation fails and is
-  restored/cmp. The four historical lesson bodies are retained verbatim.
+- (Astra, 2026-10-04) #964 review correction: continue from the latest PLAN in
+  /home/samba/share/slomix-astra-runtime-integration-20260926 (checkpoint8e262684
+  at this audit, superseding02c160cc/1986d671). September7/8 execution entries
+  and the four dated lessons remain historical, not instructions to restartR01.
+  Numbered merge approval received; finish963 then synchronize964 to actualmain
+  and repeat all gates before merge. No deployment/service/live-data operation.
 - (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
   unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
   checked against actualPG; deliberately mismatched17/14 fails fixture setup.

@@ -5,6 +5,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_backlog_current_position_uses_latest_local_plan():
+    text = (ROOT / "docs/BACKLOG.md").read_text()
+    first = text.split("## Trenutna pozicija", 1)[1].split("\n- ", 2)[1]
+    assert "2026-10-04" in first
+    assert "latest PLAN" in first
+    assert "PLAN resumes at 1986d671" not in first
+
+
 def test_old_resume_is_explicitly_historical():
     plan = (ROOT / "docs/PLAN.md").read_text()
     assert "**Historical resume instructions (2026-09-08, superseded):**" in plan

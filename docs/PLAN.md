@@ -40,7 +40,8 @@
 > this documentation detour does not replace the original runtime roadmap.
 > No production, service, real review-ref or remote operations were performed.
 
-> Historical checkpoint below predates this actual-main synchronization:
+> Historical checkpoint: only the following September28 paragraph predates
+> that synchronization; later October entries retain their stated dates.
 
 > Current checkpoint 2026-09-28: #964 is a historical-document consolidation
 > detour, not a return to unimplemented R01. Preserve runtime resume 1986d671
@@ -938,7 +939,7 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-28 (Astra, historical execution ledger corrections)
+**Zadnja posodobitev:** 2026-10-04 (Astra, historical execution ledger corrections)
 
 ## Astra execution ledger — historical authority at 2026-09-07
 
