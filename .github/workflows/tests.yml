@@ -29,10 +29,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.11", "3.13"]
+        # Paired coverage, not a cross product: preserve the two required checks.
+        include:
+          - python-version: "3.11"
+            postgres-major: "14"
+            postgres-image: postgres:14.15-alpine@sha256:9a437826bdf12bda56c491f27d06c024d05acef98715baa1bf93df263afe850b
+          - python-version: "3.13"
+            postgres-major: "17"
+            postgres-image: postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24
     services:
       postgres:
-        image: postgres:14.15-alpine
+        image: ${{ matrix.postgres-image }}
         env:
           POSTGRES_USER: etlegacy_user
           POSTGRES_PASSWORD: etlegacy_test_password
@@ -132,6 +139,7 @@ jobs:
           POSTGRES_TEST_DATABASE: etlegacy_test
           # Explicit opt-in to the disposable service, never a local DB fallback.
           RUNTIME_EVENTS_TEST_CI: "true"
+          RUNTIME_ACL_EXPECTED_PG_MAJOR: ${{ matrix.postgres-major }}
           POSTGRES_TEST_USER: etlegacy_user
           POSTGRES_TEST_PASSWORD: etlegacy_test_password
           CACHE_BACKEND: memory
