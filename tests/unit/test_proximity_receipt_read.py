@@ -9,6 +9,25 @@ from unittest.mock import AsyncMock
 import pytest
 
 from proximity.parser import ProximityParserV4
+from proximity.parser.import_receipt import claim_import_receipt
+from shared.proximity_source import bind_proximity_source
+
+
+@pytest.mark.parametrize('digest', [None, 'a' * 64])
+async def test_receipt_helpers_use_adapter_placeholder_contract(digest):
+    filename = "untrusted'filename"
+    calls = []
+    async def invoke(query, params):
+        assert '$' not in query and query.count('?') == len(params)
+        assert filename not in query
+        calls.append(query)
+        return (digest,) if 'SELECT file_hash' in query else (True,)
+    adapter = SimpleNamespace(execute=invoke, fetch_one=invoke)
+    await claim_import_receipt(adapter, filename, source_sha256=digest)
+    if digest is not None:
+        await bind_proximity_source(adapter, filename, digest)
+    assert await ProximityParserV4(db_adapter=adapter)._check_processed_file(filename)  # noqa: SLF001
+    assert len(calls) == (2 if digest is None else 3)
 
 
 @pytest.mark.parametrize('row,expected', [(None, False), ((False,), False), ((True,), True)])
@@ -17,7 +36,7 @@ async def test_receipt_read_uses_required_table_directly(row, expected):
     parser = ProximityParserV4(db_adapter=SimpleNamespace(fetch_one=fetch))
     assert await parser._check_processed_file('sealed.txt') is expected  # noqa: SLF001 - receipt contract
     fetch.assert_awaited_once_with(
-        'SELECT aggregates_applied FROM proximity_processed_files WHERE filename = $1',
+        'SELECT aggregates_applied FROM proximity_processed_files WHERE filename = ?',
         ('sealed.txt',),
     )
 

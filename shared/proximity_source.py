@@ -75,7 +75,7 @@ async def bind_proximity_source(adapter, filename: str, digest: str) -> None:
     the legacy parser does not enforce content identity yet.
     """
     row = await adapter.fetch_one(
-        'SELECT file_hash FROM proximity_processed_files WHERE filename = $1',
+        'SELECT file_hash FROM proximity_processed_files WHERE filename = ?',
         (filename,),
     )
     if row is None:

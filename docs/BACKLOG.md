@@ -1,5 +1,32 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> Current1083queue:1079merged;1080freshgates and prepared1081/1082predecessors
+>remain. Parent3739dd5a incorporated locally. After actual1082merge, final1083
+>sync/publication/gates. Original runtime roadmap and no-service boundaries retained.
+
+## Historical preparation — not current gate instructions
+
+> Current2026-10-05: #1083 locally incorporates parent4859d660; no publication
+> before predecessor squashes and final gates. Exact-start ambiguity must stay
+> unresolved, not guess another round. Original runtime plan remains in latest
+> /home/samba/share/slomix-astra-runtime-integration-20260926/docs/PLAN.md.
+> No live relinking, services, production or NEVER MERGE actions.
+
+> 2026-10-04 review follow-up1083: initial5443c8f1 CI succeeded but2P1 findings.
+> Fixed new receipt queries to adapter ? contract, adjusted PG proof shims using
+> real converter; prevented strict/relaxed ambiguous relinker fallback. Four
+> regressions failed before,3mutation failures restored/cmp;406unitpass/20skips.
+> Added real-PG relinker candidate tests; await new exact-head CI/review, no merge.
+
+> 2026-10-04: runtime linkage gate found same-map source misattribution via end
+> versus start clocks. Unique exact source-start lookup now precedes legacy fallback;
+> duplicate start unresolved; filename-derived starts not promoted to identities.
+> 375unit pass/20existing skips;2mutations fail/restored/cmp; full private-clone
+> canonical parser proof resolves right round+session, synthetic writes rolled back.
+> Corrected test-only PG fixture not yet rerun:60minute proof service expired during
+> full suite (Result=timeout), so no full-green claim. CI and owner restart pending.
+> No historical data repair; original runtime roadmap/capture/handover unchanged.
+
 > Current1082queue:1079merged;1080freshgates pending,1081prepared. Thislocal
 >parent250d34d7 integration keeps all reviewed fixes and shared-admission lesson.
 >Wait actual1081before final1082publication. Original runtime roadmap unchanged.

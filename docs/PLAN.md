@@ -1,6 +1,92 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current #1082 queue gate — 2026-10-05
+## Current #1083 queue gate — 2026-10-05
+
+#1079 through #1082 are merged. Actual main is
+47ac2440b701cae6b8640698b57ae73e0782e8e0 (#1082, 2026-10-04T23:36:06Z).
+Reviewed c934a36a and squash trees match (24f420fe); all 14 checks, matching
+Codex 5985572595 and mandatory settle passed. Seven source and seventeen prior
+receipt/ownership PG cases actually PASS on both CI majors.
+This #1083 now includes actual main. Squash conflicts preserve adapter-contract
+question-mark placeholders and their actual-PG translation helpers; source/tests
+remain identical to 67a39a09. Next fresh exact-head CI/review, including four
+round/relinker PG cases and all predecessor cases, before the merge cycle.
+No source changes, services, live relinking or production actions. Original
+runtime roadmap retained in latest integration PLAN. All entries below are
+historical preparation evidence, not additional current wait instructions.
+
+## Historical #1083 preparation — 2026-10-05
+
+Normal local parent4859d660 integration retains round/linker source/tests67a39a09
+and the reconciled1082stats/proximity spool boundary. Original histories remain.
+Wait predecessors1079-1082 actual merges and fresh exact-head gates before
+publication. Repeat local round ambiguity/fallback and relinker regressions;
+four actual PG round/relinker cases must execute in final-head CI14/17.
+No live relinking, service or production operation. Latest original runtime
+roadmap is in /home/samba/share/slomix-astra-runtime-integration-20260926/docs/PLAN.md.
+Earlier preparation checkpoints below are historical, not current merge state.
+
+Fresh combined proximity/relinker/capture/spool/manifest/document selection:
+599passed/20pre-existing explicit GUID/Lua skips10.90s. Reintroduced ambiguity
+guessing in resolver and strict/relaxed relinker gives3failures/15passingcontrols:
+101 is None and fallback unexpectedly awaited. Both sources restored using
+apply_patch/cmp; no mutation committed. Prior P1 placeholder/ambiguity repairs
+and resolved review threads4177168098/4177168099 verified retained. Fresh SQL
+and exact-head external review still required after actual parent merges.
+
+## Runtime proximity round identity — 2026-10-04
+
+Review follow-up on PR1083:5443c8f1 full CI succeeded, including the corrected PG
+fixture, but Codex found2P1 items. Adapter-facing claim/bind/required receipt-read
+queries now use ?; raw asyncpg proof adapters reuse the production placeholder
+converter. Strict-contract regressions failed before fix for both claim modes.
+Production PostgreSQLAdapter accepts both styles; this fixes the documented
+boundary contract, not evidence that existing PostgreSQL imports failed.
+
+Relinker now stops on multiple strict OR relaxed start identities; it must not
+fall through to a generic matcher that can choose the first exact/canonical hit.
+Old tests merely got no result from their fallback fake; new tests force fallback
+to return an ID and assert it is never called and no writes occur. Both failed
+before fix. Mutating both ambiguity guards plus digest-query placeholder gives
+3failures; restored/cmp.406unit tests pass/20existing skips, new/touched files lint
+clean. Two real-PG candidate-query relinker cases added (discovery injected, no
+service startup), alongside the corrected parser PG cases; latest follow-up still
+needs exact-head CI/review because private service remains expired. No deployment.
+
+New slice based on1082/a6778f53. Actual private-clone characterization reproduced
+wrong round/session when source end is nearer a later same-map/R1 start, despite
+an exact first-round start identity. Synthetic rows rolled back; no history scope
+claim. Regression initially fails102!=101. Contract: prefer a UNIQUE exact match
+of plausible source start + map + round; duplicate identity stays unresolved.
+If no exact identity, retain existing end-target fallback for legacy compatibility.
+No schema or historical repair, no changing generic linker's other callers.
+Original source/ownership/capture and runtime/Spiderweb roadmap remains below.
+
+Implementation: proximity-specific resolver probes indexed map/round/start identity
+(LIMIT2, duplicate -> ambiguous_source_start), then delegates unchanged to the
+legacy linker only if no exact match or implausible/missing start. Filename-derived
+start is explicitly tagged and never promoted into this exact-source probe; parser
+reuse resets metadata provenance. Main parser line count unchanged (4replacements).
+Read-only EXPLAIN on clone confirmed idx_rounds_map_round_start, no new migration.
+
+Proof:375unit tests pass/20existing skips;11focused round-identity tests. Original
+regression102!=101, bypass mutation repeats it; filename-provenance mutation fails
+1789787400!=0. Both restored/cmp. Full canonical parser+real adapter on private
+clone before timeout: single+repeated-map fixtures resolve to expected round and
+session, source start=linked start; all writes rolled back and observer0rows.
+This is linkage mechanism proof, not a committed whole-session import.
+
+PG fixture initially failed DuplicateTableError (journal fixture already creates
+rounds); corrected to ALTER only the test-owned schema. Full rerun interrupted
+at12:39:37CEST by proof service's60minute RuntimeMax, Result=timeout: connection
+was closed in the middle of operation;1failed/394passed/21skips/6errors. Do NOT
+report that run green. Corrected2PG linkage tests still need execution; service
+restart owner-only, no live DB fallback. CI exact-head PG validation required.
+Interrupted fixture teardown may leave a test-owned schema in disposable postgres;
+inspect after restart, do not blindly clean schemas. No live data repair/deploy.
+
+
+## Historical inherited #1082 queue gate — 2026-10-05
 
 #1079, #1080 and #1081 are merged. Actual main is
 b59a233648162cd1b005bccaab116d2a28f30afe (#1081, 2026-10-04T23:20:59Z).

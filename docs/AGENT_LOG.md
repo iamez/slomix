@@ -1,5 +1,24 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Ambiguity must survive every retry path.**
+  Refusing duplicate source identities at ingestion is insufficient if a later
+  relinker invokes a matcher that chooses its first exact/canonical hit. Stop
+  both strict and relaxed duplicate branches before fallback. Tests must force
+  the fallback to return a candidate: an empty fake hid the bypass. New shared
+  adapter-facing receipt SQL uses ?; raw asyncpg fixtures translate through the
+  real adapter converter, rather than constraining production to fixture syntax.
+
+- **2026-10-04 · Compare the same clock before nearest-round fallback.**
+  Proximity's end timestamp passed as target is compared to rounds.start; a later
+  same-map/R1 round can beat the exact original source start and select a wrong
+  session. Private synthetic clone proof observed this, not historical corruption.
+  Prefer unique exact map/round/header-start identity; ambiguous identity remains
+  unresolved. Do not promote filename-derived fallback starts into header identity.
+  Keep legacy fallback semantics for absent exact matches. Test journal_db already
+  creates a minimal rounds table; extend that private fixture rather than recreate.
+  Check remaining proof-service lifetime before suites: RuntimeMax interrupted a
+  run and its teardown; connection-closed errors are not a successful guard proof.
+
 - **2026-10-05 · Reconcile shared admission APIs, not only conflict markers.**
   An older runtime slice exported validate_stats_filename for manifest/import
   callers while proximity publication parameterized the same private helper.

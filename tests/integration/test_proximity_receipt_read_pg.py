@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from proximity.parser import ProximityParserV4
+from tests.integration.proximity_adapter_helpers import pg_query
 from tests.integration.test_runtime_events_pg import journal_db  # noqa: F401
 
 
@@ -33,10 +34,10 @@ async def test_receipt_read_failure_then_retry(journal_db, monkeypatch, tmp_path
         reads.append(True)
         if armed and failure == 'sql':
             await writer.execute('SELECT 1 / 0')
-        return await writer.fetchrow(query, *(params or ()))
+        return await writer.fetchrow(pg_query(query), *(params or ()))
 
     async def execute(query, params=None):
-        return await writer.execute(query, *(params or ()))
+        return await writer.execute(pg_query(query), *(params or ()))
 
     parser = ProximityParserV4(db_adapter=SimpleNamespace(
         transaction=transaction, fetch_one=fetch_one, execute=execute,
