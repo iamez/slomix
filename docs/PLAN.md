@@ -109,12 +109,16 @@ the original Discord+website-off and recovery gates. No service/deployment/merge
 
 ## Historical inherited #1081 queue gate — 2026-10-05
 
-#1079 is merged7b9b43a6. #1080 latest published6e0be64b addresses4179646678/4179660774
-and awaits fresh CI/review. This1081local tree incorporates that parent while
-preserving ownership source/tests8381da13 and full-section document guards. Next: finish1080gates/actual merge,
-then synchronize1081 with that squash and obtain fresh exact-head proofs/review.
-Do not re-wait1079; do not publish1081before1080. No service/liveDB/production
-actions. Original runtime roadmap remains in latest integration PLAN at
+#1079 is merged at 7b9b43a6. #1080 is merged at
+5893826278fcfb4db7d100e0e25f5b464e285785 (2026-10-04T23:04:37Z).
+The reviewed 6e0be64b and actual squash have identical tree 92d674b5;
+all 14 checks, matching Codex review, resolved threads and mandatory settle passed.
+This #1081 tree now includes actual main. Squash-induced conflicts retained the
+already-integrated parent plus ownership changes: transaction-required imports,
+claim before read, and schema-failure tests expecting failure during reservation.
+Ownership source/tests remain identical to 8381da13. Next: fresh exact-head CI,
+all eleven real-PG ownership scenarios on both CI majors, and review before merge.
+No service/liveDB/production actions. Original runtime roadmap remains in latest integration PLAN at
 /home/samba/share/slomix-astra-runtime-integration-20260926. All entries below
 are historical evidence, not additional current wait instructions.
 
