@@ -5,8 +5,29 @@ import os
 import stat
 import uuid
 from pathlib import Path
+from typing import Literal
 
-from shared.runtime_spool import inspect_published_stats_file
+from shared.runtime_manifest_reader import inspect_completion_manifest
+from shared.runtime_spool import _validate_metadata, inspect_published_stats_file
+
+
+def _receipt_fields(directory, completion, expected_sha256):
+    """Validate the same caller contract before either publication or retry."""
+    if not isinstance(directory, Path) or not directory.is_absolute():
+        raise ValueError('Manifest spool must be an absolute Path')
+    if (type(completion) is not dict
+            or set(completion) != {'version', 'filename', 'bytes', 'state'}
+            or type(completion['version']) is not int or completion['version'] != 1
+            or completion['state'] != 'writer_closed'):
+        raise ValueError('Expected a version 1 writer_closed receipt')
+    filename, size = completion['filename'], completion['bytes']
+    # 240 ASCII bytes plus the 14-byte suffix fits the Linux 255-byte entry.
+    if not isinstance(filename, str) or len(filename) > 240:
+        raise ValueError('Manifest filename must be a bounded string')
+    if expected_sha256 is None:
+        raise ValueError('Completion requires SHA-256')
+    _validate_metadata(filename, size, 8 * 1024 * 1024, expected_sha256)
+    return filename, size
 
 
 def publish_completion_manifest(
@@ -25,18 +46,7 @@ def publish_completion_manifest(
     An error after link can leave a complete manifest: reconcile, never overwrite.
     Existing manifests, including identical ones, raise FileExistsError.
     """
-    if not isinstance(directory, Path) or not directory.is_absolute():
-        raise ValueError('Manifest spool must be an absolute Path')
-    if (type(completion) is not dict
-            or set(completion) != {'version', 'filename', 'bytes', 'state'}
-            or type(completion['version']) is not int or completion['version'] != 1
-            or completion['state'] != 'writer_closed'):
-        raise ValueError('Expected a version 1 writer_closed receipt')
-    filename, size = completion['filename'], completion['bytes']
-    # Match the Lua producer's 240-byte ASCII basename contract. The suffix
-    # adds 14 bytes, fitting Linux NAME_MAX=255 without narrowing valid input.
-    if not isinstance(filename, str) or len(filename) > 240:
-        raise ValueError('Manifest filename must be a bounded string')
+    filename, size = _receipt_fields(directory, completion, expected_sha256)
     content = inspect_published_stats_file(
         directory, filename, expected_size=size, expected_sha256=expected_sha256,
     )
@@ -71,3 +81,31 @@ def publish_completion_manifest(
         finally:
             os.close(directory_fd)
     return directory / name
+
+
+def record_completion_once(
+    directory: Path, completion: dict, *, expected_sha256: str,
+) -> Literal['published', 'content_present', 'missing_content', 'content_conflict', 'receipt_conflict']:
+    """One caller-driven retry, never overwrite or silently accept another receipt.
+
+    Existing receipt must match THIS supplied size/hash as well as local bytes.
+    content_present is observation only, not recovered fsync durability/import ack.
+    Missing receipt is published only against verified content. Publication races,
+    malformed manifests and I/O errors propagate; caller can inspect on a later
+    attempt. No loop, source ack/delete or durability upgrade. Caller owns trusted
+    immutable receipt/spool. New publication verifies payload twice (at most16MiB
+    reads), existing receipt once; local filesystem waits are not time-bounded.
+    """
+    filename, size = _receipt_fields(directory, completion, expected_sha256)
+    observed = inspect_completion_manifest(directory, filename)
+    if observed.status != 'missing_manifest':
+        if observed.size != size or observed.sha256 != expected_sha256:
+            return 'receipt_conflict'
+        return 'content_present' if observed.status == 'match' else observed.status
+    content = inspect_published_stats_file(
+        directory, filename, expected_size=size, expected_sha256=expected_sha256,
+    )
+    if content != 'match':
+        return 'missing_content' if content == 'missing' else 'content_conflict'
+    publish_completion_manifest(directory, completion, expected_sha256=expected_sha256)
+    return 'published'

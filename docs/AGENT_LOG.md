@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Recheck repaired boundaries through their composition.**
+  Filename length and restrictive-umask admission had separate regressions.
+  A capture -> receipt -> repeated retry proof now combines200/201/240-byte
+  names with0400 payload/manifest files, preserving bytes/inodes/modes. Both
+  old200-byte and0600-only guards fail this composed proof when reintroduced.
+  Keep component tests and add the cross-boundary case; green components alone
+  do not establish caller compatibility or authenticated source provenance.
+
 - **2026-10-04 · Historical labels do not repair active continuation links.**
   A dated ledger can still contain an imperative pointing to an obsolete hash.
   Keep its evidence, but route every handoff/inventory/known-issues entry point
@@ -229,6 +237,12 @@ Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
+
+- **2026-09-20 · Retry must match the requested identity, not only stored bytes.**
+  A self-consistent existing completion receipt can describe a different requested
+  snapshot. Compare caller size/hash before returning content_present; otherwise
+  return receipt_conflict without writes. Retrying after sync failure observes
+  content but does not retroactively establish its crash durability.
 
 - **2026-09-20 · A recovered manifest and its payload are separate observations.**
   Reader distinguishes missing manifest from missing payload and content conflict.

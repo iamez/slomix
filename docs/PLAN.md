@@ -1,6 +1,53 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current reader preparation — 2026-10-04
+## Current retry preparation — 2026-10-04
+
+Owner approved1075 after earlier queue entries. Normal actual-main539db373
+merge preserves both histories, reader0400/0600 handling
+and original retry bytes10d232f1. Repeat real filesystem reconciliation proofs.
+No activation, service, deployment or application DB action. Earlier approved
+963/964/966/1066/1072/1073/1074 are merged; current exact-head tests/review/CI
+and mandatory420s cycle remain merge gates. Reviewed89d8d906 and actual1074
+squash539db373 trees are identical, before normal synchronization here.
+Previous baseline:263 combined retry/reader/manifest/Lua/capture/import/spool/
+parser/document/artifact cases pass20.76s. Retry implementation remains byte-
+identical to10d232f1; its original tests are retained and extended below.
+Renewed caller-identity guard mutation fails both size/hash filesystem cases:
+content_present instead of receipt_conflict. Restored with apply_patch/cmp;
+60 receipt/document cases pass1.03s after restoration. No mutation committed.
+New composed regression covers200/201/240-byte names through capture, first
+receipt publication under umask0277, and two unchanged retries. Both files stay
+0400 with identical inode/bytes/mode, no added entries; bytes/stat/hash agree.
+0600-only reader mutation fails all3 cases;200-byte admission mutation fails
+201/240 with200 as control. Both restored/apply_patch/cmp.119combined receipt/
+spool/document cases pass1.65s, Ruff clean. This is local filesystem evidence,
+not producer trust, source activation or a crash-durability acknowledgement.
+After normal89d8d906 parent refresh,279combined retry/reader/Lua/capture/import/
+spool/document cases pass22.65s; all implementation and new test bytes retained.
+After actual1074squash539db373 synchronization,119receipt/spool/document cases
+pass1.62s; only documentation changed, implementation/new tests retained.
+Original runtime capture/sealed-source/retry/handover then Spiderweb plan retained
+in the latest local integration PLAN, not replaced by this queue detour.
+
+## Historical retry and parent checkpoints — superseded status, retained evidence
+
+> #1075 security-baseline refresh 2026-10-03: normal parentfa658b12 merge
+> preserves both histories and unchanged runtime source770ed5b3. Manifest
+> retry/reader/publisher and Node/plan gates repeated, including actual fsync
+> fault and content reconciliation fixtures. Local preparation only; await
+> actual parents and fresh publication gates, no service or source action.
+
+> #1075 local refresh 2026-09-28: normal parentc6e532a8 merge retains both
+> histories, latest worker guards and reader0400/0600 admission. Retry source
+> and tests match preserved runtime1986d671 byte-for-byte; no hidden backport
+> or outstanding external review thread found. Actual filesystem retry proves
+> file-sync failure republishes, directory-sync failure only observes existing
+> content, and repeats preserve inode/bytes without writes. Disabling caller
+> identity comparison fails both size/hash cases; restored/cmp. All56 focused
+> retry/reader/publisher/plan cases pass0.88s, Ruff clean. Parent134-case real
+> child/SSH/Lua proof has identical inherited inputs. No remote/services/DB.
+> Root owns review/publication; next1077, original runtime plan unchanged.
+### Parent reader preparation — 2026-10-04, inherited checkpoint
 
 Owner approved1074 after older predecessors. Normal actual-maind3a8f4df merge
 retains both histories;963/964/966/1066/1072/1073 are merged. Reviewed1073 parent
@@ -18,6 +65,7 @@ Publish after post-sync tests, then require fresh exact-head review/CI and
 mandatory420s cycle. Original runtime roadmap remains in latest integration PLAN.
 
 ## Historical reader and parent checkpoints — superseded status, retained evidence
+
 
 > #1074 security-baseline refresh 2026-10-03: normal parentf20023c9 merge
 > retains secured main and both document histories. Runtime source unchanged
@@ -1792,6 +1840,24 @@ Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
 both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
+
+### R04t caller-driven completion retry — 2026-09-20
+
+record_completion_once validates the same caller receipt as publication. Existing
+receipt must match requested size/hash as well as captured content; differing
+request returns receipt_conflict, never content_present. Missing receipt publishes
+only against verified bytes; missing_content/content_conflict remain separate.
+Malformed manifests, I/O and publication races propagate for later inspection.
+No loop, overwrite, source acknowledgement or durability upgrade on retry.
+Caller owns trusted immutable receipt/spool. Publication checks bytes twice;
+local filesystem waits remain outside any wall-clock bound.
+187 combined tests pass0skips. Actual filesystem proves no writes on repeat,
+pre-link sync failure retries publication, post-link failure observes existing
+content, missing/corrupt data never acknowledged. Removing caller-identity guard
+fails two cases content_present != receipt_conflict; restored/cmp. Ruff clean.
+#1074 reported checks green/no inline findings at refresh. Next source collision
+reservation and trusted completion delivery before producer integration. Original
+runtime/new-site/reversible dev sequence retained; no services/DB/deploy changes.
 
 ### R04s read-only completion recovery — 2026-09-20
 

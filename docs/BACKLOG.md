@@ -27,6 +27,28 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) #1075 synchronized through actual main539db373,
+  retaining previous retry/reader fixes. Earlier approved PRs have merged;
+  fresh exact-head review/CI remain gates before the mandatory merge cycle.
+  No source activation, service or deployment; original runtime plan retained.
+  Composed200/201/240-byte +0400 publication/retry regression added;119cases
+  pass, both historical boundary regressions fail under mutation/restored cmp.
+  Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
+  preserved local checkpoint8e262684 is an access anchor, not the latest head.
+
+### Historical retry checkpoints
+
+- (Astra, 2026-09-28) #1075 prepared on c6e532a8, retaining reader umask fix
+  and worker guards.56filesystem/plan cases pass0.88s; caller size/hash mutation
+  fails both cases/restored/cmp. No differences from old integration retry
+  implementation; no remote/service/DB. Next1077 then root exact-head gates.
+
+- (Astra, 2026-09-20) R04t completion retry composes reader/publisher without
+  overwrite.187 combined tests pass; wrong requested size/hash guard mutation
+  fails/restores. Missing/corrupt content remains distinct; existing content does
+  not gain durability acknowledgement. Next source reservation/delivery, no deploy.
+### Inherited parent checkpoints
+
 - (Astra, 2026-10-04) #1074 locally retains the prior0400/0600 reader repair
   while incorporating actual merged parent/main d3a8f4df. Owner-approved;
   earlier predecessors merged, fresh exact-head review/CI remain merge gates.
@@ -35,6 +57,7 @@
   retained checkpoint8e262684 is a local access anchor, not the latest head.
 
 ### Historical reader checkpoints
+
 
 - (Astra, 2026-09-28) #1074 prepared on a222a558; old integration paths audited
   without importing its whole history. Fixed actual umask0277 publisher0400
