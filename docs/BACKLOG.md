@@ -1,6 +1,14 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
-> Current1066 preparation2026-10-04: owner-approved older-first consolidation;
+> Current2026-10-05: older nine approved PRs merged with tree verification.
+> #1079 normally integrates actual main95758cc7; fresh local/CI/review gates
+> pending, then1080-1084 in order. Read latest integration PLAN at
+> /home/samba/share/slomix-astra-runtime-integration-20260926. Original runtime
+> and Spiderweb roadmap retained; no services, production or NEVER MERGE action.
+
+> Historical preparation entries below; current queue is #1079 through #1084.
+
+> Historical1066 preparation2026-10-04: owner-approved older-first consolidation;
 > importer bytes preserved on actual mainfa40c12e after963/964/966 merged.
 > CI PG14/17 proves all10 isolated importer cases on76233b74; fresh exact-head
 > CI/SQL/review required again after this actual-main sync. No restart/live DB fallback.
@@ -20,12 +28,24 @@
 > isolated service; old SQL evidence does not cover this new guard. Resume
 > exact-head review/queue gates, then the unchanged runtime v2 plan.
 
+> 2026-10-03 receipt failure fix prepared with two failing-before/passing-after
+>tests and restored mutation. Real PG post-write failure/rollback still pending
+>isolated service restart. No deployment or production change.
+
+> 2026-10-03 Spiderweb detour after successful DEV preflight: added neutral import
+>boundary and explicit runtime acceptance gates; existing scene/LOS/research
+>work preserved. Actual PG proof pending isolated service restart. No deployment
+>or Discord shutdown. Return to original runtime sequence after this slice.
+
 > Pravilo za skoke: ko uporabnik vpraša nekaj IZVEN trenutnega taska,
 > najprej TUKAJ zapiši, kje si ostal; po fixu se vrni in vpiši, kaj si
 > spremenil — tudi če si kaj pokvaril. Commit po vsakem zaključenem
 > koraku, ne na koncu dneva.
 
 ## Trenutna pozicija
+
+Current queue is #1079 through #1084. The #1077 paragraph below is historical:
+#1077 merged as95758cc7 and is not awaiting another merge.
 
 - (Astra, 2026-10-04) #1077 actual-main8f298662 refresh keeps old producer
   work, actual merged reservation and worker fixes. No source activation.

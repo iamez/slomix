@@ -1,6 +1,32 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current producer preparation — 2026-10-04
+## Current proximity boundary consolidation — 2026-10-05
+
+All nine approved older PRs (963/964/966/1066/1072/1073/1074/1075/1077) are
+merged and their reviewed/squash trees verified identical. This #1079 branch
+normally integrates actual main95758cc7, retaining both documentation histories
+and the merged source/guard fixes. Its canonical receipt propagation, explicit
+transaction boundary and regression tests remain from97a39263. Fresh local
+proofs, exact-head PG14/17 CI and reviews are still required before merge.
+Next approved order is1079 ->1080 ->1081 ->1082 ->1083 ->1084. NEVER MERGE
+924-943/967 and held956 are excluded. No services, production or application
+database changes. Proof service has timed out; do not fall back to live DB.
+Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926
+for original capture/sealing/retry/exclusive-handover, full-session outage
+acceptance, usable Spiderweb/proximity audit and later Home modernization.
+Historical preparation statuses below retain evidence, not current authority.
+
+Fresh post-sync proof:50 focused boundary/receipt/document/retry tests pass
+1.01s after mutation restoration (earlier coverage-enabled run12.04s; not a
+performance comparison). Removing transaction admission fails3 cases; restoring
+the exact old swallowed-receipt behavior fails both receipt cases with True is
+False. Initial mutation accidentally used undefined logger, raising instead of
+swallowing; that false-negative measurement was rejected and rerun with the
+actual baseline self.logger call. Both files restored using apply_patch and cmp.
+New-file Ruff and whitespace clean. All1079 source/test bytes match97a39263;
+no source edits introduced by actual-main integration. Fresh CI SQL still pending.
+
+## Historical producer preparation — 2026-10-04 (merged as #1077)
 
 Owner approved1077 after older963/964/966/1066/1072-1075, all now merged. Normal
 actual-main8f298662 integration preserves both histories and original producer
@@ -829,6 +855,81 @@ NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment action
 > Verification: five document/plan contracts pass. Restoring the obsolete live
 > resume instruction fails the history guard; restored/cmp. Four original dated
 > lesson bodies remain unchanged. No endpoint, service or data-repair claim.
+
+## Historical proximity boundary proofs — 2026-10-03
+
+> Result2026-10-03: owner restarted proofPG. Actual canonical parser + adapter
+>on private restored cloneC passed receipt-python and receipt-sql failures AFTER
+>vehicle INSERT visible inside transaction/invisible to observer. Both return
+>failure with0rows/0receipts; retry commits1vehicle/1receipt; repeat unchanged.
+>Initial measurement failed before injection because synthetic vehicle identity
+>collided with earlier proof (unique key excludes map_name). Distinct fixture
+>vehicle names corrected; no real data or schema changed to accommodate test.
+>Added permanent test_proximity_receipt_failure_pg.py: real transactions and
+>observer, synthetic data step plus canonical receipt/import control flow;
+>Python/SQL failures and simulated missing receipt capability. Combined suite
+>18passed3.61s, zero skips; removing both guards gives3PG failures, restored/cmp.
+>New integration test Ruff clean. Existing parser DTZ warnings remain baseline.
+>This closes bounded receipt-failure proof, NOT all-section/concurrency/source
+>replacement or standalone worker acceptance. Next review/publish this slice,
+>then adopt boundary with durable retry/linkage ownership; original plan intact.
+
+> Continuation2026-10-03: proof service rechecked, MainPID0/failed/timeout.
+>Prepared private proximity_acceptance.py receipt-python and receipt-sql modes,
+>each with separate synthetic filename/map. Injection asserts actual vehicle
+>INSERT visible to transaction adapter and invisible to independent observer
+>before receipt failure; then requires failure,0rows/0receipts, successful retry
+>and unchanged repeat. SQL mode injects SELECT1/0; Python mode raises before
+>receipt execute. Syntax checked only, neither mode run yet. Owner must start
+>isolated service; no live DB fallback. Parser fix9f6090d0 remains unverified
+>on realPG for these failure modes and is not ready for publication/deployment.
+
+> Receipt fix2026-10-03 prepared locally: canonical parser previously returned
+>True after data writes when receipt table was absent or receipt execute raised
+>a Python exception. Regression reaches actual receipt path after synthetic data
+>write; both cases failed on original code (True is False, no rollback).
+>_mark_file_processed now raises on missing table and propagates write failure
+>to import_file's transaction boundary. Same parser line count, no migration.
+>20targeted tests pass; broader selection39pass/1unrelated collection skip.
+>Mutation reverting both lines gives2failures; restored/cmp. Initial test stub
+>was falsely green because it lacked objective_focus; replaced with actual file
+>parsing plus receipt-path reachability assertion. Ruff's DTZ001:718/DTZ007:1584
+>are reproduced unchanged on HEAD; new test lint clean. ActualPG receipt-failure
+>proof PENDING owner restart (proofservice expired), so no push/deploy readiness
+>claim. Existing adapters lacking transactions still cannot guarantee rollback;
+>new runtime boundary requires one. Follow up receipt-read failure/concurrency
+>and worker wiring separately; original Runtimev2 and SaaS scope preserved.
+
+> Result2026-10-03: owner supplied incremental SaaS extraction guidance; no new
+>SaaS product scope. Local ignored docs/research/future-saas-extraction.md records
+>components, game-specific limits, prerequisites and over-engineering risks.
+>Real isolated PG14 proof with canonical parser/adapter as etlegacy_user in cloneC:
+>synthetic proofspider vehicle write failure returns unsuccessful,0rows/0receipts;
+>retry commits1vehicle(distance360)/1receipt; repeat leaves counts unchanged.
+>Observer SQL COUNT and fetched row length agree. Discord/website/dotenv/config
+>imports blocked; only private socket allowed. No matching canonical round exists
+>for this synthetic map: unresolved linkage is explicit, not a linkage proof.
+>Private script proximity_acceptance.py retained alongside backup. New boundary
+>still not worker/cog wired. Inspection finds _mark_file_processed catches and
+>logs errors: NEXT reproduce post-write receipt failure before treating parser
+>success as durable completion. Do not claim all-section/concurrency proof.
+>No live/production changes; original runtime plan and withheld metrics retained.
+
+> Spiderweb runtime slice 2026-10-03 (additive, original roadmap retained):
+>SW-2 scene, SW-3 oracle LOS and SW-4 research protocol already exist on main;
+>do not rebuild them from the older detached checkout's September6 status.
+>Confirmed gap: ProximityCog owns scan/relink tasks, ingestion before_scan waits
+>for Discord readiness. New shared/proximity_import.py establishes explicit
+>caller-owned transactional import, no inferred session/date or default DB.
+>Not wired into worker/cog yet; no runtime-independence or successful PG import
+>claim. Nine boundary tests pass; removing transaction guard produces3failures,
+>restored and cmp checked. Isolated proofPG expired before new importer DB proof.
+>Next prove actual canonical proximity import/rollback/retry on private PG, then
+>adopt boundary preserving legacy behavior; separately extract durable capture,
+>receipt/single-writer ownership, relinking and correlation. Discord+website-OFF
+>ingestion and restarted Spiderweb snapshot acceptance are mandatory before
+>runtime completion. Keep layer4 withheld verdicts unchanged. No live mutations.
+
 > 2026-10-03 #1078 CI coverage: retain exactly the existing two Python check
 > names/jobs, pairing Python3.11 with PostgreSQL14 and Python3.13 with PostgreSQL17
 > (not a cross product). No triggers or extra jobs added. Images pinned to root's
