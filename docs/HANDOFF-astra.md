@@ -1,5 +1,21 @@
 # HANDOFF — Astra (Codex CLI), 7. 9. 2026
 
+> **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
+> first. The dated ledger, observations and work package below are historical
+> evidence, not current approval or deployment instructions.
+
+> **Historical execution corrections, Astra 2026-09-08:** PLAN's Astra execution
+> ledger recorded the work package at that time. The approved runtime first
+> event is `round_stats_imported` in the canonical `process_file()` transaction,
+> not `round_ended` in a Discord mixin. Consumers wait for late-update coverage.
+> Stability gates development; soak gates activation. Raw Codex input logging
+> has been removed locally; never restore it to prove integration. Both hooks
+> still need owner trust review. PRs #964/#965/#966/#969 carry the first slices.
+> Dev was rebuilt/restarted by another session: read-only check now reports
+> `4bc00b1f`, start 2026-09-07 23:41 CEST, app.html mtime 23:40; /health ok.
+> Earlier "bundle never rebuilt" statements are historical. Main has since
+> advanced; neither this timestamp nor /api/build proves current artifact identity.
+
 > Tracked copy of the handoff assembled from two Claude sessions on the owner's request. The same text was delivered as `/tmp/slomix-claude-handoff-to-astra-20260907.md`; this copy lives in the repo so a fresh clone carries it. No secrets: credentials and webhook URLs are only in `.env` files.
 
 Sestavljeno na ownerjevo zahtevo iz dveh Claude sej: **Fable** (ta datoteka, del A)
