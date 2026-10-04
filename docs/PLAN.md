@@ -1,5 +1,50 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Verified proximity runtime source — 2026-10-04
+
+Based on PR1081 follow-up8381da13 (CI successful, new Codex review completed
+without major issues, previous sprint thread answered/resolved). No merge.
+Original runtime plan and deferred Home/Spiderweb phases remain unchanged.
+
+Runtime boundary now REQUIRES caller-supplied expected_size/expected_sha256 from
+a trusted sealed capture. Read an owned 0400/0600 regular file in an owned0700
+directory, no final symlink/FIFO; bound raw bytes (default8MiB, caller configurable),
+check descriptor/name metadata and SHA256, then parse those same immutable bytes.
+Do not reopen the source path after verification. Legacy direct parsing remains
+path-based; in-memory input is an optional canonical parser path, not a rewrite.
+
+Outer transaction claims the receipt, binds hash ONLY on a newly inserted row,
+checks existing identity, then runs canonical import inside its nested transaction.
+Any existing NULL hash (TRUE/FALSE/NULL aggregate flag) is unverified: reject,
+never silently adopt or rewrite historical evidence. A different hash is a
+conflict; identical bytes replay without adding aggregates. Canonical failure
+returns False and rolls back even the outer hash/claim; cancellation propagates.
+Validation/conflicts raise explicitly. No schema migration or historical repair.
+
+Evidence:34 focused tests pass, including7 actual-PG source cases. Expanded
+path-discovered proximity suite345passed/20existing explicit skips. Three guard
+mutations each fail as expected: bypass digest comparison, reopen mutable path,
+ignore stored-hash conflict; restored/cmp. New code/tests lint clean; parser import
+ordering separately checked without suppressing unchanged datetime baseline.
+Full canonical parser+two actual pools on private cloneC prove commit/cancel AFTER
+vehicle INSERT with contender blocked, retry/replay1vehicle(360)/1receipt and
+matching stored hash. Network/presentation imports restricted as before. Synthetic
+maps unlinked; no full session-linkage acceptance claim.
+
+Limits: legacy writers still do not enforce content identity. Runtime activation
+requires their controlled exclusion, not merely new receipt locking. Unknown old
+receipts need an explicitly scoped adoption/reconciliation plan before cutover.
+Same bytes do not prove source authenticity, remote seal, correct session linkage,
+unchanging external gametimes, bounded parser object memory or IO wall time.
+Same-size within-tick metadata changes can evade metadata checks; content identity
+rests on SHA256 and parsing captured bytes. A metadata-guard test initially assumed
+every rapid write changes timestamps; fixed its fixture with an explicit timestamp
+change, without weakening the digest/path-substitution guards.
+The existing stats spool rejects _engagements.txt; its allowlist remains unchanged.
+Validate operational proximity size distribution before adopting the8MiB default.
+Next: review/CI, explicit legacy handover/adoption and capture integration, then
+the original Discord+website-off and recovery gates. No service/deployment/merge.
+
 ## Runtime same-filename ownership — 2026-10-04
 
 Review follow-up: PR1081 CI found one failing existing sprint pipeline test

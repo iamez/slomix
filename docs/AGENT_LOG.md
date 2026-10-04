@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Verify the bytes that the parser actually consumes.**
+  Hashing a path and reopening it leaves a replacement window. Capture bounded
+  bytes, verify trusted size/digest, parse that immutable payload, and commit its
+  identity with the receipt/data. Never stamp today's hash onto an old hashless
+  receipt as proof of yesterday's content. Same-size rapid writes may not change
+  observed metadata; metadata checks are supplementary, not the content proof.
+  Full handover must exclude legacy writers that do not enforce the new digest.
+
 - **2026-10-04 · Prefix-only test selection missed a legacy caller.**
   test_proximity*.py omits proximity_sprint_pipeline_test.py. A transaction
   contract change therefore passed the selected315 tests but failed full CI.

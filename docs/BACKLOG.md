@@ -1,5 +1,12 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04 source identity: runtime requires verified private bytes + expected
+> size/SHA256, stores digest only for a new claimed receipt, rejects conflicts and
+> all existing hashless receipts. Captured bytes go to canonical parser; failures
+> roll back outer identity binding.345tests pass/20existing skips;3 mutations
+> fail/restored; actual two-pool clone proof passed. Next review/CI and explicit
+> legacy ownership/adoption/capture contracts; no deployment/merge.
+
 > 2026-10-04: same-filename concurrent import fix in separate branch based1080.
 > Transaction-owned receipt row claim precedes reads; nontransactional import
 > rejected. Real-PG owner commit/rollback/cancel, canceled waiter/nested lifetime,
