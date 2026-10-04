@@ -1,12 +1,19 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current #1080 preparation — 2026-10-05
+## Current #1080 consolidation — 2026-10-05
 
 Actual-main checkpoint:1079 merged7b9b43a6 at2026-10-04T22:36:46Z. Reviewed
 c5d8fc4e and squash trees744f0475 identical; all14checks, matching Codex5985124334,
 zero threads, actual3receipt cases PASS on both CI majors. Mandatory cycle clean.
 This normal main sync retains already-integrated parent evidence and1080work;
 only documentation conflicts, no source changes. Fresh final-head gates next.
+
+Review4179646678 correctly identified conflicting predecessor status in the
+former current section. The pre-merge preparation below is now explicitly
+historical. Do not wait for1079 again: it is merged; next gate is1080fresh
+exact-head CI/review followed by the mandatory settle cycle.
+
+## Historical #1080 local preparation — before #1079 merged
 
 Normal integration of published1079 c5d8fc4e preserves both histories and all
 older merged fixes. #1079 is awaiting fresh gates, not merged yet; only after

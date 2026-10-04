@@ -1,5 +1,11 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-05 · Separate current instructions from pre-merge history.**
+  A new closure paragraph does not make contradictory wait instructions in the
+  same current section safe. Put an explicit historical heading before the old
+  preparation text and state the next actual PR gate once. Preserve evidence,
+  but never leave both "merged" and "wait for this merge" as current directions.
+
 - **2026-10-04 · Unknown receipt state is not an absent receipt.**
   The proximity optional-column helper swallows schema-query errors; the old
   receipt read also swallowed query failures. Both could authorize aggregate
