@@ -27,9 +27,9 @@
 
 ## Trenutna pozicija
 
-- (Astra, 2026-10-04) #1077 local parent9ed9c092 refresh keeps old producer
+- (Astra, 2026-10-04) #1077 actual-main8f298662 refresh keeps old producer
   work, actual merged reservation and worker fixes. No source activation.
-  Await actual predecessors and fresh exact-head gates; original runtime
+  Predecessors merged; await fresh exact-head gates and review threads. Runtime
   delivery/sealing/retry/handover remains the next development track.
   Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
   retained local checkpoint8e262684 is an access anchor, not the latest head.

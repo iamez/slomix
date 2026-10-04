@@ -2,15 +2,15 @@
 
 ## Current producer preparation — 2026-10-04
 
-Owner approved1077 after older963/964/966/1066/1072-1075. Local normal parent
-9ed9c092 integration preserves both histories, incorporated main539db373 and original producer
+Owner approved1077 after older963/964/966/1066/1072-1075, all now merged. Normal
+actual-main8f298662 integration preserves both histories and original producer
 bytesae39292f, including merged1076 reservation and current worker repairs.
 Repeat offline child/Lua/filesystem proofs, not a deployed producer claim.
 Previous combined run:166 tests pass45.71s, including actual owned children,
 filesystem reservation/receipt operations and offline Lua harness. Worker and
 worker-test blobs match actual main; producer/reservation/Lua blobs matchae39292f.
-Publish only after actual earlier merges and fresh main synchronization;
-963/964/966/1066/1072/1073/1074 merged;1075 preparation does not imply its merge.
+Reviewed1075 parent9ed9c092 and actual squash8f298662 trees match exactly.
+Publish after post-sync proof, then fresh exact-head review/CI and thread checks.
 Fresh combined producer/reservation/worker/Lua/capture/import/manifest/spool/
 parser/document/artifact suite:330 pass54.86s. Producer/reservation/Lua bytes
 still matchae39292f and worker/source-test bytes match actual main. Actual owned
@@ -19,8 +19,7 @@ Latest parent9ce21e0d refresh:139 producer/reservation/worker/Lua/receipt/docume
 cases pass37.39s with actual owned children and filesystem operations. Parent
 code/test bytes retained; the only conflict was documentation, histories kept.
 exact-head review/CI and answering old worker threads remain merge gates.
-Inherited1075 composed filename/umask retry tests retained. Latest actual main
-is539db373; another actual predecessor/main sync is required before publication.
+Inherited1075 composed filename/umask retry tests retained on actualmain8f298662.
 After inheriting those tests:142 producer/worker/Lua/receipt/document cases pass
 35.70s, implementation bytes still unchanged from6902bbd8.
 Latest published-parent9ed9c092 integration:346combined producer/worker/Lua/
@@ -32,6 +31,8 @@ winners (assert0==1 failure); dropping generation from Lua completion delivery
 fails the actual interpreter with "unexpected writer outcome: ok". Both restored
 using apply_patch/cmp;34reservation/Lua cases pass0.43s afterward. No mutation
 committed and no real source dispatched; this repeats the retained guard proofs.
+After actual1075squash8f298662 synchronization,142producer/worker/Lua/receipt/
+document cases pass35.31s; implementation/tests unchanged, Ruff/whitespace clean.
 Original runtime delivery/sealed-source/retry/handover and Spiderweb roadmap is
 preserved in the latest local integration PLAN. No service or production action.
 
