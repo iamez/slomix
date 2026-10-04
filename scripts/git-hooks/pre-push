@@ -93,10 +93,24 @@ note() { printf '  %s\n' "$*" >&2; }
 
 problems=0
 
+review_source=''
+if [ "${1:-}" = '--review-source' ]; then
+    # Snapshot preflight is based on an immutable source, not a mutable local
+    # origin/main that may describe a different published branch.
+    if [ "$#" -ne 2 ] || [[ ! "$2" =~ ^[0-9a-f]{40}([0-9a-f]{24})?$ ]] \
+        || [ "$(git cat-file -t "$2" 2>/dev/null)" != commit ]; then
+        red "pre-push: review source must be an existing full commit OID."
+        exit 1
+    fi
+    review_source=$2
+fi
+
 while read -r _local_ref local_sha _remote_ref remote_sha; do
     [ "$local_sha" = "$ZERO" ] && continue        # branch deletion, nothing to inspect
 
-    if [ "$remote_sha" = "$ZERO" ]; then
+    if [ -n "$review_source" ]; then
+        base=$review_source
+    elif [ "$remote_sha" = "$ZERO" ]; then
         # New branch: compare against whatever it forked from, not the whole history.
         base=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
     else
@@ -104,7 +118,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     fi
 
     if [ -n "${base:-}" ]; then
-        mapfile -t files < <(git diff --name-only --diff-filter=d "$base..$local_sha" 2>/dev/null)
+        mapfile -d '' -t files < <(git diff --name-only -z --diff-filter=d "$base..$local_sha" 2>/dev/null)
         # Drop whatever the branch merely inherited by merging origin/main. The
         # check below hunts FOREIGN files — another session's work swept in by a
         # wildcard add — and a file that arrived from main is the opposite of
@@ -115,18 +129,18 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         # against the old branch tip, 6 actually changed relative to main. A
         # guard that fires on an ordinary merge teaches people to reach for
         # --no-verify, which is how a guard stops guarding.
-        if git rev-parse --verify -q origin/main >/dev/null; then
-            mapfile -t against_main < <(git diff --name-only --diff-filter=d "origin/main...$local_sha" 2>/dev/null)
+        if [ -z "$review_source" ] && git rev-parse --verify -q origin/main >/dev/null; then
+            mapfile -d '' -t against_main < <(git diff --name-only -z --diff-filter=d "origin/main...$local_sha" 2>/dev/null)
             if [ "${#against_main[@]}" -gt 0 ]; then
-                mapfile -t files < <(
-                    comm -12 \
-                        <(printf '%s\n' "${files[@]}" | sort -u) \
-                        <(printf '%s\n' "${against_main[@]}" | sort -u)
+                mapfile -d '' -t files < <(
+                    comm -z -12 \
+                        <(printf '%s\0' "${files[@]}" | sort -z -u) \
+                        <(printf '%s\0' "${against_main[@]}" | sort -z -u)
                 )
             fi
         fi
     else
-        mapfile -t files < <(git ls-tree -r --name-only "$local_sha" 2>/dev/null)
+        mapfile -d '' -t files < <(git ls-tree -r --name-only -z "$local_sha" 2>/dev/null)
     fi
     [ "${#files[@]}" -eq 0 ] && continue
 
