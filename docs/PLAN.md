@@ -1,6 +1,100 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current #1080 consolidation — 2026-10-05
+## Current #1081 queue gate — 2026-10-05
+
+#1079 is merged at 7b9b43a6. #1080 is merged at
+5893826278fcfb4db7d100e0e25f5b464e285785 (2026-10-04T23:04:37Z).
+The reviewed 6e0be64b and actual squash have identical tree 92d674b5;
+all 14 checks, matching Codex review, resolved threads and mandatory settle passed.
+This #1081 tree now includes actual main. Squash-induced conflicts retained the
+already-integrated parent plus ownership changes: transaction-required imports,
+claim before read, and schema-failure tests expecting failure during reservation.
+Ownership source/tests remain identical to 8381da13. Next: fresh exact-head CI,
+all eleven real-PG ownership scenarios on both CI majors, and review before merge.
+No service/liveDB/production actions. Original runtime roadmap remains in latest integration PLAN at
+/home/samba/share/slomix-astra-runtime-integration-20260926. All entries below
+are historical evidence, not additional current wait instructions.
+
+## Historical #1081 preparation — 2026-10-05
+
+Latest parent checkpoint:1079 merged7b9b43a6;1080published5a714cba now pending
+fresh gates. Normal published-parent integration retains all feature bytes and
+evidence. Wait actual1080squash before final publication; older statuses below
+predate this update. No source change or new runtime activation.
+
+Normal local parent033a4f4f integration preserves source/tests8381da13 and all
+older merged fixes. #1079 is in its fresh merge gates; #1080 is local-prepared.
+Publish1081 only after predecessors merge, actual-main synchronization and fresh
+proofs/reviews. Eleven PG ownership scenarios must actually execute on both CI
+majors; local service remains timed out, no application-DB fallback. Original
+runtime capture/sealing/retry/exclusive-handover and Spiderweb roadmap remain
+in the latest PLAN at /home/samba/share/slomix-astra-runtime-integration-20260926.
+No service, production or NEVER MERGE actions. Earlier status entries historical.
+
+Fresh path-discovered proximity/capability/document unit selection:373passed,
+20explicit pre-existing GUID/Lua skips10.39s, including the sprint pipeline.
+Omitting canonical claim invocation fails2receipt-read caller cases (0==1),
+restored using apply_patch/cmp;10read/sprint cases then pass0.33s. Touched files
+lint clean. This local proof checks protocol invocation, NOT database contention;
+the eleven real-PG ownership cases remain mandatory fresh CI evidence.
+
+## Historical runtime same-filename ownership — 2026-10-04
+
+Review follow-up: PR1081 CI found one failing existing sprint pipeline test
+(assert False is True); its fake adapter lacked the newly-required transaction.
+Updated only that test adapter with transaction/rollback tracking and write-scope
+assertions. The earlier local test_proximity*.py glob excluded proximity_*_test.py;
+use path-discovered *proximity* tests / full collection, not naming assumptions.
+Production transaction requirement unchanged; fresh exact-head CI/review required.
+Reproduced sprint failure, then passing sprint test. Mutating fake transaction
+activation fails its write-scope guard, restored/cmp. Path-discovered proximity
+selection now320passed/20existing skips; changed fixture lint clean.
+
+Continuation of PR1080 (32e515bd), itself dependent on1079; no merges authorized.
+Original runtime roadmap remains below. Home ideas remain deferred.
+
+Contract: canonical imports require a transaction-capable adapter. Inside that
+transaction, reserve/lock the filename receipt BEFORE reading aggregates_applied;
+retain ownership through final receipt and outer commit/rollback. Existing flag
+and metadata must remain unchanged during reservation. A new FALSE reservation
+is uncommitted and rolls back on failure. Same-filename contenders wait and recheck;
+distinct filenames can proceed. Failure/cancellation/lock timeout never authorize
+aggregate writes; stricter-isolation serialization errors require whole-TX retry.
+
+Implementation uses a parameterized receipt-row UPSERT, preserving its flag;
+no hash-derived advisory lock, new table or migration. PostgreSQL documents atomic
+ON CONFLICT behavior and stricter snapshot conflicts:
+https://www.postgresql.org/docs/14/sql-insert.html
+https://www.postgresql.org/docs/14/transaction-iso.html
+Shared claim helper lives in proximity/parser/import_receipt.py; canonical parser
+shrinks2lines. The unsafe no-transaction fallback is now explicitly rejected.
+Actual cog supplies the transaction-capable bot DB adapter; runtime boundary
+already requires transactions; parse-only entry point remains unaffected.
+
+Evidence: original race fails3 ownership tests; implemented claim passes them.
+No-op claim mutation reproduces3 failures, restored/cmp. Private-PG tests also
+cover existing TRUE/FALSE/NULL flag+metadata, distinct filenames, repeatable-read
+and serializable stale snapshots, nested transaction lifetime, canceled waiter
+and lock timeout recovery. Full canonical parser+two real PostgreSQLAdapter pools
+on private restored cloneC observed second backend blocked before receipt read:
+first commit or cancel AFTER vehicle INSERT -> contender/replay1vehicle(360)/
+1receipt. Separate observer COUNT and rows agree; no presentation imports or
+non-proof socket connections allowed. Synthetic maps are unlinked, not a linkage
+acceptance proof. Prior failure tests now distinguish reservation from completion
+so their failure injection still occurs AFTER actual data writes.
+Final local selection315passed/20existing explicit skips, including11 new PG
+ownership cases. New helper and touched test files lint clean; parser datetime
+lint findings are unchanged baseline. Full-proof logs and fixtures remain private.
+
+Limit: all overlapping writers must use this protocol. Old deployed writers are
+not protected by this new code; no simultaneous runtime activation allowed.
+Filename is still legacy receipt identity: changed content, alternate filenames,
+multi-source namespacing and capture sealing remain next separate gates. Do not
+claim general exactly-once ingestion. Waiting policy/timeouts remain caller-owned;
+the tests prove configured timeout recovery, not a global production timeout.
+No deployment, service change, production write or merge performed.
+
+## Historical inherited #1080 consolidation — 2026-10-05
 
 Actual-main checkpoint:1079 merged7b9b43a6 at2026-10-04T22:36:46Z. Reviewed
 c5d8fc4e and squash trees744f0475 identical; all14checks, matching Codex5985124334,

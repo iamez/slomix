@@ -24,8 +24,8 @@ async def import_proximity_file(
 ) -> ProximityImportResult:
     """Use the canonical parser; never create a connection or guess a session.
 
-    Unlike the legacy parser's compatibility fallback, runtime imports require
-    transactions. A failure must not be acknowledged as a completed import.
+    Canonical and runtime imports require transactions. A failure must not be
+    acknowledged as a completed import.
     The adapter must implement the canonical database adapter contract, including
     transaction-bound execute/fetch methods. No local marker is written here.
     """

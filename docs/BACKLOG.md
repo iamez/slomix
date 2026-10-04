@@ -1,5 +1,25 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> Current1081queue:1079merged;1080published6e0be64b awaiting fresh gates. This
+>local preparation retains parent review correction and ownership fixes.
+>Next actual1080squash sync, then fresh1081publication/gates. No services.
+
+## Historical queue preparation — superseded instructions retained as evidence
+
+> Current2026-10-05: #1081 local parent033a4f4f reconciliation only; wait1079/1080
+> actual merges before publication. Read latest integration PLAN at
+> /home/samba/share/slomix-astra-runtime-integration-20260926. Runtime roadmap
+> unchanged; earlier preparation entries below are historical, not current gates.
+
+> 2026-10-04: same-filename concurrent import fix in separate branch based1080.
+> Transaction-owned receipt row claim precedes reads; nontransactional import
+> rejected. Real-PG owner commit/rollback/cancel, canceled waiter/nested lifetime,
+> timeout retry, distinct-file and stale-snapshot proofs added. No-op mutation
+> fails3 original concurrency regressions; restored/cmp. Full canonical parser
+> +two actual pooled adapters proved post-write cancel/commit and replay on cloneC.
+> Next: exact-head review/CI, then stable source-content identity and original
+> runtime acceptance. No deployment/merge; older writers still require cutover.
+
 > Current2026-10-05 00:37CEST:1079merged7b9b43a6, tree matches reviewedc5d8fc4e.
 >1080normal actual-main sync retains prepared history; fresh publication/gates
 >next. Earlier "wait1079" statuses are historical. Original runtime plan retained.

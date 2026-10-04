@@ -10,6 +10,23 @@
   BACKLOG current position now routes to PLAN instead of duplicating PR numbers;
   old queue/anchor evidence is retained under its own historical level-2 heading.
 
+- **2026-10-04 · Prefix-only test selection missed a legacy caller.**
+  test_proximity*.py omits proximity_sprint_pipeline_test.py. A transaction
+  contract change therefore passed the selected315 tests but failed full CI.
+  Discover paths/callers and pytest naming patterns, not only the modern prefix.
+  Update participating test adapters; do not weaken the production guard.
+
+- **2026-10-04 · Lock absent receipts before checking them.**
+  Two READ COMMITTED import transactions can both read no receipt and double an
+  aggregate while leaving only one receipt. Reserve/lock the filename row with
+  an UPSERT that preserves the flag, then read and write within the same TX.
+  Unlike SELECT FOR UPDATE on an absent row, reservation creates something to
+  serialize on. Real-PG proofs must observe pg_blocking_pids, cancellation,
+  outer transaction lifetime and actual observer rows, not elapsed sleep alone.
+  Higher isolation can raise serialization failure; retry the whole transaction.
+  Nontransactional and old-version writers cannot participate safely. This is
+  filename concurrency protection, not content identity or a general lease.
+
 - **2026-10-04 · Unknown receipt state is not an absent receipt.**
   The proximity optional-column helper swallows schema-query errors; the old
   receipt read also swallowed query failures. Both could authorize aggregate
