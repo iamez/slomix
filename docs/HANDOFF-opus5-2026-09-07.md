@@ -91,7 +91,13 @@ Na tem sem zgradil pripombo, da je legacy bundle 5 dni zastarel, in jo moral
 
 `git merge-base --is-ancestor origin/<veja> origin/main` je zato javil "ni
 mergana" za **7 vej, katerih PR-ji so vsi MERGED** (#885, #892, #893, #900…).
-Pravi test je stanje PR-ja, ne prednikovanje.
+Correction (2026-10-04): MERGED alone does not prove current content.
+Check the PR's merged state AND inspect the affected content on freshly fetched
+`origin/main`: `git diff <reviewed-head> origin/main -- <affected-paths>`.
+Use the reviewed immutable commit, not a branch that may have been reused.
+A later revert or follow-up can change that content; inspect nonempty diffs
+instead of treating either ancestry or PR state as proof that the fix remains.
+Immediately after a squash merge, also compare the reviewed and merged tree IDs.
 
 ### 3.5 ⛔ Merilnik, ki meri prehitro, poroča prazno stran, ki ni prazna
 

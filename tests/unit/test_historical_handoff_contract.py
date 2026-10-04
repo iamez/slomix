@@ -103,6 +103,14 @@ def test_squash_lesson_follows_all_newer_lessons():
             assert match.start() < position
 
 
+def test_squash_handoff_requires_current_content_not_only_merged_state():
+    text = (ROOT / "docs/HANDOFF-opus5-2026-09-07.md").read_text()
+    lesson = text.split("### 3.4", 1)[1].split("### 3.5", 1)[0]
+    assert "MERGED alone does not prove current content" in lesson
+    assert "git diff <reviewed-head> origin/main -- <affected-paths>" in lesson
+    assert "revert" in lesson and "reused" in lesson
+
+
 def test_resume_explicitly_identifies_local_only_retrieval():
     plan = (ROOT / "docs/PLAN.md").read_text()
     boundary = '## Historical checkpoints — superseded, retain evidence as of each date'
