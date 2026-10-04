@@ -5,12 +5,13 @@ For initial onboarding only, paste the first-session block into a `codex` sessio
 (check with `codex debug prompt-input "ping"` before the first real session).
 The short form at the bottom is for every later session.
 
-For continuation after the 2026-09-07 handoff, read PLAN's "Astra execution
-ledger" and its latest dated evidence first. Do not repeat hour-one discovery
+For continuation, read `docs/PLAN.md` latest checkpoint first, including its
+local-only runtime continuation path. The September "Astra execution ledger"
+is historical evidence, not current queue authority. Do not repeat hour-one discovery
 or wait for a new task selection if the owner has already approved that plan.
 Use only the short continuation form below for a later session, not the
-first-session block. The legacy package below remains background; the ledger supersedes old queue
-order, completion claims and the Discord-only runtime emitter proposal.
+first-session block. The legacy package below remains background; the current
+PLAN supersedes old queue order, completion claims and the Discord-only runtime emitter proposal.
 
 ---
 

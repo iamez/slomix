@@ -10,6 +10,10 @@ fresh exact-head review/CI and postmerge verification. No merge yet.
 omitted-target / historical-scope mutations fail then restore/cmp.
 Fresh review also corrected the historical squash lesson: merged PR status
 alone is insufficient; inspect current affected content and immediate tree identity.
+964 self-review also routes BOTH the continuation prompt introduction and the
+handoff header to the latest PLAN, not the historical September ledger.
+Combined51 contracts/preflight cases pass8.52s; reverting the introduction to
+the old ledger-first advice fails, restored/cmp and7 ledger contracts pass.
 
 LOCAL-ONLY runtime resume: last saved integration checkpoint8e262684, on branch
 refactor/db-runtime-team-assignment-20260926 in

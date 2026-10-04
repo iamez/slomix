@@ -45,6 +45,9 @@ def test_preserved_september_seven_lessons_follow_later_runtime_lessons():
 
 def test_continuation_prompt_has_separate_first_session_scope():
     text = (ROOT / 'docs/prompts/astra_kickoff.md').read_text()
+    introduction = text.split('## First session only', 1)[0]
+    assert 'For continuation, read `docs/PLAN.md` latest checkpoint first' in introduction
+    assert 'is historical evidence, not current queue authority' in introduction
     assert '## First session only (historical onboarding block)' in text
     short = text.split('## Short form (later sessions)', 1)[1]
     assert 'docs/PLAN.md' in short
@@ -54,6 +57,8 @@ def test_continuation_prompt_has_separate_first_session_scope():
 
 def test_handoff_preserves_narrow_review_exception_without_authorizing_execution():
     text = (ROOT / 'docs/HANDOFF-next.md').read_text().split('## ', 1)[0]
+    assert '**Current routing — 2026-10-04.** Read the latest checkpoint' in text
+    assert '**Historical consolidation checkpoint — 2026-09-20.**' in text
     assert 'it uses forbidden push options' not in text
     assert 'AGENTS.md' in text and 'narrow written exception' in text
     assert 'Astra did not execute' in text

@@ -1,6 +1,10 @@
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
-> **Consolidation checkpoint — 2026-09-20.** Current authority is docs/PLAN.md;
+> **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
+> first, including its local-only runtime continuation path. All dated blocks
+> below are historical evidence, not current approval or deployment instructions.
+>
+> **Historical consolidation checkpoint — 2026-09-20.** Authority is docs/PLAN.md;
 > retain both historical handoff tracks below, not their old queue as current.
 > #1076 merged; #1057/#962 are conditionally approved. Runtime resumes at #1077
 > completion delivery/sealing after consolidation, then new-site audit and an
