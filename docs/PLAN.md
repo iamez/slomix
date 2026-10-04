@@ -2,11 +2,15 @@
 
 ## Current #1082 queue gate — 2026-10-05
 
-#1079 and #1080 are merged; actual main is 58938262. #1081 published 9af897c9
-is undergoing fresh exact-head CI/review. This local #1082 incorporates that
-parent and preserves the reconciled stats/proximity validation boundary.
-Next: actual #1081 merge, then final #1082 main sync, CI/SQL/review gates.
-Do not publish this preparation before #1081 merges. No service/production/liveDB action. Original runtime roadmap
+#1079, #1080 and #1081 are merged. Actual main is
+b59a233648162cd1b005bccaab116d2a28f30afe (#1081, 2026-10-04T23:20:59Z).
+Reviewed 9af897c9 and squash trees are identical (23a8194e). All 14 checks and
+matching Codex 5985473080 passed; eleven ownership and six receipt PG scenarios
+actually PASS on both majors. Mandatory cycle completed with no open findings.
+This #1082 now includes actual main. Squash conflicts preserve digest-on-new-row
+claims, old receipt refusal, both histories and the separate stats validator.
+Next: fresh exact-head CI including seven actual PG source cases and review,
+then the mandatory merge cycle. No service/production/liveDB action. Original runtime roadmap
 remains in latest integration PLAN; all preparation entries below historical.
 
 ## Historical #1082 preparation — 2026-10-05
