@@ -1,5 +1,11 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> Current1083queue:1079merged;1080freshgates and prepared1081/1082predecessors
+>remain. Parent1b5466cd incorporated locally. After actual1082merge, final1083
+>sync/publication/gates. Original runtime roadmap and no-service boundaries retained.
+
+## Historical preparation — not current gate instructions
+
 > Current2026-10-05: #1083 locally incorporates parent4859d660; no publication
 > before predecessor squashes and final gates. Exact-start ambiguity must stay
 > unresolved, not guess another round. Original runtime plan remains in latest
@@ -22,6 +28,14 @@
 > No historical data repair; original runtime roadmap/capture/handover unchanged.
 
 > Current2026-10-05: #1082 local parent6e1296da merge preserves old public stats
+
+> Current1082queue:1079merged;1080freshgates pending,1081prepared. Thislocal
+>parent7a882cf1 integration keeps all reviewed fixes and shared-admission lesson.
+>Wait actual1081before final1082publication. Original runtime roadmap unchanged.
+
+## Historical preparation — not current gate instructions
+
+> Historical2026-10-05: #1082 local parent6e1296da merge preserves old public stats
 > filename validator and distinct proximity admission. Fresh combined tests next;
 > wait1079-1081actual merges before final sync/publication. Read latest integration
 > PLAN at /home/samba/share/slomix-astra-runtime-integration-20260926. Original
@@ -44,6 +58,12 @@
 > fail/restored; actual two-pool clone proof passed. Next review/CI and explicit
 > legacy ownership/adoption/capture contracts; no deployment/merge.
 
+> Current1081queue:1079merged;1080published959cb109 awaiting fresh gates. This
+>local preparation retains parent review correction and ownership fixes.
+>Next actual1080squash sync, then fresh1081publication/gates. No services.
+
+## Historical queue preparation — superseded instructions retained as evidence
+
 > Current2026-10-05: #1081 local parent033a4f4f reconciliation only; wait1079/1080
 > actual merges before publication. Read latest integration PLAN at
 > /home/samba/share/slomix-astra-runtime-integration-20260926. Runtime roadmap
@@ -58,7 +78,13 @@
 > Next: exact-head review/CI, then stable source-content identity and original
 > runtime acceptance. No deployment/merge; older writers still require cutover.
 
-> Current2026-10-05: #1080 local preparation incorporates published1079c5d8fc4e.
+> Current2026-10-05 00:37CEST:1079merged7b9b43a6, tree matches reviewedc5d8fc4e.
+>1080normal actual-main sync retains prepared history; fresh publication/gates
+>next. Earlier "wait1079" statuses are historical. Original runtime plan retained.
+
+## Historical preparation notes — not current merge instructions
+
+> Historical2026-10-05, before1079merge: #1080 local preparation incorporates published1079c5d8fc4e.
 > Wait1079actual squash, then sync/fresh gates; no1080publication yet. Read
 > latest integration PLAN at /home/samba/share/slomix-astra-runtime-integration-20260926.
 > Original runtime roadmap retained. Earlier statuses below are historical.
@@ -74,7 +100,7 @@
 > identity. No merge/deploy; both pytest connection selectors now explicitly
 > target private PG to avoid the general collection probe's localhost default.
 
-> Current2026-10-05: older nine approved PRs merged with tree verification.
+> Historical1079preparation2026-10-05: older nine approved PRs merged with tree verification.
 > #1079 normally integrates actual main95758cc7; fresh local/CI/review gates
 > pending, then1080-1084 in order. Read latest integration PLAN at
 > /home/samba/share/slomix-astra-runtime-integration-20260926. Original runtime
