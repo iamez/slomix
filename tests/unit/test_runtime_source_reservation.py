@@ -7,7 +7,7 @@ from threading import Barrier
 
 import pytest
 
-from shared.runtime_source_reservation import reserve_source_generation
+from shared.runtime_source_reservation import claim_source_generation, reserve_source_generation
 
 GENERATION_ID = '0123456789abcdef' * 2
 
@@ -114,3 +114,48 @@ def test_unsafe_root_is_rejected(tmp_path):
     with pytest.raises(OSError):
         reserve_source_generation(link, GENERATION_ID)
     assert not (tmp_path / GENERATION_ID).exists()
+
+
+def test_claim_has_one_concurrent_winner(tmp_path):
+    """Persistent exclusive marker prevents duplicate dispatch, including later calls."""
+    tmp_path.chmod(0o700)
+    reserved = reserve_source_generation(tmp_path, GENERATION_ID)
+    barrier = Barrier(2)
+    def attempt():
+        barrier.wait(timeout=5)
+        try:
+            return claim_source_generation(tmp_path, GENERATION_ID)
+        except FileExistsError:
+            return None
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(attempt) for _ in range(2)]
+        results = [future.result(timeout=10) for future in futures]
+    assert results.count(None) == 1 and results.count(reserved) == 1
+    marker = reserved / '.writer-claimed'
+    assert marker.read_bytes() == b'writer-claim-v1\n'
+    assert stat.S_IMODE(marker.stat().st_mode) == 0o600
+    with pytest.raises(FileExistsError):
+        claim_source_generation(tmp_path, GENERATION_ID)
+
+
+@pytest.mark.parametrize('phase', ['write', 'file-sync', 'dir-sync'])
+def test_failed_claim_remains_consumed(tmp_path, monkeypatch, phase):
+    """Even an empty/ambiguous claim cannot be silently reused after interruption."""
+    tmp_path.chmod(0o700)
+    reserved = reserve_source_generation(tmp_path, GENERATION_ID)
+    original = os.fsync
+    def sync(fd):
+        is_dir = stat.S_ISDIR(os.fstat(fd).st_mode)
+        if (phase == 'dir-sync') == is_dir:
+            raise OSError('fixture claim sync failure')
+        original(fd)
+    with monkeypatch.context() as patch:
+        if phase == 'write':
+            patch.setattr('shared.runtime_source_reservation.os.write', lambda fd, data: 0)
+        else:
+            patch.setattr('shared.runtime_source_reservation.os.fsync', sync)
+        with pytest.raises(OSError):
+            claim_source_generation(tmp_path, GENERATION_ID)
+    assert (reserved / '.writer-claimed').exists()
+    with pytest.raises(FileExistsError):
+        claim_source_generation(tmp_path, GENERATION_ID)

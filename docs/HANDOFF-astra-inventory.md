@@ -1,5 +1,18 @@
 # HANDOFF — Astra: full open-work inventory (2026-09-07)
 
+> **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
+> first. The dated inventory and ledger below are historical evidence, not
+> current approval or deployment instructions; recheck live PR states separately.
+
+> **2026-09-08 intake:** this is the historical inventory, not the execution
+> queue. PLAN's Astra ledger recorded dispositions and proof limits at that date.
+> Runtime section 5's Discord-only `round_ended` proposal is superseded by
+> transactional `round_stats_imported` at the canonical importer; consumer
+> activation also needs late-update coverage. No automatic historic replay is
+> proven by file/Discord persistence. Existing watchdog cadence implies around
+> ten minutes plus scheduling/probe time, not a strict two- or ten-minute bound.
+> Recount ratchets and recheck merged PRs; do not resurrect closed code work.
+
 > Companion to `HANDOFF-astra.md` §C. Compiled by a read-only inventory pass over
 > `docs/PLAN.md`, `docs/BACKLOG.md`, `docs/HANDOFF-next.md`, `docs/KNOWN_ISSUES.md`,
 > `docs/INFRA_HANDOFF_2026-02-18.md`, `docs/SPIDERWEB_STATUS.md`, the ratchet files under
