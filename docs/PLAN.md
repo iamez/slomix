@@ -1,5 +1,35 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Private proximity publication follow-up — 2026-10-04
+
+Continue the source-identity slice in PR1082, not a new parallel feature or
+deployment. Preserve community stats filename restrictions; add an explicit
+proximity publisher requiring size AND SHA256, reusing the existing atomic
+no-clobber/fsync primitive. Private destination only; no permission changes to
+the shared legacy source. Contract: no final name until complete verified bytes,
+no overwrite on replay/conflict, post-link fsync failure keeps final evidence.
+Prove streaming failure, digest mismatch, concurrent publication and read-back
+through the verified canonical parser input; rerun existing stats-spool tests.
+This supplies local publication, not remote sealing, a worker or old-receipt
+adoption. Full cutover gates and original runtime/Spiderweb phases remain below.
+
+Result: explicit publish_proximity_file added using the same unchanged link/fsync
+core as publish_stats_file. SHA256 required; community allowlist still rejects
+engagement files.140 focused tests pass; expanded proximity+spool/capture suite
+478passed/20existing explicit skips. Digest-bypass mutation fails the same-size
+corruption test (DID NOT RAISE), restored/cmp. Real canonical parser+two real pools
+on private cloneC prove publication -> verified import -> commit/cancel -> replay:
+1vehicle(distance360)/1receipt/matching digest per fresh synthetic fixture. No
+presentation imports or non-proof sockets. Synthetic maps remain unlinked.
+PR1082 original1f2a32a1 CI succeeded and Codex completed without findings, threads0
+(hasNextPage=false); this follow-up requires new exact-head CI/review before use.
+
+Read-only handover census: shared DEV local_proximity resolves to legacy shared
+directory mode775;1085files,1093542894bytes,max2492374bytes,none above8MiB. Independent
+find-stat and du apparent-byte totals/count/max agree. Do NOT chmod that source.
+Private restored clone (not live DB) has1077receipts:1075hashless+2earlier synthetic
+hashed; grouped and COUNT queries agree. Hashless history is not adopted here.
+
 ## Verified proximity runtime source — 2026-10-04
 
 Based on PR1081 follow-up8381da13 (CI successful, new Codex review completed

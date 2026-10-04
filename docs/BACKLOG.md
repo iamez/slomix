@@ -1,5 +1,15 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04 PR1082 follow-up: explicit verified proximity publication into a
+> separate private spool, shared no-clobber/fsync core; stats allowlist unchanged.
+> 478passed/20existing skips including old capture/spool regression coverage;
+> SHA-bypass mutation fails/restored/cmp. Full fresh-fixture private-clone proof
+> covers publication through canonical import and two-pool commit/cancel/replay.
+> Original1082 head CI/review clean; follow-up needs fresh gates. Shared legacy
+> permissions untouched. Next source seal/ownership and forward-only handover;
+> historical unknown hashes are not replay/adoption permission. Original plan
+> preserved, no new parallel PR, no service operation/deployment/merge.
+
 > 2026-10-04 source identity: runtime requires verified private bytes + expected
 > size/SHA256, stores digest only for a new claimed receipt, rejects conflicts and
 > all existing hashless receipts. Captured bytes go to canonical parser; failures

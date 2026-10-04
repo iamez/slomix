@@ -1,4 +1,4 @@
-"""Linux-only no-clobber publication into a caller-owned private stats spool."""
+"""Linux-only no-clobber publication into caller-owned private input spools."""
 
 import hashlib
 import os
@@ -10,12 +10,15 @@ from pathlib import Path
 from typing import Literal
 
 _NAME = re.compile(r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-[12]\.txt', re.ASCII)
+_PROXIMITY_NAME = re.compile(
+    r'\d{4}-\d{2}-\d{2}-\d{6}-[A-Za-z0-9_.+-]+-round-[12]_engagements\.txt', re.ASCII,
+)
 
 
-def _validate_metadata(filename, expected_size, max_bytes, expected_sha256):
+def _validate_metadata(filename, expected_size, max_bytes, expected_sha256, *, name_pattern=_NAME):
     """Apply identical metadata bounds to publication and reconciliation."""
-    if not _NAME.fullmatch(filename) or '..' in filename:
-        raise ValueError('Invalid stats filename')
+    if not name_pattern.fullmatch(filename) or '..' in filename:
+        raise ValueError('Invalid input filename')
     if expected_sha256 is not None and (
         not isinstance(expected_sha256, str)
         or re.fullmatch(r'[0-9a-f]{64}', expected_sha256, re.ASCII) is None
@@ -46,6 +49,34 @@ def publish_stats_file(
     .part are not import candidates. No retention or orphan cleanup is done here.
     """
     _validate_metadata(filename, expected_size, max_bytes, expected_sha256)
+    return _publish_file(directory, filename, chunks, expected_size, expected_sha256)
+
+
+def publish_proximity_file(
+    directory: Path, filename: str, chunks: Iterable[bytes], *,
+    expected_size: int, expected_sha256: str, max_bytes: int = 8 * 1024 * 1024,
+) -> Path:
+    """Publish verified proximity bytes, keeping the stats allowlist separate.
+
+    Requires an absolute private directory and trusted size/digest from a sealed
+    upstream snapshot. Publication mechanics and failure semantics are those of
+    publish_stats_file: no overwrite, file and directory fsync, final entry may
+    survive a post-link error. Reconcile that entry; never overwrite or delete it.
+    Caller bounds chunk allocation and streaming time, and owns source lifecycle.
+    This is not remote authentication, sealing, a deadline or a worker. Shared
+    legacy input directories must not be chmodded to satisfy this contract.
+    """
+    if not isinstance(directory, Path) or not directory.is_absolute():
+        raise ValueError('Proximity spool must be an absolute Path')
+    if expected_sha256 is None:
+        raise ValueError('Proximity publication requires an expected SHA-256')
+    _validate_metadata(filename, expected_size, max_bytes, expected_sha256,
+                       name_pattern=_PROXIMITY_NAME)
+    return _publish_file(directory, filename, chunks, expected_size, expected_sha256)
+
+
+def _publish_file(directory, filename, chunks, expected_size, expected_sha256):
+    """Shared publication mechanics; only validated wrappers may call this."""
     directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     temporary = '.incoming-' + uuid.uuid4().hex + '.part'
     created = False

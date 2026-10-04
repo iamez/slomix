@@ -1,5 +1,14 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · Private spool is a destination, not a chmod of shared input.**
+  DEV local_proximity is a symlink to the shared legacy source. A default find
+  reported zero files because it did not traverse that command-line symlink;
+  find -H plus independent du apparent-byte census measured1085files/1093542894B.
+  Keep Samba permissions intact and publish verified copies privately. Reuse
+  atomic publication mechanics behind separate explicit filename policies;
+  accepting proximity files must not loosen the community stats allowlist.
+  A post-link fsync error leaves final evidence: reconcile, never overwrite.
+
 - **2026-10-04 · Verify the bytes that the parser actually consumes.**
   Hashing a path and reopening it leaves a replacement window. Capture bounded
   bytes, verify trusted size/digest, parse that immutable payload, and commit its

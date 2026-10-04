@@ -11,6 +11,7 @@ import pytest
 
 from proximity.parser import ProximityParserV4
 from shared import proximity_import
+from shared.runtime_spool import publish_proximity_file
 from tests.integration.test_runtime_events_pg import journal_db  # noqa: F401
 
 
@@ -21,9 +22,9 @@ async def source_import(journal_db, monkeypatch, tmp_path):  # noqa: F811
     await writer.execute('CREATE TABLE proximity_processed_files (filename TEXT PRIMARY KEY, aggregates_applied BOOLEAN, file_hash TEXT)')
     source = tmp_path / '2026-10-04-120000-fixture-round-1_engagements.txt'
     payload = b'# PROXIMITY_TRACKER_V4\n# map=fixture\n# round=1\n'
-    source.write_bytes(payload)
-    source.chmod(0o600)
     digest = hashlib.sha256(payload).hexdigest()
+    publish_proximity_file(tmp_path, source.name, [payload],
+                           expected_size=len(payload), expected_sha256=digest)
     controls = {'failure': None, 'replace_path': False}
     seen = []
 
