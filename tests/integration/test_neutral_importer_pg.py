@@ -12,7 +12,8 @@ from tests.integration.test_runtime_events_pg import connection_options
 
 
 @pytest.mark.parametrize('scenario', [
-    'single', 'ordered_pair', 'r2_first', 'late_r1', 'deferred_r1', 'zero_delta',
+    'single', 'ordered_pair', 'r2_first', 'late_r1', 'deferred_r1', 'zero_delta', 'verified_spool',
+    'conflicting_r1', 'invalid_name_payload', 'invalid_selected_r1',
 ])
 def test_neutral_import_commits_player_event_and_retry(tmp_path, scenario):
     """Real parser, SQL and commit work with presentation/setup imports blocked."""
@@ -33,8 +34,12 @@ def test_neutral_import_commits_player_event_and_retry(tmp_path, scenario):
     )
     if scenario in {'late_r1', 'deferred_r1'}:
         fixture.rename(fixture.with_suffix('.pending'))
+    if scenario == 'verified_spool':
+        fixture.rename(fixture.with_suffix('.source'))
+        r2.rename(r2.with_suffix('.source'))
     script = r'''
 import asyncio
+import hashlib
 import importlib.abc
 import json
 import os
@@ -53,6 +58,8 @@ class BlockSetup(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, BlockSetup())
 from postgresql_database_manager import PostgreSQLDatabaseManager
 from shared.runtime_import import import_ready_file
+from shared.runtime_capture_retry import capture_once
+from shared.runtime_ingest import ExpectedStatsIdentity, import_verified_file
 
 async def main():
     options = json.loads(os.environ.pop('NEUTRAL_IMPORT_TEST_CONNECTION'))
@@ -68,16 +75,105 @@ async def main():
         )
         manager = PostgreSQLDatabaseManager(config=SimpleNamespace(
             database_type='postgresql', excluded_maps=frozenset(),
-        ))
+        ), allow_legacy_r1_fallback=False)
         manager.pool = pool
         # Explicit test-only bootstrap, never part of neutral construction.
         await manager._create_schema_if_missing()
         await admin.execute((Path(sys.argv[2]) / 'migrations/083_runtime_events.sql').read_text())
         manager.event_stream_enabled = True
         scenario = sys.argv[3]
+        if scenario == 'invalid_selected_r1':
+            original_r1 = Path(sys.argv[1])
+            original_r2 = original_r1.with_name('2026-09-20-121000-goldrush-round-2.txt')
+            r1 = original_r1.with_name('2019-12-31-235500-goldrush-round-1.txt')
+            r2 = original_r1.with_name('2020-01-01-000500-goldrush-round-2.txt')
+            r1.write_bytes(original_r1.read_bytes())
+            r2.write_bytes(original_r2.read_bytes())
+            r1.chmod(0o600)
+            r2.chmod(0o600)
+            assert manager.parser.find_corresponding_round_1_file(str(r2)) == str(r1)
+            plain = await import_ready_file(manager, r2)
+            assert plain.status == 'failed', plain
+            assert plain.message == 'Invalid R1 dependency: Invalid stats timestamp', plain
+            payload, dependency = r2.read_bytes(), r1.read_bytes()
+            checked = await import_verified_file(
+                manager, r2.parent, r2.name, expected_size=len(payload),
+                expected_sha256=hashlib.sha256(payload).hexdigest(),
+                expected_r1={r1.name: ExpectedStatsIdentity(
+                    len(dependency), hashlib.sha256(dependency).hexdigest())},
+            )
+            assert checked.capture_status == 'match', checked
+            assert checked.dependency_status == 'invalid', checked
+            assert checked.import_result.status == 'failed', checked
+            for table in ('rounds', 'player_comprehensive_stats', 'processed_files', 'runtime_events'):
+                assert await admin.fetchval(f'SELECT count(*) FROM {table}') == 0
+                assert await admin.fetch(f'SELECT * FROM {table}') == []
+            print('Neutral PG proof: selected previous-year R1 rejected; no rows/markers/events')
+            return
+        if scenario in {'conflicting_r1', 'invalid_name_payload'}:
+            r1 = Path(sys.argv[1])
+            r2 = r1.parent / '2026-09-20-121000-goldrush-round-2.txt'
+            if scenario == 'conflicting_r1':
+                expected_r1 = r1.read_bytes()
+                r1.write_bytes(expected_r1.replace(b'1 10 20 3 2 1', b'1 10 20 7 2 1'))
+                r1.chmod(0o600)
+                r2.chmod(0o600)
+                assert capture_once(r1.parent, r1.name, [expected_r1], expected_size=len(expected_r1),
+                                    expected_sha256=hashlib.sha256(expected_r1).hexdigest()) == 'conflict'
+                payload = r2.read_bytes()
+                result = await import_verified_file(
+                    manager, r2.parent, r2.name, expected_size=len(payload),
+                    expected_sha256=hashlib.sha256(payload).hexdigest(),
+                    expected_r1={r1.name: ExpectedStatsIdentity(
+                        len(expected_r1), hashlib.sha256(expected_r1).hexdigest())},
+                )
+                assert result.import_result is None, result
+                assert result.capture_status == 'match' and result.dependency_status == 'conflict', result
+            else:
+                invalid = r2.with_name('2026-09-20-121000-foo..bar-round-2.txt')
+                invalid.write_bytes(r2.read_bytes())
+                result = await import_ready_file(manager, invalid)
+                assert result.status == 'failed', result
+                payload = invalid.read_bytes()
+                verified = await import_verified_file(
+                    manager, invalid.parent, invalid.name, expected_size=len(payload),
+                    expected_sha256=hashlib.sha256(payload).hexdigest(),
+                )
+                assert verified.import_result.status == 'failed', verified
+                assert verified.capture_status is None and verified.dependency_status is None, verified
+            for table in ('rounds', 'player_comprehensive_stats', 'processed_files', 'runtime_events'):
+                assert await admin.fetchval(f'SELECT count(*) FROM {table}') == 0
+                assert await admin.fetch(f'SELECT * FROM {table}') == []
+            print('Neutral PG proof: rejection ' + scenario + '; all rows/markers/events absent')
+            return
         if scenario != 'single':
             r1 = Path(sys.argv[1])
             r2 = r1.parent / '2026-09-20-121000-goldrush-round-2.txt'
+            if scenario == 'verified_spool':
+                sources = {path: path.with_suffix('.source').read_bytes() for path in (r1, r2)}
+                legacy = r1.parent / 'local_stats'
+                legacy.mkdir()
+                (legacy / r1.name).write_bytes(sources[r1])
+                async def verified(path, digest=None):
+                    return await import_verified_file(
+                        manager, path.parent, path.name, expected_size=len(sources[path]),
+                        expected_sha256=digest or hashlib.sha256(sources[path]).hexdigest(),
+                        expected_r1={r1.name: ExpectedStatsIdentity(
+                            len(sources[r1]), hashlib.sha256(sources[r1]).hexdigest())},
+                    )
+                missing = await verified(r2)
+                assert missing.capture_status == 'missing' and missing.import_result is None
+                assert capture_once(r2.parent, r2.name, [sources[r2]], expected_size=len(sources[r2]),
+                                    expected_sha256=hashlib.sha256(sources[r2]).hexdigest()) == 'published'
+                conflict = await verified(r2, '0' * 64)
+                assert conflict.capture_status == 'conflict' and conflict.import_result is None
+                waiting = await verified(r2)
+                assert waiting.import_result.status == 'waiting_for_r1', waiting
+                assert waiting.dependency_status == 'missing', waiting
+                for table in ('rounds', 'processed_files', 'runtime_events'):
+                    assert await admin.fetchval(f'SELECT count(*) FROM {table}') == 0
+                assert capture_once(r1.parent, r1.name, [sources[r1]], expected_size=len(sources[r1]),
+                                    expected_sha256=hashlib.sha256(sources[r1]).hexdigest()) == 'published'
             if scenario == 'zero_delta':
                 assert (await manager.process_file(r1))[0]
                 r1.rename(r1.with_suffix('.retired'))
@@ -96,7 +192,10 @@ async def main():
             for path in paths:
                 if scenario == 'late_r1' and path == r1:
                     r1.with_suffix('.pending').rename(r1)
-                if scenario == 'deferred_r1':
+                if scenario == 'verified_spool':
+                    result = await verified(path)
+                    assert result.capture_status == 'match' and result.import_result.status == 'imported'
+                elif scenario == 'deferred_r1':
                     result = await import_ready_file(manager, Path(path.name))
                     assert result.status == 'imported', result
                 else:
@@ -118,6 +217,15 @@ async def main():
             assert await admin.fetchval('SELECT count(*) FROM runtime_events') == len(events)
             assert await admin.fetchval('SELECT count(*) FROM processed_files WHERE success') == 2
             assert await manager.process_file(r2) == (True, 'Already processed')
+            if scenario == 'verified_spool':
+                def no_read():
+                    raise AssertionError('Completed capture must not read source again')
+                    yield b''
+                assert capture_once(r2.parent, r2.name, no_read(), expected_size=len(sources[r2]),
+                                    expected_sha256=hashlib.sha256(sources[r2]).hexdigest()) == 'content_present'
+                retry = await verified(r2)
+                assert retry.import_result.status == 'imported'
+                assert retry.import_result.message == 'Already processed'
             after = await admin.fetch("""
                 SELECT r.round_number, r.round_status, p.kills
                 FROM rounds r JOIN player_comprehensive_stats p ON p.round_id=r.id
@@ -142,17 +250,31 @@ async def main():
                 for invalid_name in (
                     '2026-13-32-999999-goldrush-round-2.txt',
                     '0001-01-01-000000-goldrush-round-2.txt',
+                    '2026-02-29-120000-goldrush-round-2.txt',
+                    '2026-09-20-240000-goldrush-round-2.txt',
+                    '2019-12-31-235959-goldrush-round-2.txt',
+                    '2036-01-01-000000-goldrush-round-2.txt',
                 ):
-                    invalid_time = r2.with_name(invalid_name)
-                    invalid_time.write_text('invalid fixture')
-                    invalid = await import_ready_file(manager, invalid_time)
-                    assert invalid.status == 'failed', invalid
-                    assert await admin.fetchval(
-                        'SELECT success FROM processed_files WHERE filename=$1', invalid_time.name
-                    ) is False
+                    for half in (1, 2):
+                        invalid_time = r2.with_name(invalid_name.replace('-round-2.txt', f'-round-{half}.txt'))
+                        payload = (r2 if half == 2 else r1.with_suffix('.retired')).read_bytes()
+                        invalid_time.write_bytes(payload)
+                        invalid_time.chmod(0o600)
+                        invalid = await import_ready_file(manager, invalid_time)
+                        assert invalid.status == 'failed', invalid
+                        checked = await import_verified_file(
+                            manager, invalid_time.parent, invalid_time.name,
+                            expected_size=len(payload), expected_sha256=hashlib.sha256(payload).hexdigest(),
+                            expected_r1={r1.name: ExpectedStatsIdentity(1, '0' * 64)},
+                        )
+                        assert checked.import_result.status == 'failed', checked
+                        assert checked.dependency_status is None, checked
+                        assert await admin.fetchval(
+                            'SELECT success FROM processed_files WHERE filename=$1', invalid_time.name
+                        ) is None
                 assert await admin.fetchval(
                     'SELECT success FROM processed_files WHERE filename=$1', malformed.name
-                ) is False
+                ) is None
                 assert await admin.fetchval('SELECT count(*) FROM runtime_events') == 2
                 assert await admin.fetchval('SELECT count(*) FROM rounds') == len(rows)
             async with pool.acquire() as conn:
