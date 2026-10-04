@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) #963 mergeda2737e7a with exact reviewed/squash tree
+  identity771ed168,14green checks, all8threads answered and420s cycle. #964
+  normally integrated actual main with both histories preserved.51 local cases
+  and current-plan routing mutation proof; publish for fresh review/CI next.
+  Retained integration checkpoint8e262684 is a local access anchor: read its
+  worktree's latest PLAN, not a historical queue. No service/deployment action.
+
 - (Astra, 2026-10-04) #963 review correction: current local integration checkpoint
   is8e262684 in /home/samba/share/slomix-astra-runtime-integration-20260926;
   read its latest PLAN rather than resuming from historical1986d671.
@@ -14,6 +21,13 @@
   gates and older-first order. Correct the historical deployment recipe to pass
   the exact built commit; no live deployment, service or data action.
   September28 corrections remain in Git history and the dated PLAN below.
+
+- (Astra, 2026-10-04) #964 review correction: continue from the latest PLAN in
+  /home/samba/share/slomix-astra-runtime-integration-20260926 (checkpoint8e262684
+  at this audit, superseding02c160cc/1986d671). September7/8 execution entries
+  and the four dated lessons remain historical, not instructions to restartR01.
+  Numbered merge approval received; finish963 then synchronize964 to actualmain
+  and repeat all gates before merge. No deployment/service/live-data operation.
 - (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
   unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
   checked against actualPG; deliberately mismatched17/14 fails fixture setup.
@@ -855,6 +869,42 @@
   lokalni `docs/research/DATAPOINT_AUDIT_2026-09-07.md`; agenti zaprti.
   Odprto po vrsti: #980 (drift tipov + 11 niti), #981 vrata, veji
   `feat/live-ticker-reads-its-events` in `feat/profile-long-tail` za PR.
+- (Astra, 2026-09-20) Historical consolidation checkpoint: preserve #964 historical execution ledger
+  and current-main runtime track together. September7/8 entries below describe
+  then, not the current runtime implementation. #1076 merged; #1057/#962 approved
+  conditionally; #964 not approved. Resume #1077 delivery/sealing after detour.
+
+- **2026-09-08 (Astra, resume checkpoint):** first implementation slices are
+  published as #964/#965/#966/#969/#979; see PLAN's current ledger. Targeted
+  tests pass per slice (2/40/7/4/19), not a combined whole-project proof.
+  Review corrections: closed issue moved to closure ledger, YAML dependency
+  declared directly, failed heartbeat retained across midnight. Helpers stopped
+  after their bounded tasks; local agent Node/Python tools persist separately
+  from services. No merge/deploy/browser/live-data mutation by Astra. Runtime
+  R01 remains gated by necessary stability/review work; it is not implemented.
+
+- **2026-09-07 (Astra):** owner approved the reconciled implementation plan.
+  Current authority: PLAN's "Astra execution ledger" (A01–A10, R01–R04).
+  Source `4f653c01`: #955 and #912 are now merged; runtime proof is separate.
+  Handoff saved in PR #964; watchdog delivery in #965; immutable review
+  snapshot candidate tested separately. Node/CI pin alignment is the next slice.
+  No service, deployment, browser, live-data write or merge performed by Astra.
+  Next: finish these stability slices, Codex/local environment safeguards and
+  artifact identity; isolated event-journal development follows the gate.
+
+**Only the September 7/8 entries immediately above are historical, not current action instructions.** In
+particular, Astra has not executed `review_slices.sh cut --push`: #961 added a
+narrow AGENTS exception for the legacy script while our approved plan prepares
+an immutable replacement. Preserve that exception pending owner review; do not
+apply it to any other push. Old advice to delete generated OpenAPI types is superseded
+by npm `pre*` hooks (`generate:api` before bare `npx`). Prior "install/restart
+watchdog" notes are not proof that installation is still pending.
+
+Deferred, not forgotten: twins r4/puran test, user layouts, spiderweb layer 3
+rendering/layer 4, endpoint-gap features, broad response typing and modular UI
+work. Data repairs, production migration and real alert delivery have their
+own permission gates. Read PLAN A09/A10 before reopening old research.
+
 - (Fable 5.1, 2026-09-07, 22:05) Owner: »poglej live mode kot obiskovalec«
   — pregledano med živo igro na produkciji (legacy `#/live`, v1.39.0):
   deset vrzeli (L1–L10) in osem rezin v LOKALNEM
