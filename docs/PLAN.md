@@ -2,11 +2,17 @@
 
 ## Current #1084 queue gate — 2026-10-05
 
-#1079 through #1082 are merged (main 47ac2440). #1083 published 74c54c85 awaits
-fresh gates. This normal published-parent merge preserves all source/migration
-fixes and current/historical routing. Next actual #1083 merge, then #1084 final
-main sync and fresh CI/SQL/review.
-Do not publish this preparation yet. Migration 094 is not live-applied; no services,
+#1079 through #1083 are merged. Actual main is
+124fe76d3a744c7b98ba7847827cb9282cb40f40 (#1083, 2026-10-04T23:51:58Z).
+Reviewed74c54c85 and squash trees match (5b953f79); all14checks, matching
+Codex5985680060 and mandatory settle passed. Four round/relinker and twenty-four
+predecessor PG cases actually PASS on both CI majors.
+This #1084 includes actual main. The squash conflict retains normalized map
+identity in the canonical resolver, consistent with the parent gate. Source,
+tests, provenance migration and release registration remain identical to7071a20b.
+Next fresh exact-head review/CI, including all20source/parent PG cases and
+predecessor cases on both majors, then mandatory merge cycle.
+Migration 094 is not live-applied; no services,
 production or historical data repair. Original runtime roadmap retained in
 latest integration PLAN. Everything below records historical preparation only.
 
