@@ -27,6 +27,27 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) #1074 locally retains the prior0400/0600 reader repair
+  while incorporating actual merged parent/main d3a8f4df. Owner-approved;
+  earlier predecessors merged, fresh exact-head review/CI remain merge gates.
+  No service, deployment or source activation; original runtime plan retained.
+  Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
+  retained checkpoint8e262684 is a local access anchor, not the latest head.
+
+### Historical reader checkpoints
+
+- (Astra, 2026-09-28) #1074 prepared on a222a558; old integration paths audited
+  without importing its whole history. Fixed actual umask0277 publisher0400
+  receipt rejection; exact0400/0600 admission, no permission widening. Mutation
+  fails/restored/cmp;134offline filesystem/worker/SSH/Lua cases pass45.35s.
+  Root owns fresh review, then1075/1077 preparation; original runtime retained.
+
+- (Astra, 2026-09-20) R04s read-only manifest recovery implemented with explicit
+  missing/conflict/match states; malformed/unsafe/I/O remains an error.177 tests
+  pass, replaced-entry mutation fails/restores. #1073 refreshed checks green.
+  Next retry policy and collision-safe source reservation; no source activation.
+### Inherited parent checkpoints
+
 - (Astra, 2026-10-04) #1073 retains prior filename-cap repair and manifest
   runtime proofs during normal actual-main67ad2d8c refresh. Earlier approved
   predecessors merged; fresh exact-head gates remain, no activation/deployment.
@@ -34,6 +55,7 @@
   preserved local checkpoint8e262684 is an access anchor, not the latest head.
 
 ### Historical manifest checkpoints
+
 
 - (Astra, 2026-09-28) Propagated final worker90026032 through local #1069–#1073
   by normal merges, retaining both histories and exact worker/source-test bytes.

@@ -107,6 +107,13 @@
   before merge, retain its date, and independently prove installed guard behavior.
   Run mutation probes in isolated copies, not packages used by concurrent tests.
 
+- **2026-09-28 · Receipt recovery must accept safe modes its publisher creates.**
+  umask0277 turns a requested0600 manifest into0400. Read-only recovery now
+  admits exactly0400/0600 without chmod, retaining owner/type and drift checks.
+  Actual publish/read proof verifies unchanged mode/inode/bytes; group/other,
+  executable and special-bit modes remain rejected. Apply the publisher/reader
+  boundary check to metadata receipts as well as payload spool entries.
+
 - **2026-09-28 · Validate selected dependencies as well as current inputs.**
   The earliest supported R2 can select a previous-year R1 across midnight;
   matching trusted bytes do not establish calendar admission. Both import
@@ -222,6 +229,12 @@ Newest first. This is the repo-side memory that any agent (Codex, Claude,
 Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
+
+- **2026-09-20 · A recovered manifest and its payload are separate observations.**
+  Reader distinguishes missing manifest from missing payload and content conflict.
+  Duplicate JSON keys, unsafe paths, malformed content and concurrent replacement
+  must raise, never appear absent. A complete receipt recovered after directory
+  sync failure can match bytes but still does not authorize source deletion.
 
 - **2026-09-20 · A receipt must accept every supported producer basename.**
   Lua accepted240-byte names while manifest publishing capped200, stranding valid

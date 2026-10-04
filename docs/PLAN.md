@@ -1,6 +1,44 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current manifest preparation — 2026-10-04
+## Current reader preparation — 2026-10-04
+
+Owner approved1074 after older predecessors. Normal actual-maind3a8f4df merge
+retains both histories;963/964/966/1066/1072/1073 are merged. Reviewed1073 parent
+5ea7fefd and squashd3a8f4df trees are identical. Reader/source tests remain
+unchanged fromfa658b12, including prior0400/0600 mode repair. Repeat actual
+filesystem proofs; no receipt changes, service activation or deployment.
+253 combined reader/manifest/Lua/capture/import/spool/parser/document/artifact
+cases pass20.70s; reader source/tests byte-identical to repairedfa658b12.
+Renewed0600-only mutation fails real publish/read under restrictive umask0277;
+the reader rejects a safe publisher-created0400 manifest. Restored/apply_patch/
+cmp without widening permissions;52 reader/document cases pass0.72s afterward.
+Post-sync combined reader/capture/import/spool/document suite:266pass23.56s.
+Reader source/tests remain byte-identical tofa658b12; Ruff/whitespace clean.
+Publish after post-sync tests, then require fresh exact-head review/CI and
+mandatory420s cycle. Original runtime roadmap remains in latest integration PLAN.
+
+## Historical reader and parent checkpoints — superseded status, retained evidence
+
+> #1074 security-baseline refresh 2026-10-03: normal parentf20023c9 merge
+> retains secured main and both document histories. Runtime source unchanged
+> fromc6e532a8, including safe0400/0600 receipt admission without chmod.
+> Reader/publisher/Node/plan validation repeated; local preparation only,
+> pending actual parent merge and fresh publication gates. No service action.
+
+> #1074 local refresh 2026-09-28: normal prepared-parent a222a558 merge keeps
+> both documentation histories and exact latest worker source/test bytes.
+> Read-only review inventory found no #1074/#1075 threads; reader/retry and
+> #1077 handoff paths match preserved runtime1986d671, no lost local fixes found.
+> Actual publisher under umask0277 creates private0400 manifests: reader's old
+> exact0600 guard rejected them. Accept exactly0400/0600 without chmod, retaining
+> owner/type/identity/size and unsafe-mode rejection. Real filesystem regression
+> fails before repair and under guard mutation; restored/cmp. Final134cases pass
+> 45.35s including45 actual workers, synthetic SSH/capture retry and offline Lua.
+> Repeated receipt recovery proves unchanged inode/bytes/mode. Ruff clean.
+> One initial suite command named a nonexistent test file and ran zero tests;
+> corrected full run above is the evidence. No remote, service, DB or source
+> activation. Root handles publication/review; original runtime plan retained.
+### Parent manifest preparation — 2026-10-04, inherited checkpoint
 
 Owner approved1073 after963/964/966/1066/1072, all now merged. Normal actual-main
 67ad2d8c integration retains both histories and unchanged manifest bytes.
@@ -20,6 +58,7 @@ Original runtime plan: latest local integration PLAN, then capture/sealed-source
 retry/exclusive handover, usable Spiderweb/proximity and later website work.
 
 ## Historical branch and parent checkpoints — superseded status, retained evidence
+
 
 > #1073 security-baseline refresh 2026-10-03: normal parent3cce1ed1 merge
 > retains actualmaincc6b0a4d and both document histories; runtime/Lua source
@@ -1754,6 +1793,23 @@ both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04s read-only completion recovery — 2026-09-20
+
+On #1073: inspect_completion_manifest distinguishes missing_manifest,
+missing_content, content_conflict and match. Unsafe/malformed receipts and I/O
+failures raise instead of masquerading as absence. Private0700 directory and
+owned0600 regular manifest, nofollow/nonblock, at most4097bytes read, descriptor/
+named identity checks; strict schema/version/identity, duplicate keys rejected,
+then bounded SHA/size inspection of immutable captured bytes. No writes/repair,
+source acknowledgement or provenance/durability claim. Caller retains immutable
+directory/files through use; reads are byte-bounded, not time-bounded.
+177 combined tests pass0skips. Actual filesystem recovery covers repeated reads,
+missing states, corruption, unsafe FIFO/symlink/permissions, replaced entry and
+complete manifest left after directory sync failure. Disabling identity guard
+fails replaced-file test DID NOT RAISE RuntimeError; restored/cmp. Ruff clean.
+#1073 cb9ba634 reported checks green. Next durable retry policy and collision-safe
+source reservation before producer wiring; original runtime/new-site/dev order
+retained. No merge authority inferred, no service/SSH/DB/deployment changes.
 ### R04r completion manifest refresh — 2026-09-28
 
 Normal merge of #1072 head 4a764f1c preserves both histories and all inherited
