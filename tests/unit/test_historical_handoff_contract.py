@@ -105,9 +105,11 @@ def test_squash_lesson_follows_all_newer_lessons():
 
 def test_resume_explicitly_identifies_local_only_retrieval():
     plan = (ROOT / "docs/PLAN.md").read_text()
-    current = plan.split('> Historical checkpoint below', 1)[0]
+    boundary = '## Historical checkpoints — superseded, retain evidence as of each date'
+    assert boundary in plan
+    current = plan.split(boundary, 1)[0]
     assert 'LOCAL-ONLY runtime resume' in current
     assert '/home/samba/share/slomix-astra-runtime-integration-20260926' in current
     assert 'refactor/db-runtime-team-assignment-20260926' in current
-    assert 'git -C' in current and '1986d671^{commit}' in current
+    assert 'git -C' in current and '8e262684^{commit}' in current
     assert 'not fetchable from GitHub' in current

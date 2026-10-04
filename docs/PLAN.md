@@ -1,5 +1,26 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Current consolidation checkpoint — 2026-10-04
+
+Owner approved963/964/966/1066/1072/1073/1074/1075/1077, one at a time with
+fresh exact-head review/CI and postmerge verification. No merge yet.
+963 now changes the historical deployment recipe AND its tests; do not reuse
+33be0bbe or d8238e0c payload-identity claims for the corrected head.
+43 focused tests pass, including actual disposable deploy preflight, and the
+omitted-target / historical-scope mutations fail then restore/cmp.
+
+LOCAL-ONLY runtime resume: last saved integration checkpoint8e262684, on branch
+refactor/db-runtime-team-assignment-20260926 in
+/home/samba/share/slomix-astra-runtime-integration-20260926.
+Read that worktree's latest PLAN; the local checkpoint is not fetchable from GitHub.
+Read-only verification:
+`git -C /home/samba/share/slomix-astra-runtime-integration-20260926 cat-file -e '8e262684^{commit}'`.
+02c160cc and1986d671 are retained historical checkpoints, not current targets.
+Original runtime capture/retry/handover then Spiderweb/proximity/UI plan unchanged.
+NEVER MERGE924-943/967 and held956 remain excluded; no service/deployment actions.
+
+## Historical checkpoints — superseded, retain evidence as of each date
+
 > 2026-10-04 fresh review correction: owner approved963/964/966/1066/
 >1072-1075/1077 subject to individual fresh gates; do not merge with findings.
 > Runtime integration checkpoint8e262684 supersedes02c160cc; read latest local
@@ -10,10 +31,10 @@
 > never the live run clone or services. Historical labels have paragraph scope.
 
 > 2026-10-04 older-PR consolidation: #963 refreshed onto actual main0b22b014.
-> Both historical document streams are retained; the handoff and executable
-> recipe contract remain byte-identical to the reviewed33be0bbe. This is not
-> a deployment. Latest runtime roadmap remains in the local integration
-> worktree named below (checkpoint02c160cc, superseding1986d671).
+> At this initial refresh both document streams were retained and payload/test
+> bytes matched33be0bbe. The later06f044a7 recipe/test correction invalidates that
+> payload identity for subsequent heads. This was not a deployment.
+> Integration checkpoint02c160cc was current then, superseded by8e262684 above.
 > Older queue is reviewed before1079-1084. Hold956 and NEVER MERGE924-943/967.
 > Fresh tests, exact-head CI/review and numbered authorization precede merge.
 > Validation:17 focused contracts pass, including execution of the documented
