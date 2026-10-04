@@ -104,7 +104,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     fi
 
     if [ -n "${base:-}" ]; then
-        mapfile -t files < <(git diff --name-only --diff-filter=d "$base..$local_sha" 2>/dev/null)
+        mapfile -d '' -t files < <(git diff --name-only -z --diff-filter=d "$base..$local_sha" 2>/dev/null)
         # Drop whatever the branch merely inherited by merging origin/main. The
         # check below hunts FOREIGN files — another session's work swept in by a
         # wildcard add — and a file that arrived from main is the opposite of
@@ -116,17 +116,17 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         # guard that fires on an ordinary merge teaches people to reach for
         # --no-verify, which is how a guard stops guarding.
         if git rev-parse --verify -q origin/main >/dev/null; then
-            mapfile -t against_main < <(git diff --name-only --diff-filter=d "origin/main...$local_sha" 2>/dev/null)
+            mapfile -d '' -t against_main < <(git diff --name-only -z --diff-filter=d "origin/main...$local_sha" 2>/dev/null)
             if [ "${#against_main[@]}" -gt 0 ]; then
-                mapfile -t files < <(
-                    comm -12 \
-                        <(printf '%s\n' "${files[@]}" | sort -u) \
-                        <(printf '%s\n' "${against_main[@]}" | sort -u)
+                mapfile -d '' -t files < <(
+                    comm -z -12 \
+                        <(printf '%s\0' "${files[@]}" | sort -z -u) \
+                        <(printf '%s\0' "${against_main[@]}" | sort -z -u)
                 )
             fi
         fi
     else
-        mapfile -t files < <(git ls-tree -r --name-only "$local_sha" 2>/dev/null)
+        mapfile -d '' -t files < <(git ls-tree -r --name-only -z "$local_sha" 2>/dev/null)
     fi
     [ "${#files[@]}" -eq 0 ] && continue
 

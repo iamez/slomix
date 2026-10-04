@@ -1,5 +1,12 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · A bounded review diff does not bound transferred ancestry.**
+  A new parent commit transfers its reachable objects too. Require source
+  history already reachable on the exact destination before publishing review
+  refs. Check symbolic type under transaction locks: Git2.34 no-deref verify
+  still accepts a matching symbolic OID. Carry NUL filenames through the
+  bundled guard so LF/TAB/quotes cannot silently skip content/raw-data checks.
+
 - **2026-10-03 · Immutable snapshots must read real objects and verify refs.**
   A pinned commit OID does not disable refs/replace. Set GIT_NO_REPLACE_OBJECTS
   for every Git subprocess, including direct blob reads and publication hooks.

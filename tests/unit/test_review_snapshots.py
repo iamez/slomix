@@ -41,7 +41,7 @@ def repo(tmp_path):
     return checkout
 
 
-def commit(repo, files):
+def commit(repo, files, *, published=True):
     for name, content in files.items():
         path = repo / name
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -50,6 +50,89 @@ def commit(repo, files):
     git(repo, "commit", "-m", "source")
     # A local tracking ref gives the genuine hook its normal origin/main base.
     git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+    if published:
+        # Fixture setup: source is already public on this disposable destination.
+        # No production remote or hook is changed.
+        git(repo.parent / "remote.git", "fetch", "--quiet", str(repo),
+            "HEAD:refs/heads/main")
+
+
+def test_unpublished_source_cannot_leak_excluded_history(repo):
+    commit(repo, {"a.py": "selected\n", "b.txt": "private fixture\n"}, published=False)
+    before = git(repo, "ls-remote", "origin")
+    result = run(repo, "cut", "--push", area="safe|a.py", check=False)
+    assert result.returncode != 0, "unpublished parent leaked unselected history"
+    assert "source must already be advertised" in result.stderr
+    assert git(repo, "ls-remote", "origin") == before
+    assert snapshots(repo) == ""
+    source = git(repo, "rev-parse", "HEAD")
+    probe = subprocess.run(["git", "-C", str(repo.parent / "remote.git"),
+                            "cat-file", "-e", source], capture_output=True)
+    assert probe.returncode != 0
+
+
+@pytest.mark.parametrize("raced", ["review-base", "review"])
+def test_symbolic_local_review_ref_is_rejected(repo, raced):
+    commit(repo, {"a.py": "selected\n"})
+    run(repo, "cut")
+    refs = dict(line.split() for line in snapshots(repo).splitlines())
+    ref = next(ref for ref in refs if f"/{raced}/" in ref)
+    git(repo, "update-ref", "refs/heads/mutable-alias", refs[ref])
+    git(repo, "symbolic-ref", ref, "refs/heads/mutable-alias")
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0, "symbolic review ref was certified immutable"
+    assert snapshots(repo.parent / "remote.git") == ""
+    assert git(repo, "symbolic-ref", ref) == "refs/heads/mutable-alias"
+
+
+@pytest.mark.parametrize("raced", ["review-base", "review"])
+def test_symbolic_ref_race_is_rejected_in_transaction(repo, monkeypatch, raced):
+    commit(repo, {"a.py": "selected\n"})
+    run(repo, "cut")
+    refs = dict(line.split() for line in snapshots(repo).splitlines())
+    ref = next(ref for ref in refs if f"/{raced}/" in ref)
+    alias = "refs/heads/mutable-alias"
+    git(repo, "update-ref", alias, refs[ref])
+    real_git = shutil.which("git")
+    tools = repo.parent / "symbolic-race"
+    tools.mkdir()
+    wrapper = tools / "git"
+    wrapper.write_text(
+        f"#!{sys.executable}\nimport os, subprocess, sys\n"
+        f"real_git = {real_git!r}\n"
+        "if sys.argv[1] == 'update-ref' and '--stdin' in sys.argv:\n"
+        f"    subprocess.run([real_git, 'symbolic-ref', {ref!r}, {alias!r}], check=True)\n"
+        "os.execv(real_git, [real_git, *sys.argv[1:]])\n"
+    )
+    wrapper.chmod(0o755)
+    monkeypatch.setenv("PATH", f"{tools}{os.pathsep}{os.environ['PATH']}")
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0, "raced symbolic ref passed transaction verification"
+    assert snapshots(repo.parent / "remote.git") == ""
+    assert git(repo, "symbolic-ref", ref) == alias
+    assert git(repo, "rev-parse", alias) == refs[ref]
+
+
+def test_source_on_fetch_remote_only_cannot_authorize_push_destination(repo):
+    commit(repo, {"a.py": "selected\n"})
+    destination = repo.parent / "empty-push.git"
+    git(repo, "init", "--bare", str(destination))
+    git(repo, "remote", "set-url", "--push", "origin", str(destination))
+    result = run(repo, "cut", "--push", check=False)
+    assert result.returncode != 0
+    assert "source must already be advertised" in result.stderr
+    assert snapshots(repo) == snapshots(destination) == ""
+
+
+@pytest.mark.parametrize("filename", ["archive\n.zip", "archive\t.zip", 'archive".zip'])
+def test_unusual_raw_filename_does_not_escape_guard(repo, filename):
+    commit(repo, {filename: "historical fixture\n"})
+    git(repo, "tag", "archived-baseline")
+    commit(repo, {filename: ""})
+    result = run(repo, "--base", "archived-baseline", "cut", "--push", check=False)
+    assert result.returncode != 0, "quoted filename bypassed the publication guard"
+    assert "repository publication guard failed" in result.stderr
+    assert snapshots(repo) == snapshots(repo.parent / "remote.git") == ""
 
 
 def run(repo, *args, area="area|.", check=True):
@@ -196,6 +279,7 @@ def test_separate_push_destination_is_inspected_and_published(repo):
     destination = repo.parent / "push.git"
     git(repo, "init", "--bare", str(destination))
     git(repo, "remote", "set-url", "--push", "origin", str(destination))
+    git(destination, "fetch", "--quiet", str(repo), "HEAD:refs/heads/main")
     run(repo, "cut", "--push")
     assert snapshots(destination) == expected
     assert len((repo.parent / "hook-calls").read_text().splitlines()) == 2

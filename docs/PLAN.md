@@ -1,5 +1,28 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Current snapshot-security correction — 2026-10-04
+
+Owner explicitly approved966, but new review findings block merge.
+Publication now requires source ancestry already reachable from an advertised
+ordinary branch on the exact push destination; unknown/shallow ancestry fails
+closed. No implicit source upload. Local symbolic refs are rejected again while
+no-deref transaction locks are held: Git2.34 still resolved symbolic OIDs during
+verify, so no-deref alone failed both real races. No existing ref is overwritten.
+Bundled hook carries NUL-delimited filenames through enumeration/intersection,
+including LF/TAB/quotes. Fixture setup explicitly seeds only disposable remotes.
+106 combined snapshot/hook/Node/plan tests pass38.46s; initial6security cases
+failed against old code,2new transaction races failed against the first fix.
+Disabling three final guards produces6failures; restored/cmp and6pass.
+Actual local Git/remote/hook/object proofs only; no real snapshot refs changed.
+Ruff, bash-n and ShellCheck pass. Earlier byte-identity claims below describe
+their prior heads, not this changed security implementation. Fresh review/CI
+and actual963/964 main synchronization remain required before966 merge.
+Remote advertisement is an observation, not a lock against later remote removal.
+Sources: https://git-scm.com/docs/git-push,
+https://git-scm.com/docs/git-update-ref, https://git-scm.com/docs/git-ls-remote.
+
+## Historical checkpoints — evidence applies to the heads named below
+
 > 2026-10-04 #966 older-first consolidation: normal main0b22b014 integration
 > retains both histories and unchanged reviewed a6cea132 tooling/tests.
 > No real review refs are published or changed. NEVER MERGE924-943/967 and

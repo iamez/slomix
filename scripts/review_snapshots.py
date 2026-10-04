@@ -212,6 +212,62 @@ def assert_compatible(expected, existing):
             raise ValueError(f"immutable snapshot conflict: {ref}; no refs updated")
 
 
+def require_published_source(source, remote):
+    """Only reuse history already reachable from an advertised ordinary branch.
+
+    Unknown local tips and shallow ancestry fail closed; never publish the
+    source implicitly merely to satisfy this check. Replacement objects stay off.
+    This observes remote reachability, not a lock against later remote deletion.
+    """
+    for ref, tip in remote.items():
+        if ref.startswith(("refs/heads/review/", "refs/heads/review-base/")):
+            continue
+        result = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", source, tip],
+            capture_output=True, env=git_env(),
+        )
+        if result.returncode == 0:
+            return
+    raise ValueError("source must already be advertised by the push destination")
+
+
+def reject_symbolic_refs(refs):
+    for ref in refs:
+        result = subprocess.run(["git", "symbolic-ref", "-q", ref],
+                                capture_output=True, env=git_env())
+        if result.returncode == 0:
+            raise ValueError("symbolic local review ref is not immutable")
+        if result.returncode != 1:
+            raise ValueError("cannot inspect local review ref type")
+
+
+def commit_direct_refs(updates, refs):
+    """Recheck symbolic type while the no-deref transaction holds ref locks.
+
+    Older Git verifies the resolved OID even with no-deref. The locked type
+    check closes that race without overwriting an existing symbolic ref.
+    """
+    with subprocess.Popen(
+        ["git", "update-ref", "--no-deref", "--stdin"],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        text=True, env=git_env(),
+    ) as process:
+        process.stdin.write("start\n" + "\n".join(updates) + "\nprepare\n")
+        process.stdin.flush()
+        for expected in ("start: ok\n", "prepare: ok\n"):
+            if process.stdout.readline() != expected:
+                _, error = process.communicate()
+                raise ValueError("local ref transaction failed: " + error.strip())
+        try:
+            reject_symbolic_refs(refs)
+        except BaseException:
+            process.communicate("abort\n")
+            raise
+        _, error = process.communicate("commit\n")
+        if process.returncode:
+            raise ValueError("local ref transaction failed: " + error.strip())
+
+
 def preflight_publication(refs, remote):
     """Run the bundled guard even in fresh clones with no installed Git hook.
 
@@ -267,12 +323,14 @@ def main():
         refs.update(snapshot(base, source, paths, name))
     existing = existing_refs()
     assert_compatible(refs, existing)
+    reject_symbolic_refs(refs)
     remote = {}
     if args.push and refs:
         destination = push_destination()
         remote = {ref: sha for sha, ref in
                   (line.split() for line in remote_git("ls-remote", "--heads", "--", destination).decode().splitlines())}
         assert_compatible(refs, remote)
+        require_published_source(source, remote)
         ordered = list(refs)
         for offset in range(0, len(ordered), 2):
             pair = ordered[offset:offset + 2]
@@ -284,8 +342,7 @@ def main():
     updates = [f"{'verify' if ref in existing else 'create'} {ref} {sha}"
                for ref, sha in refs.items()]
     if updates:
-        git("update-ref", "--stdin", data=("start\n" + "\n".join(updates)
-            + "\nprepare\ncommit\n").encode())
+        commit_direct_refs(updates, refs)
     for ref, sha in refs.items():
         print(f"{ref} {sha}")
     # One atomic push per pair: real hooks see at most 25 changed files per ref.

@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04)966security review repaired: published-source admission on
+  actual push target, locked symbolic-ref type check and NUL hook filenames.
+  106tests pass;6mutant failures restored/cmp. No real review refs or deploy.
+  Await963/964 consolidation and fresh current-head gates before merging966.
+
 - (Codex, 2026-10-03) #966 four fresh findings repaired: transaction verify for
   existing local refs, raw binary admission independent of forced-text drivers,
   replacement-object suppression across Git/hook subprocesses, and signed
