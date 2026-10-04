@@ -2,8 +2,8 @@
 
 ## Current #1083 queue gate — 2026-10-05
 
-#1079 is merged. #1080 latest959cb109 awaits review/CI;1081/1082remain locally
-prepared. This normal parent1b5466cd merge retains their fixes and documentation
+#1079 is merged. #1080 latest6e0be64b awaits review/CI;1081/1082remain locally
+prepared. This normal parent3739dd5a merge retains their fixes and documentation
 correction. Next actual1082merge, then1083final sync and fresh CI/SQL/review.
 No source changes, services, live relinking or production actions. Original
 runtime roadmap retained in latest integration PLAN. All entries below are
@@ -82,7 +82,7 @@ inspect after restart, do not blindly clean schemas. No live data repair/deploy.
 
 ## Historical inherited #1082 queue gate — 2026-10-05
 
-#1079 is merged. #1080published959cb109 awaits fresh gates; #1081local7a882cf1
+#1079 is merged. #1080published6e0be64b awaits fresh gates; #1081local250d34d7
 incorporates its documentation correction. This1082local merge preserves that
 history and the reconciled stats/proximity validation boundary. Next actual
 1080/1081merges, then final1082main sync, CI/SQL/review before publication/merge.
@@ -189,9 +189,9 @@ the original Discord+website-off and recovery gates. No service/deployment/merge
 
 ## Historical inherited #1081 queue gate — 2026-10-05
 
-#1079 is merged7b9b43a6. #1080 latest published959cb109 addresses review4179646678
+#1079 is merged7b9b43a6. #1080 latest published6e0be64b addresses4179646678/4179660774
 and awaits fresh CI/review. This1081local tree incorporates that parent while
-preserving ownership source/tests8381da13. Next: finish1080gates/actual merge,
+preserving ownership source/tests8381da13 and full-section document guards. Next: finish1080gates/actual merge,
 then synchronize1081 with that squash and obtain fresh exact-head proofs/review.
 Do not re-wait1079; do not publish1081before1080. No service/liveDB/production
 actions. Original runtime roadmap remains in latest integration PLAN at
@@ -289,6 +289,15 @@ Review4179646678 correctly identified conflicting predecessor status in the
 former current section. The pre-merge preparation below is now explicitly
 historical. Do not wait for1079 again: it is merged; next gate is1080fresh
 exact-head CI/review followed by the mandatory settle cycle.
+
+Follow-up4179660774 found a second current-labelled entry point in BACKLOG.
+Its current-position section now routes to this top checkpoint and the latest
+integration PLAN, without maintaining a duplicate numeric PR queue. Original
+queue/anchor evidence remains under a separate historical level-2 heading.
+RCA: both old document tests extracted only the first bullet, missing stale
+prose before it. They now inspect the entire current section; both failed on
+old content. Reinjecting stale queue prose fails the new guard, restored/cmp.
+35focused cases pass after correction. No importer or PG test source change.
 
 ## Historical #1080 local preparation — before #1079 merged
 
