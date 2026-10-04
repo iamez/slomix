@@ -2,8 +2,8 @@
 
 ## Current reader preparation — 2026-10-04
 
-Owner approved1074 after older predecessors. Normal localb2c2c703 parent merge
-retains actual main7a5ac9c1 and both histories.963/964 merged; later parents are
+Owner approved1074 after older predecessors. Normal local32c2aa31 parent merge
+retains actual mainfa40c12e and both histories.963/964/966 merged; later parents are
 local preparations, not presumed merged. Reader/source tests remain
 unchanged fromfa658b12, including prior0400/0600 mode repair. Repeat actual
 filesystem proofs; no receipt changes, service activation or deployment.
@@ -35,9 +35,9 @@ review/CI. Original runtime roadmap remains in the latest local integration PLAN
 > activation. Root handles publication/review; original runtime plan retained.
 ### Parent manifest preparation — 2026-10-04, inherited checkpoint
 
-Owner approved1073 after963/964/966/1066/1072. Local normal parent9a330777
-integration includes actual main7a5ac9c1 and retains both histories and manifest
-bytes.963/964 merged;966/1066/1072 remain prerequisites, not presumed merged.
+Owner approved1073 after963/964/966/1066/1072. Local normal parentce35b42e
+integration includes actual mainfa40c12e and retains both histories and manifest
+bytes.963/964/966 merged;1066/1072 remain prerequisites, not presumed merged.
 227 combined manifest/Lua/capture/import/spool/parser/document/artifact cases
 pass20.27s; manifest source/tests match prior repairedf20023c9 byte-for-byte.
 Current backlog now explicitly routes to latest integration PLAN/access anchor.
@@ -93,8 +93,8 @@ retry/exclusive handover, usable Spiderweb/proximity and later website work.
 ### Parent completion preparation — 2026-10-04, inherited checkpoint
 
 Owner approved1072 as part of the older queue, after963/964/966/1066.
-Local normal parent4b66761e integration includes actual964 main7a5ac9c1,
-966 snapshot preparation and1066 importer fixes; both documentation histories
+Local normal parent06e5a20d integration includes actual966 mainfa40c12e
+and1066 importer fixes; both documentation histories
 retained. Offline completion prototype remains unchanged fromc87a2cb0. No game
 activation, service action or deployment. Repeat Lua/capture/import proofs;
 publish only after preceding actual merges and another main synchronization.
@@ -157,12 +157,17 @@ retry/exclusive handover, then Spiderweb/proximity/UI sequence is unchanged.
 ## Inherited ingest preparation — historical checkpoint on 2026-10-04
 
 Owner approved1066 after963/964/966 and fresh individual gates. Local normal
-maina2737e7a refresh preserves reviewed815af476 importer/parser bytes and
+mainfa40c12e refresh preserves reviewed815af476 importer/parser bytes and
 both document histories. Local proof service timed out; no application DB
 fallback. CI run37230517327 now proves all10 neutral importer scenarios on
 both PostgreSQL14 and17 (jobs111519006384/111519006487 inspected). Full suites
 7528pass/157skip and7532pass/153skip; matching76233b74 Codex review has no major
-issues. Final actual-main synchronization after964/966 and fresh gates remain.
+issues.966 now mergedfa40c12e at20:28:07Z after clean420s gates. Reviewedca082271
+and squash tree581095f0 match exactly; actual main integrated here. Fresh
+exact-head CI/SQL/review remain required before1066 merge.
+After actual966 main integration:259 combined offline contracts and executable
+Git/parser/filesystem/artifact proofs pass47.74s. Importer/parser and new SQL
+scenario bytes unchanged from76233b74; fresh CI must execute all10 PG cases.
 Preparation for explicit CI proof: add selected previous-year R1 scenario to
 the existing canonical PostgreSQL fixture. Real parser must select2019 R1 for
 2020 R2; both entry points reject it and independent SQL count/list prove no
@@ -173,12 +178,17 @@ preflight); importer code remains unchanged. Publishing now for earlier CI
 evidence does not change merge order:964 then966 then1066, each actual-main sync.
 Current runtime plan is in the latest local integration PLAN, not an older
 resume hash quoted below. No service/deploy/production or NEVER MERGE changes.
-Local integration now includes966 preparationca082271 with both document streams
-and unchanged importer/parser/test bytes. Actual964 main7a5ac9c1 is included;
-966 still awaits its fresh exact-head review/CI and actual merge.
+Local integration includes966ca082271 and its actual squashfa40c12e with both
+document streams and unchanged importer/parser/test bytes. Squash conflicts
+retain already-integrated identical parent content and this slice's additions.
 Combined importer/spool/parser plus snapshot/hook/ledger/handoff/artifact/Node/
 plan suite:259 tests pass49.27s. Actual SQL evidence above belongs to76233b74;
 repeat exact-head CI after final prerequisite synchronization.
+Fresh selected-R1 guard mutation after parent integration: four admission cases
+fail ('imported' instead of 'failed'), plus two actual midnight-parser/filesystem
+cases fail ('imported'/'match' instead of 'failed'/'invalid'). Both source files
+restored using apply_patch and cmp against saved copies; six targeted cases
+pass0.18s. This local mutation proof is DBless; CI SQL evidence remains separate.
 
 ## Inherited snapshot preparation — historical checkpoint on 2026-10-04
 
