@@ -1,5 +1,11 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> 2026-10-04: CI and next Codex review found094 absent from the release list.
+> Added it beside093 in existing v1.45.0 config, without running any deploy.
+> Release-config+runner93tests pass; bash source prints094, bash-n/ShellCheck pass.
+> Previous88e366fe CI was1failed/7606passed/153skipped, not green. Fresh gates
+> required again. No production action, no new research lane or plan replacement.
+
 > 2026-10-04:1084 initialCI green but review found normalized-map mismatch and
 > permissive-receipt adoption. Fixed both; new094 records strict provenance on
 > fresh INSERT only, old receipts remainFALSE.540tests/20skips,60focused;2more

@@ -1,5 +1,12 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · A migration has three delivery artifacts.**
+  Add the numbered SQL, fresh-bootstrap schema, and active MIGRATIONS entry in
+  the latest release config. Validate test_release_config_contract.py as well
+  as test_apply_migrations.py locally: otherwise --only/--validate can block the
+  next owner deployment even when parser and migration SQL tests pass. Updating
+  the list is not permission to execute a migration or deploy frozen production.
+
 - **2026-10-04 · Receipt provenance is enforced state, not a caller warning.**
   A matching hash proves source bytes, not whether earlier ingestion enforced
   parent linkage. Strict replay of permissive ON CONFLICT imports can falsely

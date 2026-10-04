@@ -22,6 +22,13 @@ Normalized query still uses idx_rounds_map_round_start for round/start; sampled
 like-for-like speedup. No speculative new index. Fresh exact-head CI/review needed;
 review replies precede thread closure. Next gates below remain unchanged.
 
+Full CI88e366fe found one release-registration omission, not a parser test failure:
+"migrations no release config ever ships: 094_proximity_runtime_parent_gate.sql"
+(7606passed/153skipped,1failed on Python3.13). Added094 to the existing latest
+release config beside083-093; this neither runs migrations nor enables workers.
+Release-config contract belongs in local migration validation alongside the runner.
+Fresh CI/review required after this correction; production remains frozen.
+
 Parent PR1083/67a39a09 now has successful CI and matching Codex review with no
 major issues; both fixed threads resolved,0unresolved/full pagination. This slice
 continues from that exact head, without merging or changing any running service.
