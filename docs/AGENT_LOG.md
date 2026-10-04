@@ -1,5 +1,13 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-05 · Reconcile shared admission APIs, not only conflict markers.**
+  An older runtime slice exported validate_stats_filename for manifest/import
+  callers while proximity publication parameterized the same private helper.
+  Retain the public stats validator and separate proximity admission; choosing
+  either conflict side loses a contract. Run both caller families and composed
+  long-name/read-only retries. Widening stats admission must fail the dedicated
+  test; restore the mutation with apply_patch and verify exact bytes with cmp.
+
 - **2026-10-04 · Private spool is a destination, not a chmod of shared input.**
   DEV local_proximity is a symlink to the shared legacy source. A default find
   reported zero files because it did not traverse that command-line symlink;
