@@ -25,6 +25,12 @@
   observed metadata; metadata checks are supplementary, not the content proof.
   Full handover must exclude legacy writers that do not enforce the new digest.
 
+- **2026-10-05 · Separate current instructions from pre-merge history.**
+  A new closure paragraph does not make contradictory wait instructions in the
+  same current section safe. Put an explicit historical heading before the old
+  preparation text and state the next actual PR gate once. Preserve evidence,
+  but never leave both "merged" and "wait for this merge" as current directions.
+
 - **2026-10-04 · Prefix-only test selection missed a legacy caller.**
   test_proximity*.py omits proximity_sprint_pipeline_test.py. A transaction
   contract change therefore passed the selected315 tests but failed full CI.
