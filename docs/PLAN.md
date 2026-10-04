@@ -2,10 +2,10 @@
 
 ## Current #1083 queue gate — 2026-10-05
 
-#1079 and #1080 are merged (main 58938262). #1081 published 9af897c9 awaits
-fresh review/CI; #1082 is locally prepared at d159f915. This normal parent merge
-retains their fixes and documentation. Next actual #1081 then #1082 merges,
-then #1083 final main sync and fresh CI/SQL/review before publication/merge.
+#1079 through #1081 are merged (main b59a2336). #1082 published c934a36a awaits
+fresh review/CI. This normal published-parent merge retains all fixes and
+documentation. Next actual #1082 merge, then #1083 final main sync and fresh
+CI/SQL/review before publication/merge.
 No source changes, services, live relinking or production actions. Original
 runtime roadmap retained in latest integration PLAN. All entries below are
 historical preparation evidence, not additional current wait instructions.
