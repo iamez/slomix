@@ -77,28 +77,6 @@
   its lease check. Create absent pairs atomically with absence leases; existing
   complete pairs are only observed, never guaranteed against external writers.
 
-- **2026-09-28 · Snapshot identity and remote admission depend on Git configuration.**
-  show-ref exits1 for an empty branch set; for-each-ref gives a valid empty set.
-  Origin's fetch URL need not be its push URL: resolve one push destination and
-  inspect/publish that same endpoint, retaining create-only CAS for races. Fail
-  before ref writes for multiple URLs rather than promise cross-remote atomicity.
-  Pin commit-tree UTF-8: i18n.commitEncoding otherwise changes commit headers
-  and OIDs for identical source/base inputs. Test with actual disposable Git
-  repos, genuine hooks, distinct bare remotes and independent object inspection.
-
-- **2026-09-28 · A flag named exclude does not make a Git pathspec negative.**
-  Passing a plain path through --exclude expanded snapshot selection; accepting
-  an empty area silently lost requested coverage. Validate actual exclusion
-  magic and nonempty measured changes before all ref writes. Disposable local
-  remotes prove rejection without refs/push hooks, and exact successful scope.
-
-- **2026-09-27 · Planned Git path slices are not actual tree differences.**
-  Restoring a file over a source directory can implicitly remove unselected
-  children. Validate generated trees against the exact selected path set and
-  line/file limits before publishing refs; reject unsafe D/F splits. A baseline
-  tree entry is not an index leaf: restore selected descendant blobs instead.
-  Reject duplicate area identities and empty/exclusion-only pathspecs before
-  Git's implicit whole-tree selection or dictionary replacement loses scope.
 - **2026-10-03 · Read-only ACL checks need more than table privileges.**
   PostgreSQL documents column ACLs separately and allows NOINHERIT memberships
   to remain reachable through SET ROLE. PG16 separates SET from MEMBER; earlier
@@ -115,6 +93,7 @@
   catalog queries and actual denied SQL. Fail closed if unrelated PUBLIC or
   inherited role privileges still authorize writes; do not revoke those globally.
   Test SET LOCAL ROLE must be RESET before releasing a successful savepoint.
+
 - **2026-10-03 · Artifact provenance does not certify the RUN index.**
   A clean tracked status can hide locally changed runtime files behind
   assume-unchanged or skip-worktree. Checkout of a new commit preserves these
@@ -127,6 +106,21 @@
   observed undici and brace-expansion findings. Refresh the advisory result
   before merge, retain its date, and independently prove installed guard behavior.
   Run mutation probes in isolated copies, not packages used by concurrent tests.
+
+- **2026-09-28 · Snapshot identity and remote admission depend on Git configuration.**
+  show-ref exits1 for an empty branch set; for-each-ref gives a valid empty set.
+  Origin's fetch URL need not be its push URL: resolve one push destination and
+  inspect/publish that same endpoint, retaining create-only CAS for races. Fail
+  before ref writes for multiple URLs rather than promise cross-remote atomicity.
+  Pin commit-tree UTF-8: i18n.commitEncoding otherwise changes commit headers
+  and OIDs for identical source/base inputs. Test with actual disposable Git
+  repos, genuine hooks, distinct bare remotes and independent object inspection.
+
+- **2026-09-28 · A flag named exclude does not make a Git pathspec negative.**
+  Passing a plain path through --exclude expanded snapshot selection; accepting
+  an empty area silently lost requested coverage. Validate actual exclusion
+  magic and nonempty measured changes before all ref writes. Disposable local
+  remotes prove rejection without refs/push hooks, and exact successful scope.
 
 - **2026-09-28 · Build cwd is not necessarily deployment source.**
   dev_deploy.sh defaults SRC to the primary checkout, even when invoked from
@@ -166,6 +160,14 @@
   loses the transition during cooldown or after a failed retry. Persist one
   pending-warning bit per key until warning ACK or superseding nonwarn data;
   keep latest payloads and delivery history separate, without a historical queue.
+
+- **2026-09-27 · Planned Git path slices are not actual tree differences.**
+  Restoring a file over a source directory can implicitly remove unselected
+  children. Validate generated trees against the exact selected path set and
+  line/file limits before publishing refs; reject unsafe D/F splits. A baseline
+  tree entry is not an index leaf: restore selected descendant blobs instead.
+  Reject duplicate area identities and empty/exclusion-only pathspecs before
+  Git's implicit whole-tree selection or dictionary replacement loses scope.
 
 - **2026-09-27 · Publication modes are filtered by the process umask.**
   open(mode=0600) under umask0277 creates0400, still readable by its owner.

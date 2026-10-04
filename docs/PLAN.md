@@ -2,11 +2,16 @@
 
 ## Current snapshot-security correction — 2026-10-04
 
-Owner explicitly approved966.9648fa41 has14successful checks, matching Codex
-no-major-issues review and all5answered threads resolved. Local preparation now
-integrates reviewed964/bf8c42a1, preserving both histories and source/hook bytes.
-Combined snapshot/hook/ledger/handoff/artifact/Node/plan proofs:169 pass46.98s.
-Actual964 squash/main sync and fresh exact-head gates still block966 merge.
+Owner explicitly approved966.964 merged as7a5ac9c1 at20:12:47Z through the
+mandatory420s cycle. Reviewedbf8c42a1 and actual squash tree5e956b96 are identical.
+This normal actual-main integration preserves both histories and source/hook
+bytes; already-integrated ledger content retained in squash conflict resolution.
+Previous966 head9648fa41 had14successful checks, matching Codex no-major-issues
+review and all5answered threads resolved; fresh exact-head gates are required.
+Combined pre-squash snapshot/hook/ledger/handoff/artifact/Node/plan proofs:
+169 pass46.98s. After actual-main synchronization:169 pass47.14s. Restored
+newest-first ordering of inherited lesson blocks without changing their bodies;
+26 documentation contracts pass0.44s afterward. Fresh review/CI still required.
 Latest non-main-source correction: pass the pinned source OID explicitly to
 the bundled guard. Its snapshot mode compares against that exact commit and
 does not intersect with ambient origin/main. Normal push-hook behavior remains
