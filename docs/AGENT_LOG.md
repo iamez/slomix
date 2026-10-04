@@ -238,6 +238,32 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-20 · Cleanup waits can be interrupted too.**
+  Catching cancellation only around the first worker join leaves the termination
+  joins vulnerable. Defer their exceptions, finish escalation within a fixed
+  cleanup budget, close the reaped process, then propagate the original error.
+  Inject interruptions into each join; use fixture cleanup so a failed regression
+  does not itself leave a live worker. OS cleanup failure must remain explicit.
+  Capture the supervisor's own exception explicitly: sys.exc_info in finally
+  may instead describe an unrelated exception being handled by its caller.
+
+- **2026-09-20 · Observation time is not child exit time.**
+  After a bounded join, a late parent clock read cannot prove an already exited
+  child exceeded its budget. Use observed liveness for timeout intervention and
+  preserve completed/failed exit status otherwise. Test with a real child and
+  an isolated supervisor clock jump, keeping multiprocessing waits real.
+
+- **2026-09-20 · Reserve and consume producer dispatch separately.**
+  An existing generation directory is not permission to rerun its writer.
+  Persist an exclusive claim before dispatch and retain it even after failures;
+  interrupted handoff may strand a generation but must not overwrite its data.
+  Keep generation identity on both producer path and completion callback.
+
+- **2026-09-20 · A failed reservation may still own its namespace.**
+  Atomic mkdir prevents two same-token writers from reserving one generation.
+  A later fsync failure can leave that directory; retry must refuse reuse even
+  when empty. Never infer an empty directory is free. Keep source reservation,
+  immutable payload completion and durable receipt delivery as separate states.
 - **2026-09-20 · Retry must match the requested identity, not only stored bytes.**
   A self-consistent existing completion receipt can describe a different requested
   snapshot. Compare caller size/hash before returning content_present; otherwise

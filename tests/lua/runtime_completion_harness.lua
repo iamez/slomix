@@ -1,5 +1,7 @@
 -- Real temporary filesystem with ET-shaped bindings, never a running server.
-local module_path, directory, scenario = arg[1], arg[2], arg[3]
+local module_path, directory, scenario, generation = arg[1], arg[2], arg[3], arg[4]
+if scenario == "unsafe-generation" then generation = "../" .. generation end
+if scenario == "uppercase-generation" then generation = string.upper(generation) end
 local writer = dofile(module_path)
 local name = "2026-09-20-120000-oasis-round-1.txt"
 if scenario == "unsafe-name" then name = "../" .. name end
@@ -9,7 +11,7 @@ local handle
 local api = {
     FS_WRITE = 1,
     trap_FS_FOpenFile = function(path)
-        assert(path == "gamestats/" .. name)
+        assert(path == "gamestats/runtime-snapshots/" .. generation .. "/" .. name)
         if scenario == "open-fail" then return 0, -1 end
         opened = true
         handle = assert(io.open(directory .. "/" .. name, "wb"))
@@ -38,7 +40,8 @@ local chunks = {"header\n", "player-row\n"}
 if scenario == "sparse" then chunks = {[1] = "x", [3] = "z"} end
 if scenario == "empty" then chunks = {} end
 if scenario == "oversize" then chunks = {string.rep("x", 8 * 1024 * 1024 + 1)} end
-local ok = pcall(writer.write, api, name, chunks, function(receipt)
+local ok = pcall(writer.write, api, generation, name, chunks, function(receipt, receipt_generation)
+    assert(receipt_generation == generation, "completion lost generation identity")
     assert(closed and writes == 2, "completion preceded payload close")
     if scenario == "notify-error" then error("fixture notification failure") end
     assert(receipt.version == 1 and receipt.filename == name and receipt.bytes == 18)

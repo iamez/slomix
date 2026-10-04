@@ -27,6 +27,46 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) #1077 actual-main8f298662 refresh keeps old producer
+  work, actual merged reservation and worker fixes. No source activation.
+  Predecessors merged; await fresh exact-head gates and review threads. Runtime
+  delivery/sealing/retry/handover remains the next development track.
+  Read the latest PLAN in /home/samba/share/slomix-astra-runtime-integration-20260926;
+  retained local checkpoint8e262684 is an access anchor, not the latest head.
+
+### Historical producer checkpoints
+
+- (Astra, 2026-09-28) #1077 prepared on1075 parent770ed5b3, retaining final
+  worker guards and original producer/reservation/Lua behavior. Relevant paths
+  audited against1986d671, no missing local backports.168offline cases pass
+  45.65s; exclusive-claim and generation-delivery mutations fail/restored/cmp.
+  All three new durable queue trees are clean for root publication/review;
+  no live source/service/DB changes. Original runtime continuation not replaced.
+
+- (Astra, 2026-09-20) #1077 review4057883492/4057883502: defer interruptions
+  through bounded child reaping and preserve the original exception; broaden
+  serialization-failure test to PicklingError with actual serializer proof.
+  Self-review additionally fixed inherited caller exception context suppressing
+  cancellation; tests reproduce calls from an unrelated except block.
+  Runtime delivery/sealing remains next. No merge or service activation.
+
+- (Astra, 2026-09-20) #1077 review4057826087: fix inherited worker false timeout
+  after child exit and late parent observation. Real-child success/failure
+  regressions and failed/restored mutation added; no source/service activation.
+  Resume trusted completion delivery and snapshot sealing after review checks.
+
+- (Astra, 2026-09-20) R04v combines reservation and offline Lua prototype; durable
+  exclusive claim precedes one producer dispatch, generation scopes path/callback.
+  Concurrency/error/repeat proofs and two failed/restored mutations complete.
+  Next trusted receipt delivery and snapshot sealing; no game/service activation.
+
+- (Astra, 2026-09-20) R04u independent main-based source generation reservation:
+  16 focused cases pass, same-token concurrency has one winner, existing entries
+  never reused, sync-error reservations retained. Mutation fails/restores. Prior
+  capture/manifest work stays in #1075 chain (24paths), not discarded. Next
+  producer handoff/identity delivery, no service or source activation.
+### Inherited parent checkpoints
+
 - (Astra, 2026-10-04) #1075 synchronized through actual main539db373,
   retaining previous retry/reader fixes. Earlier approved PRs have merged;
   fresh exact-head review/CI remain gates before the mandatory merge cycle.
@@ -37,6 +77,7 @@
   preserved local checkpoint8e262684 is an access anchor, not the latest head.
 
 ### Historical retry checkpoints
+
 
 - (Astra, 2026-09-28) #1075 prepared on c6e532a8, retaining reader umask fix
   and worker guards.56filesystem/plan cases pass0.88s; caller size/hash mutation

@@ -1,6 +1,67 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current retry preparation — 2026-10-04
+## Current producer preparation — 2026-10-04
+
+Owner approved1077 after older963/964/966/1066/1072-1075, all now merged. Normal
+actual-main8f298662 integration preserves both histories and original producer
+bytesae39292f, including merged1076 reservation and current worker repairs.
+Repeat offline child/Lua/filesystem proofs, not a deployed producer claim.
+Previous combined run:166 tests pass45.71s, including actual owned children,
+filesystem reservation/receipt operations and offline Lua harness. Worker and
+worker-test blobs match actual main; producer/reservation/Lua blobs matchae39292f.
+Reviewed1075 parent9ed9c092 and actual squash8f298662 trees match exactly.
+Publish after post-sync proof, then fresh exact-head review/CI and thread checks.
+Fresh combined producer/reservation/worker/Lua/capture/import/manifest/spool/
+parser/document/artifact suite:330 pass54.86s. Producer/reservation/Lua bytes
+still matchae39292f and worker/source-test bytes match actual main. Actual owned
+children, interrupted cleanup and filesystem receipts exercised; no live SSH.
+Latest parent9ce21e0d refresh:139 producer/reservation/worker/Lua/receipt/document
+cases pass37.39s with actual owned children and filesystem operations. Parent
+code/test bytes retained; the only conflict was documentation, histories kept.
+exact-head review/CI and answering old worker threads remain merge gates.
+Inherited1075 composed filename/umask retry tests retained on actualmain8f298662.
+After inheriting those tests:142 producer/worker/Lua/receipt/document cases pass
+35.70s, implementation bytes still unchanged from6902bbd8.
+Latest published-parent9ed9c092 integration:346combined producer/worker/Lua/
+capture/import/receipt/spool/document cases pass61.68s. Worker/source-test bytes
+match main (last worker implementation commit4de6f07e); producer/reservation/Lua
+paths matchae39292f exactly. These confirm retained fixes, not new activation.
+Renewed pre-publication mutations: removing claim O_EXCL yields two concurrent
+winners (assert0==1 failure); dropping generation from Lua completion delivery
+fails the actual interpreter with "unexpected writer outcome: ok". Both restored
+using apply_patch/cmp;34reservation/Lua cases pass0.43s afterward. No mutation
+committed and no real source dispatched; this repeats the retained guard proofs.
+After actual1075squash8f298662 synchronization,142producer/worker/Lua/receipt/
+document cases pass35.31s; implementation/tests unchanged, Ruff/whitespace clean.
+Original runtime delivery/sealed-source/retry/handover and Spiderweb roadmap is
+preserved in the latest local integration PLAN. No service or production action.
+
+## Historical producer and parent checkpoints — superseded status, retained evidence
+
+> #1077 security-baseline refresh 2026-10-03: normal parent10d232f1 merge
+> preserves both histories and runtime/Lua source1ef94058. Corrected root
+> command passes166 reservation/Lua/manifest/capture/worker/Node/plan cases
+> in46.43s with actual child, filesystem and Lua evidence. Initial command
+> named nonexistent test_runtime_source_claim.py and exited4 with no tests;
+> actual file is test_runtime_source_reservation.py. No source activation,
+> services or publication; actual parent merges and fresh review still required.
+
+> #1077 local refresh 2026-09-28: normal merge prepared1075 parent770ed5b3
+> into originalc015270b preserves both histories. Explicit conflict resolution
+> retains final parent worker implementation/tests byte-for-byte; producer claim,
+> Lua and harness paths remain exactlyc015270b/1986d671. Merged1076 reservation
+> stays intact underneath the claim refactor. No entire old integration merge.
+> Three old worker review threads are covered by inherited current45case worker
+> proofs (including PicklingError, delayed clock, interrupt escalation/ownership).
+> Final168offline cases pass45.65s: actual filesystem claims/receipt recovery,
+> owned child lifecycle, synthetic SSH and14 real Lua harness scenarios. Payload
+> length/stat=18 and hashlib/sha256sum agree; claim reuse preserves bytes.
+> Removing O_EXCL gives two concurrent claim winners; omitting generation from
+> Lua callback fails real harness. Both mutations restored/cmp. Ruff/whitespace
+> clean. No real source, service, network, DB, deployment or remote ref changes.
+> Root owns fresh exact-head publication/review; original runtime1986d671 work
+> beyond this queue (delivery/sealing/import composition) remains preserved.
+### Parent retry preparation — 2026-10-04, inherited checkpoint
 
 Owner approved1075 after earlier queue entries. Normal actual-main539db373
 merge preserves both histories, reader0400/0600 handling
@@ -30,6 +91,7 @@ Original runtime capture/sealed-source/retry/handover then Spiderweb plan retain
 in the latest local integration PLAN, not replaced by this queue detour.
 
 ## Historical retry and parent checkpoints — superseded status, retained evidence
+
 
 > #1075 security-baseline refresh 2026-10-03: normal parentfa658b12 merge
 > preserves both histories and unchanged runtime source770ed5b3. Manifest
@@ -1841,6 +1903,88 @@ both existing plan additions preserved. Next: root push and review reply.
 
 ## Track: runtime v2 R01 (Astra)
 
+### R04v review follow-up: interrupted cleanup — 2026-09-20
+
+PR #1077 review4057883492 reproduced live child leakage on interrupted cleanup
+join and loss of the original exception on repeated interruption. Defer cleanup
+exceptions, escalate SIGTERM-resistant child to SIGKILL, retry interrupted final
+joins within one grace budget, close the reaped process, then propagate the
+original exception. Failure to reap remains an explicit error, not success.
+Real-child regressions interrupt joins 2, 3 and 1/2/3; verify procfs, active_children,
+closed process object and exact original exception. Fixture teardown also reaps
+children when testing broken implementations. No claim of arbitrary signal safety
+between Python instructions or recovery from OS kill/wait failure.
+Review4057883502: accept pickle.PicklingError alongside existing serializer
+exceptions, tested with a real spawn serializer invoking a failing __reduce__.
+Local lambda previously passed and prior CI was green: do not claim a reproduced
+CI outage. Both guards have observed failing mutations followed by restoration.
+Final combined suite: 167 passed, zero skips; 19 focused worker cases include
+runtime cleanup logs. Ruff and whitespace clean; no live-network proof claimed.
+Next remains trusted completion delivery and snapshot sealing; no activation.
+Post-push self-review found sys.exc_info could inherit an unrelated caller-side
+except context and suppress cleanup cancellation. Capture only exceptions raised
+inside this supervisor explicitly. Real-child tests now run inside an unrelated
+except block: old context lookup fails twice with DID NOT RAISE KeyboardInterrupt.
+
+### R04v review follow-up: child outcome versus observation time — 2026-09-20
+
+PR #1077 review4057826087 found inherited supervisor logic classifying an
+already exited child as timed_out when the parent reads its clock late.
+After bounded join, classify timeout by child liveness; preserve exit status
+otherwise. Startup still reduces join budget, shutdown still reaps owned child.
+This does not prove an exact child exit timestamp or a hard OS deadline.
+Real spawn/join tests advance only the supervisor clock after confirmed exit;
+both successful and failed children retain their outcomes. Existing blocked-read,
+blocked-close and SIGTERM-refusal proofs remain required. Restoring the old
+condition fails both new cases; fix restored and cmp verified.
+Combined offline capture/SSH/Lua/reservation/spool suite: 163 passed, zero skips;
+Ruff and whitespace checks pass. No live SSH or deployed-service proof claimed.
+Next remains trusted completion delivery and immutable snapshot sealing, then
+new-site audit and owner-approved reversible dev transition. No services changed.
+
+### R04v one-shot producer handoff — 2026-09-20
+
+Combine #1076 and #1072 by normal ancestry merge (documentation retained from
+both),21paths vs main. claim_source_generation creates exclusive0600 persistent
+.writer-claimed marker in private reservation; file then directory fsync before
+dispatch. Existing/partial marker refuses reuse. Failures strand generation
+intentionally; no automatic rollback/retry. Trusted dispatcher invokes producer
+once with matching generation. Lua offline helper now requires32lowerhex
+generation, writes gamestats/runtime-snapshots/<generation>/<filename>, returns
+generation alongside unchanged v1 writer_closed receipt. Caller must preserve
+that scope when delivering/storing receipt. No real dispatcher/ET integration.
+Actual Linux filesystem + Lua harness reserve/claim/write/close/notify prove
+generation propagation and later claim refusal across all success/error cases.
+Concurrent claims have one winner; short writes and both sync failures leave
+consumed marker. Removing O_EXCL permits two winners and fails; dropping callback
+generation fails Lua happy path; both restored/cmp. Lua parse/Ruff clean.
+161 combined cases pass0skips on this prerequisite subset; later manifest chain
+#1073–#1075 is not included or claimed tested by this branch.
+This does not authenticate caller, freeze owner writes or deliver durable receipts.
+Next trusted completion delivery and immutable snapshot sealing before activation.
+Original runtime/new-site audit/reversible dev order retained; no services/DB/
+SSH/game/Lua deployment changes. #1076 all reported checks green at refresh.
+
+### R04u exclusive source-generation reservation — 2026-09-20
+
+Independent main-based primitive, not a reset of the runtime plan. Existing
+capture/producer/manifest chain remains in #1059–#1075; latest #1075 checks green
+at966f829d. Its branch touches24paths vs main, so this independently testable
+reservation slice avoids exceeding25path hook without bypass or premature merge.
+reserve_source_generation creates a caller-chosen32lowerhex directory with atomic
+mkdir beneath an existing private0700owner root; child then parent fsync before
+success. Any existing entry refuses reuse, including empty directories/symlinks.
+Post-mkdir failure preserves reservation; no cleanup or automatic new token.
+Caller retains stable root, hands reservation to one producer and prevents later
+rewrites. This is namespace reservation, not a lease, snapshot completion or
+producer wiring. Returned Path is not a capability; no source/DB/service action.
+16 focused actual-filesystem tests pass0skips: sync order/mode, two concurrent
+attempts have one winner, all existing types preserved, failed sync blocks reuse.
+Swallowing FileExistsError fails two existing-directory proofs DID NOT RAISE;
+restored/cmp, Ruff clean. No broader capture tests claimed on this independent
+branch. Next explicit producer handoff and trusted completion delivery, keeping
+reservation/data/receipt identities aligned. Runtime first, then new-site full
+audit, then owner-approved reversible dev transition; production unchanged.
 ### R04t caller-driven completion retry — 2026-09-20
 
 record_completion_once validates the same caller receipt as publication. Existing
