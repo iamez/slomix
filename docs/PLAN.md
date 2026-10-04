@@ -1,5 +1,21 @@
 # PLAN — edini vir resnice za tekoči načrt
 
+## Current producer preparation — 2026-10-04
+
+Owner approved1077 after older963/964/966/1066/1072-1075. Local normal parent
+6c8a1dd7 integration preserves both histories, main0b22b014 and original producer
+bytesae39292f, including merged1076 reservation and current worker repairs.
+Repeat offline child/Lua/filesystem proofs, not a deployed producer claim.
+Fresh combined run:166 tests pass45.71s, including actual owned children,
+filesystem reservation/receipt operations and offline Lua harness. Worker and
+worker-test blobs match actual main; producer/reservation/Lua blobs matchae39292f.
+Publish only after actual earlier merges and fresh main synchronization;
+exact-head review/CI and answering old worker threads remain merge gates.
+Original runtime delivery/sealed-source/retry/handover and Spiderweb roadmap is
+preserved in the latest local integration PLAN. No service or production action.
+
+## Historical producer and parent checkpoints — superseded status, retained evidence
+
 > #1077 security-baseline refresh 2026-10-03: normal parent10d232f1 merge
 > preserves both histories and runtime/Lua source1ef94058. Corrected root
 > command passes166 reservation/Lua/manifest/capture/worker/Node/plan cases
@@ -23,6 +39,18 @@
 > clean. No real source, service, network, DB, deployment or remote ref changes.
 > Root owns fresh exact-head publication/review; original runtime1986d671 work
 > beyond this queue (delivery/sealing/import composition) remains preserved.
+### Parent retry preparation — 2026-10-04, inherited checkpoint
+
+Owner approved1075 after earlier queue entries. Normal locale88d562e parent
+merge preserves current main0b22b014, both histories, reader0400/0600 handling
+and original retry bytes10d232f1. Repeat real filesystem reconciliation proofs.
+No activation, service, deployment or application DB action. Publish only after
+actual earlier merges and another main sync, exact-head tests/review/CI.
+Original runtime capture/sealed-source/retry/handover then Spiderweb plan retained
+in the latest local integration PLAN, not replaced by this queue detour.
+
+## Historical retry and parent checkpoints — superseded status, retained evidence
+
 
 > #1075 security-baseline refresh 2026-10-03: normal parentfa658b12 merge
 > preserves both histories and unchanged runtime source770ed5b3. Manifest
@@ -40,6 +68,17 @@
 > retry/reader/publisher/plan cases pass0.88s, Ruff clean. Parent134-case real
 > child/SSH/Lua proof has identical inherited inputs. No remote/services/DB.
 > Root owns review/publication; next1077, original runtime plan unchanged.
+### Parent reader preparation — 2026-10-04, inherited checkpoint
+
+Owner approved1074 after older predecessors. Normal localaee59b22 parent merge
+retains current main0b22b014 and both histories. Reader/source tests remain
+unchanged fromfa658b12, including prior0400/0600 mode repair. Repeat actual
+filesystem proofs; no receipt changes, service activation or deployment.
+Publish only after actual1073 merge and fresh main sync, tests and exact-head
+review/CI. Original runtime roadmap remains in the latest local integration PLAN.
+
+## Historical reader and parent checkpoints — superseded status, retained evidence
+
 
 > #1074 security-baseline refresh 2026-10-03: normal parentf20023c9 merge
 > retains secured main and both document histories. Runtime source unchanged
@@ -60,6 +99,19 @@
 > One initial suite command named a nonexistent test file and ran zero tests;
 > corrected full run above is the evidence. No remote, service, DB or source
 > activation. Root handles publication/review; original runtime plan retained.
+### Parent manifest preparation — 2026-10-04, inherited checkpoint
+
+Owner approved1073 after963/964/966/1066/1072. Local normal parent6d9f66b6
+integration includes main0b22b014 and retains both histories and manifest bytes.
+The previous 200->240 filename fix remains present, not discarded as stale.
+Repeat actual filesystem/no-clobber/fsync and producer-boundary proofs; this
+is not source activation. Final publication waits for actual earlier merges,
+fresh parent/main synchronization and exact-head CI/review.
+Original runtime plan: latest local integration PLAN, then capture/sealed-source/
+retry/exclusive handover, usable Spiderweb/proximity and later website work.
+
+## Historical branch and parent checkpoints — superseded status, retained evidence
+
 
 > #1073 security-baseline refresh 2026-10-03: normal parent3cce1ed1 merge
 > retains actualmaincc6b0a4d and both document histories; runtime/Lua source
@@ -100,6 +152,31 @@
 > skips, including actual children, SIGINT fault injection, Lua interpreter and
 > manifest filesystem proofs. Ruff/whitespace clean. Local preparation only;
 > actual-main synchronization, fresh CI/review and merge cycles remain required.
+### Parent completion preparation — 2026-10-04, inherited checkpoint
+
+Owner approved1072 as part of the older queue, after963/964/966/1066.
+Normal main0b22b014 integration retains both documentation histories and the
+offline completion prototype unchanged fromc87a2cb0. No game activation,
+service action or deployment. Repeat executable Lua/capture proofs locally;
+publish only after preceding merges and another actual-main synchronization.
+Current runtime roadmap lives in the latest PLAN under
+/home/samba/share/slomix-astra-runtime-integration-20260926, local branch
+refactor/db-runtime-team-assignment-20260926. Original capture/sealed-source/
+retry/exclusive handover, then Spiderweb/proximity/UI sequence is unchanged.
+
+## Historical completion and main checkpoints — superseded status, retained evidence
+
+> #1072 actual-parent checkpoint 2026-10-03: #1071 merged5e948f0b at05:07:24Z
+> after explicit permission and420s gates; reviewed/squash trees5d47e81e match.
+> Normal actual-main merge retains both histories and exact runtime/Lua bytes
+> fromf90c37f7. Root45 Lua/capture/Node/plan cases pass10.75s. Retarget main,
+> publish for fresh exact-head review/CI; no1072 merge permission or deployment.
+
+> #1072 reviewed-parent refresh 2026-10-03: normal parente5621f2f merge
+> retains actualmain194b1e6e and both histories. Runtime/Lua bytes unchanged
+> from3cce1ed1; root45 Lua/capture/Node/plan cases pass10.84s. Await1071 actual
+> merge, final main sync and fresh review before publication. No service action.
+
 
 > #1072 security-baseline refresh 2026-10-03: normal parenta1ead937 merge
 > retains actualmaincc6b0a4d and both documentation histories. Runtime/Lua
@@ -130,6 +207,140 @@
 > Lua-completion plus SSH/stability tests pass10.85s offline; no game server,
 > source activation, real SSH or service changes. Grace callers remain compatible.
 > Root owns final main-sync/publication gates; original runtime1986d671 preserved.
+
+### Inherited main history
+> 2026-10-03 #1078 CI coverage: retain exactly the existing two Python check
+> names/jobs, pairing Python3.11 with PostgreSQL14 and Python3.13 with PostgreSQL17
+> (not a cross product). No triggers or extra jobs added. Images pinned to root's
+> Docker registry manifest digests verified independently against response bytes.
+> ACL fixture now compares actual server_version_num with the expected CI major;
+> expected17 against actual14 fails setup instead of skipping new coverage.
+> Parsed-YAML contract pins pairing, hashes, check names and unchanged job/trigger
+> inventory. Hardcoding14 service image causes1 test failure; disabling actual-major
+> check causes2 failures; restored/cmp for both. This proves guards, not PG17 SQL
+> behavior: that still requires the actual17 CI leg to finish successfully.
+> Final local suite with expected14:35 passed,4 version-skipped52.70s; Ruff and
+> whitespace checks pass. Timing is this run, not a performance comparison.
+
+> 2026-10-03 #1078 resumed after owner restarted private proof service. On actual
+> PostgreSQL14.24, root suite31passed/4version-skipped24.83s; helper independent
+> repeat31passed/4skipped31.55s. Guard mutations observed: column check removed
+> gives8 DID NOT RAISE failures; reachable-role traversal removed gives3 failures;
+> ownership check alone removed gives1 failure. All three edits restored with
+> apply_patch and cmp against saved exactSQL. Real SESSION AUTHORIZATION website
+> followed by SET ROLE proves two-hop NOINHERIT table/sequence/owner capabilities.
+> All fixtures rolled back in postgres disposable schemas; root's restored DB
+> was untouched. Three MAINTAIN cases and PG16 membership-options case still
+> require real newer PostgreSQL; no PG17 runtime claim or version simulation.
+
+> 2026-10-03 #1078 review4172501633/636/639 follow-up, PREPARED NOT PG-VERIFIED:
+> unmerged093 now also rejects effective column privileges, PostgreSQL17 MAINTAIN,
+> and table/sequence rights or ownership reachable through transitive SET ROLE.
+> Version-specific reachability uses PG16+ SET and PG14/15 MEMBER; unrelated
+> role grants remain untouched. Official references:
+> https://www.postgresql.org/docs/14/functions-info.html and
+> https://www.postgresql.org/docs/16/functions-info.html distinguish membership
+> semantics; https://www.postgresql.org/docs/17/functions-info.html documents
+> column privileges/MAINTAIN; https://www.postgresql.org/docs/17/role-membership.html
+> explains SET versus INHERIT. Added isolated regression fixtures for column
+> PUBLIC/group grants, real session-authenticated two-hop NOINHERIT role changes,
+> owner-with-revoked-grants, MAINTAIN and PG16 non-SET membership compatibility.
+> Proof service expired before these changes: no restart or fallback connection
+> attempted. Static registration/Ruff/whitespace pass; actual PG tests and guard
+> mutations are PENDING owner restart. PG16/17-specific cases require that actual
+> server version, not simulated version strings. Only PG14 is installed locally.
+> Prior093 restore/checksum proof below describes older SQL, not this revision;
+> repeat on a fresh disposable restore, never edit the old migration ledger.
+> Root reports live DEV has no additional SET-reachable website roles; these
+> bypasses are regression/contract risks, not newly observed live grants.
+> Original runtime plan remains preserved; do not deploy or merge on this note.
+
+> Root's independent restored-DEV rehearsal, 2026-10-03: official migration
+> runner as etlegacy_user applied exact093 from6396b222 (unchanged in subsequent
+> test/docs commits), checksum verified. Ledger95; rounds3474/playerrows22501
+> unchanged. Actual website generation SELECT succeeds; journal/receipt SELECT,
+> generation INSERT and sequence nextval are denied. This is the private restored
+> backup, not the live application database; root reports no live writes.
+
+> 093 follow-up: require effective generation SELECT as well as denied writes.
+> An attempted no-grants/wrong-role fixture stopped earlier with permission denied
+> for runtime_events, so it did not exercise that positive postcondition. Replaced
+> it with an explicit ineffective-GRANT SQL fault injection; disabling only the
+> positive postcondition then fails DID NOT RAISE, restored/cmp. Final focused
+> suite20 passed6.85s. This fault injection is not a claim of a production GRANT
+> failure. All SQL ran in the explicitly configured disposable cluster only.
+
+> 2026-10-03 DEV rehearsal follow-up: inherited default ACLs grant website_app
+> CRUD on newly created runtime tables and rights on their sequences; migration
+> 092's additive SELECT grant does not restrict them. New093 revokes only six
+> runtime table grants and their owned serial/identity sequences, then grants
+> generation SELECT. Legacy and default ACLs remain unchanged. Effective-grant
+> assertions fail closed on PUBLIC/inherited privileges or a wrong runner role.
+> Real private-PG tests reproduce083-092 with permissive defaults, prove old
+> generation INSERT succeeds, and verify093 via catalog permissions plus actual
+> denied SQL. Transaction-owned fixtures roll back fully; root's restored copy
+> and live databases were not touched.19 focused PG/journal/plan tests pass5.23s;
+> disabled093 mutation fails runtime_events SELECT permission, restored/cmp.
+> Fixture corrections: SET LOCAL ROLE survives successful savepoints (RESET ROLE
+> required); identity-column UPDATE is rejected before ACL checks, so use a
+> nonidentity column to prove authorization. Existing083-092 remain immutable.
+> Next: root independently rehearses093 on the restored backup, fresh PR/CI/review
+> and specific merge permission before DEV deployment. Runtime roadmap unchanged.
+
+> 2026-10-03 #979 review4172412989: reject RUN assume-unchanged/skip-worktree
+> index flags before status, source fetch, staging or deployment. Four actual
+> disposable Git regressions first failed against the old guard; both flags
+> with clean and hidden modified runtime bytes now fail closed. Preflight and
+> activation paths preserve RUN HEAD, index and assets; an independent disposable
+> checkout confirms unchanged target blobs would retain the hidden runtime bytes.
+> Deliberately disabling the new guard fails all four cases; restored and cmp
+> verified. Focused artifact/Node/plan/watchdog suite:50 passed11.44s; Ruff,
+> bash syntax and whitespace pass. One initial mutation invocation rejected an
+> invalid pytest --showlocals=no option (exit4, no tests); corrected invocation
+> produced the four actual failures. No live service, deployment or DB action.
+> Root must rebuild exact-SHA artifacts, publish, obtain fresh CI/review and
+> PR-specific merge permission. Original runtime roadmap remains unchanged.
+
+> 2026-10-03 DEV preflight: owner authorizes updates/restarts on Samba only;
+> production is a separate host and remains excluded. Local address inspection
+> confirms 192.168.64.116 belongs to Samba. Read-only transactions through both
+> bot/web roles show 84 ledger entries and no new 083-092 entries; running web
+> and run checkout agree on75ee10b5. Main5e948f0b postmerge workflows all pass.
+> Refresh #979 onto actual main before exact-SHA artifact rebuild and review.
+> Preserve both document histories during normal merge. No live mutation,
+> migration or restart performed; no PR-specific merge authority inferred.
+> Next: refreshed artifact proofs/review, backup and migration rehearsal, then
+> approved DEV update. Runtime v2 activation and original roadmap stay gated.
+
+> #979 real artifact acceptance, 2026-09-28: normal merges preserve original
+> 94cf8e3d, actual main ec8ec7ed, Node pin ea5f2ab3 and dependency repair022f1115.
+> Clean committed source338f5b9b built with actual Node22.23.2/npm10.9.8 through
+> npm run build:app (not mocked Vite), after npm ci --ignore-scripts/typecheck.
+> Provenance records exact SHA and all137 output hashes; independent hashlib
+> and sha256sum agree, and all recorded input hashes match actual files.
+> Actual dev_deploy.sh with DEV_PREFLIGHT_ONLY=1, explicit offline SHA and ONLY
+> a disposable run clone succeeds. Run HEAD/tree and old asset bytes, inodes,
+> mtimes and independent hashes remain unchanged; temporary staging is removed.
+> In-process Starlette static HTTP requests return200 for HTML and six referenced
+> assets with bytes equal to built files. No listener, browser, actual DEV run
+> clone, service, network deployment or production operation was used.
+> All23 artifact guards pass5.63s; disabling output equality fails corruption
+> detection with DID NOT RAISE, restored/cmp. Ruff/bash syntax/whitespace clean.
+> Codacy annotation106142970471 at helper line28 reviewed: subprocess uses an
+> argv list, no shell; all helper callsites supply fixed Git subcommands/options,
+> source path is a separate -C argument. Trusted local PATH/toolchain remains a
+> prerequisite, not an untrusted execution boundary; no scanner disabled.
+> Proof script/disposable clone remain local under
+> /tmp/slomix-artifact-livebuild-kLb7dL. This closes missing-real-build evidence,
+> not live deployment acceptance. Rebuild/reverify after this documentation
+> commit because exact-SHA provenance must change even for documentation commits.
+> Parent must integrate actual merged #969/#1027, then fresh CI/review/merge cycle.
+
+> #1071 actual-parent checkpoint 2026-10-03: #1070 merged194b1e6e at04:21:17Z
+> after owner confirmation and420s gates. Reviewed/squash treesfd38bcde match.
+> Normal actual-main merge retains every stability test and both histories;
+> runtime source/tests byte-identical toa1ead937. Repeat focused gates, retarget
+> to main and publish for fresh review/CI. No approval inferred for1071 merge.
 
 > #1071 security-baseline refresh 2026-10-03: normal parent965a2494 merge
 > includes actualmaincc6b0a4d. Both histories retained; runtime source/tests
@@ -535,6 +746,20 @@
 >two delivery attempts and no third-cycle duplicate. No Discord request, live
 >collector/service action or production data. Await1055 merge then final refresh
 >and publish for fresh exact-head review; no965 merge approval.
+
+> Current #969 checkpoint 2026-09-28: normal integration of main 1f4a388d
+> preserves both histories and the exact Node pin/PyYAML declaration. Six
+> node/plan contracts pass in 0.30s. Actual isolated binary reports v22.23.2
+> via --version and 22.23.2 via process.versions.node. Restoring old22.13.1
+> fails the frontend engine-floor guard; restored/cmp. No npm installation,
+> build, browser, system toolchain, dependency lock or service change. Root
+> owns publication and final review/merge gates. Runtime resume1986d671 and
+> dependency consolidation remain current; older checkpoints are historical.
+
+> Node pin slice follow-up (Astra, 2026-09-08): PR #969 review identified
+> PyYAML as an undeclared direct test dependency despite green CI. Declared
+> PyYAML==6.0.3 in requirements-dev and added a declaration contract. Validate
+> with the isolated agent venv; no service environment changes.
 >Current1067 checkpoint2026-09-27: approved1065 merged9ef42671 at20:36:29Z;
 >squash tree equals reviewed1f6562f0. Actualmain normally integrated; explicit
 >private-key-only sidecar repair preserved fromc63f8ac5. Repeat combined gate,
@@ -808,6 +1033,53 @@
 > No merge/deploy performed or approved. Older LOCAL/unpublished notes below are
 > historical. Production bytes remain unchanged from921af249.
 
+> #1027 completed local dependency proof, 2026-09-28: Node22.23.2/npm10.9.8,
+> npm ci --ignore-scripts, typecheck and 70 files/845 Vitest tests pass (single
+> worker, 273.39s). build:app succeeds in 2.33s; offline HTML validation resolves
+> all six referenced local assets as nonempty files. This is not a browser/live
+> deployment proof. Existing Vite future-native-loader and Tailwind sourcemap
+> warnings remain; jsdom emitted canvas/navigation warnings, no failed tests.
+> npm audit JSON twice reports zero vulnerabilities; npm ls/explain independently
+> confirms core1.34.20, YAML4.3.2, nanoid3.3.19 and Vitest/mocker4.1.11.
+> Original-lock API generation equals patched output byte-for-byte. Actual
+> installed-package guard mutations reproduce missing YAML budget exception and
+> nanoid zero-size subprocess timeout (1s, child reaped); both restored with cmp,
+> then both bounded probes pass. No tracked generated artifacts or service changes.
+> Local proof script: /tmp/slomix-deps-security-proof-20260928.cjs; baseline install
+> /tmp/slomix-deps-baseline-5lbaDz. Next actual-main synchronization and fresh
+> exact-head review/CI; original runtime plan follows queue consolidation.
+
+> #1027 follow-up, 2026-09-28: upstream nanoid3.3.19 is compatible with
+> postcss8.5.25's existing ^3.3.16 range, removing the remaining high advisory
+> https://github.com/advisories/GHSA-2v37-7h3g-55p8 . Targeted lock-only update
+> and restored unrelated libc metadata leave exactly three changed lock entries
+> against original f0d263c2: core, YAML and nanoid; package.json remains identical.
+> Node22.23.2/npm10.9.8 clean install and audit report zero vulnerabilities;
+> npm explain independently confirms the expected installed dependency paths.
+> Same committed OpenAPI JSON generates byte-identical types with original and
+> patched locks (cmp and SHA25661f4c4a5b04489b01fe4913df6ac43ef1474a262f0dc873076acea0463ade05d).
+> Temporary no-save downgrade failed with npm's `Cannot read properties of null
+> (reading 'edgesOut')`; no concurrent/partial-install comparison is credited.
+> Reinstalled patched lock, then used separate original-lock npm ci for the
+> comparison. Bounded original-package probes reproduce YAML merge-budget bypass
+> and nanoid zero-size timeout; patched probes pass. Typecheck passes. Full tests
+> and SPA build remain pending at this checkpoint; no server/browser/deployment.
+
+> #1027 dependency preparation, 2026-09-28: Node22.23.2/npm10.9.8 targeted
+> lock-only/ignore-scripts update advances @redocly/openapi-core1.34.19->1.34.20
+> and js-yaml4.3.1->4.3.2 without overrides. openapi-typescript7.13.0 already
+> permits core^1.34.6; registry metadata shows unchanged engine/dependency
+> requirements except the YAML patch, and upstream core has no source changes.
+> npm10 stripped18 unrelated libc selectors; restored those exactly from HEAD.
+> Structural lock comparison proves only the two intended package entries differ;
+> package.json and Vitest/mocker4.1.11 retained. No node_modules installation.
+> Sources: https://redocly.com/docs/cli/v1/changelog and
+> https://github.com/nodeca/js-yaml/security/advisories/GHSA-2883-xcg3-v3hh .
+> Fresh npm audit removes those YAML/Vitest findings but reports one remaining
+> high nanoid<3.3.18 advisory GHSA-2v37-7h3g-55p8; audit is NOT clean. No blanket
+> audit fix applied. Next owner/root decision on narrow additional patch, then
+> npm ci, generator output comparison, typecheck/test/build:app and fresh CI.
+
 > Pravilo: ta datoteka se posodobi ob VSAKEM koraku. Nič se ne »dogovori«
 > samo v pogovoru. Bereta jo obe seji (in vsak prihodnji model).
 > Podrobne raziskovalne zapiske drži lokalno (docs/REPO_BOUNDARY.md);
@@ -825,6 +1097,22 @@
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
+
+## Consolidation follow-up: artifact review #979 — 2026-09-20
+
+Preserve this older preflight proposal and fix three reviewed provenance gaps:
+refresh source origin/main before default target resolution (explicit commits
+remain offline); run the verifier from DEV_SRC_DIR rather than launcher checkout;
+reject assume-unchanged/skip-worktree flags on tracked build inputs. All four
+new regressions failed before fixes and when guards were deliberately reverted,
+then restored/cmp.23 disposable-clone build/preflight tests pass, Ruff/bash syntax
+clean. Only Vite is a tiny fixture executable; no actual app build, browser,
+real run-clone operation, service or network deployment. Source-ref fetch is
+now allowed before staging; RUN fetch/checkout/services still require validation.
+This branch still needs current-main integration and fresh CI before merge;
+no owner permission for #979. Approved batch is #1076/#1057/#962 only. Original
+runtime completion delivery/sealing resumes after consolidation, then new-site
+audit and owner-approved reversible DEV transition. NEVER MERGE remains untouched.
 
 ## Proga: Astra watchdog delivery acknowledgement
 
@@ -3029,6 +3317,55 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
 - hosting ticket, če watcher potrdi populacijo B (host stall).
+
+## Astra — SPA artifact provenance before dev mutation (2026-09-07)
+
+Follow-up 2026-09-08: root completed the interrupted helper's parent-symlink
+fix. All source/output path components and run website/static parents are
+checked before any proof unlink or activation. Nineteen behavioral tests pass
+in the isolated agent Python environment. Removing the early output-parent
+check caused the static-parent test to fail with FileNotFoundError (the existing
+proof was wrongly deleted); restored with apply_patch and cmp. Node version is
+recorded as metadata, not enforced against .nvmrc by this slice; use the pinned
+toolchain from #969. No real build, deploy or service action performed.
+
+- Implemented locally on `fix/website-artifact-preflight`; no real build,
+  deployment, restart or production changes. Parent review and feature PR next.
+- `npm run build:app` keeps `prebuild:app` API generation, then wraps the
+  existing Vite command with `scripts/spa_artifact.py`. A deployable build
+  requires the exact target commit checked out and all tracked changes committed.
+  Record includes source SHA, frontend/config/lock/OpenAPI/generated-type input
+  hashes, output hashes and Node version. Failed builds invalidate old provenance;
+  changed source during a build cannot receive successful provenance.
+- **Policy changes:** `SKIP_STATIC=1` is rejected, not an escape from missing
+  or stale artifacts. Untracked frontend inputs and ignored source/public inputs
+  other than generated API types are refused. Frontend production `.env` files,
+  `VITE_*` overrides and non-production `NODE_ENV` are unsupported and fail with
+  an actionable error. Commit-before-build applies even to unrelated tracked edits.
+- `dev_deploy.sh` pins the requested ref in the source clone (fetch source refs
+  explicitly before choosing/building the target), verifies and copies artifacts
+  into a unique sibling staging directory, and revalidates staged bytes before
+  any run-clone checkout. Initial artifact failure occurs before even fetching
+  into the run clone. `DEV_PREFLIGHT_ONLY=1` performs staging/checks only and
+  cleans its own temporary directory; it does not change services or run checkout.
+- Only proven SPA output is installed. **Legacy `static/modern` is preserved
+  with a warning**, not copied on a timestamp claim; legacy provenance remains
+  a separate slice. Previous SPA output is retained in a uniquely named sibling
+  recovery directory; automatic backup deletion is not part of this change.
+- Evidence: 15 behavioral tests passed with disposable Git clones, mock Vite
+  and mutation-recording executables. Missing, corrupt, dirty, wrong-target,
+  stale, changed generated inputs, untracked input, unsupported env, symlink and
+  SKIP_STATIC cases leave the active fixture checkout/assets untouched and call
+  no fetch/checkout/service command. Additional cases cover copy corruption,
+  failed/during-build source changes and successful disposable activation with
+  restarts disabled, previous assets retained and legacy unchanged.
+- Mutation: disabling output-hash equality was seen accepting corrupt output
+  and failing `assert result.returncode != 0`; restored, `cmp` passed, all 15
+  tests passed again. Ruff, shell syntax and whitespace checks passed.
+- Limits: this is trusted-local provenance/integrity bookkeeping, not signing,
+  hermetic dependency verification or an atomic code-plus-assets release manager.
+  Failures after successful preflight/checkout may still require owner recovery;
+  no live activation or browser rendering has been proven by these tests.
 
 ## Proga: Astra shared Node 22 pin
 

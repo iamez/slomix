@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-10-04) #1077 local parent6c8a1dd7 refresh keeps old producer
+  work, actual merged reservation and worker fixes. No source activation.
+  Await actual predecessors and fresh exact-head gates; original runtime
+  delivery/sealing/retry/handover remains the next development track.
+
+### Historical producer checkpoints
+
 - (Astra, 2026-09-28) #1077 prepared on1075 parent770ed5b3, retaining final
   worker guards and original producer/reservation/Lua behavior. Relevant paths
   audited against1986d671, no missing local backports.168offline cases pass
@@ -36,6 +43,16 @@
   never reused, sync-error reservations retained. Mutation fails/restores. Prior
   capture/manifest work stays in #1075 chain (24paths), not discarded. Next
   producer handoff/identity delivery, no service or source activation.
+### Inherited parent checkpoints
+
+- (Astra, 2026-10-04) #1075 locally synchronized through preparede88d562e,
+  retaining previous retry/reader fixes and current main0b22b014. Earlier PRs
+  must merge first; fresh actual-main sync/review/CI remain publication gates.
+  No source activation, service or deployment; original runtime plan retained.
+
+### Historical retry checkpoints
+
+
 - (Astra, 2026-09-28) #1075 prepared on c6e532a8, retaining reader umask fix
   and worker guards.56filesystem/plan cases pass0.88s; caller size/hash mutation
   fails both cases/restored/cmp. No differences from old integration retry
@@ -45,6 +62,16 @@
   overwrite.187 combined tests pass; wrong requested size/hash guard mutation
   fails/restores. Missing/corrupt content remains distinct; existing content does
   not gain durability acknowledgement. Next source reservation/delivery, no deploy.
+### Inherited parent checkpoints
+
+- (Astra, 2026-10-04) #1074 locally retains the prior0400/0600 reader repair
+  while incorporating prepared parentaee59b22 and main0b22b014. Owner-approved,
+  but publish/review only after earlier merges and another actual-main sync.
+  No service, deployment or source activation; original runtime plan retained.
+
+### Historical reader checkpoints
+
+
 - (Astra, 2026-09-28) #1074 prepared on a222a558; old integration paths audited
   without importing its whole history. Fixed actual umask0277 publisher0400
   receipt rejection; exact0400/0600 admission, no permission widening. Mutation
@@ -55,6 +82,15 @@
   missing/conflict/match states; malformed/unsafe/I/O remains an error.177 tests
   pass, replaced-entry mutation fails/restores. #1073 refreshed checks green.
   Next retry policy and collision-safe source reservation; no source activation.
+### Inherited parent checkpoints
+
+- (Astra, 2026-10-04) #1073 retains prior filename-cap repair and manifest
+  runtime proofs during local parent/main refresh. Approved but waiting for
+  earlier merges and fresh exact-head gates; no activation or deployment.
+
+### Historical manifest checkpoints
+
+
 - (Astra, 2026-09-28) Propagated final worker90026032 through local #1069–#1073
   by normal merges, retaining both histories and exact worker/source-test bytes.
   Combined218cases pass47.43s. Minimum-grace compatible with existing callers;
@@ -82,6 +118,15 @@
   #1071 retry succeeded. #1072 lacked Actions due to branch filter; same-SHA
   verification alias uses existing feat/db-runtime-* trigger. No code bypass.
   Next manifest recovery and source collision protocol, no activation.
+### Inherited parent checkpoint
+
+- (Astra, 2026-10-04) #1072 approved but waits for older963/964/966/1066.
+  Local main0b22b014 refresh preserves the offline Lua prototype and both
+  histories. No producer activation/deployment; fresh actual-main sync and
+  exact-head tests/review/CI remain required after the earlier merges.
+
+### Historical branch checkpoints
+
 
 - (Astra, 2026-09-28) #1072 locally refreshed on #1071 head 97db51fa with
   both histories retained. 172 combined offline tests pass in 28.00s, zero
@@ -94,6 +139,53 @@
   139 combined tests pass; short-write mutation emits false completion and fails,
   restored/cmp. Fresh name/single writer required; durable receipt, digest and
   collisions remain next. Owner allowed local development, no deployment.
+### Inherited main checkpoints (historical)
+
+- (Astra helper, 2026-10-03) Paired14/3.11 +17/3.13 CI prepared with pinnedimages,
+  unchanged two Python checknames/jobs and no newtriggers. Expected servermajor
+  checked against actualPG; deliberately mismatched17/14 fails fixture setup.
+  YAML/major guards observed failing and restored/cmp. Await actualPG17 CI proof.
+
+- (Astra helper, 2026-10-03) #1078 resumed proof: actualPG14.24 gives31passed,
+  4newer-version skips; twelve observed failures across three guard mutations,
+  all restored/cmp. SQL unchanged from98b92702. Root owns restored-copy rehearsal.
+  Next paired PG14/3.11 and PG17/3.13 CI coverage without extra jobs/triggers.
+
+- (Astra helper, 2026-10-03) #1078 review follow-up prepared: column ACLs,
+  version-gated MAINTAIN and transitive SET ROLE/ownership checks. Proof service
+  expired, so new PG cases/mutations are explicitly pending; no service start,
+  live DB fallback or existing restored-copy ledger change. Repeat093 acceptance
+  on fresh disposable restore after owner restart. Original roadmap unchanged.
+
+- (Astra helper, 2026-10-03) DEV permission rehearsal exposed inherited runtime
+  CRUD/sequence grants. New093 narrows only runtime object ACLs; real isolated
+  tests verify denied writes, generation read, unchanged legacy/default grants,
+  and fail-closed PUBLIC/wrong-role cases.19 tests pass5.23s; observed mutation
+  failure restored/cmp. No application DB changes. Root owns restored-backup
+  rehearsal and review/merge gates; original runtime queue remains preserved.
+- (Astra helper, 2026-10-03) #979 RUN index flags review4172412989 repaired:
+  four old-guard failures and four deliberate mutation failures, restored/cmp;
+  50 focused tests pass11.44s. Disposable checkout independently reproduces hidden
+  runtime-byte survival. No live changes; root continues exact-SHA rebuild/review
+  and dev restoration rehearsal before returning to the original runtime plan.
+
+- (Astra, 2026-10-03) DEV-only authorization received. Read-only Samba preflight
+  identifies old75ee10b5 deployment and ten pending main migrations. Refreshing
+  #979 on5e948f0b preserves artifact safeguards and both histories. No deployment
+  yet; return to original runtime queue after safe deployment preparation.
+
+- (Astra, 2026-09-28) #979 real Node22.23.2 wrappedbuild/provenance verified:
+  137outputs hashes by two paths; actual preflight only in disposable clone
+  preserves HEAD/tree/assets/inodes/mtimes. In-process HTTP200 HTML+6assets
+  equalsdisk, no server/browser/DEVdeployment.23guards pass5.63s; corruption
+  mutation fails/restored/cmp. Final docscommit requires rebuilt exactSHA;
+  root owns actual parent merge synchronization and remote review/CI.
+
+- (Astra, 2026-09-20) #979 consolidation review: fixed stale default source ref,
+  wrong-checkout verifier and hidden-index input flags, with four failing/restored
+  regressions and23passing fixture tests. No real deploy. Branch refresh/CI and
+  PR-specific permission remain gates. Runtime resume remains #1077 after detour.
+
 
 - (Astra, 2026-09-28) #1071 local refresh on bda56937 preserves both histories
   and worker/SSH sidecar fixes. 160 offline cases pass (25.71s), including actual
@@ -277,6 +369,16 @@
   pass,Ruff clean. Wait for #962 disk fix before combined verification. #965 has
   no merge permission. Runtime resume #1077 c015270b: completion delivery/sealing,
   then new-site audit and approved DEV transition. NEVER MERGE unchanged.
+
+- (Astra, 2026-09-28) #969 normal main1f4a388d refresh: six node/plan contracts
+  pass; isolated22.23.2 binary verified by two version paths. Old22.13.1 pin
+  mutation fails, restored/cmp. No install/build/browser/service/lock change.
+  Root owns remote review/merge; original runtime1986d671 plan preserved.
+
+- (Astra, 2026-09-20) Consolidation: refreshed #969 from main without conflict;
+  six Node-pin/plan tests pass, no installs or builds. Preserve its dependency
+  declaration review fix; no merge approval for this PR. Runtime resume remains
+  #1077 completion delivery/sealing after the side quest.
 - (Astra, 2026-09-27) PR1067 follow-up: remove PKey.from_path implicit adjacent
   certificate discovery. Public typed file-object private-key loaders preserve
   five tested key encodings; certificate paths unsupported, no ambient cert or
@@ -553,6 +655,24 @@
   dev-guard mutation restored/cmp. Expanded200 passed; publish/review next.
   #1054 nine exact-head checks green and both external reviews no findings.
   No merge approval for #1050 or later; no service/production activation.
+
+- (Astra, 2026-09-28) #1027 local dependency proof complete: zero audit findings,
+  identical original/patched generated API types, typecheck, 845 tests/70 files
+  and SPA build succeed. Six built HTML asset references resolve offline.
+  Actual YAML/nanoid guard mutations fail, restored/cmp and probes pass; no
+  browser/server/deploy. Ready for parent-led main sync, publication and review.
+
+- (Astra, 2026-09-28) #1027 compatible nanoid3.3.19 lock patch removes last
+  audit finding; original/patched OpenAPI output identical and typecheck passes.
+  Bounded old dependency probes fail, patched probes pass. Full single-worker
+  Vitest run in progress; SPA build next. Only three package entries changed
+  versus original PR lock; no runtime server or production action.
+
+- (Astra, 2026-09-28) #1027 lock-only upstream security patch prepared:
+  core1.34.20/YAML4.3.2 only; unrelated npm10 libc metadata loss restored.
+  Existing Vitest4.1.11 preserved. npm audit still finds high nanoid<3.3.18,
+  so no clean-audit/readiness claim. No npm ci or runtime validation yet;
+  next controlled dependency decision and frontend validation, no deployment.
 
 - (Astra, 2026-09-20) R04u independent main-based source generation reservation:
   16 focused cases pass, same-token concurrency has one winner, existing entries
