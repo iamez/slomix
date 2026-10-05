@@ -4,6 +4,22 @@
 
 ### Review follow-up — 2026-10-05 (local, not yet published)
 
+Measured follow-up: owner started disposable PG14. Actual SQL captured from
+both callers on100002synthetic rows chose sequential scans with existing raw
+and partial-start indexes. Two fresh proof runs agree. Repeat-run warm local
+buffers:736-738hits/7.158-8.128ms before,3-6hits/0.016-0.052ms with normalized
+index. These are synthetic TEMP-table measurements, not production speedups.
+Unique/missing/ambiguous results unchanged; rollback independently verified.
+Added migration095 and bootstrap non-unique expression index; registered095
+with the current release config. No live migration, data repair or worker.
+Two new real-PG tests cover migration/bootstrap reapplication, duplicate and
+NULL-session identities, both actual query shapes, all equality index conditions
+and bounded buffers without planner forcing. Missing migration/schema first
+failed2tests; raw-map mutation then failed1 with1passing control, restored/cmp.
+Final focused PG/source/parent/release/migration/docs suite150passed11.32s.
+Ruff and whitespace clean. Review replies/fresh exact-head CI still required.
+No merge permission inferred; production and NEVER MERGE untouched.
+
 Fresh GitHub evidence confirms1079-1083 merged and1084 still open/blocked at
 head1e82c231/base124fe76d3. Copilot has3unresolved threads: normalized-map
 index coverage at both callers, plus stale BACKLOG. Corrected BACKLOG locally;

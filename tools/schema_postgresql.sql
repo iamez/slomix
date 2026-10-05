@@ -7738,6 +7738,10 @@ CREATE INDEX idx_rounds_map_round_end ON public.rounds USING btree (map_name, ro
 
 CREATE INDEX idx_rounds_map_round_start ON public.rounds USING btree (map_name, round_number, round_start_unix);
 
+-- 095: exact proximity identity uses the normalized map at both callers.
+CREATE INDEX IF NOT EXISTS idx_rounds_normalized_map_round_start
+    ON rounds (LOWER(BTRIM(map_name)), round_number, round_start_unix);
+
 
 --
 -- Name: idx_rounds_score_confidence; Type: INDEX; Schema: public; Owner: -

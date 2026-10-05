@@ -1,5 +1,12 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> Review remediation 2026-10-05: owner-started disposable PG confirms normalized
+> lookup scans100002synthetic rows with old indexes. Added non-unique095 index,
+> bootstrap and release registration;150focused tests pass, mutation fails then
+> restored/cmp. Stale predecessor status corrected. Fresh publication/review/CI
+> remain gates, no live migration or service change. Research of all Stats tabs
+> is additive and deferred in integration PLAN, not a runtime replacement.
+
 > Current #1084 queue (verified 2026-10-05): #1079 through #1083 are merged.
 > Actual main is124fe76d3; published #1084 head1e82c231 already includes it.
 > Only #1084 review remediation and fresh exact-head CI/review gates remain;

@@ -949,3 +949,13 @@ loaders. Do not pass a path-aware loader or certificate path; encrypted keys
 fail without prompting. Existing five key-format proofs and complete-auth guard
 remain; no real handshake was tested. This corrects the earlier implication
 that disabling legacy auth alone removed all ambient identity discovery.
+# 2026-10-05 — An index name in EXPLAIN is not bounded key access
+
+Proximity exact identity applies LOWER(BTRIM(map_name)); a raw leading map key
+does not match that expression. Owner-started disposable PG14 with100002rows
+chose sequential scans for both canonical and strict queries. A normalized
+non-unique expression index puts all three identity predicates in Index Cond.
+Tests must inspect those conditions and buffer work, not only index presence.
+Retain ambiguity detection and NULL-session parents; never make this UNIQUE or
+partial on session readiness. TEMP local-buffer timing is not cold production
+latency. Preserve migration/bootstrap/release parity; apply only via owner deploy.
