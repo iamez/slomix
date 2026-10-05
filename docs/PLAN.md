@@ -2,6 +2,27 @@
 
 ## Current #1084 queue gate — 2026-10-05
 
+### Review follow-up — 2026-10-05 (local, not yet published)
+
+Fresh GitHub evidence confirms1079-1083 merged and1084 still open/blocked at
+head1e82c231/base124fe76d3. Copilot has3unresolved threads: normalized-map
+index coverage at both callers, plus stale BACKLOG. Corrected BACKLOG locally;
+no thread resolution or review request yet. Python3.13 CI remains failure.
+Earlier observation of idx_rounds_map_round_start usage is NOT evidence of
+bounded leading-key access: LOWER(BTRIM(map_name)) differs from raw map_name.
+Next measure real EXPLAIN (ANALYZE, BUFFERS) on representative synthetic rounds,
+unique/missing/ambiguous targets and both canonical/strict query shapes; compare
+existing access with a matching expression-index candidate and fresh-bootstrap
+parity before choosing a migration. No speculative index or live migration yet.
+Disposable proof service is failed/Result=timeout (60-minute limit); owner must
+start it before those measurements. No fallback to the application database.
+
+Owner placed expanded Lua/comparative research at the END of the integration
+plan, explicitly requiring renewed research in Plan mode before implementation.
+Continue this runtime gate and saved capture/provenance/retry/handover sequence.
+Documentation/release-contract check: 59 tests passed in10.46s; diff check clean.
+These validate documentation contracts, not query performance or PG behavior.
+
 #1079 through #1083 are merged. Actual main is
 124fe76d3a744c7b98ba7847827cb9282cb40f40 (#1083, 2026-10-04T23:51:58Z).
 Reviewed74c54c85 and squash trees match (5b953f79); all14checks, matching

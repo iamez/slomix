@@ -1,8 +1,14 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
-> Current1084queue:1079merged;1080freshgates and prepared1081-1083remain.
->Parent02cc9307 integrated locally. Next actual1083squash, final1084sync/gates.
->094notlive-applied; no services/production changes. Original roadmap retained.
+> Current #1084 queue (verified 2026-10-05): #1079 through #1083 are merged.
+> Actual main is124fe76d3; published #1084 head1e82c231 already includes it.
+> Only #1084 review remediation and fresh exact-head CI/review gates remain;
+> do not wait for already-merged predecessors. Three Copilot threads concern
+> normalized-map index coverage (two locations) and this stale status (fixed
+> locally). Python3.13 CI is still red; a completed review is not approval.
+> Migration094 is not live-applied; no services/production changes.
+> Original runtime plan remains in the integration worktree. Expanded proximity
+> research is a deferred final Plan-mode phase, not replacement runtime work.
 
 ## Historical preparation — not current gate instructions
 
