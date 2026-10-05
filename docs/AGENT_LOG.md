@@ -1,5 +1,31 @@
 # AGENT_LOG — durable lessons for the next agent
 
+- **2026-10-04 · A migration has three delivery artifacts.**
+  Add the numbered SQL, fresh-bootstrap schema, and active MIGRATIONS entry in
+  the latest release config. Validate test_release_config_contract.py as well
+  as test_apply_migrations.py locally: otherwise --only/--validate can block the
+  next owner deployment even when parser and migration SQL tests pass. Updating
+  the list is not permission to execute a migration or deploy frozen production.
+
+- **2026-10-04 · Receipt provenance is enforced state, not a caller warning.**
+  A matching hash proves source bytes, not whether earlier ingestion enforced
+  parent linkage. Strict replay of permissive ON CONFLICT imports can falsely
+  succeed while stored links remain NULL. Migration094 defaults old receipts
+  to FALSE; strict insertion stamps TRUE atomically, never upgrades on conflict.
+  Require that persisted provenance before accepting strict replay. Normalized
+  map identity must also agree across preflight, parser and later relinker.
+
+- **2026-10-04 · Successful replay is not proof of repaired linkage.**
+  Vehicle ON CONFLICT DO NOTHING preserves an earlier NULL round_id even when
+  replay resolves the correct parent. A fresh forward-only runtime can defer
+  initial import until an exact parent/session exists, instead of inheriting
+  Discord's broad historical relinker. Pending is not acknowledgment; retain
+  sealed input and distinguish retryable absence from ambiguous identity and
+  query failure. This policy cannot adopt already-unlinked permissive receipts.
+  Test fixtures must support the failure branch too: missing fallback columns
+  initially made a mutation fail from SQL abort, not from the intended false
+  success; add those fixture columns and prove the actual acceptance failure.
+
 - **2026-10-04 · Ambiguity must survive every retry path.**
   Refusing duplicate source identities at ingestion is insufficient if a later
   relinker invokes a matcher that chooses its first exact/canonical hit. Stop
@@ -923,3 +949,13 @@ loaders. Do not pass a path-aware loader or certificate path; encrypted keys
 fail without prompting. Existing five key-format proofs and complete-auth guard
 remain; no real handshake was tested. This corrects the earlier implication
 that disabling legacy auth alone removed all ambient identity discovery.
+# 2026-10-05 — An index name in EXPLAIN is not bounded key access
+
+Proximity exact identity applies LOWER(BTRIM(map_name)); a raw leading map key
+does not match that expression. Owner-started disposable PG14 with100002rows
+chose sequential scans for both canonical and strict queries. A normalized
+non-unique expression index puts all three identity predicates in Index Cond.
+Tests must inspect those conditions and buffer work, not only index presence.
+Retain ambiguity detection and NULL-session parents; never make this UNIQUE or
+partial on session readiness. TEMP local-buffer timing is not cold production
+latency. Preserve migration/bootstrap/release parity; apply only via owner deploy.

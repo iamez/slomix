@@ -1,13 +1,16 @@
 """Verified runtime bytes and receipt digest commit or roll back together."""
+# ruff: noqa: SLF001 -- inject canonical parser linkage faults before commit
 
 import asyncio
 import hashlib
 from contextlib import asynccontextmanager
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from asyncpg import LockNotAvailableError, UndefinedColumnError
 
 from proximity.parser import ProximityParserV4
 from shared import proximity_import
@@ -131,3 +134,224 @@ async def test_runtime_parses_captured_bytes_not_reopened_path(source_import):
     assert seen == ['fixture']
     assert await observer.fetchval('SELECT file_hash FROM proximity_processed_files') == digest
     assert await observer.fetchval('SELECT sum(applied) FROM proof_data') == 1
+
+
+@pytest.fixture
+async def linked_import(journal_db, monkeypatch, tmp_path):  # noqa: F811
+    """Real parser identity and receipt flow; minimal child replaces wide schema."""
+    writer, observer = journal_db
+    await writer.execute('ALTER TABLE rounds ADD COLUMN map_name TEXT, ADD COLUMN round_start_unix BIGINT')
+    await writer.execute('ALTER TABLE rounds ADD COLUMN round_date TEXT, ADD COLUMN round_time TEXT, ADD COLUMN created_at TIMESTAMP, ADD COLUMN round_canonical_id TEXT')
+    await writer.execute('CREATE TABLE proximity_processed_files (filename TEXT PRIMARY KEY, aggregates_applied BOOLEAN, file_hash TEXT)')
+    await writer.execute('CREATE TABLE proof_child (id INTEGER PRIMARY KEY, round_id INTEGER REFERENCES rounds(id))')
+    migration = Path(__file__).resolve().parents[2] / 'migrations/094_proximity_runtime_parent_gate.sql'
+    await writer.execute(migration.read_text())
+    payload = b'# map=fixture\n# round=1\n# round_start_unix=1789794600\n# round_end_unix=1789795200\n'
+    digest = hashlib.sha256(payload).hexdigest()
+    source = publish_proximity_file(tmp_path, '2026-09-19-051000-fixture-round-1_engagements.txt',
+        [payload], expected_size=len(payload), expected_sha256=digest)
+    controls = {'failure': None, 'context_override': False}
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    @asynccontextmanager
+    async def transaction():
+        async with writer.transaction():
+            yield
+
+    async def execute(query, params=None):
+        return await writer.execute(pg_query(query), *(params or ()))
+
+    async def fetch_one(query, params=None):
+        return await writer.fetchrow(pg_query(query), *(params or ()))
+
+    async def fetch_all(query, params=None):
+        return await writer.fetch(pg_query(query), *(params or ()))
+
+    adapter = SimpleNamespace(transaction=transaction, execute=execute,
+                              fetch_one=fetch_one, fetch_all=fetch_all)
+
+    def factory(**kwargs):
+        parser = ProximityParserV4(**kwargs)
+        monkeypatch.setattr(parser, '_table_has_column', AsyncMock(side_effect=lambda t, c: c == 'filename'))
+
+        async def child(day):
+            if controls['context_override']:
+                parser._round_link_context['round_id'] = None
+            await writer.execute('INSERT INTO proof_child VALUES (1,$1) ON CONFLICT DO NOTHING',
+                                 parser._round_link_context['round_id'])
+            if controls['failure'] == 'cancel':
+                raise asyncio.CancelledError()
+            if controls['failure'] == 'duplicate':
+                await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (11,1,21,'fixture',1789794600)")
+            if controls['failure'] == 'pause':
+                entered.set()
+                await release.wait()
+
+        monkeypatch.setattr(parser, '_import_engagements', child)
+        for method in ('_update_player_stats', '_update_crossfire_pairs', '_import_heatmaps'):
+            monkeypatch.setattr(parser, method, AsyncMock())
+        return parser
+
+    monkeypatch.setattr(proximity_import, 'ProximityParserV4', factory)
+
+    async def run(strict=True):
+        return await proximity_import.import_proximity_file(
+            source, adapter=adapter, session_date=date(2026, 9, 19), gametimes_dir=tmp_path,
+            expected_size=len(payload), expected_sha256=digest, require_linked_parent=strict,
+        )
+
+    return writer, observer, controls, entered, release, run
+
+
+async def assert_no_linked_import(observer):
+    for table in ('proof_child', 'proximity_processed_files'):
+        assert await observer.fetchval(f'SELECT count(*) FROM {table}') == 0
+        assert await observer.fetch(f'SELECT * FROM {table}') == []
+
+
+async def test_late_parent_then_session_then_retry(linked_import):
+    writer, observer, controls, entered, release, run = linked_import
+    result = await run()
+    assert not result.success and result.pending_reason == 'parent_missing'
+    assert result.parsed_stats is None and result.round_id is None
+    await assert_no_linked_import(observer)
+    await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (10,1,NULL,'fixture',1789794600)")
+    result = await run()
+    assert not result.success and result.pending_reason == 'session_missing'
+    await assert_no_linked_import(observer)
+    await writer.execute('UPDATE rounds SET gaming_session_id=20 WHERE id=10')
+    for _ in range(2):
+        result = await run()
+        assert result.success and result.pending_reason is None
+        assert (result.round_id, result.gaming_session_id) == (10, 20)
+        assert await observer.fetchval('SELECT count(*) FROM proof_child') == 1
+        assert [tuple(r) for r in await observer.fetch('SELECT * FROM proof_child')] == [(1, 10)]
+        assert await observer.fetchval('SELECT count(*) FROM proximity_processed_files') == 1
+        assert await observer.fetchval('SELECT aggregates_applied FROM proximity_processed_files') is True
+
+
+@pytest.mark.parametrize('during_import', [False, True])
+async def test_strict_duplicate_identity_rolls_back(linked_import, during_import):
+    writer, observer, controls, entered, release, run = linked_import
+    await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (10,1,20,'fixture',1789794600)")
+    if during_import:
+        controls['failure'] = 'duplicate'
+    else:
+        await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (11,1,21,'fixture',1789794600)")
+    result = await run()
+    assert not result.success and result.pending_reason == 'parent_ambiguous'
+    await assert_no_linked_import(observer)
+    assert await observer.fetchval('SELECT count(*) FROM rounds') == (1 if during_import else 2)
+
+
+@pytest.mark.parametrize('failure', ['cancel', 'wrong_context'])
+async def test_strict_failure_after_child_write_is_atomic(linked_import, failure):
+    writer, observer, controls, entered, release, run = linked_import
+    await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (10,1,20,'fixture',1789794600)")
+    if failure == 'cancel':
+        controls['failure'] = failure
+        with pytest.raises(asyncio.CancelledError):
+            await run()
+    else:
+        controls['context_override'] = True
+        with pytest.raises(RuntimeError, match='identity changed'):
+            await run()
+    await assert_no_linked_import(observer)
+
+
+async def test_strict_parent_is_locked_through_import(linked_import):
+    writer, observer, controls, entered, release, run = linked_import
+    await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (10,1,20,'fixture',1789794600)")
+    controls['failure'] = 'pause'
+    task = asyncio.create_task(run())
+    try:
+        await asyncio.wait_for(entered.wait(), 5)
+        await assert_no_linked_import(observer)
+        await observer.execute("SET lock_timeout='100ms'")
+        with pytest.raises(LockNotAvailableError, match='lock timeout'):
+            await observer.execute('UPDATE rounds SET gaming_session_id=21 WHERE id=10')
+        release.set()
+        assert (await asyncio.wait_for(task, 5)).success
+        assert await observer.fetchval('SELECT gaming_session_id FROM rounds WHERE id=10') == 20
+    finally:
+        release.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_strict_identity_ignores_date_but_not_map_round_or_clock(linked_import):
+    writer, observer, controls, entered, release, run = linked_import
+    await writer.execute("""
+        INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix)
+        VALUES (10,2,20,'fixture',1789794600), (11,1,21,'different',1789794600),
+               (12,1,22,'fixture',1789795200)
+    """)
+    assert (await run()).pending_reason == 'parent_missing'
+    await assert_no_linked_import(observer)
+    # Physical identity survives midnight/date labels; it does not select a
+    # different round merely because its START equals the source END.
+    await writer.execute("""
+        INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix,round_date)
+        VALUES (13,1,23,'fixture',1789794600,'2026-09-20')
+    """)
+    result = await run()
+    assert result.success and (result.round_id, result.gaming_session_id) == (13, 23)
+    assert await observer.fetchval('SELECT round_id FROM proof_child') == 13
+
+
+async def test_parent_query_failure_rolls_back_receipt_reservation(linked_import):
+    writer, observer, controls, entered, release, run = linked_import
+    await writer.execute('ALTER TABLE rounds RENAME COLUMN gaming_session_id TO unavailable_session_id')
+    with pytest.raises(UndefinedColumnError):
+        await run()
+    await assert_no_linked_import(observer)
+
+
+async def test_permissive_import_cannot_be_adopted_by_strict_replay(linked_import):
+    writer, observer, controls, entered, release, run = linked_import
+    assert (await run(False)).success
+    assert await observer.fetchval('SELECT round_id FROM proof_child') is None
+    assert await observer.fetchval('SELECT runtime_parent_gate FROM proximity_processed_files') is False
+    await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (10,1,20,'fixture',1789794600)")
+    with pytest.raises(ValueError, match='lacks strict parent provenance'):
+        await run()
+    assert [tuple(row) for row in await observer.fetch('SELECT * FROM proof_child')] == [(1, None)]
+    assert await observer.fetchval('SELECT runtime_parent_gate FROM proximity_processed_files') is False
+
+
+@pytest.mark.parametrize('duplicate', [False, True])
+async def test_normalized_parent_identity_stays_consistent_with_parser(linked_import, duplicate):
+    writer, observer, controls, entered, release, run = linked_import
+    await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (10,1,20,' FIXTURE ',1789794600)")
+    if duplicate:
+        await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) VALUES (11,1,21,'fixture',1789794600)")
+        assert (await run()).pending_reason == 'parent_ambiguous'
+        await assert_no_linked_import(observer)
+    else:
+        result = await run()
+        assert result.success and result.round_id == 10
+        assert await observer.fetchval('SELECT round_id FROM proof_child') == 10
+        assert await observer.fetchval('SELECT runtime_parent_gate FROM proximity_processed_files') is True
+
+
+async def test_parent_gate_migration_preserves_existing_provenance(journal_db):  # noqa: F811
+    writer, observer = journal_db
+    await writer.execute('CREATE TABLE proximity_processed_files (filename TEXT PRIMARY KEY, aggregates_applied BOOLEAN, file_hash TEXT)')
+    await writer.execute("INSERT INTO proximity_processed_files VALUES ('old',TRUE,'known-hash')")
+    sql = (Path(__file__).resolve().parents[2] / 'migrations/094_proximity_runtime_parent_gate.sql').read_text()
+    await writer.execute(sql)
+    assert await observer.fetchval("SELECT runtime_parent_gate FROM proximity_processed_files WHERE filename='old'") is False
+    await writer.execute("INSERT INTO proximity_processed_files VALUES ('strict',TRUE,'new-hash',TRUE)")
+    await writer.execute(sql)
+    assert [tuple(row) for row in await observer.fetch('SELECT * FROM proximity_processed_files ORDER BY filename')] == [
+        ('old', True, 'known-hash', False), ('strict', True, 'new-hash', True),
+    ]
+
+
+async def test_missing_parent_gate_migration_fails_closed(linked_import):
+    writer, observer, controls, entered, release, run = linked_import
+    await writer.execute('ALTER TABLE proximity_processed_files RENAME COLUMN runtime_parent_gate TO old_parent_gate')
+    with pytest.raises(UndefinedColumnError):
+        await run()
+    await assert_no_linked_import(observer)

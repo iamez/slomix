@@ -1,5 +1,52 @@
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
+> Review remediation 2026-10-05: owner-started disposable PG confirms normalized
+> lookup scans100002synthetic rows with old indexes. Added non-unique095 index,
+> bootstrap and release registration;150focused tests pass, mutation fails then
+> restored/cmp. Stale predecessor status corrected. Fresh publication/review/CI
+> remain gates, no live migration or service change. Research of all Stats tabs
+> is additive and deferred in integration PLAN, not a runtime replacement.
+
+> Current #1084 queue (verified 2026-10-05): #1079 through #1083 are merged.
+> Actual main is124fe76d3; published #1084 head1e82c231 already includes it.
+> Only #1084 review remediation and fresh exact-head CI/review gates remain;
+> do not wait for already-merged predecessors. Three Copilot threads concern
+> normalized-map index coverage (two locations) and this stale status (fixed
+> locally). Python3.13 CI is still red; a completed review is not approval.
+> Migration094 is not live-applied; no services/production changes.
+> Original runtime plan remains in the integration worktree. Expanded proximity
+> research is a deferred final Plan-mode phase, not replacement runtime work.
+
+## Historical preparation — not current gate instructions
+
+> Current2026-10-05: #1084 locally incorporates parentdc31f859; no publication
+> before predecessor squashes and final gates.094migration not live-applied.
+> Original runtime roadmap remains in latest integration PLAN at
+> /home/samba/share/slomix-astra-runtime-integration-20260926. No live repair,
+> services, production or NEVER MERGE actions; earlier statuses historical.
+
+> 2026-10-04: CI and next Codex review found094 absent from the release list.
+> Added it beside093 in existing v1.45.0 config, without running any deploy.
+> Release-config+runner93tests pass; bash source prints094, bash-n/ShellCheck pass.
+> Previous88e366fe CI was1failed/7606passed/153skipped, not green. Fresh gates
+> required again. No production action, no new research lane or plan replacement.
+
+> 2026-10-04:1084 initialCI green but review found normalized-map mismatch and
+> permissive-receipt adoption. Fixed both; new094 records strict provenance on
+> fresh INSERT only, old receipts remainFALSE.540tests/20skips,60focused;2more
+> mutations fail/restored. Full normalized-parent and old-adoption rejection
+> clone proofs with094 rolled back including schema; no live migration/history
+> repair. Fresh review/CI required; do not merge initial932905e1 as reviewed-green.
+
+> 2026-10-04: owner restarted isolated PG. Late-parent clone proof confirmed
+> successful replay can leave NULL vehicle links. Added opt-in strict parent gate
+> at runtime boundary; defer instead of writing orphan data. Full real-parser/adapter
+> proof now waits for parent/session, links once on repeat, rolls everything back.
+> Three guard mutations fail/restored/cmp. No history repair, service change or
+> worker activation. Parent1083 exact-head CI/Codex green, threads resolved; no
+> numbered merge approval. Remaining capture/retry/handover and original roadmap
+> unchanged. Interrupted old private test schema retained, not blindly deleted.
+
 > Current1083queue:1079merged;1080freshgates and prepared1081/1082predecessors
 >remain. Parent3739dd5a incorporated locally. After actual1082merge, final1083
 >sync/publication/gates. Original runtime roadmap and no-service boundaries retained.
