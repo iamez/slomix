@@ -90,3 +90,24 @@ it('expires old rows and clears derived scores on an empty gap response', async 
     expect(document.getElementById('live-ticker')?.textContent).toContain('No live events');
   } finally { ticker.stopLiveTicker(); }
 });
+
+it('removes the previous worker from the DOM when its replacement read fails', async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = '<div id="view-live" class="active"></div><div id="live-ticker"></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  fetchJSON.mockResolvedValueOnce({ stream_id: 'old', last_seq: 100, events: [
+    { seq: 100, type: 'ROUND_START', received_at: Date.now() / 1000 },
+  ] }).mockResolvedValueOnce({ stream_id: 'new', last_seq: 1, events: [] })
+    .mockRejectedValueOnce(new Error('replacement unavailable'));
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.getElementById('live-ticker')?.textContent).toContain('ROUND START');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(document.getElementById('live-ticker')?.textContent).toContain('feed error');
+    expect(document.getElementById('live-ticker')?.textContent).not.toContain('ROUND START');
+  } finally { ticker.stopLiveTicker(); warn.mockRestore(); }
+});

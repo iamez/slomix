@@ -90,6 +90,8 @@ _KILL_DEDUP_SECONDS = 1.5
 
 _events: deque[dict[str, Any]] = deque(maxlen=_BUFFER_MAX)
 _seq = 0
+# Bounded by the admitted event vocabulary; each filter needs its own loss evidence.
+_evicted_by_type: dict[str, int] = {}
 _stream_id = uuid.uuid4().hex
 _lock = asyncio.Lock()
 # (killer_slot, victim_slot) -> received_at of the last LIVE_KILL
@@ -187,6 +189,9 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                 "source": batch.source,
                 "received_at": now,
             }
+            if len(_events) == _events.maxlen:
+                evicted = _events[0]
+                _evicted_by_type[evicted["type"]] = evicted["seq"]
             _events.append(record)
             _state.apply(record)  # fold into the current-state snapshot
             accepted += 1
@@ -243,7 +248,9 @@ async def feed(
         # ring eviction or page truncation establishes a delivery gap.
         gap = bool(cursor > 0 and (
             len(selected) > limit or len(eligible) > len(selected)
-            or (_events and _events[0]["seq"] > cursor + 1)))
+            or any(seq > cursor for etype, seq in _evicted_by_type.items()
+                   if (etype in wanted if wanted is not None
+                       else etype not in _FEED_HIDDEN_TYPES))))
     return {
         "status": "ok",
         "events": out,

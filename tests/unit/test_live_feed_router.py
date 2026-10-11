@@ -24,6 +24,7 @@ def client(monkeypatch):
     monkeypatch.setattr(live, "_UPSTREAM", "")
     monkeypatch.setattr(live, "_state", live.LiveStateReducer())
     monkeypatch.setattr(live, "_recent_livex_kills", {})
+    monkeypatch.setattr(live, "_evicted_by_type", {})
     monkeypatch.setattr(live, "_seq", 0)  # noqa: SLF001
     monkeypatch.setenv("INTERNAL_API_SECRET", "test-secret")
     app = FastAPI()
@@ -258,3 +259,26 @@ def test_ring_eviction_and_retention_report_gaps(client, monkeypatch):
     for event in live._events:  # noqa: SLF001 -- explicit ring aging
         event['received_at'] -= live._FEED_RETENTION_SECONDS + 1  # noqa: SLF001
     assert client.get('/api/live/feed?since=3').json()['gap'] is True
+
+
+@pytest.mark.parametrize('hidden_type', ['LIVE_MOVEMENT', 'LIVE_AGGREGATE'])
+def test_evicted_hidden_telemetry_only_gaps_when_requested(client, monkeypatch, hidden_type):
+    from collections import deque
+    monkeypatch.setattr(live, '_events', deque(maxlen=3))
+    assert _post(client, [{'type': 'ROUND_START'}]).status_code == 200
+    assert _post(client, [{'type': hidden_type}] * 5).status_code == 200
+    default = client.get('/api/live/feed?since=1').json()
+    assert default['events'] == []
+    assert default['gap'] is False
+    assert client.get('/api/live/feed?since=1&types=ROUND_END').json()['gap'] is False
+    assert client.get('/api/live/feed?since=1&types=' + hidden_type).json()['gap'] is True
+
+
+def test_evicted_visible_event_only_gaps_for_matching_filter(client, monkeypatch):
+    from collections import deque
+    monkeypatch.setattr(live, '_events', deque(maxlen=3))
+    _post(client, [{'type': 'ROUND_START'}, {'type': 'ROUND_END'}])
+    _post(client, [{'type': 'LIVE_MOVEMENT'}] * 4)
+    assert client.get('/api/live/feed?since=1').json()['gap'] is True
+    assert client.get('/api/live/feed?since=1&types=ROUND_START').json()['gap'] is False
+    assert client.get('/api/live/feed?since=1&types=ROUND_END').json()['gap'] is True

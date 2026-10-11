@@ -1,3 +1,12 @@
+## 2026-10-11 — Filtered loss and cached module graphs need explicit evidence
+
+Raw ring-head advancement does not prove a renderable event was lost. Track
+last evicted sequence per allowed type and apply the requested filter to that
+bounded watermark. For legacy JS changes, invalidate the full import chain;
+updating only the leaf URL cannot help a cached parent. Home and Live must
+import the same versioned tonight module. Parse imports rather than searching
+comments, and verify actual HTTP bytes/cache headers without invoking lifespan.
+
 ## 2026-10-11 — Empty Live pages still carry state transitions
 
 Treat feed status, gap evidence and age expiry independently of events.length.

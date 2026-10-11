@@ -1,3 +1,16 @@
+## 2026-10-11 — Live review findings addressed
+
+PR #1085: eviction now records the last evicted sequence per admitted event
+type, so hidden telemetry cannot manufacture a default-feed gap. Explicit
+filters still receive gap evidence for their own lost types. Three HTTP
+regressions failed first;55Python cases pass. Bump the full HTML/app/home/tonight/
+ticker import chain and share one tonight URL. AST/DOM cache contract failed
+before the bump;37frontend cases pass including failed replacement-worker read.
+Watermark/cache mutations failed, source restored/cmp. Actual main-app ASGI:
+HTML and all four JS URLs return200/source-equal; HTML/app revalidate, remaining
+JS cache86400s. Same synthetic eviction returns default gap=false and explicit
+movement gap=true. No listener, app lifespan, database or deployed browser proof.
+
 ## 2026-10-11 — Live empty/error polling recovery follow-up
 
 PR #1085 self-review reproduced stale rendered status after a failed request

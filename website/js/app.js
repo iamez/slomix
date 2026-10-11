@@ -17,7 +17,7 @@ import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './liv
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260819-card';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
 import { loadSeasonInfo, loadLastSession, loadSessionsView, toggleSeasonDetails } from './sessions.js?v=20260817-score';
-import { loadHomePulseCards } from './home.js';
+import { loadHomePulseCards } from './home.js?v=20261011-live-recovery';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js?v=20260813-audit-brandslate';
 import { loadFormView } from './form.js';
 
@@ -62,7 +62,7 @@ import { loadSeasonLeaders, loadActivityCalendar, loadSeasonSummary } from './se
 import { loadHallOfFameView } from './hall-of-fame.js';
 import { loadRecordBookView } from './record-book.js';
 import { openWrapped } from './wrapped.js';
-import { loadTonightView } from './tonight.js?v=20260819-ladder';
+import { loadTonightView } from './tonight.js?v=20261011-live-recovery';
 import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
 import { loadSessions2View } from './sessions2.js?v=20260817-score';
 import { loadSessionDetailView } from './session-detail.js?v=20260720-ssd-gsid';
