@@ -292,20 +292,32 @@ export function LivePage() {
   // later poll asks only for seq > since, per the /api/live/feed contract.
   // Events accumulate here because a cursor poll returns only the new ones.
   const [since, setSince] = useState(0);
+  const [stream, setStream] = useState<string | null>(null);
+  const [generation, setGeneration] = useState(0);
   const [log, setLog] = useState<LiveEvent[]>([]);
   const [gapNote, setGapNote] = useState<string | null>(null);
-  const feed = useLiveFeed(since);
+  const feed = useLiveFeed(since, generation);
   const feedData = feed.data;
   useEffect(() => {
     if (feedData == null) return;
-    if (since > 0 && feedData.oldest_seq != null && feedData.oldest_seq > since + 1) {
-      setGapNote(`ring overwrote ${figure(feedData.oldest_seq - since - 1)} events between polls`);
+    const changedStream = stream != null && feedData.stream_id != null && stream !== feedData.stream_id;
+    if (feedData.stream_id != null) setStream(feedData.stream_id);
+    if (changedStream || feedData.cursor_reset || feedData.last_seq < since) {
+      setLog([]);
+      setGapNote('feed restarted — reloading recent events');
+      setSince(0);
+      // A new cache generation must not replay the previous worker's since=0 page.
+      setGeneration((value) => value + 1);
+      return;
+    }
+    if (feedData.gap === true) {
+      setGapNote('some events expired or were skipped between polls');
     }
     if (feedData.events.length > 0) {
       setLog((prev) => [...prev, ...feedData.events.filter((e) => !prev.some((p) => p.seq === e.seq))].slice(-200));
     }
     if (feedData.last_seq > since) setSince(feedData.last_seq);
-  }, [feedData, since]);
+  }, [feedData, since, stream]);
   const server = useServerActivityHistory(24);
   const voice = useVoiceActivityHistory(24);
   const monitoring = useMonitoringStatus();
@@ -316,16 +328,16 @@ export function LivePage() {
       <Stack gap={2}>
         <Lbl>live · the server right now</Lbl>
         <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: 'var(--track-title)', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
-          {state.data?.is_live
+          {state.isError ? 'live updates unavailable' : !state.data ? 'checking live updates' : state.data.is_live
             ? `${state.data.current_map != null ? mapLabel(state.data.current_map) : 'unknown map'} · live`
-            : 'nobody on'}
+            : 'no recent live updates'}
         </h1>
         {state.data && (
           <>
             <Meta>
               {state.data.is_live
                 ? `${figure(state.data.roster.player_count)} playing${state.data.round_number != null ? ` · round ${figure(state.data.round_number)}` : ''}${state.data.roster.has_bots ? ' · bots present' : ''}`
-                : 'the card wakes the moment the first player connects'}
+                : 'player presence is unknown until fresh server events arrive'}
             </Meta>
             {state.data.roster.roster_age_seconds != null && state.data.roster.roster_age_seconds > 60 && (
               <Meta>roster {figure(Math.round(state.data.roster.roster_age_seconds / 60))} min old — lingering through a delivery gap, dimmed, not current</Meta>

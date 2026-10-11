@@ -2285,9 +2285,9 @@ export async function uploadGreatshotDemo(file: File) {
 // Phase 6 — the live surface. State and feed POLL while the page is
 // mounted; history and monitoring refresh on their own slower clocks.
 
-export function useLiveFeed(since: number) {
+export function useLiveFeed(since: number, generation = 0) {
   return useQuery({
-    queryKey: ['live-feed', since],
+    queryKey: ['live-feed', generation, since],
     queryFn: () =>
       apiGet('/api/live/feed', { query: { since } }) as Promise<LiveFeed>,
     refetchInterval: 15 * 1000,

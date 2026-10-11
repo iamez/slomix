@@ -5049,6 +5049,10 @@ export interface GreatshotDetail {
 
 export interface LiveFeed {
   status: string;
+  /** Process identity and loss verdict from the live ring; absent on older servers. */
+  stream_id?: string;
+  cursor_reset?: boolean;
+  gap?: boolean;
   /** Typed loosely on purpose: each event is {seq, type, received_at, …}
    *  with per-type payloads; the recorded quiet-server form has none, so
    *  renderable richness waits for a recording that carries them. */

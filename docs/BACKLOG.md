@@ -1,3 +1,22 @@
+## 2026-10-11 — Live feed recovery isolated for review
+
+A worker restart resets the in-memory sequence, previously stranding clients
+behind an old cursor or mixing two workers' events. Add worker identity and
+cursor-reset metadata, authoritative event envelopes and explicit gap evidence.
+SPA query generations and serialized legacy polling recover retained events;
+upstream failure is unavailable, and silence does not establish player absence.
+This slice is based on main and contains no runtime-v2 migration/deployment work.
+The complete runtime-v2 roadmap remains preserved in the local integration
+branch fix/website-live-feed-recovery-20261011 at1d09f778; its D2 migration review
+and owner service handover remain separate. Do not replace that plan with this
+smaller public review branch. No service action or database write is part of PR.
+
+Validation on this isolated branch:52Python/33frontend cases, typecheck and lint;
+three negative controls observed failing/restored with cmp, and fresh-process
+ASGI proof of old cursor50 recovering event1 with a new stream identity.
+Browser/deployed acceptance, source-clock semantics, durable retry idempotency
+and roster reconstruction after restart remain open follow-up work.
+
 # BACKLOG — kje sem ostal + kaj se je spremenilo ad hoc
 
 > Current1083queue:1079merged;1080freshgates and prepared1081/1082predecessors

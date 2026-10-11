@@ -96,10 +96,9 @@ describe('LivePage', () => {
       </QueryClientProvider>,
     );
     // The recording is a QUIET server: the page says so, not a spinner.
-    // 'nobody on' renders BEFORE data via optional chaining — wait for the
-    // data-carrying line, then assert the heading.
-    await waitFor(() => expect(screen.getByText(/wakes the moment the first player connects/)).toBeInTheDocument());
-    expect(screen.getByText('nobody on')).toBeInTheDocument();
+    // Quiet transport does not establish that the game server is empty.
+    await waitFor(() => expect(screen.getByText(/player presence is unknown/)).toBeInTheDocument());
+    expect(screen.getByText('no recent live updates')).toBeInTheDocument();
     expect(screen.getByText(/quiet — no renderable events/)).toBeInTheDocument();
     // 24h history: the recorded peak and uptime in the aside.
     await waitFor(() => expect(screen.getByText(new RegExp(`peak ${serverHist.summary.peak_players} · uptime`))).toBeInTheDocument());
@@ -322,4 +321,60 @@ describe('LivePage long tail (ledger 2026-09-09)', () => {
     expect(screen.getByText(/voice sampling fresh · [\d,]+ records · last 2026-09-02 11:48 UTC/)).toBeInTheDocument();
     expect(screen.getByText(/^Slomix API: api /)).toBeInTheDocument();
   });
+});
+
+function mountFeedProbe(feedResponse: (since: number) => LiveFeed, stateResponse: () => Promise<unknown> = () => Promise.resolve(liveState)) {
+  const client = makeQueryClient();
+  client.setDefaultOptions({ queries: { retry: false } });
+  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+    const url = new URL(String(input), 'http://local');
+    const body = url.pathname === '/api/live/feed'
+      ? feedResponse(Number(url.searchParams.get('since')))
+      : url.pathname === '/api/live/state' ? await stateResponse() : {
+        '/api/server-activity/history': serverHist, '/api/voice-activity/history': voiceHist,
+        '/api/monitoring/status': monitoring, '/api/status': health, '/api/stats/tonight': tonightQuiet,
+      }[url.pathname];
+    return { ok: true, status: 200, json: async () => body } as Response;
+  }));
+  render(<QueryClientProvider client={client}><MemoryRouter><LivePage /></MemoryRouter></QueryClientProvider>);
+  return client;
+}
+
+it.each([1, 7])('reloads a new worker even when its sequence has reached %s', async (head) => {
+  let restarted = false;
+  const client = mountFeedProbe((since) => {
+    const last = restarted ? head : 5;
+    const events = restarted
+      ? (since === 0 ? [{ seq: 1, type: 'ANNOUNCE', text: 'new worker opening' }] : [])
+      : (since === 0 ? [{ seq: 5, type: 'ANNOUNCE', text: 'old worker event' }] : []);
+    return { status: 'ok', events, last_seq: last, oldest_seq: events[0]?.seq ?? null,
+      stream_id: restarted ? 'new-worker' : 'old-worker', cursor_reset: since > last, gap: false };
+  });
+  await screen.findByText('old worker event');
+  await waitFor(() => expect(client.getQueryData(['live-feed', 0, 5])).toBeDefined());
+  restarted = true;
+  await client.invalidateQueries({ queryKey: ['live-feed'] });
+  await screen.findByText('new worker opening');
+  expect(screen.queryByText('old worker event')).not.toBeInTheDocument();
+});
+
+it('does not label filtered telemetry sequence numbers as lost events', async () => {
+  const client = mountFeedProbe((since) => ({ status: 'ok', stream_id: 'one-worker', gap: false,
+    events: since === 0 ? [{ seq: 1, type: 'ROUND_START' }] : [{ seq: 12, type: 'ROUND_END' }],
+    oldest_seq: since === 0 ? 1 : 12, last_seq: since === 0 ? 1 : 12 }));
+  await screen.findByText('round ended');
+  expect(screen.queryByText(/overwrote|skipped between polls/)).not.toBeInTheDocument();
+  client.clear();
+});
+
+it('keeps loading separate from an empty game server', async () => {
+  mountFeedProbe(() => feed, () => new Promise(() => {}));
+  expect(screen.getByRole('heading', { name: 'checking live updates' })).toBeInTheDocument();
+  expect(screen.queryByText('nobody on')).not.toBeInTheDocument();
+});
+
+it('reports a failed state request without claiming the server is empty', async () => {
+  mountFeedProbe(() => feed, () => Promise.reject(new Error('offline')));
+  expect(await screen.findByRole('heading', { name: 'live updates unavailable' })).toBeInTheDocument();
+  expect(screen.queryByText('nobody on')).not.toBeInTheDocument();
 });

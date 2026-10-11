@@ -1,3 +1,12 @@
+## 2026-10-11 — Live sequence recovery requires a worker identity
+
+A per-process counter alone cannot distinguish a restarted worker whose head
+has overtaken the prior cursor. Reset client deduplication and cached feed pages
+on changed stream identity; clear derived legacy state and serialize polling.
+Hidden telemetry consumes sequence IDs, so numeric holes alone do not prove
+lost renderable events. Use server gap metadata and keep transport fields
+server-owned. A failed configured upstream must not report successful silence.
+
 # AGENT_LOG — durable lessons for the next agent
 
 - **2026-10-04 · Ambiguity must survive every retry path.**
