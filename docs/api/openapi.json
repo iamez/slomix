@@ -11127,7 +11127,7 @@
   },
   "/api/live/feed": {
    "get": {
-    "description": "Events with seq > since, oldest first — the NEWEST ``limit`` of them.\n\nBefore 2026-08-18 this returned the OLDEST page after the cursor, so a\ncold page load replayed the oldest fifth of the ring (a quarter-hour-old\nrevive) while the newest events fell outside the page — the live feed's\n\"stuck on quiet, then bursts\" symptom. A gap is detectable client-side:\n``oldest_seq > since + 1`` means events between were skipped (resync\nroster/map from /state, the play-by-play in between is gone).\nAge retention keeps stale ring content out entirely.",
+    "description": "Newest retained page after the cursor, ordered oldest first.\n\nBefore 2026-08-18 this returned the OLDEST page after the cursor, so a\ncold page load replayed the oldest fifth of the ring (a quarter-hour-old\nrevive) while the newest events fell outside the page — the live feed's\n\"stuck on quiet, then bursts\" symptom. ``gap`` reports eviction, expiry or\ntruncation; a numeric jump alone may be intentionally hidden telemetry.\n``stream_id`` identifies this worker's sequence namespace. A cursor ahead\nof its head receives a fresh page and ``cursor_reset``; clients must also\nreload on a changed stream ID even when the new head passed their cursor.\nAge retention keeps stale ring content out entirely.",
     "operationId": "feed_api_live_feed_get",
     "parameters": [
      {

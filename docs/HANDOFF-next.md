@@ -1,45 +1,3 @@
-## 2026-10-11 — Live review findings addressed
-
-PR #1085: eviction now records the last evicted sequence per admitted event
-type, so hidden telemetry cannot manufacture a default-feed gap. Explicit
-filters still receive gap evidence for their own lost types. Three HTTP
-regressions failed first;55Python cases pass. Bump the full HTML/app/home/tonight/
-ticker import chain and share one tonight URL. AST/DOM cache contract failed
-before the bump;37frontend cases pass including failed replacement-worker read.
-Watermark/cache mutations failed, source restored/cmp. Actual main-app ASGI:
-HTML and all four JS URLs return200/source-equal; HTML/app revalidate, remaining
-JS cache86400s. Same synthetic eviction returns default gap=false and explicit
-movement gap=true. No listener, app lifespan, database or deployed browser proof.
-
-## 2026-10-11 — Live empty/error polling recovery follow-up
-
-PR #1085 self-review reproduced stale rendered status after a failed request
-and stale derived scores on an empty gap response. Render every poll outcome,
-age retained rows even during silence/failure, and honor gap before testing
-whether a page has events. Two DOM regressions failed before the fix; all35
-focused frontend cases pass afterward. Disabling row expiry was observed
-failing in the real ticker's rendered JSDOM output, then restored with cmp.
-No browser/server/deployment claim. Return to runtime-v2 D2 remains unchanged.
-
-## 2026-10-11 — Live feed recovery isolated for review
-
-A worker restart resets the in-memory sequence, previously stranding clients
-behind an old cursor or mixing two workers' events. Add worker identity and
-cursor-reset metadata, authoritative event envelopes and explicit gap evidence.
-SPA query generations and serialized legacy polling recover retained events;
-upstream failure is unavailable, and silence does not establish player absence.
-This slice is based on main and contains no runtime-v2 migration/deployment work.
-The complete runtime-v2 roadmap remains preserved in the local integration
-branch fix/website-live-feed-recovery-20261011 at1d09f778; its D2 migration review
-and owner service handover remain separate. Do not replace that plan with this
-smaller public review branch. No service action or database write is part of PR.
-
-Validation on this isolated branch:52Python/33frontend cases, typecheck and lint;
-three negative controls observed failing/restored with cmp, and fresh-process
-ASGI proof of old cursor50 recovering event1 with a new stream identity.
-Browser/deployed acceptance, source-clock semantics, durable retry idempotency
-and roster reconstruction after restart remain open follow-up work.
-
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
 > **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
@@ -81,6 +39,56 @@ Vstopna točka za avtonomnega agenta. Vir resnice za načrt je `docs/PLAN.md`,
 pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
 KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
+
+## 2026-10-11 — CI-generated contracts reconciled
+
+Full CI identified stale OpenAPI description, datapoint ledger and displaced
+mandatory handoff preamble. Regenerate snapshots; explicitly retire oldest_seq
+as a loss heuristic in favor of server gap evidence (unread baseline unchanged).
+Keep the original handoff routing/authority preamble before all dated sections.
+All20OpenAPI/datapoint/history contract cases pass locally; no test guard relaxed.
+
+## 2026-10-11 — Live review findings addressed
+
+PR #1085: eviction now records the last evicted sequence per admitted event
+type, so hidden telemetry cannot manufacture a default-feed gap. Explicit
+filters still receive gap evidence for their own lost types. Three HTTP
+regressions failed first;55Python cases pass. Bump the full HTML/app/home/tonight/
+ticker import chain and share one tonight URL. AST/DOM cache contract failed
+before the bump;37frontend cases pass including failed replacement-worker read.
+Watermark/cache mutations failed, source restored/cmp. Actual main-app ASGI:
+HTML and all four JS URLs return200/source-equal; HTML/app revalidate, remaining
+JS cache86400s. Same synthetic eviction returns default gap=false and explicit
+movement gap=true. No listener, app lifespan, database or deployed browser proof.
+
+## 2026-10-11 — Live empty/error polling recovery follow-up
+
+PR #1085 self-review reproduced stale rendered status after a failed request
+and stale derived scores on an empty gap response. Render every poll outcome,
+age retained rows even during silence/failure, and honor gap before testing
+whether a page has events. Two DOM regressions failed before the fix; all35
+focused frontend cases pass afterward. Disabling row expiry was observed
+failing in the real ticker's rendered JSDOM output, then restored with cmp.
+No browser/server/deployment claim. Return to runtime-v2 D2 remains unchanged.
+
+## 2026-10-11 — Live feed recovery isolated for review
+
+A worker restart resets the in-memory sequence, previously stranding clients
+behind an old cursor or mixing two workers' events. Add worker identity and
+cursor-reset metadata, authoritative event envelopes and explicit gap evidence.
+SPA query generations and serialized legacy polling recover retained events;
+upstream failure is unavailable, and silence does not establish player absence.
+This slice is based on main and contains no runtime-v2 migration/deployment work.
+The complete runtime-v2 roadmap remains preserved in the local integration
+branch fix/website-live-feed-recovery-20261011 at1d09f778; its D2 migration review
+and owner service handover remain separate. Do not replace that plan with this
+smaller public review branch. No service action or database write is part of PR.
+
+Validation on this isolated branch:52Python/33frontend cases, typecheck and lint;
+three negative controls observed failing/restored with cmp, and fresh-process
+ASGI proof of old cursor50 recovering event1 with a new stream identity.
+Browser/deployed acceptance, source-clock semantics, durable retry idempotency
+and roster reconstruction after restart remain open follow-up work.
 
 ## 0. Kako se dela v tem repu (trda pravila)
 - Feature veja + PR; **nikoli merge brez ownerjevega dovoljenja za TA PR**;

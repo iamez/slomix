@@ -1,3 +1,11 @@
+## 2026-10-11 — CI-generated contracts reconciled
+
+Full CI identified stale OpenAPI description, datapoint ledger and displaced
+mandatory handoff preamble. Regenerate snapshots; explicitly retire oldest_seq
+as a loss heuristic in favor of server gap evidence (unread baseline unchanged).
+Keep the original handoff routing/authority preamble before all dated sections.
+All20OpenAPI/datapoint/history contract cases pass locally; no test guard relaxed.
+
 ## 2026-10-11 — Live review findings addressed
 
 PR #1085: eviction now records the last evicted sequence per admitted event

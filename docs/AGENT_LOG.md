@@ -1,3 +1,12 @@
+## 2026-10-11 — Generated API prose and handoff preambles are contracts
+
+A router docstring changes the frozen OpenAPI description even if its schema
+is unchanged. Refresh dump_openapi and the datapoint ledger when removing a
+field reader. Explain deliberately retired transport heuristics in decisions;
+never grow the unread baseline to hide them. Keep HANDOFF-next's mandatory
+routing/authority preamble before the first dated heading, not below updates.
+The20OpenAPI/ledger/history checks cover these three CI failures.
+
 ## 2026-10-11 — Filtered loss and cached module graphs need explicit evidence
 
 Raw ring-head advancement does not prove a renderable event was lost. Track
