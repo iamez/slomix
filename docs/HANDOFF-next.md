@@ -1,3 +1,13 @@
+## 2026-10-11 — Live empty/error polling recovery follow-up
+
+PR #1085 self-review reproduced stale rendered status after a failed request
+and stale derived scores on an empty gap response. Render every poll outcome,
+age retained rows even during silence/failure, and honor gap before testing
+whether a page has events. Two DOM regressions failed before the fix; all35
+focused frontend cases pass afterward. Disabling row expiry was observed
+failing in the real ticker's rendered JSDOM output, then restored with cmp.
+No browser/server/deployment claim. Return to runtime-v2 D2 remains unchanged.
+
 ## 2026-10-11 — Live feed recovery isolated for review
 
 A worker restart resets the in-memory sequence, previously stranding clients

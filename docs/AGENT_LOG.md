@@ -1,3 +1,11 @@
+## 2026-10-11 — Empty Live pages still carry state transitions
+
+Treat feed status, gap evidence and age expiry independently of events.length.
+An empty successful response must clear a displayed error; a failed request
+must render unavailable immediately; gap-only responses invalidate derived
+scores. Run row expiry for every poll outcome so silence cannot preserve old
+rows indefinitely. DOM tests execute the legacy module, including filter clicks.
+
 ## 2026-10-11 — Live sequence recovery requires a worker identity
 
 A per-process counter alone cannot distinguish a restarted worker whose head

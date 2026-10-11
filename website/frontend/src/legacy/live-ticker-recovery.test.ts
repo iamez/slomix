@@ -3,11 +3,11 @@ import { afterEach, expect, it, vi } from 'vitest';
 const fetchJSON = vi.hoisted(() => vi.fn());
 vi.mock('../../../js/utils.js', () => ({
   API_BASE: '/api', fetchJSON,
-  escapeHtml: (value: unknown) => String(value ?? ''), safeInsertHTML: vi.fn(),
+  escapeHtml: (value: unknown) => String(value ?? ''), safeInsertHTML: (host: HTMLElement, position: InsertPosition, html: string) => host.insertAdjacentHTML(position, html),
 }));
 vi.mock('../../../js/live-state.js?v=20260819-ladder', () => ({ getSnapshot: () => null }));
 
-afterEach(() => { vi.useRealTimers(); vi.resetModules(); fetchJSON.mockReset(); });
+afterEach(() => { vi.useRealTimers(); localStorage.clear(); vi.resetModules(); fetchJSON.mockReset(); });
 
 it('legacy polling recovers a new worker and clears the old roster', async () => {
   vi.useFakeTimers();
@@ -46,4 +46,47 @@ it('does not overlap requests when the feed is slow', async () => {
   finish({ events: [], last_seq: 0 });
   await vi.advanceTimersByTimeAsync(0);
   ticker.stopLiveTicker();
+});
+
+
+it('renders a failed poll immediately and recovers on an empty response', async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = '<div id="view-live" class="active"></div><div id="live-ticker"></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  fetchJSON.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ events: [], last_seq: 0 });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.getElementById('live-ticker')?.textContent).toContain('feed error');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(document.getElementById('live-ticker')?.textContent).toContain('quiet');
+    expect(document.getElementById('live-ticker')?.textContent).not.toContain('feed error');
+  } finally { ticker.stopLiveTicker(); warn.mockRestore(); }
+});
+
+it('expires old rows and clears derived scores on an empty gap response', async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = '<div id="view-live" class="active"></div><div id="live-ticker"></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const received = Date.now() / 1000;
+  fetchJSON.mockResolvedValueOnce({ last_seq: 1, events: [
+    { seq: 1, type: 'REVIVE', slots: '1 2', received_at: received },
+  ] }).mockResolvedValue({ events: [], last_seq: 2, gap: true });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ticker.getLiveMVP()).not.toBeNull();
+    document.querySelector<HTMLInputElement>('input[data-live-cat="support"]')!.click();
+    expect(document.getElementById('live-ticker')?.textContent).toContain('revived');
+    vi.setSystemTime(new Date((received + 601) * 1000));
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(ticker.getLiveMVP()).toBeNull();
+    expect(document.getElementById('live-ticker')?.textContent).not.toContain('revived');
+    expect(document.getElementById('live-ticker')?.textContent).toContain('No live events');
+  } finally { ticker.stopLiveTicker(); }
 });
