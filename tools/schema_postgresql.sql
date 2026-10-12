@@ -3027,7 +3027,8 @@ CREATE TABLE public.proximity_processed_files (
     imported_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     tracker_version text,
     round_key text,
-    capabilities jsonb
+    capabilities jsonb,
+    runtime_parent_gate boolean DEFAULT false NOT NULL
 );
 
 
@@ -7736,6 +7737,10 @@ CREATE INDEX idx_rounds_map_round_end ON public.rounds USING btree (map_name, ro
 --
 
 CREATE INDEX idx_rounds_map_round_start ON public.rounds USING btree (map_name, round_number, round_start_unix);
+
+-- 095: exact proximity identity uses the normalized map at both callers.
+CREATE INDEX IF NOT EXISTS idx_rounds_normalized_map_round_start
+    ON rounds (LOWER(BTRIM(map_name)), round_number, round_start_unix);
 
 
 --
