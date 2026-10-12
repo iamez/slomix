@@ -101,6 +101,9 @@ MIGRATIONS=(
   "091_runtime_cache_consumer.sql"
   "092_runtime_cache_generation_read_grant.sql"
   "093_runtime_website_least_privilege.sql"
+  # Strict proximity receipt provenance only; does not enable a runtime worker.
+  "094_proximity_runtime_parent_gate.sql"
+  "095_proximity_normalized_parent_index.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"

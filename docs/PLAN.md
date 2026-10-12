@@ -1,6 +1,151 @@
 # PLAN — edini vir resnice za tekoči načrt
 
-## Current #1083 queue gate — 2026-10-05
+## Current #1084 queue gate — 2026-10-05
+
+### Review follow-up — 2026-10-05 (local, not yet published)
+
+Measured follow-up: owner started disposable PG14. Actual SQL captured from
+both callers on100002synthetic rows chose sequential scans with existing raw
+and partial-start indexes. Two fresh proof runs agree. Repeat-run warm local
+buffers:736-738hits/7.158-8.128ms before,3-6hits/0.016-0.052ms with normalized
+index. These are synthetic TEMP-table measurements, not production speedups.
+Unique/missing/ambiguous results unchanged; rollback independently verified.
+Added migration095 and bootstrap non-unique expression index; registered095
+with the current release config. No live migration, data repair or worker.
+Two new real-PG tests cover migration/bootstrap reapplication, duplicate and
+NULL-session identities, both actual query shapes, all equality index conditions
+and bounded buffers without planner forcing. Missing migration/schema first
+failed2tests; raw-map mutation then failed1 with1passing control, restored/cmp.
+Final focused PG/source/parent/release/migration/docs suite150passed11.32s.
+Ruff and whitespace clean. Review replies/fresh exact-head CI still required.
+No merge permission inferred; production and NEVER MERGE untouched.
+
+Fresh GitHub evidence confirms1079-1083 merged and1084 still open/blocked at
+head1e82c231/base124fe76d3. Copilot has3unresolved threads: normalized-map
+index coverage at both callers, plus stale BACKLOG. Corrected BACKLOG locally;
+no thread resolution or review request yet. Python3.13 CI remains failure.
+Earlier observation of idx_rounds_map_round_start usage is NOT evidence of
+bounded leading-key access: LOWER(BTRIM(map_name)) differs from raw map_name.
+Next measure real EXPLAIN (ANALYZE, BUFFERS) on representative synthetic rounds,
+unique/missing/ambiguous targets and both canonical/strict query shapes; compare
+existing access with a matching expression-index candidate and fresh-bootstrap
+parity before choosing a migration. No speculative index or live migration yet.
+Disposable proof service is failed/Result=timeout (60-minute limit); owner must
+start it before those measurements. No fallback to the application database.
+
+Owner placed expanded Lua/comparative research at the END of the integration
+plan, explicitly requiring renewed research in Plan mode before implementation.
+Continue this runtime gate and saved capture/provenance/retry/handover sequence.
+Documentation/release-contract check: 59 tests passed in10.46s; diff check clean.
+These validate documentation contracts, not query performance or PG behavior.
+
+#1079 through #1083 are merged. Actual main is
+124fe76d3a744c7b98ba7847827cb9282cb40f40 (#1083, 2026-10-04T23:51:58Z).
+Reviewed74c54c85 and squash trees match (5b953f79); all14checks, matching
+Codex5985680060 and mandatory settle passed. Four round/relinker and twenty-four
+predecessor PG cases actually PASS on both CI majors.
+This #1084 includes actual main. The squash conflict retains normalized map
+identity in the canonical resolver, consistent with the parent gate. Source,
+tests, provenance migration and release registration remain identical to7071a20b.
+Next fresh exact-head review/CI, including all20source/parent PG cases and
+predecessor cases on both majors, then mandatory merge cycle.
+Migration 094 is not live-applied; no services,
+production or historical data repair. Original runtime roadmap retained in
+latest integration PLAN. Everything below records historical preparation only.
+
+## Historical #1084 preparation — 2026-10-05
+
+Normal local parentdc31f859 integration preserves parent-gate/provenance fixes
+7071a20b and all earlier repairs, including the reconciled stats/proximity spool.
+Migration094 remains unapplied to live DEV; no release/deploy command executed.
+Wait1079-1083 actual merges, then final synchronization/fresh exact-head CI and
+review. Local unit/fixture checks cannot replace actual PG source+parent tests.
+No services/live database/production actions. Original capture/sealing/retry/
+handover, full-session outage acceptance, Spiderweb/proximity audit and later
+Home roadmap remain in latest integration PLAN at
+/home/samba/share/slomix-astra-runtime-integration-20260926. Older statuses historical.
+
+Fresh path-discovered proximity/relinker/spool/capture/manifest/migration/docs
+suite727passed/20pre-existing explicit GUID/Lua skips11.86s. Disabling strict
+ambiguity/session guards fails2cases (DID NOT RAISE), restored via apply_patch/cmp.
+90boundary/release-config/migration-status cases then pass0.66s; Ruff clean.
+One attempted focused command named nonexistent test_migration_runner_safety.py
+and exited4 (no tests ran); corrected using rg --files, not counted as a pass.
+Current release registration and previous normalized/provenance review fixes
+are unchanged from7071a20b. Real-PG contention/provenance remains CI gate.
+
+## Historical runtime late-parent gate — 2026-10-04
+
+Review follow-up: initial932905e1 CI passed, but Codex found2issues. Addressed
+normalized map identity in BOTH runtime gate and canonical exact-start resolver.
+Migration094/bootstrap add runtime_parent_gate FALSE by default; only a strict
+new receipt INSERT sets TRUE, within the same import transaction. Conflict keeps
+existing provenance; strict replay rejects old permissive receipts even with a
+valid hash. Documentation-only forward-handover assumptions were insufficient.
+Strict mode requires094; missing column fails closed. Legacy/default mode works
+without094. No existing migration changed; no live migration/backfill/deployment.
+
+540tests pass/20existing skips including migration-runner tests;60focused pass.
+Two additional mutations failed/restored/cmp (provenance acceptance and normalized
+parser identity). Actual clone proofs rerun with migration in outer rollback TX:
+normalized parent/session/replay correct and strict adoption of an old permissive
+vehicle import rejected, originalNULL link/provenance unchanged. Independent
+observer verifies no committed fixture rows; schema change also rolled back.
+Normalized query still uses idx_rounds_map_round_start for round/start; sampled
+30.434ms first read with disk reads versus0.106ms warm/all hits, not an SLA or a
+like-for-like speedup. No speculative new index. Fresh exact-head CI/review needed;
+review replies precede thread closure. Next gates below remain unchanged.
+
+Full CI88e366fe found one release-registration omission, not a parser test failure:
+"migrations no release config ever ships: 094_proximity_runtime_parent_gate.sql"
+(7606passed/153skipped,1failed on Python3.13). Added094 to the existing latest
+release config beside083-093; this neither runs migrations nor enables workers.
+Release-config contract belongs in local migration validation alongside the runner.
+Fresh CI/review required after this correction; production remains frozen.
+
+Parent PR1083/67a39a09 now has successful CI and matching Codex review with no
+major issues; both fixed threads resolved,0unresolved/full pagination. This slice
+continues from that exact head, without merging or changing any running service.
+
+Actual isolated-clone characterization: importing before the parent, then adding
+the parent and replaying returned success twice but left vehicle.round_id/session
+NULL. Resolver independently found the correct parent. All synthetic writes were
+rolled back and checked by a separate observer. Not a historical corruption count.
+
+Chosen forward-only policy: import_proximity_file(require_linked_parent=True)
+defers ingestion until unique exact map/R1-or-R2/header-start AND non-null session.
+Pending reasons distinguish missing parent/session from ambiguous or unavailable
+source identity; none acknowledges work. Database failures propagate as failures.
+Receipt claim/digest/data share a transaction; pending/failure rolls back that
+attempt. Existing parent is SHARE-locked through parsing; final identity and
+canonical parser context must still match. No nearest/date fallback in this mode.
+Default remains false for compatibility; NO worker/cog wiring or deployment here.
+
+Full canonical parser + real PostgreSQLAdapter clone proof: parent_missing and
+session_missing each leave0vehicles/receipts; parent+session arrival then import
+and replay yield1vehicle linked to expected round/session, equal physical starts,
+one verified receipt. Enclosing proof transaction rolled back; observer0rows.
+This is mechanism proof, not a committed whole-session cutover acceptance.
+Path-discovered proximity/relinker/spool/capture suite499passed/20existing skips;
+focused boundary+PG40passed; changed Python lint and whitespace clean. Exact-head
+CI/review remain publication gates, not inferred from these local results.
+Three guard mutations observed failing (pending admission, final parser identity,
+parent SHARE lock), restored/cmp. First mutation initially exposed an incomplete
+test schema; extended only the fixture, repeated and observed false success=True.
+
+Caller contract remains essential: retain sealed source, bounded retry for missing
+parent/session, reconcile ambiguous/missing-header sources without guessing. Use
+only after exclusive forward-only handover; existing permissive/hashless receipts
+are NOT evidence of linked ingestion. This does not repair old unlinked rows or
+provide durable correlation delivery. SHARE locks do not prevent future duplicate
+inserts; post-check detects observed duplicates, not a database uniqueness promise.
+Double parsing uses the same verified bytes; no new path reopen, memory/latency
+guarantee or scheduler. Next: exact-head checks/review; capture seal, durable retry,
+exclusive handover and full Discord/website-off recovery proof. Then usable
+Spiderweb/full proximity audit, later Home design; original plan preserved below.
+
+
+## Historical inherited #1083 queue gate — 2026-10-05
 
 #1079 through #1082 are merged. Actual main is
 47ac2440b701cae6b8640698b57ae73e0782e8e0 (#1082, 2026-10-04T23:36:06Z).
