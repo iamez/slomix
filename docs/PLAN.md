@@ -1,30 +1,3 @@
-## 2026-10-12 — Bounded website issue correction review
-
-CI followup: the first full run found a stale OpenAPI description and an older
-round-id-specific composite assertion. Regenerated only the changed endpoint
-description and migrated the assertion to canonical key membership plus its
-quality gate. Both failing tests and their neighbouring cases now pass (10).
-Review scope is24files, still below the25-file push cap.
-
-Feature fix/website-issue-scope-review-20261012 addresses #849/#857 with one
-accepted canonical session scope for composite metrics and coverage, including
-cache outcome membership. Date ambiguity returns409; explicit gsid wins.
-#850 adds completed/substitution/NULL status gates to story kill/movement totals.
-#851 replaces the interpolation-blind vocabulary regex with object-property AST
-inspection (budget40unchanged). #852 replaces unstable source-line citations.
-
-Read-only composite corpus:153sessions,zeroerrors;10sessions/64players changed
-in derived metrics, kills and membership unchanged. Independent SQL confirms all
-50affected source counts. In-process real API gsid137 plus both dates agrees.
-Native SELECT-only fixture exercises wrong round_id, canonical keys across
-midnight, bad date/map/half and foreign cache; AND-to-OR mutation changes2to7.
-Story corpus:59kill/70movement sessions,only153changes, confirmed via SQL and
-service payload. Source/guard mutations observed failing then cmp restored.
-Targeted PR-branch Python81passed,2native tests skipped without disposablePG;
-those actual SQL bodies were separately executed on a pinned read-only target.
-Original roadmap remains below. Runtime/Spiderweb integration is separate;
-this bounded review does not deploy, activate services or authorize a merge.
-
 ## 2026-10-12 — Ordered merge reconciliation
 
 Owner explicitly authorized #1084 first, then #1085. #1084 merged through the
