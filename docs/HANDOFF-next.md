@@ -42,6 +42,12 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 ## 2026-10-12 — Bounded website issue correction review
 
+CI followup: the first full run found a stale OpenAPI description and an older
+round-id-specific composite assertion. Regenerated only the changed endpoint
+description and migrated the assertion to canonical key membership plus its
+quality gate. Both failing tests and their neighbouring cases now pass (10).
+Review scope is24files, still below the25-file push cap.
+
 Feature fix/website-issue-scope-review-20261012 addresses #849/#857 with one
 accepted canonical session scope for composite metrics and coverage, including
 cache outcome membership. Date ambiguity returns409; explicit gsid wins.

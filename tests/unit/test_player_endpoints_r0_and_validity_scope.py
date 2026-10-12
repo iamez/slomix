@@ -176,25 +176,21 @@ async def test_composite_session_scope_excludes_cancelled_rounds():
     validity+bot gates and fail the status gate)."""
     from website.backend.routers import skill_router
 
-    db = _Recorder()
-    try:
-        await skill_router.get_composite_stats(gaming_session_id=154, db=db)
-    except Exception:  # noqa: BLE001 — only the recorded SQL is under test
-        pass
-    scoped = [x for x in db.queries if "gaming_session_id = $1" in x]
-    assert scoped, f"session-scoped queries not seen; recorded: {db.queries}"
-    # ⛔ Counted, not searched: the big CTE query repeats the round_set
-    # fragment several times AND carries pcs_where — a membership check
-    # found the pcs gate and declared the whole query gated, so a mutation
-    # that stripped the round_set gate SURVIVED. Every id-subselect must
-    # bring its own gate, plus exactly one on the pcs scope.
-    big = next(q for q in scoped if "round_id IN (SELECT id FROM rounds" in q)
-    subselects = big.count("IN (SELECT id FROM rounds")
-    gates = big.count("round_status IN ('completed', 'substitution')")
-    assert subselects > 0
-    assert gates == subselects + 1, (
-        f"{subselects} id-subselects but {gates} status gates (want one per subselect plus one on the pcs scope)"
-    )
+    from tests.unit.test_composite_canonical_scope import ScopeDB
+
+    db = ScopeDB()
+    await skill_router.get_composite_stats(gaming_session_id=154, db=db)
+    accepted = [q for q, _ in db.queries
+                if "SELECT round_start_unix, map_name, round_number" in q and "is_bot_round" in q]
+    assert len(accepted) == 1
+    assert "round_status IN ('completed', 'substitution')" in accepted[0]
+    big = next(q for q, _ in db.queries if "WITH session_pcs" in q)
+    # Quality is resolved once into canonical keys. Every proximity source
+    # must consume those keys; PCS independently retains its reliable join.
+    assert "round_id IN (SELECT id FROM rounds" not in big
+    assert big.count("unnest($3::bigint[], $4::text[], $5::int[])") == 5
+    assert big.count("r.round_status IN ('completed', 'substitution')") == 1
+    assert "WHERE gaming_session_id = $1 AND kill_outcome_id IN" in big
 
 
 @pytest.mark.asyncio
