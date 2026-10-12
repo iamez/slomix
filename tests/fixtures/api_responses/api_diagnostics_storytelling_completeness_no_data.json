@@ -39,7 +39,7 @@
     {
       "key": "distance_mult_hardcoded",
       "title": "Distance multiplier hardcoded na 1.0",
-      "detail": "kis.py:229 — per-kill distance data še ni implementirana."
+      "detail": "Razdalja posameznega uboja še ni vključena v izračun; množitelj razdalje ostaja 1.0."
     }
   ]
 }

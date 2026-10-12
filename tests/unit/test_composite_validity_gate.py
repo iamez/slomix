@@ -28,6 +28,10 @@ class CapturingDB:
 
     async def fetch_all(self, query: str, params=None) -> list:
         self.queries.append(" ".join(query.split()))
+        if "SELECT round_start_unix, map_name, round_number" in query:
+            return [(1786406400, "supply", 1, "2026-08-11")]
+        if "GROUP BY gaming_session_id" in query:
+            return [(121, "2026-08-11", "2026-08-11", 1)]
         return []
 
     async def fetch_one(self, query: str, params=None) -> Any:
@@ -71,13 +75,15 @@ async def test_gsid_scope_excludes_invalid_and_bot_rounds():
     assert "r.is_bot_round IS DISTINCT FROM TRUE" in sql
     # The proximity round set is gated too, not only the PCS aggregate — the
     # metrics are built from both.
-    assert "is_valid IS DISTINCT FROM FALSE" in sql.split("round_id IN (SELECT id FROM rounds")[1]
+    assert "round_id IN (SELECT id FROM rounds" not in sql
+    assert "kill_outcome_id IN (SELECT id FROM proximity_kill_outcome" in sql
+    assert "session_date = ANY($2::date[])" in sql
+    assert "unnest($3::bigint[], $4::text[], $5::int[])" in sql
 
 
 @pytest.mark.asyncio
 async def test_legacy_date_scope_is_gated_as_well():
-    """The date path cannot separate two sessions on one day — that is its
-    known limitation — but an invalid round must not count on either path."""
+    """A resolvable date uses the same canonical session quality gates."""
     db = CapturingDB()
     resp = await _call(db, "?session_date=2026-08-11")
 

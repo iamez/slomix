@@ -178,6 +178,11 @@ async def test_endpoint_returns_known_issues_panel_always():
     assert "known_issues" in result
     keys = {ki["key"] for ki in result["known_issues"]}
     assert {"time_played_per_player", "headshot_pct", "distance_mult_hardcoded"} <= keys
+    detail = next(ki["detail"] for ki in result["known_issues"]
+                  if ki["key"] == "distance_mult_hardcoded")
+    assert "kis.py" not in detail, "public diagnostics must describe the fact, not a source location"
+    assert "množitelj razdalje ostaja 1.0" in detail
+
 
 
 # ---------------------------------------------------------------------------

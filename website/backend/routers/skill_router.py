@@ -5,6 +5,7 @@ Completely isolated from existing routers - new /api/skill/* prefix.
 """
 
 import json
+from datetime import date
 
 from fastapi import APIRouter, Depends
 
@@ -12,6 +13,7 @@ from website.backend.dependencies import get_db, require_internal_secret
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import fetch_identity_links
+from website.backend.services.composite_scope import resolve_composite_scope
 from website.backend.services.skill_rating_service import (
     CONSTANT,
     MIN_ROUNDS,
@@ -496,60 +498,17 @@ async def get_composite_stats(
 
     Scope (prefer ?gaming_session_id — see below):
       - ?gaming_session_id=N  → the ONE gaming session, the correct scope.
-        Every CTE is bound to that session's rounds (round_id / gsid), and bot
+        Every CTE is bound to that session's canonical round keys, and bot
         rounds are excluded. This is the fix for the date-scoping bug: two
         sessions on the same calendar date (e.g. a real match + a bot test that
         carries gaming_session_id=NULL) share a round_date, so ?session_date
         merged BOTH — surfacing phantom [BOT]… players from the other session.
-      - ?session_date=YYYY-MM-DD → legacy date scope (kept for callers that
-        only have a date; still merges everything played that day).
+      - ?session_date=YYYY-MM-DD → resolves a single canonical session;
+        a date shared by multiple sessions returns 409 instead of merging them.
       - neither → latest proximity session_date.
     """
-    # Scope resolution: gaming_session_id wins; else fall back to session_date.
-    if gaming_session_id is not None:
-        scope_param: object = gaming_session_id
-        # gsid-bound predicates. pcs joins rounds (no gsid column of its own);
-        # storytelling_kill_impact carries gaming_session_id directly; the
-        # proximity_* tables are round-keyed, so restrict to this session's
-        # round set. Bot rounds are dropped at the driving table (session_pcs
-        # LEFT-JOINs the rest, so excluding bots here removes them everywhere).
-        pcs_from = "player_comprehensive_stats p JOIN rounds r ON r.id = p.round_id"
-        pcs_cols = (
-            "p.player_guid, MAX(p.player_name) as player_name, "
-            "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
-            "SUM(p.gibs) as gibs"
-        )
-        # Round-quality gate, the same one every other KPI applies (S6 audit):
-        # excluding bots by NAME is not enough. Session 121 carries one round
-        # flagged is_valid = FALSE, and its 53 kills were inflating the
-        # composite by 8-16 % for the four players in it (SuperBoyy 147 -> 135,
-        # qmr 128 -> 108) — invisible, because the players are real.
-        # Status gate added with the other two (Codex on #855, round two):
-        # the story endpoints around this panel exclude cancelled rounds, and
-        # a composite computed WITH one disagreed with the same story's
-        # scoreboard. Measured: sessions 153, 84, 83, 80… carry rounds that
-        # pass the validity+bot gates and fail this one.
-        pcs_where = (
-            "WHERE r.gaming_session_id = $1 AND r.round_number > 0 "
-            "AND r.is_valid IS DISTINCT FROM FALSE "
-            "AND r.is_bot_round IS DISTINCT FROM TRUE "
-            "AND (r.round_status IN ('completed', 'substitution') "
-            "     OR r.round_status IS NULL) "
-            "AND p.player_guid NOT LIKE 'OMNIBOT%' "
-            "AND p.player_name NOT LIKE '[BOT]%'"
-        )
-        pcs_group = "GROUP BY p.player_guid"
-        pcs_alias = "p."
-        ski_where = "WHERE gaming_session_id = $1"
-        round_set = (
-            "round_id IN (SELECT id FROM rounds "
-            "WHERE gaming_session_id = $1 "
-            "  AND is_valid IS DISTINCT FROM FALSE "
-            "  AND is_bot_round IS DISTINCT FROM TRUE "
-            "  AND (round_status IN ('completed', 'substitution') "
-            "       OR round_status IS NULL))"
-        )
-    else:
+    # A date must resolve to one canonical session; explicit gsid wins.
+    if gaming_session_id is None:
         if not session_date:
             # ⛔ The fallback scope reads ALL five coverage sources, not one
             # (Codex on #848): with proximity_kill_outcome empty but any other
@@ -582,25 +541,45 @@ async def get_composite_stats(
                     -- (2026-08-27), so this is shape, not behaviour.
                     SELECT GREATEST(
                         (SELECT MAX(t.session_date) FROM proximity_kill_outcome t
-                          JOIN rounds r ON r.id = t.round_id
+                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
+                            AND r.map_name = t.map_name AND r.round_number = t.round_number
+                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
                           WHERE r.is_valid IS DISTINCT FROM FALSE
-                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                            AND r.is_bot_round IS DISTINCT FROM TRUE
+                            AND r.round_number IN (1, 2)
+                            AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)),
                         (SELECT MAX(t.session_date) FROM proximity_crossfire_opportunity t
-                          JOIN rounds r ON r.id = t.round_id
+                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
+                            AND r.map_name = t.map_name AND r.round_number = t.round_number
+                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
                           WHERE r.is_valid IS DISTINCT FROM FALSE
-                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                            AND r.is_bot_round IS DISTINCT FROM TRUE
+                            AND r.round_number IN (1, 2)
+                            AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)),
                         (SELECT MAX(t.session_date) FROM proximity_lua_trade_kill t
-                          JOIN rounds r ON r.id = t.round_id
+                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
+                            AND r.map_name = t.map_name AND r.round_number = t.round_number
+                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
                           WHERE r.is_valid IS DISTINCT FROM FALSE
-                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                            AND r.is_bot_round IS DISTINCT FROM TRUE
+                            AND r.round_number IN (1, 2)
+                            AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)),
                         (SELECT MAX(t.session_date) FROM proximity_combat_position t
-                          JOIN rounds r ON r.id = t.round_id
+                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
+                            AND r.map_name = t.map_name AND r.round_number = t.round_number
+                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
                           WHERE r.is_valid IS DISTINCT FROM FALSE
-                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                            AND r.is_bot_round IS DISTINCT FROM TRUE
+                            AND r.round_number IN (1, 2)
+                            AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)),
                         (SELECT MAX(t.session_date) FROM proximity_spawn_timing t
-                          JOIN rounds r ON r.id = t.round_id
+                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
+                            AND r.map_name = t.map_name AND r.round_number = t.round_number
+                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
                           WHERE r.is_valid IS DISTINCT FROM FALSE
-                            AND r.is_bot_round IS DISTINCT FROM TRUE)
+                            AND r.is_bot_round IS DISTINCT FROM TRUE
+                            AND r.round_number IN (1, 2)
+                            AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL))
                     )
                     """
                 )
@@ -650,30 +629,38 @@ async def get_composite_stats(
                     "meta": {"metrics": _COMPOSITE_METRIC_DESCRIPTIONS},
                 }
             session_date = str(row[0])
-        scope_param = session_date
-        # The legacy date path cannot separate two sessions sharing a date —
-        # that is its known limitation — but it can at least apply the same
-        # quality gate, so an invalid round never counts on either path.
-        pcs_from = "player_comprehensive_stats p JOIN rounds r ON r.id = p.round_id"
-        pcs_cols = (
-            "p.player_guid, MAX(p.player_name) as player_name, "
-            "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
-            "SUM(p.gibs) as gibs"
-        )
-        pcs_where = (
-            "WHERE p.round_date = $1 AND p.round_number > 0 "
-            "AND r.is_valid IS DISTINCT FROM FALSE "
-            "AND r.is_bot_round IS DISTINCT FROM TRUE"
-        )
-        pcs_group = "GROUP BY p.player_guid"
-        pcs_alias = "p."
-        ski_where = "WHERE session_date = $1::date"
-        round_set = (
-            "round_id IN (SELECT id FROM rounds "
-            "WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) = $1 "
-            "  AND is_valid IS DISTINCT FROM FALSE "
-            "  AND is_bot_round IS DISTINCT FROM TRUE)"
-        )
+    scope = await resolve_composite_scope(
+        db, gaming_session_id=gaming_session_id, session_date=session_date,
+    )
+    gaming_session_id = scope.gaming_session_id
+    session_date = scope.dates[0] if scope.dates else session_date
+    scope_params = (
+        gaming_session_id, [date.fromisoformat(d) for d in scope.dates],
+        *scope.round_key_arrays(),
+    )
+    # Metrics and their coverage share the same canonical identity. Raw
+    # proximity round_id links are not reliable on repeated maps (#857).
+    round_set = f"session_date = ANY($2::date[]) AND {scope.round_key_filter_sql(3)}"
+    pcs_from = "player_comprehensive_stats p JOIN rounds r ON r.id = p.round_id"
+    pcs_cols = (
+        "p.player_guid, MAX(p.player_name) as player_name, "
+        "SUM(p.kills) as kills, SUM(p.deaths) as deaths, SUM(p.gibs) as gibs"
+    )
+    pcs_where = (
+        "WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2) "
+        "AND r.is_valid IS DISTINCT FROM FALSE "
+        "AND r.is_bot_round IS DISTINCT FROM TRUE "
+        "AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL) "
+        "AND p.player_guid NOT LIKE 'OMNIBOT%' AND p.player_name NOT LIKE '[BOT]%'"
+    )
+    pcs_group = "GROUP BY p.player_guid"
+    pcs_alias = "p."
+    # Cache rows have a reliable outcome id. Gate both the TIR numerator and
+    # cache coverage through accepted canonical outcomes, never their round_id.
+    ski_where = (
+        "WHERE gaming_session_id = $1 AND kill_outcome_id IN "
+        f"(SELECT id FROM proximity_kill_outcome WHERE {round_set})"
+    )
 
     # Query per-player aggregates for this session from proximity + PCS. The
     # scope fragments above are code-controlled (no user input) and the scope
@@ -760,7 +747,7 @@ async def get_composite_stats(
         WHERE pcs.kills > 0
         ORDER BY pcs.kills DESC
     """,
-        (scope_param,),
+        scope_params,
     )
 
     players = []
@@ -893,7 +880,7 @@ async def get_composite_stats(
                   WHERE {round_set} AND killer_guid_canonical IS NOT NULL
                     AND killer_guid_canonical NOT LIKE 'OMNIBOT%')
         """,
-            (scope_param,),
+            scope_params,
         )
     except Exception:
         logger.warning("composite coverage query failed; reporting unmeasured", exc_info=True)

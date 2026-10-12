@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import ts from 'typescript';
 import { stripJsComments } from './testing/sourceText';
 
 /**
@@ -25,25 +26,31 @@ const SOURCES = import.meta.glob('./**/*.{ts,tsx}', {
 }) as Record<string, string>;
 
 /**
- * The grey secondary line, however it is spelled inline.
- *
- * ⛔ ORDER-INSENSITIVE ON PURPOSE (Codex on #845). The first version matched
- * the pair only as `fontSize, color` adjacent — so a hand-written note with
- * the properties reversed, or with `whiteSpace` between them, slid past the
- * ratchet unseen. Property order in an object literal is incidental; the
- * VOCABULARY is the pair. Two patterns, one per order, each confined to a
- * single object literal by `[^{}]*?` so a fontSize in one style and a color
- * in the next cannot pair up across a brace.
+ * Count the two direct properties of the same object, in either order.
+ * Template interpolation contains braces (and may nest templates/objects),
+ * so a brace-delimited regex cannot distinguish it from an object boundary.
+ * Parse TSX instead: unrelated expressions between the properties cannot
+ * hide a note, and properties in separate or nested objects cannot pair up.
  */
-const FS = String.raw`fontSize:\s*'var\(--fs-(?:micro|caption)\)'`;
-const COL = String.raw`color:\s*'var\(--color-text-500\)'`;
-const GREY_NOTE_PATTERNS = [
-  new RegExp(`${FS}[^{}]*?${COL}`, 'g'),
-  new RegExp(`${COL}[^{}]*?${FS}`, 'g'),
-];
-
-function countGreyNotes(text: string): number {
-  return GREY_NOTE_PATTERNS.reduce((n, re) => n + [...text.matchAll(re)].length, 0);
+function countGreyNotes(text: string, fileName = 'vocabulary.tsx'): number {
+  const source = ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, false);
+  let count = 0;
+  const visit = (node: ts.Node) => {
+    if (ts.isObjectLiteralExpression(node)) {
+      const values = new Map(node.properties
+        .filter(ts.isPropertyAssignment)
+        .filter((property) => ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
+        .map((property) => [
+          (property.name as ts.Identifier | ts.StringLiteral).text,
+          ts.isStringLiteral(property.initializer) ? property.initializer.text : null,
+        ]));
+      if ((values.get('fontSize') === 'var(--fs-micro)' || values.get('fontSize') === 'var(--fs-caption)')
+        && values.get('color') === 'var(--color-text-500)') count += 1;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return count;
 }
 
 /** Everything except the tests and the one file where the pattern is
@@ -91,7 +98,7 @@ describe('design vocabulary', () => {
     let count = 0;
     const perFile = new Map<string, number>();
     for (const [file, text] of appSources()) {
-      const n = countGreyNotes(text);
+      const n = countGreyNotes(text, file);
       if (n > 0) perFile.set(file, n);
       count += n;
     }
@@ -141,10 +148,10 @@ describe('design vocabulary', () => {
     // old single-order regex before this shipped. A ratchet with a blind
     // spot is worse than none: it certifies the pile is not growing while
     // the pile grows in the one spelling it cannot see.
-    const forward = "style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}";
-    const reversed = "style={{ color: 'var(--color-text-500)', fontSize: 'var(--fs-micro)' }}";
+    const forward = "<span style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }} />";
+    const reversed = "<span style={{ color: 'var(--color-text-500)', fontSize: 'var(--fs-micro)' }} />";
     const interleaved =
-      "style={{ fontSize: 'var(--fs-caption)', whiteSpace: 'pre-wrap', color: 'var(--color-text-500)' }}";
+      "<span style={{ fontSize: 'var(--fs-caption)', whiteSpace: 'pre-wrap', color: 'var(--color-text-500)' }} />";
     expect(countGreyNotes(forward)).toBe(1);
     expect(countGreyNotes(reversed)).toBe(1);
     expect(countGreyNotes(interleaved)).toBe(1);
@@ -152,7 +159,22 @@ describe('design vocabulary', () => {
     // boundary must stop the match, or every page with one grey fontSize
     // and one unrelated grey color would count as a note it never wrote.
     const acrossObjects =
-      "style={{ fontSize: 'var(--fs-micro)' }} … style={{ color: 'var(--color-text-500)' }}";
+      "<><span style={{ fontSize: 'var(--fs-micro)' }} /><span style={{ color: 'var(--color-text-500)' }} /></>";
     expect(countGreyNotes(acrossObjects)).toBe(0);
+  });
+
+  it('counts a grey note across nested template interpolation without joining objects', () => {
+    const interpolated = "<span style={{ fontSize: 'var(--fs-caption)', width: `${width}px`, color: 'var(--color-text-500)' }} />";
+    const nested = "<span style={{ color: 'var(--color-text-500)', width: `${pick({ suffix: `size-${value}` })}px`, fontSize: 'var(--fs-micro)' }} />";
+    const escaped = "<span style={{ fontSize: 'var(--fs-micro)', content: `escaped \\`${value}\\``, color: 'var(--color-text-500)' }} />";
+    expect(countGreyNotes(interpolated)).toBe(1);
+    expect(countGreyNotes(nested)).toBe(1);
+    expect(countGreyNotes(escaped)).toBe(1);
+    const separate = "<><span style={{ fontSize: 'var(--fs-caption)', width: `${pick({ n: 1 })}px` }} /><span style={{ color: 'var(--color-text-500)' }} /></>";
+    const nestedObjects = "<span style={{ fontSize: 'var(--fs-caption)', nested: { color: 'var(--color-text-500)' }, width: `${width}px` }} />";
+    expect(countGreyNotes(separate)).toBe(0);
+    expect(countGreyNotes(nestedObjects)).toBe(0);
+    const generic = "const note = <T>(value: T) => ({ fontSize: 'var(--fs-caption)', width: `${value}px`, color: 'var(--color-text-500)' });";
+    expect(countGreyNotes(generic, 'fixture.ts')).toBe(1);
   });
 });

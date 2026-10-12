@@ -33,7 +33,7 @@ from website.backend.services.storytelling.base import (
 from website.backend.services.storytelling.service import StorytellingService
 
 
-# Build a minimal kill tuple. Schema (per kis.py:150-160):
+# Build a minimal kill tuple. Schema from _KisMixin._score_kill in kis.py:
 # (ko_id, session_date, round_number, round_start_unix, map_name,
 #  killer_guid, killer_name, victim_guid, victim_name, outcome, kill_time_ms)
 def _kill(*, outcome="tapped_out", kill_time=10_000, killer_guid="K", victim_guid="V"):
