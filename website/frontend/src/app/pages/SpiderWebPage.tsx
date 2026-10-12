@@ -172,7 +172,7 @@ function Beliefs({ snap }: { snap: SpiderWebSnapshot }) {
             ? <Unavailable what={`beliefs — ${snap.information_state.pov_unavailable}`} />
             : holders.length === 0
               ? <Unavailable what="beliefs — no reconstructed state for this round (no tracks)" />
-              : <Absent reason="no beliefs granted at this moment — nothing has been seen, heard or reported yet" />)
+              : <Absent reason="no beliefs granted at this moment" />)
           : <DataTable<Row> parity="spider-web.beliefs.table" label="beliefs" columns={columns} rows={rows} rowKey={(r) => r.id} defaultSort={{ key: 'holder', dir: 'asc' }} minWidth={1000} />}
         {gaps.length > 0 && (
           <Stack gap={1}>

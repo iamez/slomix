@@ -175,6 +175,32 @@ describe('SpiderWebPage', () => {
     expect(screen.queryByText(/nothing has been seen, heard or reported yet/)).toBeNull();
   });
 
+  it.each([true, false])('keeps empty beliefs distinct from unavailable reconstruction (holder=%s)', async (hasHolder) => {
+    const holder = Object.values(povForm.information_state.holders)[0];
+    const gap = 'living listener position at the shot time is unavailable';
+    const shaped: SpiderWebSnapshot = { ...povForm, information_state: {
+      ...povForm.information_state,
+      holders: hasHolder ? { [holder.holder_guid]: { ...holder, beliefs: [],
+        unavailable: { gunfire_reconstruction: gap } } } : {},
+      unavailable: { gunfire_reconstruction: gap },
+    } };
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return shaped;
+      if (url.includes('/assets/maps/geometry/')) return { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: null };
+      return undefined;
+    });
+    renderAt('11344', '?pov=team:AXIS');
+    await screen.findByText(`gunfire reconstruction unavailable for this pov: ${gap}`);
+    if (hasHolder) {
+      expect(screen.getByText(`gunfire reconstruction unavailable: ${gap}`)).toBeInTheDocument();
+      expect(screen.getByText('no beliefs granted at this moment')).toBeInTheDocument();
+    } else {
+      expect(screen.getByText(/beliefs — no reconstructed state for this round/)).toBeInTheDocument();
+      expect(screen.queryByText('no beliefs granted at this moment')).toBeNull();
+    }
+    expect(screen.queryByText(/nothing has been seen, heard or reported yet/)).toBeNull();
+  });
+
   it('a team pov is a SERVER parameter, and the withheld players are named', async () => {
     const spy = stub((url) => {
       if (url.includes('/api/replay/round/11344/web')) return url.includes('pov=team%3AAXIS') || url.includes('pov=team:AXIS') ? povForm : world;
