@@ -1,8 +1,9 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes, useNavigate } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient, sameView } from '../lib/queries';
+import { SpiderWebScene } from '../components/SpiderWebScene';
 import { SpiderWebPage, normalisePov } from './SpiderWebPage';
 import type { SpiderWebSnapshot } from '../lib/types';
 import { isClockOwnHud, isClockWithheld } from '../lib/types';
@@ -421,11 +422,11 @@ describe('SpiderWebPage — the five Codex threads on #1005', () => {
   it('a snapshot of another point of view is not a placeholder for this one', () => {
     // Across a switch the oracle's players would be drawn under a team's
     // label until the request landed; within a view the previous moment may stand in.
-    expect(sameView(world, 'world')).toBe(world);
-    expect(sameView(world, 'team:AXIS')).toBeUndefined();
-    expect(sameView(povForm, 'team:AXIS')).toBe(povForm);
-    expect(sameView(povForm, 'world')).toBeUndefined();
-    expect(sameView(undefined, 'world')).toBeUndefined();
+    expect(sameView(world, 'world', world.round_id)).toBe(world);
+    expect(sameView(world, 'team:AXIS', world.round_id)).toBeUndefined();
+    expect(sameView(povForm, 'team:AXIS', world.round_id)).toBe(povForm);
+    expect(sameView(povForm, 'world', world.round_id)).toBeUndefined();
+    expect(sameView(undefined, 'world', world.round_id)).toBeUndefined();
   });
 
   it('a failed geometry request is unavailable, not "never exported"', { timeout: 20000 }, async () => {
@@ -456,10 +457,11 @@ describe('SpiderWebPage — the five Codex threads on #1005', () => {
   });
 
   it('the wheel zooms, on an svg that appeared after a first render without bounds', async () => {
-    // First answer: nobody placed and no geometry → Absent, no svg. Then the
+    // First answer: nobody placed and geometry pending, no svg. Then the
     // geometry arrives → the svg mounts; the wheel listener must be on it.
     const empty: SpiderWebSnapshot = { ...world, players: [], edges: [], player_count: 0 };
     let geometryReady = false;
+    let finishMesh!: (response: Response) => void;
     stub((url) => {
       if (url.includes('/api/replay/round/11344/web')) return empty;
       if (url.includes('/assets/maps/geometry/')) return geometryReady ? geometry : undefined;
@@ -470,12 +472,13 @@ describe('SpiderWebPage — the five Codex threads on #1005', () => {
       if (url.includes('/assets/maps/geometry/')) {
         return geometryReady
           ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(geometry) } as Response)
-          : new Promise((resolve) => setTimeout(() => { geometryReady = true; resolve({ ok: true, status: 200, json: () => Promise.resolve(geometry) } as Response); }, 60));
+          : new Promise<Response>((resolve) => { finishMesh = resolve; });
       }
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(empty) } as Response);
     });
     renderAt();
-    await waitFor(() => expect(screen.getByText(/nobody could be placed at this moment/)).toBeInTheDocument());
+    await screen.findByText(/floor mesh…/);
+    await act(async () => { geometryReady = true; finishMesh({ ok: true, status: 200, json: async () => geometry } as Response); });
     const svg = await screen.findByLabelText('reconstructed moment', {}, { timeout: 8000 });
     fireEvent.wheel(svg, { deltaY: -100 });
     await waitFor(() => expect(screen.getByText(/zoom 1\.15×/)).toBeInTheDocument());
@@ -532,5 +535,102 @@ describe('SpiderWebPage — the second Codex round on #1005', () => {
     const fills = new Set([...svg.querySelectorAll('[data-player] circle')].map((c) => c.getAttribute('stroke')));
     expect(fills.has('var(--color-axis)')).toBe(true);
     expect(fills.has('var(--color-allies)')).toBe(true);
+  });
+});
+
+describe('request identity and recovery', () => {
+  it('never uses another round as a placeholder, even for the same POV', () => {
+    expect(sameView(world, 'world', world.round_id + 1)).toBeUndefined();
+  });
+
+  it('synchronizes the slider through URL navigation and history, and cancels a preview', async () => {
+    stub((url) => url.includes('/web?') ? { ...world, t_ms: Number(new URL(url, 'http://fixture').searchParams.get('t')) }
+      : { vertices: [], indexes: [], bounds: { min: [0, 0, 0], max: [100, 100, 100] } });
+    function History() {
+      const navigate = useNavigate();
+      return <><button onClick={() => navigate('?t=120000')}>later URL</button><button onClick={() => navigate(-1)}>history back</button><SpiderWebPage /></>;
+    }
+    render(<QueryClientProvider client={makeQueryClient()}><MemoryRouter initialEntries={['/spider-web/round/11344?t=30000']}><Routes>
+      <Route path="/spider-web/round/:roundId" element={<History />} />
+    </Routes></MemoryRouter></QueryClientProvider>);
+    const slider = await screen.findByRole('slider', { name: 'moment' });
+    expect(slider).toHaveValue('30000');
+    fireEvent.click(screen.getByText('later URL'));
+    await waitFor(() => expect(slider).toHaveValue('120000'));
+    fireEvent.click(screen.getByText('history back'));
+    await waitFor(() => expect(slider).toHaveValue('30000'));
+    fireEvent.change(slider, { target: { value: '40000' } });
+    expect(screen.getByText(/preview 40,000 ms/)).toBeInTheDocument();
+    fireEvent.pointerCancel(slider);
+    expect(slider).toHaveValue('30000');
+  });
+
+  it('labels retained time after a 429 and retries the requested moment', async () => {
+    let fail = true;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://fixture');
+      if (url.pathname.includes('/geometry/')) return new Response('', { status: 404 });
+      const t = Number(url.searchParams.get('t'));
+      return t === 40000 && fail ? new Response('{}', { status: 429 })
+        : new Response(JSON.stringify({ ...world, t_ms: t }));
+    }));
+    renderAt('11344', '?t=30000');
+    const slider = await screen.findByRole('slider', { name: 'moment' });
+    fireEvent.change(slider, { target: { value: '40000' } });
+    fireEvent.pointerUp(slider);
+    await screen.findByText(/requested moment: unavailable/);
+    expect(screen.getByText(/requested 40,000 ms.*rendered 30,000 ms/)).toBeInTheDocument();
+    fail = false;
+    fireEvent.click(screen.getByRole('button', { name: 'retry moment' }));
+    await screen.findByText(/requested 40,000 ms.*rendered 40,000 ms/);
+    expect(screen.queryByText(/requested moment: unavailable/)).toBeNull();
+  });
+
+  it('cancels an obsolete request and cannot publish its late response', async () => {
+    let finish!: (response: Response) => void;
+    let signal: AbortSignal | undefined;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+      const url = new URL(String(input), 'http://fixture');
+      if (url.pathname.includes('/geometry/')) return new Response('', { status: 404 });
+      const t = Number(url.searchParams.get('t'));
+      if (t === 40000) { signal = options?.signal ?? undefined; return new Promise<Response>((resolve) => { finish = resolve; }); }
+      return new Response(JSON.stringify({ ...world, t_ms: t }));
+    }));
+    renderAt('11344', '?t=30000');
+    const slider = await screen.findByRole('slider', { name: 'moment' });
+    fireEvent.change(slider, { target: { value: '40000' } });
+    fireEvent.pointerUp(slider);
+    await screen.findByRole('button', { name: 'cancel request' });
+    fireEvent.click(screen.getByRole('button', { name: 'cancel request' }));
+    await waitFor(() => expect(signal?.aborted).toBe(true));
+    await act(async () => { finish(new Response(JSON.stringify({ ...world, t_ms: 40000 }))); });
+    expect(slider).toHaveValue('30000');
+    expect(screen.getByText(/requested 30,000 ms.*rendered 30,000 ms/)).toBeInTheDocument();
+  });
+});
+
+describe('authorized scene framing', () => {
+  function regionScene(players = povForm.players.slice(0, 1).map((p) => ({ ...p, x: 0, y: 0, z: 0 }))) {
+    const holder = Object.values(povForm.information_state!.holders)[0];
+    return { ...povForm, players, edges: [], information_state: { ...povForm.information_state!, holders: {
+      [holder.holder_guid]: { ...holder, position_claim_max_radius: 700, beliefs: [{ ...holder.beliefs[0],
+        subject_guid: 'authorized-enemy', region: { x: 3000, y: 0, z: 0, radius: 100 }, confidence: 0.8 }] },
+    } } };
+  }
+  it.each([false, true])('fits granted regions with no mesh (belief-only=%s)', (onlyBeliefs) => {
+    render(<SpiderWebScene snap={onlyBeliefs ? regionScene([]) : regionScene()} mesh={null} pov="team:AXIS" />);
+    const circle = screen.getByRole('img', { name: 'reconstructed moment' }).querySelector('[data-belief-subject]')!;
+    const x = Number(circle.getAttribute('cx')); const y = Number(circle.getAttribute('cy')); const r = Number(circle.getAttribute('r'));
+    expect(x - r).toBeGreaterThanOrEqual(0); expect(x + r).toBeLessThanOrEqual(860);
+    expect(y - r).toBeGreaterThanOrEqual(0); expect(y + r).toBeLessThanOrEqual(560);
+  });
+  it('does not report no mesh while loading or after a transport failure', () => {
+    const empty = { ...world, players: [], edges: [] };
+    const mounted = render(<SpiderWebScene snap={empty} mesh={undefined} pov="world" />);
+    expect(screen.getByText(/floor mesh…/)).toBeInTheDocument();
+    expect(screen.queryByText(/no floor mesh/)).toBeNull();
+    mounted.rerender(<SpiderWebScene snap={empty} mesh={undefined} meshError pov="world" />);
+    expect(screen.getByText(/floor mesh: unavailable/)).toBeInTheDocument();
+    expect(screen.queryByText(/no floor mesh/)).toBeNull();
   });
 });

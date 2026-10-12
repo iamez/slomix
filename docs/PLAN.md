@@ -1,3 +1,22 @@
+## 2026-10-12 — Bounded Spiderweb correctness review
+
+The review branch selects the completed Spiderweb source/tests onto current
+main without importing the runtime integration history. Hearing uses event-time
+listener positions; enemy metrics use the current roster. Legacy and SPA views
+keep requested/accepted snapshots distinct, recover failed requests, distinguish
+geometry failures, and fit authorized belief regions. Geometry verification
+reports coverage only; success does not certify gameplay alignment.
+
+Revalidation: 284 Python cases, 176 targeted frontend cases, Node 22.23.2
+TypeScript checks, Python lint and legacy JavaScript syntax checks. Existing
+functional and guard-mutation evidence remains valid for its recorded scope;
+no live deployment or new gameplay alignment is claimed by these checks.
+
+Pending: hearing reconstruction-gap reasons, broader positional validation and
+the separate runtime D4/D5 continuation. Preserve the complete original plan
+and handoff below. No service activation, database writes, push or merge is
+implied; this is a bounded review package awaiting the owner's PR decision.
+
 ## 2026-10-12 — Ordered merge reconciliation
 
 Owner explicitly authorized #1084 first, then #1085. #1084 merged through the

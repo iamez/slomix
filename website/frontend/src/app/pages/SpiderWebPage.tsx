@@ -15,7 +15,7 @@ import { Absent, Chip, Lbl, Meta, Pending, SectionHead, Unavailable, figure } fr
 import { ApiError } from '../lib/api';
 import { stripEtColors } from '../lib/names';
 import { mapLabel } from '../lib/maps';
-import { useMapMesh, useSpiderWebMoment } from '../lib/queries';
+import { sameView, useMapMesh, useSpiderWebMoment } from '../lib/queries';
 import { SpiderWebScene } from '../components/SpiderWebScene';
 import { isTeamPov } from '../lib/spiderWeb';
 import { WEAPON_NAMES } from '../lib/weapons';
@@ -212,11 +212,15 @@ export function SpiderWebPage() {
   // with the oracle; the page must see the same view it will draw.
   const pov = normalisePov(search.get('pov'));
   const tCommitted = Number.isFinite(tFromUrl) && search.get('t') != null && tFromUrl >= 0 ? Math.round(tFromUrl) : 60000;
-  const [tLive, setTLive] = useState(tCommitted);
+  const identity = `${roundId}:${pov}:${tCommitted}`;
+  const [draft, setDraft] = useState({ identity, value: tCommitted });
+  const tLive = draft.identity === identity ? draft.value : tCommitted;
+  const setTLive = (value: number) => setDraft({ identity, value });
   const moment = useSpiderWebMoment(roundId, tCommitted, pov);
-  const mesh = useMapMesh(moment.data?.map_name ?? null);
-
-  const snap = moment.data;
+  const lastGood = useRef<SpiderWebSnapshot | undefined>(undefined);
+  if (moment.data && !moment.isPlaceholderData && !moment.isError) lastGood.current = moment.data;
+  const snap = moment.data ?? (moment.isError ? sameView(lastGood.current, pov, roundId) : undefined);
+  const mesh = useMapMesh(snap?.map_name ?? null);
   const durationMs = snap?.round_duration_ms ?? 0;
   const commit = (t: number, nextPov = pov) => {
     const clamped = Math.max(0, Math.min(durationMs || t, Math.round(t)));
@@ -229,6 +233,18 @@ export function SpiderWebPage() {
     }, { replace: true });
   };
   const setPov = (p: string) => commit(tCommitted, p);
+  const previous = lastGood.current?.round_id === roundId ? lastGood.current : undefined;
+  const cancel = () => {
+    if (previous) commit(previous.t_ms, previous.information_state?.pov ?? 'world');
+    else setTLive(tCommitted);
+  };
+  const requestNote = <Stack gap={1}>
+    <Meta>requested {figure(tCommitted)} ms · {pov}{snap ? ` · rendered ${figure(snap.t_ms)} ms` : ' · no snapshot displayed'}</Meta>
+    {tLive !== tCommitted && <Meta>preview {figure(tLive)} ms · release to request</Meta>}
+    {moment.isFetching && <Pending label="requested moment" />}
+    {moment.isError && <><Unavailable what="requested moment" /><Chip active={false} label="retry moment" onClick={() => { void moment.refetch(); }} /></>}
+    {(moment.isFetching || moment.isError) && previous && <Chip active={false} label="cancel request" onClick={cancel} />}
+  </Stack>;
   const clockTeams = useMemo(() => (snap ? Object.keys(snap.clock).sort() : []), [snap]);
   // Names survive a switch to a team view, where the withheld side arrives
   // as bare guids: remembered from every snapshot this page has seen.
@@ -241,11 +257,11 @@ export function SpiderWebPage() {
   if (roundId == null) {
     return <Absent block reason="no round named — the spider web opens from a round's engagement panel" />;
   }
-  if (moment.isPending && !snap) return <Pending label="spider web" />;
+  if (moment.isPending && !snap) return requestNote;
   if (moment.isError && !snap) {
     return moment.error instanceof ApiError && moment.error.status === 404
       ? <Absent block reason={`no reconstructable round has id ${roundId}`} />
-      : <Unavailable what="spider web" />;
+      : requestNote;
   }
   if (!snap) return <Unavailable what="spider web" />;
 
@@ -267,16 +283,18 @@ export function SpiderWebPage() {
       </Stack>
 
       <div data-parity="spider-web.controls">
+        {requestNote}
         <Cluster gap={4} align="center" style={{ flexWrap: 'wrap' }}>
           {POVS.map((p) => (
             <Chip key={p.key} active={pov === p.key} label={p.label} onClick={() => setPov(p.key)} />
           ))}
           <input
-            type="range" min={0} max={Math.max(durationMs, 1)} step={1000} value={tLive}
+            type="range" min={0} max={Math.max(durationMs, 1)} step={200} value={tLive}
             aria-label="moment"
             onChange={(e) => setTLive(Number(e.target.value))}
-            onPointerUp={() => commit(tLive)}
-            onKeyUp={() => commit(tLive)}
+            onPointerUp={(e) => commit(Number(e.currentTarget.value))}
+            onPointerCancel={() => setTLive(tCommitted)}
+            onKeyUp={(e) => { if (e.key === 'Escape') setTLive(tCommitted); else commit(Number(e.currentTarget.value)); }}
             style={{ flex: 1, minWidth: 200, accentColor: 'var(--color-accent)' }}
           />
           <span className="m" style={{ fontSize: 'var(--fs-caption)', minWidth: 52, textAlign: 'right' }}>
@@ -312,8 +330,8 @@ export function SpiderWebPage() {
         {/* null = the server said 404 (never exported, a named absence);
           * undefined = still loading OR the request failed — a failure is
           * said below as unavailable, not as "never exported". */}
-        <SpiderWebScene snap={snap} mesh={mesh.isPending || mesh.isError ? undefined : mesh.data ?? null} pov={pov} />
-        {mesh.isError && <Unavailable what="this map's floor mesh" />}
+        <SpiderWebScene snap={snap} mesh={mesh.isPending || mesh.isError ? undefined : mesh.data ?? null} pov={pov} meshError={mesh.isError} />
+        {mesh.isError && <Chip active={false} label="retry floor mesh" onClick={() => { void mesh.refetch(); }} />}
       </div>
 
       <div data-parity="spider-web.clock">

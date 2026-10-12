@@ -1,0 +1,158 @@
+"""Enemy metrics classify retained evidence against the snapshot's roster."""
+
+import pytest
+
+from website.backend.services.information_state import (
+    BeliefItem,
+    HolderState,
+    Region,
+    to_dict,
+)
+from website.backend.services.round_web_service import (
+    CapturePolicy,
+    _team_information,
+    build_snapshot,
+    load_round_information_state,
+)
+
+
+def life(guid, team, *, start=0, end=None, identity=1):
+    return (guid, guid, team, 'MEDIC', start, end,
+            [{'time': start, 'x': 100, 'y': 0, 'z': 0, 'health': 100}], 'supply', identity)
+
+
+class Events:
+    async def fetch_all(self, query, params):
+        if 'SELECT player_guid, team, death_time_ms' in query:
+            return [('S', 'AXIS', 1000)]
+        if 'FROM proximity_aim_lock' in query:
+            return [('H', 'S', 1000)]
+        if 'FROM rounds r' in query:
+            return [(100,)]
+        return []
+
+
+async def information(tracks, t=2000):
+    return await load_round_information_state(
+        Events(), 1, t, build_snapshot(tracks, t), {},
+        CapturePolicy(capabilities={'aim_lock': 'enabled'}), tracks,
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('subject_team,expected,unknown', [
+    ('AXIS', 0, False), ('ALLIES', 1, False), ('SPECTATOR', 0, True), (None, 0, True),
+])
+async def test_loader_retains_friendly_obituary_without_enemy_metrics(subject_team, expected, unknown):
+    tracks = {'H': [life('H', 'AXIS')], 'S': [life('S', subject_team, identity=2)]}
+    result = await information(tracks)
+    holder = result['holders']['H']
+    assert holder['known_enemy_count'] == expected
+    assert any(b['source'] == 'public_obituary' for b in holder['beliefs'])
+    assert {b['subject_guid'] for b in holder['beliefs'] if b['counts_as_known']} == (
+        {'S'} if expected else set()
+    )
+    assert ('enemy_roster' in holder['unavailable']) is unknown
+    team = _team_information(result, {'team': 'AXIS', 'members': ['H']}, 2000)
+    assert team['holders']['team:AXIS']['known_enemy_count'] == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('switcher', ['H', 'S'])
+async def test_current_allegiance_changes_metrics_without_deleting_old_evidence(switcher):
+    tracks = {'H': [life('H', 'AXIS')], 'S': [life('S', 'ALLIES', identity=2)]}
+    before = 'AXIS' if switcher == 'H' else 'ALLIES'
+    after = 'ALLIES' if switcher == 'H' else 'AXIS'
+    tracks[switcher] = [life(switcher, before, end=3000, identity=3),
+                        life(switcher, after, start=3000, identity=4)]
+    earlier = (await information(tracks, 2000))['holders']['H']
+    later = (await information(tracks, 3000))['holders']['H']
+    assert earlier['known_enemy_count'] == 1
+    assert later['known_enemy_count'] == 0
+    assert any(b['subject_guid'] == 'S' for b in later['beliefs'])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('uncertain', ['holder_missing', 'subject_future', 'holder_overlap', 'subject_overlap'])
+async def test_unknown_or_conflicting_allegiance_never_invents_an_enemy(uncertain):
+    tracks = {'H': [life('H', 'AXIS')], 'S': [life('S', 'ALLIES', identity=2)]}
+    if uncertain == 'subject_future':
+        tracks['S'] = [life('S', 'ALLIES', start=4000, identity=2)]
+    elif uncertain == 'holder_missing':
+        tracks['H'] = [life('H', None)]
+    else:
+        guid = 'H' if uncertain == 'holder_overlap' else 'S'
+        tracks[guid].append(life(guid, 'ALLIES', identity=3))
+    holder = (await information(tracks))['holders']['H']
+    assert holder['known_enemy_count'] == 0
+    assert holder['nearest_known_enemy_distance'] is None
+    assert 'enemy_roster' in holder['unavailable']
+
+
+@pytest.mark.parametrize('enemies,expected', [(frozenset(), 0), (frozenset({'S'}), 1)])
+def test_distance_count_and_flag_share_the_enemy_filter(enemies, expected):
+    state = HolderState('H', [BeliefItem(holder_guid='H', source='aim_lock', t_observed=0,
+                                        subject_guid='S', region=Region(100, 0, 0, 10))])
+    payload = to_dict(state, 0, (0, 0, 0), enemy_guids=enemies)
+    assert payload['known_enemy_count'] == expected
+    assert payload['beliefs'][0]['counts_as_known'] is bool(expected)
+    assert (payload['nearest_known_enemy_distance'] is not None) is bool(expected)
+    assert len(payload['beliefs']) == 1
+
+
+@pytest.mark.asyncio
+async def test_team_union_deduplicates_enemy_and_excludes_friendly_subjects():
+    tracks = {'H': [life('H', 'AXIS')], 'H2': [life('H2', 'AXIS', identity=3)],
+              'S': [life('S', 'ALLIES', identity=2)]}
+    result = await information(tracks)
+    for guid in ('H', 'H2'):
+        assert result['holders'][guid]['known_enemy_count'] == 1
+    union = _team_information(result, {'team': 'AXIS', 'members': ['H', 'H2']}, 2000)
+    assert union['holders']['team:AXIS']['known_enemy_count'] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('team,expected', [('AXIS', 0), ('ALLIES', 1)])
+async def test_real_asgi_route_propagates_roster_to_player_and_team_pov(monkeypatch, team, expected):
+    import httpx
+    from fastapi import FastAPI
+
+    from website.backend.dependencies import get_db
+    from website.backend.routers.replay_router import router
+    from website.backend.services import line_of_sight
+
+    class RouteDB(Events):
+        async def fetch_all(self, query, params):
+            if 'SELECT 1 FROM rounds WHERE' in query:
+                return [(1,)]
+            if 'SELECT pt.player_guid, pt.player_name, pt.team, pt.player_class' in query:
+                return [life('H', 'AXIS'), life('S', team, identity=2)]
+            return await super().fetch_all(query, params)
+
+    # This fixture has no installed world geometry; no ambient asset scan.
+    monkeypatch.setattr(line_of_sight, '_DEFAULT', line_of_sight.GeometryProvider('/nonexistent/sw-a02'))
+    app = FastAPI()
+    app.include_router(router, prefix='/api')
+    app.dependency_overrides[get_db] = lambda: RouteDB()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://fixture') as client:
+        for pov in ('H', 'team:AXIS'):
+            response = await client.get('/api/replay/round/1/web', params={'t': 2000, 'pov': pov})
+            assert response.status_code == 200, response.text
+            holder = response.json()['information_state']['holders'][pov]
+            assert holder['known_enemy_count'] == expected
+            assert any(b['subject_guid'] == 'S' for b in holder['beliefs'])
+            assert {b['subject_guid'] for b in holder['beliefs'] if b['counts_as_known']} == (
+                {'S'} if expected else set()
+            )
+
+
+def test_uncertain_roster_belief_cannot_return_distance_while_count_is_zero():
+    state = HolderState('H', [BeliefItem(
+        holder_guid='H', source='public_obituary', t_observed=0,
+        subject_guid='S', region=Region(100, 0, 0, 10),
+        roster_state='uncertain_after_down', expires_at_ms=10000,
+    )])
+    payload = to_dict(state, 0, (0, 0, 0), enemy_guids=frozenset({'S'}))
+    assert payload['beliefs']
+    assert payload['known_enemy_count'] == 0
+    assert payload['nearest_known_enemy_distance'] is None

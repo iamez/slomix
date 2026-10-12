@@ -259,8 +259,9 @@ def find_position_floor(path: list, target_ms: int) -> tuple[dict | None, int, i
     """
     if not path:
         return None, -1, -1
-    times = [s.get("time", 0) for s in path]
-    idx = bisect_right(times, target_ms)
+    # Search the ordered samples directly: historical hearing calls this for
+    # each shot/listener pair, so rebuilding all timestamps per lookup is costly.
+    idx = bisect_right(path, target_ms, key=lambda sample: sample.get("time", 0))
     if idx == 0:
         return None, -1, -1
     sample = path[idx - 1]
@@ -1027,7 +1028,7 @@ async def load_round_end_ms(db, round_id: int, tracks: dict[str, list]) -> int |
     return max(ends) if ends else None
 
 
-def make_locator(tracks: dict[str, list]) -> Locator:
+def make_locator(tracks: dict[str, list], *, require_alive: bool = False) -> Locator:
     """Where a named player was at an instant, as a region we can defend.
 
     ⭐ The radius is OUR error, not their eyesight. A player who was shot in the
@@ -1043,7 +1044,9 @@ def make_locator(tracks: dict[str, list]) -> Locator:
     the instant it was formed.
 
     Returns None rather than a guess when the moment cannot be reconstructed:
-    the belief then keeps its subject and loses only its place.
+    the belief then keeps its subject and loses only its place. For listener
+    admission, require_alive rejects the last position of an already ended life;
+    subject localization retains its existing last-known-position behavior.
     """
     # ⚠️ Parsed once per life, not once per belief. `path` arrives as text from
     # some drivers and a round carries hundreds of beliefs against a handful of
@@ -1056,8 +1059,8 @@ def make_locator(tracks: dict[str, list]) -> Locator:
         track_list = tracks.get(guid)
         if not track_list:
             return None
-        track, _alive, conflict = select_life(track_list, t_ms)
-        if track is None:
+        track, alive, conflict = select_life(track_list, t_ms)
+        if track is None or (require_alive and not alive):
             return None
         path = parsed.get(track[8])
         if path is None:
@@ -1135,7 +1138,8 @@ async def load_round_information_state(
         locate=locate)
     beliefs += gunfire_beliefs(
         [(r[0], r[1], float(r[2]), float(r[3]), float(r[4])) for r in (shots or [])],
-        positions, audible_radius=AUDIBLE_GUNFIRE_RADIUS)
+        holders, audible_radius=AUDIBLE_GUNFIRE_RADIUS,
+        locate=make_locator(tracks or {}, require_alive=True))
     beliefs += aim_lock_beliefs(
         [(r[0], r[1], r[2]) for r in (locks or [])], locate=locate)
 
@@ -1147,9 +1151,31 @@ async def load_round_information_state(
     apply_capability(
         states, {"capabilities": capture_policy.capabilities}, holders)
 
+    # Allegiance is evaluated at the requested instant, independently of when
+    # evidence was acquired. Overlapping lives cannot establish a unique side.
+    roster = {
+        guid: team for guid, team in _roster_at(tracks or {}, t_ms).items()
+        if team in {"AXIS", "ALLIES"}
+        and not select_life(tracks[guid], t_ms)[2]
+    }
+    enemies = {}
+    for guid, state in states.items():
+        team = roster.get(guid)
+        enemies[guid] = frozenset(
+            subject for subject, side in roster.items()
+            if team is not None and side != team
+        )
+        if team is None or any(
+            b.subject_guid and b.subject_guid not in roster for b in state.beliefs
+        ):
+            state.unavailable["enemy_roster"] = (
+                "Current allegiance is unavailable or ambiguous for the holder "
+                "or a named subject; unclassified subjects are excluded from enemy metrics."
+            )
+
     return {
         "holders": {
-            guid: belief_payload(state, t_ms, positions.get(guid))
+            guid: belief_payload(state, t_ms, positions.get(guid), enemy_guids=enemies[guid])
             for guid, state in states.items()
         },
         "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS,

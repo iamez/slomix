@@ -946,4 +946,182 @@ describe('opening a different round', () => {
     await loadSpiderWebView({ roundId: '11501' });
     expect(host?.textContent).toContain('ALLIES');
   });
+
+  it('keeps the rendered time after a failed scrub and retries the requested time', async () => {
+    let fail = true;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://fixture');
+      const t = Number(url.searchParams.get('t'));
+      if (t === 2000 && fail) return Promise.reject(new Error('HTTP 429'));
+      return Promise.resolve({ ok: true, json: async () => ({
+        round_id: 11901, t_ms: t, map_name: null, first_position_ms: 0,
+        round_duration_ms: 600000, teams: ['AXIS', 'ALLIES'], players: [],
+        edges: [], gaps: {}, withheld_by_pov: [], clock: {},
+        nearest_teammate_separation: {}, information_state: { holders: {} },
+        capture_policy: { capabilities: {} }, reconstruction_accuracy: {},
+        player_count: 0, overlap_conflicts: 0, notes: [],
+      }) } as Response);
+    }));
+    await loadSpiderWebView({ roundId: '11901' });
+    const host = document.getElementById('spider-web-container')!;
+    const slider = host.querySelector('input[type="range"]') as HTMLInputElement;
+    slider.value = '2000';
+    slider.dispatchEvent(new Event('change'));
+    await vi.waitFor(() => expect(host.textContent).toContain('Posodobitev ni uspela'));
+    expect(host.textContent).toContain('t = 0 ms');
+    expect(slider.value).toBe('0');
+    const retry = [...host.querySelectorAll('button')].find(b => b.textContent === 'Poskusi znova')!;
+    expect(retry.hidden).toBe(false);
+    fail = false;
+    retry.click();
+    await vi.waitFor(() => {
+      expect(host.querySelector('[role="status"]')?.textContent).toBe('');
+      expect(slider.value).toBe('2000');
+      expect(host.textContent).toContain('t = 2000 ms');
+    });
+    expect(retry.hidden).toBe(true);
+    expect(host.textContent).not.toContain('Posodobitev ni uspela');
+  });
+
+
+  it('hides the old POV while loading and ignores a superseded failure', async () => {
+    let rejectOld: ((reason: Error) => void) | undefined;
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://fixture');
+      if (url.searchParams.get('pov') === 'team:AXIS') {
+        return new Promise<Response>((_resolve, reject) => { rejectOld = reject; });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({
+        round_id: 11902, t_ms: Number(url.searchParams.get('t')), map_name: null,
+        first_position_ms: 0, round_duration_ms: 600000, teams: ['AXIS', 'ALLIES'],
+        players: [], edges: [], gaps: {}, withheld_by_pov: [], clock: {},
+        nearest_teammate_separation: {}, information_state: { holders: {} },
+        capture_policy: { capabilities: {} }, reconstruction_accuracy: {},
+        player_count: 0, overlap_conflicts: 0, notes: [],
+      }) } as Response);
+    }));
+    await loadSpiderWebView({ roundId: '11902' });
+    const host = document.getElementById('spider-web-container')!;
+    const canvas = host.querySelector('canvas')!;
+    (host.querySelector('[data-pov="team:AXIS"]') as HTMLButtonElement).click();
+    expect(canvas.hidden).toBe(true);
+    expect(host.querySelector('[role="status"]')?.textContent).toContain('team:AXIS');
+    // Cancel the pending team request by choosing the still-rendered world view.
+    (host.querySelector('[data-pov="world"]') as HTMLButtonElement).click();
+    await vi.waitFor(() => {
+      expect(canvas.hidden).toBe(false);
+      expect(host.querySelector('[role="status"]')?.textContent).toBe('');
+    });
+    expect(rejectOld).toBeDefined();
+    rejectOld!(new Error('late HTTP 429'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(host.querySelector('[role="status"]')?.textContent).toBe('');
+    expect(host.textContent).not.toContain('Posodobitev ni uspela');
+    expect(host.querySelector('[data-pov="world"]')?.className).toContain('bg-slate-700');
+    expect(host.querySelector('[data-pov="team:AXIS"]')?.className).not.toContain('bg-slate-700');
+  });
+
+
+  function geometrySnapshot(roundId: number, map: string) {
+    return { round_id: roundId, t_ms: 0, map_name: map, first_position_ms: 0,
+      round_duration_ms: 600000, teams: ['AXIS', 'ALLIES'], players: [], edges: [],
+      gaps: {}, withheld_by_pov: [], clock: {}, nearest_teammate_separation: {},
+      information_state: { holders: {} }, capture_policy: { capabilities: {} },
+      reconstruction_accuracy: {}, player_count: 0, overlap_conflicts: 0, notes: [] };
+  }
+
+  it.each([404, 500, 'network'] as const)('distinguishes geometry absence from transport failure %s', async (failure) => {
+    const roundId = failure === 404 ? 12001 : failure === 500 ? 12011 : 12012;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/geometry/')) {
+        if (failure === 'network') throw new Error('offline');
+        return new Response('', { status: failure });
+      }
+      return new Response(JSON.stringify(geometrySnapshot(roundId, `fixture-${failure}`)));
+    }));
+    await loadSpiderWebView({ roundId: String(roundId) });
+    const host = document.getElementById('spider-web-container')!;
+    if (failure === 404) expect(host.textContent).toContain('ni izvožene geometrije');
+    else {
+      expect(host.textContent).toContain('Geometrija trenutno ni dosegljiva');
+      expect(host.textContent).not.toContain('ni izvožene geometrije');
+      expect([...host.querySelectorAll('button')].find(b => b.textContent === 'Ponovi geometrijo')?.hidden).toBe(false);
+    }
+  });
+
+  it('reports geometry loading and recovers explicitly after transport failure', async () => {
+    let finish!: (response: Response) => void;
+    let recover = false;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/geometry/')) return recover
+        ? new Response(JSON.stringify({ vertices: [], indexes: [], bounds: { min: [0, 0, 0], max: [100, 100, 100] } }))
+        : new Promise<Response>(resolve => { finish = resolve; });
+      return new Response(JSON.stringify(geometrySnapshot(12002, 'fixture-retry')));
+    }));
+    const pending = loadSpiderWebView({ roundId: '12002' });
+    const host = document.getElementById('spider-web-container')!;
+    await vi.waitFor(() => expect(host.textContent).toContain('Nalagam geometrijo'));
+    expect(host.textContent).not.toContain('ni izvožene geometrije');
+    finish(new Response('', { status: 500 }));
+    await pending;
+    recover = true;
+    [...host.querySelectorAll('button')].find(b => b.textContent === 'Ponovi geometrijo')!.click();
+    await vi.waitFor(() => expect(host.textContent).not.toContain('Nalagam geometrijo'));
+    expect(host.textContent).not.toContain('Geometrija trenutno ni dosegljiva');
+    expect([...host.querySelectorAll('button')].find(b => b.textContent === 'Ponovi geometrijo')!.hidden).toBe(true);
+  });
+
+  it('ignores geometry retry results after navigation to another round', async () => {
+    let first = true;
+    let finish!: (response: Response) => void;
+    let newerGeometryRequests = 0;
+    const mesh = { vertices: [], indexes: [], bounds: { min: [0, 0, 0], max: [100, 100, 100] } };
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('fixture-old.json')) {
+        if (first) { first = false; return new Response('', { status: 500 }); }
+        return new Promise<Response>(resolve => { finish = resolve; });
+      }
+      if (url.includes('fixture-new.json')) { newerGeometryRequests++; return new Response(JSON.stringify(mesh)); }
+      const newer = url.includes('/12004/');
+      return new Response(JSON.stringify(geometrySnapshot(newer ? 12004 : 12003, newer ? 'fixture-new' : 'fixture-old')));
+    }));
+    await loadSpiderWebView({ roundId: '12003' });
+    const host = document.getElementById('spider-web-container')!;
+    [...host.querySelectorAll('button')].find(b => b.textContent === 'Ponovi geometrijo')!.click();
+    await loadSpiderWebView({ roundId: '12004' });
+    finish(new Response(JSON.stringify(mesh)));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await loadSpiderWebView({ roundId: '12004' });
+    expect(newerGeometryRequests).toBe(1);
+    expect(host.textContent).toContain('runda 12004');
+  });
+
+  it('draws a granted belief-only region inside the canvas without a mesh', async () => {
+    const arc = vi.fn();
+    const canvasProto = Object.getPrototypeOf(document.createElement('canvas'));
+    vi.spyOn(canvasProto, 'getContext').mockReturnValue(new Proxy({}, {
+      get: (_t, prop) => prop === 'arc' ? arc : prop === 'measureText' ? () => ({ width: 0 }) : () => undefined,
+      set: () => true,
+    }) as CanvasRenderingContext2D);
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), 'http://fixture');
+      if (url.pathname.includes('/geometry/')) return new Response('', { status: 404 });
+      const snapshot = geometrySnapshot(12005, 'fixture-belief');
+      const region = { subject_guid: 'enemy', region: { x: 3000, y: 0, z: 0, radius: 100 }, confidence: 0.8 };
+      return new Response(JSON.stringify({ ...snapshot, information_state: { holders: {
+        'team:AXIS': { holder_guid: 'team:AXIS', position_claim_max_radius: 700, beliefs: [region] },
+      } } }));
+    }));
+    await loadSpiderWebView({ roundId: '12005' });
+    expect(arc).not.toHaveBeenCalled(); // World must not draw a holder's beliefs.
+    const host = document.getElementById('spider-web-container')!;
+    (host.querySelector('[data-pov="team:AXIS"]') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(arc).toHaveBeenCalled());
+    const [x, y, radius] = arc.mock.calls.at(-1)! as number[];
+    const canvas = host.querySelector('canvas')!;
+    expect(x - radius).toBeGreaterThanOrEqual(0); expect(x + radius).toBeLessThanOrEqual(canvas.width);
+    expect(y - radius).toBeGreaterThanOrEqual(0); expect(y + radius).toBeLessThanOrEqual(canvas.height);
+  });
+
 });

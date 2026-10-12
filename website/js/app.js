@@ -34,7 +34,7 @@ import { loadStoryView } from './story.js?v=20260817-restore';
 // there is. Keeping them explicit also states the intent in the source rather
 // than leaving it to a sed line in a deploy script.
 import { loadReplayView } from './replay.js?v=20260825-spiderweb-link';
-import { loadSpiderWebView } from './spider-web.js?v=20260825-pov-boundary';
+import { loadSpiderWebView } from './spider-web.js?v=20261012-spider-geometry';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSystemView } from './system.js?v=20260815-system';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';

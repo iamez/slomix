@@ -15,11 +15,11 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import type { MapMesh, SpiderWebSnapshot } from '../lib/types';
 import { stripEtColors } from '../lib/names';
 import {
-  DEFAULT_CAMERA, beliefRegions, boundsFromPlayers, edgeStyle, floorBands, isPlayerPov,
-  isTeamPov, placeLabels, project, statusLine, viewportFor, type Camera,
+  DEFAULT_CAMERA, beliefRegions, authorizedBounds, edgeStyle, floorBands, isPlayerPov,
+  isTeamPov, placeLabels, project, statusLine, viewportFor, type Camera, type Bounds,
 } from '../lib/spiderWeb';
 import { Cluster, Stack } from './layout';
-import { Absent, Chip, Meta, figure } from './ui';
+import { Absent, Chip, Meta, Pending, Unavailable, figure } from './ui';
 
 const W = 860; const H = 560;
 // The sides' own tokens (tokens.css: --color-axis red, --color-allies blue),
@@ -44,7 +44,7 @@ export function losKind(e: { line_of_sight?: { a_to_b: { status: string }; b_to_
   return 'indeterminate';
 }
 
-export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; mesh: MapMesh | null | undefined; pov: string }) {
+export function SpiderWebScene({ snap, mesh, pov, meshError = false }: { snap: SpiderWebSnapshot; mesh: MapMesh | null | undefined; pov: string; meshError?: boolean }) {
   const [cam, setCam] = useState<Camera>(DEFAULT_CAMERA);
   // The oracle overlay, off by default: it is a diagnostic, not the picture.
   const [showLos, setShowLos] = useState(false);
@@ -70,7 +70,23 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
     wheelCleanup.current = () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  const bounds = mesh?.bounds ?? boundsFromPlayers(snap.players);
+  const holder = isTeamPov(pov) || isPlayerPov(pov) ? Object.values(snap.information_state?.holders ?? {})[0] : undefined;
+  const beliefs = beliefRegions(holder);
+  const currentBounds = authorizedBounds(snap.players, beliefs.regions, mesh?.bounds);
+  // Keep the frame steady while evidence moves inside it. New evidence may
+  // expand it; reset view refits it. Never retain a different round or POV.
+  const frame = useRef<{ key: string; bounds: Bounds } | null>(null);
+  const frameKey = `${snap.round_id}:${pov}`;
+  if (currentBounds) {
+    const previous = frame.current?.key === frameKey ? frame.current.bounds : null;
+    if (!previous || currentBounds.min.some((v, i) => v < previous.min[i])
+      || currentBounds.max.some((v, i) => v > previous.max[i])) frame.current = { key: frameKey, bounds: previous ? {
+      min: currentBounds.min.map((v, i) => Math.min(v, previous.min[i])),
+      max: currentBounds.max.map((v, i) => Math.max(v, previous.max[i])),
+    } : currentBounds };
+  } else frame.current = null;
+  const bounds = frame.current?.bounds;
+
   const scene = useMemo(() => {
     if (!bounds) return null;
     const view = viewportFor({ bounds }, { width: W, height: H }, cam);
@@ -88,12 +104,12 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
     const labels = placeLabels(players.map(({ p, s }) => ({ x: s.x + 8, y: s.y + 3, text: p.name ? stripEtColors(p.name) : p.guid.slice(0, 8) })));
     // Enemy beliefs are drawn only for a view that has them: the world view is
     // the oracle and already shows every true position.
-    const holder = isTeamPov(pov) || isPlayerPov(pov) ? Object.values(snap.information_state?.holders ?? {})[0] : undefined;
-    const beliefs = beliefRegions(holder);
     const regions = beliefs.regions.map((r) => ({ r, s: P(r.x, r.y, r.z), px: Math.max(3, r.radius * view.scale * cam.zoom) }));
     return { view, floors, edges, players, labels, regions, unplaced: beliefs.unplacedSubjects, scalePx: SCALE_UNITS * view.scale * cam.zoom };
   }, [bounds, cam, mesh, snap, pov]);
 
+  if (!scene && meshError) return <Unavailable what="this map's floor mesh" />;
+  if (!scene && mesh === undefined) return <Pending label="floor mesh" />;
   if (!scene) return <Absent reason="nobody could be placed at this moment — no floor mesh and no positioned player to frame the scene" />;
 
   const nameOf = (guid: string) => { const p = snap.players.find((q) => q.guid === guid); return p?.name ? stripEtColors(p.name) : guid.slice(0, 8); };
@@ -181,7 +197,7 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
       <Cluster gap={3} align="center" style={{ flexWrap: 'wrap' }}>
         <Chip active={!isPlan} label="tilted" onClick={() => setCam((c) => ({ ...c, pitch: DEFAULT_CAMERA.pitch }))} title="the default camera: turned a little and tipped, so heights read" />
         <Chip active={isPlan} label="plan" onClick={() => setCam((c) => ({ ...c, pitch: 0 }))} title="straight down: heights collapse, floor distances are true" />
-        <Chip active={false} label="reset view" onClick={() => setCam(DEFAULT_CAMERA)} />
+        <Chip active={false} label="reset view" onClick={() => { frame.current = null; setCam({ ...DEFAULT_CAMERA }); }} />
         {los?.available && (
           <Chip active={showLos} label="line of sight (oracle)" onClick={() => setShowLos((v) => !v)} title="a clear ray from an eye to a body point in the static geometry — necessary, not sufficient, for having seen someone; never a belief" />
         )}
@@ -210,6 +226,7 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
         threads are geometric distance, not sight: grey between teammates, negative between opponents, solid where an engagement was open
         (the tracker holds one open up to 15 s after the last hit) · dashed discs = where this side believed an enemy was, opacity = confidence
       </Meta>
+      {meshError ? <Unavailable what="this map's floor mesh" /> : mesh === undefined ? <Pending label="floor mesh" /> : null}
       {mesh === null && <Meta>this map's floor mesh was never exported — players and threads draw without a stage, which is the truth, not a bug</Meta>}
     </Stack>
   );

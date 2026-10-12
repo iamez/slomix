@@ -252,3 +252,17 @@ export function floorBands(mesh: { vertices: number[]; indexes: number[] }, cam:
     d: tris.sort((p, q) => p.depth - q.depth).map((tri) => `M${tri.d[0]}L${tri.d[1]}L${tri.d[2]}Z`).join(''),
   })).filter((band) => band.d !== '');
 }
+
+
+/** Frame only evidence granted to this POV, including the full region extent. */
+export function authorizedBounds(players: Parameters<typeof boundsFromPlayers>[0], regions: DrawableRegion[], mesh?: Bounds | null): Bounds | null {
+  const bounds = [mesh, boundsFromPlayers(players), ...regions.map((r) => ({
+    min: [r.x - r.radius, r.y - r.radius, r.z - r.radius],
+    max: [r.x + r.radius, r.y + r.radius, r.z + r.radius],
+  }))].filter((b): b is Bounds => b != null);
+  if (bounds.length === 0) return null;
+  return {
+    min: [0, 1, 2].map((i) => Math.min(...bounds.map((b) => b.min[i]))),
+    max: [0, 1, 2].map((i) => Math.max(...bounds.map((b) => b.max[i]))),
+  };
+}

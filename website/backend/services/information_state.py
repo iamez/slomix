@@ -336,13 +336,18 @@ def _capability_state(manifest: dict | None, flag: str) -> str:
 
 def gunfire_beliefs(
     shots: Iterable[tuple],
-    holders: dict[str, tuple[float, float, float]],
+    holders: Iterable[str],
     *,
     audible_radius: float,
+    locate: Locator,
 ) -> list[BeliefItem]:
     """A shot is heard by whoever was close enough, as a REGION.
 
     `shots` rows are (shooter_guid, event_time_ms, x, y, z).
+    `locate` must resolve a living listener at the shot time, never at the
+    replay slider time. Unknown positions cannot establish hearing. The full
+    reconstructed region must fit inside the hearing radius; its uncertainty
+    must not silently become a precise listening position.
 
     ⛔ The shooter's telemetry coordinate never becomes the belief. What the
     holder gets is a circle they could have localised the noise to, and it is
@@ -353,11 +358,21 @@ def gunfire_beliefs(
     never resolve WHO. That is what keeps `known_enemy_count` honest.
     """
     out: list[BeliefItem] = []
+    holders = tuple(holders)
     for guid, t_ms, sx, sy, sz in shots:
-        for holder, (hx, hy, hz) in holders.items():
+        if not all(math.isfinite(v) for v in (sx, sy, sz)):
+            continue
+        for holder in holders:
             if holder == guid:
                 continue
-            if math.dist((sx, sy, sz), (hx, hy, hz)) > audible_radius:
+            region = locate(holder, int(t_ms))
+            if region is None:
+                continue
+            values = (region.x, region.y, region.z, region.radius)
+            if not all(math.isfinite(v) for v in values) or region.radius < 0:
+                continue
+            distance = math.dist((sx, sy, sz), (region.x, region.y, region.z))
+            if distance + region.radius > audible_radius:
                 continue
             out.append(BeliefItem(
                 holder_guid=holder,
@@ -370,7 +385,10 @@ def gunfire_beliefs(
     return out
 
 
-def counts_as_known(belief: BeliefItem, t_ms: int, *, floor: float = CONFIDENCE_FLOOR) -> bool:
+def counts_as_known(
+    belief: BeliefItem, t_ms: int, *, floor: float = CONFIDENCE_FLOOR,
+    enemy_guids: frozenset[str] | None = None,
+) -> bool:
     """Whether this item is an enemy the holder could name RIGHT NOW.
 
     ⭐ ONE rule, used by both `known_enemy_count` and the payload flag. They
@@ -385,12 +403,16 @@ def counts_as_known(belief: BeliefItem, t_ms: int, *, floor: float = CONFIDENCE_
     """
     return (
         bool(belief.subject_guid)
+        and (enemy_guids is None or belief.subject_guid in enemy_guids)
         and belief.roster_state != UNCERTAIN_AFTER_DOWN
         and belief.confidence(t_ms) >= floor
     )
 
 
-def known_enemy_count(state: HolderState, t_ms: int, *, floor: float = CONFIDENCE_FLOOR) -> int | str:
+def known_enemy_count(
+    state: HolderState, t_ms: int, *, floor: float = CONFIDENCE_FLOOR,
+    enemy_guids: frozenset[str] | None = None,
+) -> int | str:
     """Distinct enemies this holder could name — not a count of belief items.
 
     ⛔ §6.3 names the trap directly: `proximity_shot_fired` emits one row per
@@ -402,14 +424,14 @@ def known_enemy_count(state: HolderState, t_ms: int, *, floor: float = CONFIDENC
     promoting them would reintroduce the phantom squad through the back door.
     """
     subjects = {
-        b.subject_guid for b in state.beliefs if counts_as_known(b, t_ms, floor=floor)
+        b.subject_guid for b in state.beliefs if counts_as_known(b, t_ms, floor=floor, enemy_guids=enemy_guids)
     }
     return len(subjects)
 
 
 def _nearest(
     state: HolderState, t_ms: int, holder_pos: tuple[float, float, float],
-    *, resolved: bool, floor: float,
+    *, resolved: bool, floor: float, enemy_guids: frozenset[str] | None = None,
 ) -> dict | None:
     # ⭐ The two bounds come from DIFFERENT beliefs, and that is the point.
     #
@@ -430,6 +452,10 @@ def _nearest(
             continue
         if bool(belief.subject_guid) is not resolved:
             continue
+        if resolved and not counts_as_known(
+            belief, t_ms, floor=floor, enemy_guids=enemy_guids
+        ):
+            continue
         region = belief.region_at(t_ms)
         # ⭐ Past the horizon the belief still exists and still names its
         # subject — it simply stops supporting a claim about distance. Dropping
@@ -446,7 +472,7 @@ def _nearest(
 
 def nearest_known_enemy_distance(
     state: HolderState, t_ms: int, holder_pos: tuple[float, float, float],
-    *, floor: float = CONFIDENCE_FLOOR,
+    *, floor: float = CONFIDENCE_FLOOR, enemy_guids: frozenset[str] | None = None,
 ) -> dict | None:
     """How close the nearest enemy the holder could NAME might be.
 
@@ -460,7 +486,8 @@ def nearest_known_enemy_distance(
     scalar: a region 400 units wide seen from 900 away is "between 500 and
     1,300", and reporting 900 would be a number the holder never had.
     """
-    return _nearest(state, t_ms, holder_pos, resolved=True, floor=floor)
+    return _nearest(state, t_ms, holder_pos, resolved=True, floor=floor,
+                    enemy_guids=enemy_guids)
 
 
 def nearest_heard_activity_distance(
@@ -476,14 +503,24 @@ def nearest_heard_activity_distance(
     return _nearest(state, t_ms, holder_pos, resolved=False, floor=floor)
 
 
-def to_dict(state: HolderState, t_ms: int, holder_pos: tuple[float, float, float] | None) -> dict:
-    """The holder's picture, with every channel's availability stated."""
+def to_dict(
+    state: HolderState, t_ms: int, holder_pos: tuple[float, float, float] | None,
+    *, enemy_guids: frozenset[str] | None = None,
+) -> dict:
+    """The holder's picture, with every channel's availability stated.
+
+    Production callers must supply the enemies classified at snapshot time,
+    including an empty set when allegiance is unknown. None preserves the
+    low-level API for callers that already supply enemy-only named beliefs.
+    Public friendly observations remain visible but do not become enemies.
+    """
     live = [b for b in state.beliefs if b.confidence(t_ms) >= DISPLAY_FLOOR]
     return {
         "holder_guid": state.holder_guid,
-        "known_enemy_count": known_enemy_count(state, t_ms),
+        "known_enemy_count": known_enemy_count(state, t_ms, enemy_guids=enemy_guids),
         "nearest_known_enemy_distance": (
-            nearest_known_enemy_distance(state, t_ms, holder_pos) if holder_pos else None
+            nearest_known_enemy_distance(state, t_ms, holder_pos, enemy_guids=enemy_guids)
+            if holder_pos else None
         ),
         "nearest_heard_activity_distance": (
             nearest_heard_activity_distance(state, t_ms, holder_pos)
@@ -500,7 +537,7 @@ def to_dict(state: HolderState, t_ms: int, holder_pos: tuple[float, float, float
                 # Whether this item is inside `known_enemy_count`. Carried per
                 # item so the panel can fade a belief out without ever showing
                 # something the count has already discarded.
-                "counts_as_known": counts_as_known(b, t_ms),
+                "counts_as_known": counts_as_known(b, t_ms, enemy_guids=enemy_guids),
                 "capability": b.capability,
                 "expiry_basis": b.expiry_basis,
                 # ⚠️ The GROWN region, not the stored one. Publishing the
