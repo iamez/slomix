@@ -55,6 +55,8 @@ function _loadFilters() {
 
 let _filters = _loadFilters();
 let _cursor = 0;
+let _streamId = null;
+let _pollInFlight = false;
 let _events = [];          // newest last, ALL categories
 let _interval = null;
 let _lastFetchOk = null;   // null = never fetched, false = feed erroring
@@ -294,28 +296,52 @@ function _viewActive() {
 
 async function _poll() {
     if (!_viewActive()) { stopLiveTicker(); return; }
+    if (_pollInFlight) return;
+    _pollInFlight = true;
     try {
-        const data = await fetchJSON(
+        let data = await fetchJSON(
             `${API_BASE}/live/feed?since=${_cursor}`,
             { cachePolicy: 'no-store', credentials: 'same-origin' },
         );
         _lastFetchOk = true;
+        if (data && ((_streamId != null && data.stream_id != null && _streamId !== data.stream_id)
+            || data.cursor_reset === true || data.last_seq < _cursor)) {
+            _cursor = 0;
+            _events = [];
+            _roster.clear();
+            _rosterUpdatedAt = 0;
+            _streak.clear();
+            _mvp.clear();
+            _roundScores = [];
+            _samples = [];
+            _roundStartRecv = null;
+            _momentum = 50;
+            _flash = null;
+            _liveKillLastAt = 0;
+            _holdCurve = [];
+            _defenderSide = null;
+            // A new worker may already have advanced past the old cursor.
+            // Read its complete retained page before accepting any new IDs.
+            data = await fetchJSON(`${API_BASE}/live/feed?since=0`,
+                { cachePolicy: 'no-store', credentials: 'same-origin' });
+        }
+        if (data?.stream_id != null) _streamId = data.stream_id;
+        // Only the server can distinguish hidden telemetry from missing
+        // history. A reported gap makes per-round derived state
+        // (streaks, MVP tallies) untrustworthy — reset it
+        // rather than display stale numbers (coderabbit, PR #772). The
+        // roster/map recover from /api/live/state on its own poll.
+        if (data?.gap === true) {
+            _streak.clear();
+            _mvp.clear();
+            _roundScores = [];
+        }
         if (data && Array.isArray(data.events) && data.events.length) {
             // Dedup by seq: the cursor advances to the max seq we actually
             // RECEIVED (not the server's global last_seq — that skipped every
             // event between this page and the ring head, the 2026-08-18
             // "stuck on quiet then bursts" bug).
             const fresh = data.events.filter(ev => (ev.seq || 0) > _cursor);
-            // Feed gap (server pages from the newest end): events between our
-            // cursor and oldest_seq were skipped, so per-round derived state
-            // (streaks, MVP tallies) is no longer trustworthy — reset it
-            // rather than display stale numbers (coderabbit, PR #772). The
-            // roster/map recover from /api/live/state on its own poll.
-            if (_cursor > 0 && data.oldest_seq != null && data.oldest_seq > _cursor + 1) {
-                _streak.clear();
-                _mvp.clear();
-                _roundScores = [];
-            }
             // Per-event state (roster/streaks/momentum/MVP) MUST be updated
             // before buffering + render — this loop was lost in a rebase and
             // its absence silently disabled attribution, pressure and MVP.
@@ -330,13 +356,10 @@ async function _poll() {
             }
             // Only renderable rows may occupy the buffer: invisible types
             // used to crowd out the 200 slots and leave one stale revive on
-            // screen. Age expiry keeps a hidden-tab backlog from re-surfacing.
-            const cutoff = Date.now() / 1000 - 600;
+            // screen. Expiry runs for every poll outcome below.
             _events = _events
                 .concat(fresh.filter(ev => _line(ev) !== ''))
-                .filter(ev => (ev.received_at || 0) >= cutoff)
                 .slice(-MAX_BUFFER);
-            renderLiveTicker();
         }
         _momentum = 50 + (_momentum - 50) * _MOM_DECAY;
         // Momentum/hold TIMELINE samples (Sofascore pattern, Val A): one
@@ -352,6 +375,13 @@ async function _poll() {
     } catch (e) {
         _lastFetchOk = false;
         console.warn('live ticker poll failed', e);
+    } finally {
+        _pollInFlight = false;
+        // Silence and failed requests age the buffer too. Always render the
+        // latest fetch outcome, including recovery with no new events.
+        const cutoff = Date.now() / 1000 - 600;
+        _events = _events.filter(ev => (ev.received_at || 0) >= cutoff);
+        renderLiveTicker();
     }
 }
 

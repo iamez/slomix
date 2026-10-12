@@ -8,7 +8,7 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
-import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20260819-ladder';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20261011-live-recovery';
 import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260819-ladder';
 
 const POLL_MS = 8000;

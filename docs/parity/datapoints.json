@@ -189,9 +189,9 @@
   "/api/voice-activity/history": "18 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3485,
+  "read": 3484,
   "unread": 6,
-  "dropped": 198,
+  "dropped": 199,
   "endpoints": 180,
   "endpoints_fully_read": 176,
   "unmeasured": 3
@@ -308,9 +308,9 @@
    "dropped": 0
   },
   "/api/live/feed": {
-   "read": 5,
+   "read": 4,
    "unread": 0,
-   "dropped": 0
+   "dropped": 1
   },
   "/api/live/state": {
    "read": 18,
@@ -2501,7 +2501,8 @@
   {
    "endpoint": "/api/live/feed",
    "key": "oldest_seq",
-   "status": "read"
+   "status": "dropped",
+   "reason": "Superseded loss heuristic: LivePage reads server gap metadata because sequence holes can be hidden telemetry. oldest_seq remains a compatibility transport field, not a displayed loss count."
   },
   {
    "endpoint": "/api/live/feed",

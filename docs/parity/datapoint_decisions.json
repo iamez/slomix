@@ -82,5 +82,6 @@
  "/api/storytelling/scopes sessions.*": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one.",
  "/api/proximity/objective-focus players.total_time_ms": "duplicate: the same figure as total_time_s, which the row prints (fixture: 810400 ms = 810.4 s)",
  "/api/proximity/competitive/man-advantage teams.ALLIES": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)",
- "/api/proximity/competitive/man-advantage teams.AXIS": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)"
+ "/api/proximity/competitive/man-advantage teams.AXIS": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)",
+ "/api/live/feed oldest_seq": "Superseded loss heuristic: LivePage reads server gap metadata because sequence holes can be hidden telemetry. oldest_seq remains a compatibility transport field, not a displayed loss count."
 }

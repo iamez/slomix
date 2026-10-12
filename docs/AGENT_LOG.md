@@ -1,3 +1,38 @@
+## 2026-10-11 — Generated API prose and handoff preambles are contracts
+
+A router docstring changes the frozen OpenAPI description even if its schema
+is unchanged. Refresh dump_openapi and the datapoint ledger when removing a
+field reader. Explain deliberately retired transport heuristics in decisions;
+never grow the unread baseline to hide them. Keep HANDOFF-next's mandatory
+routing/authority preamble before the first dated heading, not below updates.
+The20OpenAPI/ledger/history checks cover these three CI failures.
+
+## 2026-10-11 — Filtered loss and cached module graphs need explicit evidence
+
+Raw ring-head advancement does not prove a renderable event was lost. Track
+last evicted sequence per allowed type and apply the requested filter to that
+bounded watermark. For legacy JS changes, invalidate the full import chain;
+updating only the leaf URL cannot help a cached parent. Home and Live must
+import the same versioned tonight module. Parse imports rather than searching
+comments, and verify actual HTTP bytes/cache headers without invoking lifespan.
+
+## 2026-10-11 — Empty Live pages still carry state transitions
+
+Treat feed status, gap evidence and age expiry independently of events.length.
+An empty successful response must clear a displayed error; a failed request
+must render unavailable immediately; gap-only responses invalidate derived
+scores. Run row expiry for every poll outcome so silence cannot preserve old
+rows indefinitely. DOM tests execute the legacy module, including filter clicks.
+
+## 2026-10-11 — Live sequence recovery requires a worker identity
+
+A per-process counter alone cannot distinguish a restarted worker whose head
+has overtaken the prior cursor. Reset client deduplication and cached feed pages
+on changed stream identity; clear derived legacy state and serialize polling.
+Hidden telemetry consumes sequence IDs, so numeric holes alone do not prove
+lost renderable events. Use server gap metadata and keep transport fields
+server-owned. A failed configured upstream must not report successful silence.
+
 # AGENT_LOG — durable lessons for the next agent
 
 - **2026-10-04 · A migration has three delivery artifacts.**

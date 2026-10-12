@@ -31,6 +31,7 @@ import os
 import time
 import urllib.parse
 import urllib.request
+import uuid
 from collections import deque
 from typing import Any
 
@@ -89,6 +90,9 @@ _KILL_DEDUP_SECONDS = 1.5
 
 _events: deque[dict[str, Any]] = deque(maxlen=_BUFFER_MAX)
 _seq = 0
+# Bounded by the admitted event vocabulary; each filter needs its own loss evidence.
+_evicted_by_type: dict[str, int] = {}
+_stream_id = uuid.uuid4().hex
 _lock = asyncio.Lock()
 # (killer_slot, victim_slot) -> received_at of the last LIVE_KILL
 _recent_livex_kills: dict[tuple[int, int], float] = {}
@@ -175,6 +179,7 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                     continue  # LIVEX already carried this obituary
             _seq += 1
             record = {
+                **ev.fields,
                 "seq": _seq,
                 "type": etype,
                 "level_ms": ev.level_ms,
@@ -183,8 +188,10 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                 "clock": "epoch" if etype.startswith("LIVE_") else "level",
                 "source": batch.source,
                 "received_at": now,
-                **ev.fields,
             }
+            if len(_events) == _events.maxlen:
+                evicted = _events[0]
+                _evicted_by_type[evicted["type"]] = evicted["seq"]
             _events.append(record)
             _state.apply(record)  # fold into the current-state snapshot
             accepted += 1
@@ -201,14 +208,16 @@ async def feed(
                     "renderable types (high-volume LIVEX telemetry excluded).",
     ),
 ) -> dict[str, Any]:
-    """Events with seq > since, oldest first — the NEWEST ``limit`` of them.
+    """Newest retained page after the cursor, ordered oldest first.
 
     Before 2026-08-18 this returned the OLDEST page after the cursor, so a
     cold page load replayed the oldest fifth of the ring (a quarter-hour-old
     revive) while the newest events fell outside the page — the live feed's
-    "stuck on quiet, then bursts" symptom. A gap is detectable client-side:
-    ``oldest_seq > since + 1`` means events between were skipped (resync
-    roster/map from /state, the play-by-play in between is gone).
+    "stuck on quiet, then bursts" symptom. ``gap`` reports eviction, expiry or
+    truncation; a numeric jump alone may be intentionally hidden telemetry.
+    ``stream_id`` identifies this worker's sequence namespace. A cursor ahead
+    of its head receives a fresh page and ``cursor_reset``; clients must also
+    reload on a changed stream ID even when the new head passed their cursor.
     Age retention keeps stale ring content out entirely.
     """
     if _UPSTREAM:
@@ -219,25 +228,37 @@ async def feed(
                                              "types": types})
             if upstream is not None:
                 return upstream
+            raise HTTPException(status_code=503, detail="Live upstream unavailable")
     wanted: frozenset[str] | None = None
     if types:
         wanted = frozenset(t.strip().upper() for t in types.split(",") if t.strip())
     fresh_after = time.time() - _FEED_RETENTION_SECONDS
     async with _lock:
+        cursor_reset = since > _seq
+        cursor = 0 if cursor_reset else since
+        eligible = [e for e in _events if e["seq"] > cursor
+                    and (e["type"] in wanted if wanted is not None
+                         else e["type"] not in _FEED_HIDDEN_TYPES)]
         selected = [
-            e for e in _events
-            if e["seq"] > since
-            and e["received_at"] >= fresh_after
-            and (e["type"] in wanted if wanted is not None
-                 else e["type"] not in _FEED_HIDDEN_TYPES)
+            e for e in eligible if e["received_at"] >= fresh_after
         ]
         out = selected[-limit:]
         last_seq = _seq
+        # Hidden telemetry consumes sequence numbers too. Only retention,
+        # ring eviction or page truncation establishes a delivery gap.
+        gap = bool(cursor > 0 and (
+            len(selected) > limit or len(eligible) > len(selected)
+            or any(seq > cursor for etype, seq in _evicted_by_type.items()
+                   if (etype in wanted if wanted is not None
+                       else etype not in _FEED_HIDDEN_TYPES))))
     return {
         "status": "ok",
         "events": out,
         "oldest_seq": out[0]["seq"] if out else None,
         "last_seq": last_seq,
+        "stream_id": _stream_id,
+        "cursor_reset": cursor_reset,
+        "gap": gap,
         "server_time": time.time(),
     }
 
@@ -255,6 +276,7 @@ async def state() -> dict[str, Any]:
             upstream = await _proxy("state")
             if upstream is not None:
                 return upstream
+            raise HTTPException(status_code=503, detail="Live upstream unavailable")
     async with _lock:
         return _state.snapshot()
 
@@ -269,6 +291,7 @@ async def status() -> dict[str, Any]:
             upstream = await _proxy("status")
             if upstream is not None:
                 return upstream
+            raise HTTPException(status_code=503, detail="Live upstream unavailable")
     async with _lock:
         newest = _events[-1]["received_at"] if _events else None
         count = len(_events)
