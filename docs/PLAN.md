@@ -23,6 +23,12 @@ retention, map uncertainty and reused-slot history. Runtime/DOM harnesses and
 raw evidence remain local, not in the public diff. Native game/network/browser
 acceptance and durable exactly-once delivery are not claimed.
 
+The first full CI exposed stale generated datapoint scope metadata after the
+new Live hook. The official generator updates seven dependency-count notes;
+read/unread/dropped counts and the unread baseline are unchanged. The duplicate
+HANDOFF checkpoint is omitted from this slice to retain the 25-file cap; the
+canonical PLAN/BACKLOG checkpoint and existing handoff routing remain intact.
+
 No service, database or game-server changes. Refresh the later branch against
 main after merging either this or #1087; preserve both entry cache/import edits.
 Merge requires explicit owner permission for this PR number. Runtime resumes

@@ -40,37 +40,6 @@ pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
 KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
-## 2026-10-12 — Bounded Live correctness and recovery review slice
-
-This main-based 25-file branch contains the audited Live backend, tailer and
-both clients, separate from issue PR #1086 and Spiderweb PR #1087. The full
-runtime plan and integration history remain in their existing checkout; this
-is a review slice, not a new plan or a deployment.
-
-Invalid ingest batches publish nothing. JSON/proxy/cache/player state are
-bounded, unconfirmed maps and feed failures are explicit, and retention keeps
-advancing through failed polls. Historical names are captured at ingest time;
-unknowns stay unknown rather than adopting a later slot occupant. Current
-roster/MVP state is cleared on disconnect and restricted to engine slots 0–63.
-Kill pairing respects lifecycle, round and accepted map boundaries while
-retaining same-context retransmission suppression. Support actors retain known
-names; malformed slot strings cannot fabricate player zero. Tailer authority
-validation and redirect refusal prevent forwarding its internal token.
-
-PR-branch proof: 201 Python tests, 46 frontend tests, typecheck, changed-file
-Ruff and legacy syntax pass. Negative guard mutations were observed failing and
-restored with byte comparison. Actual synthetic tail/parser/publisher-to-ASGI
-and React/legacy DOM proofs cover delivery failure/retry, cursor recovery,
-retention, map uncertainty and reused-slot history. Runtime/DOM harnesses and
-raw evidence remain local, not in the public diff. Native game/network/browser
-acceptance and durable exactly-once delivery are not claimed.
-
-No service, database or game-server changes. Refresh the later branch against
-main after merging either this or #1087; preserve both entry cache/import edits.
-Merge requires explicit owner permission for this PR number. Runtime resumes
-with the isolated native CLI R1/R2 gate and explicit default-OFF worker session;
-immutable delivery, owner activation and D4/D5 acceptance remain separate.
-
 ## 2026-10-11 — CI-generated contracts reconciled
 
 Full CI identified stale OpenAPI description, datapoint ledger and displaced
