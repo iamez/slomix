@@ -19,9 +19,9 @@ describe('the ticker reads its events', () => {
     // The recorded evening's actual words.
     expect(describeEvent(events.find((e) => e.type === 'KILL')!, NAMES)).toBe('.olz killed wiseBoy · mp40');
     expect(describeEvent(events.find((e) => e.type === 'POPUP')!, NAMES)).toBe('allies planted the Door Controls');
-    expect(describeEvent(events.find((e) => e.type === 'DYNAMITE')!, NAMES)).toBe('.lgz planted dynamite at the Door Controls');
-    expect(describeEvent(events.find((e) => e.type === 'REVIVE')!, NAMES)).toBe('qmr revived .lgz');
-    expect(describeEvent(events.find((e) => e.type === 'CALLVOTE')!, NAMES)).toBe('qmr called a vote: Match Reset');
+    expect(describeEvent(events.find((e) => e.type === 'DYNAMITE')!, NAMES)).toBe('slot 2 planted dynamite at the Door Controls');
+    expect(describeEvent(events.find((e) => e.type === 'REVIVE')!, NAMES)).toBe('slot 4 revived slot 2');
+    expect(describeEvent(events.find((e) => e.type === 'CALLVOTE')!, NAMES)).toBe('slot 4 called a vote: Match Reset');
     expect(describeEvent(events.find((e) => e.type === 'ANNOUNCE')!, NAMES)).toBe('The Doors are opening!!');
   });
 
@@ -44,9 +44,76 @@ describe('the ticker reads its events', () => {
   });
 
   it('a kill without a twin still reads, and a slot nobody named is not "undefined"', () => {
-    expect(describeEvent({ seq: 1, type: 'KILL', killer_slot: 9, victim_slot: 8, mod: 'MOD_KNIFE' }, NAMES)).toBe('someone killed someone · knife');
-    expect(describeEvent({ seq: 2, type: 'REVIVE', slots: '9 8' }, NAMES)).toBe('someone revived someone');
+    expect(describeEvent({ seq: 1, type: 'KILL', killer_slot: 9, victim_slot: 8, mod: 'MOD_KNIFE' }, NAMES)).toBe('slot 9 killed slot 8 · knife');
+    expect(describeEvent({ seq: 2, type: 'REVIVE', slots: '9 8' }, NAMES)).toBe('slot 9 revived slot 8');
     expect(describeEvent({ seq: 3, type: 'LIVE_AGGREGATE', slot: 1 }, NAMES)).toBeNull();
     expect(describeEvent({ seq: 4, type: 'PLAYER_JOIN' }, NAMES)).toBe('player join');
   });
+});
+
+it('never binds an unnamed historical event to the current occupant of a slot', () => {
+  const names = new Map([[1, 'replacement'], [2, 'new victim']]);
+  for (const event of [
+    { seq: 1, type: 'LIVE_KILL', killer_slot: 1, victim_slot: 2 },
+    { seq: 2, type: 'DYNAMITE', slot: 1 },
+    { seq: 3, type: 'REVIVE', slots: '1 2' },
+    { seq: 4, type: 'DISCONNECT', slot: 1 },
+  ]) {
+    const folded = foldDoubles([event])[0];
+    expect(describeEvent(folded, names)).toBe(describeEvent(folded, new Map()));
+  }
+  expect(describeEvent({ seq: 5, type: 'KILL', killer: '^1original', victim: 'victim', killer_slot: 1 }, names))
+    .toBe('original killed victim');
+  expect(describeEvent({ seq: 6, type: 'SAY', name: '^2original', text: 'hello' }, names))
+    .toBe('original: hello');
+});
+
+it('never folds two LIVEX kills or reuses one legacy twin across a slot disconnect', () => {
+  const first = { seq: 1, type: 'LIVE_KILL', killer_slot: 1, victim_slot: 2, killer: 'original', received_at: 1000 };
+  const next = { ...first, seq: 2, killer: 'replacement', received_at: 1001 };
+  expect(foldDoubles([first, next])).toHaveLength(2);
+  const legacy = { ...first, type: 'KILL' };
+  const twin = { ...first, seq: 2, distance: 5 };
+  const third = { ...first, seq: 3, distance: 9 };
+  expect(foldDoubles([legacy, twin, third])).toHaveLength(2);
+  expect(foldDoubles([legacy, { seq: 2, type: 'DISCONNECT', slot: 1 }, third]).filter(e => e.type === 'KILL')).toHaveLength(2);
+  expect(foldDoubles([legacy, next])).toHaveLength(2);
+});
+
+
+it('keeps explicit support-event names while older envelopes use stable slot labels', () => {
+  for (const [type, verb] of [['REVIVE', 'revived'], ['SUPPLY', 'supplied'], ['SHOVE', 'shoved']]) {
+    expect(describeEvent({ seq: 1, type, slots: '1 2', actor_name: '^1original', target_name: 'target' }, NAMES))
+      .toBe(`original ${verb} target`);
+    expect(describeEvent({ seq: 1, type, slots: '1 2' }, NAMES)).toBe(`slot 1 ${verb} slot 2`);
+  }
+});
+
+it.each(['', '   ', '0x0 1', '0.0 1', 'true 1'])('does not invent slot zero from invalid support slots %j', (slots) => {
+  const text = describeEvent({ seq: 1, type: 'REVIVE', slots }, NAMES);
+  expect(text).not.toContain('slot 0');
+  expect(text).toContain('someone');
+});
+
+it.each(['ROUND_START', 'INIT_GAME', 'MAP', 'LIVE_MAP'])('does not fold kills across the %s boundary', (type) => {
+  const kills = [
+    { seq: 2, type: 'KILL', killer_slot: 1, victim_slot: 2, received_at: 1000 },
+    { seq: 4, type: 'LIVE_KILL', killer_slot: 1, victim_slot: 2, received_at: 1001 },
+  ];
+  const boundary = { seq: 3, type, map_name: 'new-map', received_at: 1000.5 };
+  for (const prefix of [[], [{ seq: 1, type: 'MAP', map_name: 'old-map', received_at: 999 }]]) {
+    expect(foldDoubles([...prefix, kills[0], boundary, kills[1]]).filter(e => e.type === 'KILL')).toHaveLength(2);
+  }
+});
+
+it('still pairs real twins across same-map confirmation or empty map metadata', () => {
+  for (const map_name of ['known-map', '', '   ']) {
+    const events = [
+      { seq: 1, type: 'MAP', map_name: 'known-map', received_at: 999 },
+      { seq: 2, type: 'KILL', killer_slot: 1, victim_slot: 2, received_at: 1000 },
+      { seq: 3, type: 'LIVE_MAP', map_name, received_at: 1000.5 },
+      { seq: 4, type: 'LIVE_KILL', killer_slot: 1, victim_slot: 2, received_at: 1001 },
+    ];
+    expect(foldDoubles(events).filter(e => e.type === 'KILL')).toHaveLength(1);
+  }
 });

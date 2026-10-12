@@ -8,6 +8,68 @@ live state for a whole map. The bounded queue must (a) retry with backoff,
 # ruff: noqa: SLF001 — the queue internals ARE the unit under test
 from __future__ import annotations
 
+import socket
+from io import BytesIO
+from unittest.mock import Mock
+
+import pytest
+
+
+@pytest.mark.parametrize("url", [
+    "http://localhost.example.invalid/api/live/events",
+    "http://127.0.0.1.example.invalid/api/live/events",
+    "http://localhost@elsewhere.invalid/api/live/events",
+    "http://127.0.0.1@elsewhere.invalid/api/live/events",
+    "http://localhost:bad/api/live/events",
+])
+def test_http_loopback_lookalikes_are_refused_before_transport(monkeypatch, url):
+    from vps_scripts import liveview_tailer as lt
+    monkeypatch.setattr(socket, "getaddrinfo", lt._orig_getaddrinfo)
+    transport = Mock(side_effect=AssertionError("transport must not run"))
+    monkeypatch.setattr(lt.urllib.request, "urlopen", transport)
+    monkeypatch.setattr(lt.urllib.request, "build_opener", transport)
+    assert lt._url_allowed(url) is False
+    assert lt._post_once(url, "fixture", [], "fixture") is False
+    transport.assert_not_called()
+
+
+@pytest.mark.parametrize("url", [
+    "https://www.example.invalid/api/live/events",
+    "http://localhost:8000/api/live/events",
+    "http://127.0.0.1:8000/api/live/events",
+    "http://127.0.0.10:8000/api/live/events",
+])
+def test_explicit_https_and_exact_loopback_remain_supported(monkeypatch, url):
+    from vps_scripts import liveview_tailer as lt
+    monkeypatch.setattr(socket, "getaddrinfo", lt._orig_getaddrinfo)
+    assert lt._url_allowed(url) is True
+    transport = Mock()
+    transport.open.return_value = BytesIO(b'{"status":"ok"}')
+    factory = Mock(return_value=transport)
+    monkeypatch.setattr(lt.urllib.request, "build_opener", factory)
+    monkeypatch.setattr(lt.urllib.request, "urlopen", Mock(side_effect=AssertionError("network forbidden")))
+    assert lt._post_once(url, "fixture", [], "fixture") is True
+    assert any(isinstance(h, lt._NoRedirect) for h in factory.call_args.args)
+    assert transport.open.call_args.args[0].full_url == url
+
+
+def test_authenticated_post_does_not_follow_redirects(monkeypatch):
+    from vps_scripts import liveview_tailer as lt
+    monkeypatch.setattr(socket, "getaddrinfo", lt._orig_getaddrinfo)
+    req = lt.urllib.request.Request("https://www.example.invalid/api/live/events",
+                                    data=b"{}", headers={"X-Internal-Token": "fixture"})
+    handler = lt._NoRedirect()
+    assert handler.redirect_request(req, None, 302, "Found", {},
+                                    "http://elsewhere.invalid/events") is None
+    transport = Mock()
+    transport.open.side_effect = lt.urllib.error.HTTPError(req.full_url, 302, "Found", {}, None)
+    factory = Mock(return_value=transport)
+    monkeypatch.setattr(lt.urllib.request, "build_opener", factory)
+    monkeypatch.setattr(lt.urllib.request, "urlopen", Mock(side_effect=AssertionError("network forbidden")))
+    assert lt._post_once(req.full_url, "fixture", [], "fixture") is False
+    assert any(isinstance(h, lt._NoRedirect) for h in factory.call_args.args)
+    transport.open.assert_called_once()
+
 
 def _delivery(monkeypatch, results):
     import socket

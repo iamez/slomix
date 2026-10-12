@@ -18,7 +18,7 @@
  * @module live-ticker
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
-import { getSnapshot } from './live-state.js?v=20260819-ladder';
+import { getSnapshot } from './live-state.js?v=20261012-live-audit';
 
 const POLL_MS = 3000;
 const MAX_BUFFER = 200;   // events kept client-side (all categories)
@@ -68,25 +68,40 @@ let _lastFetchOk = null;   // null = never fetched, false = feed erroring
 const _roster = new Map();
 let _rosterUpdatedAt = 0;
 
+function _clientSlot(value) {
+    if (typeof value === 'string' && /^-?\d+$/.test(value)) value = Number(value);
+    return Number.isInteger(value) && value >= 0 && value < 64 ? value : null;
+}
+
+function _eventName(name, slot) {
+    if (typeof name === 'string' && name.trim()) return name;
+    const valid = _clientSlot(slot);
+    return valid == null ? '?' : `#${valid}`;
+}
+
 function _rosterApply(ev) {
-    if (ev.type === 'TEAM_CHANGE' && ev.slot != null) {
+    const slot = _clientSlot(ev.slot);
+    if (slot == null) return;
+    if (ev.type === 'TEAM_CHANGE') {
         if (ev.team === 1 || ev.team === 2 || ev.team === 3) {
-            _roster.set(ev.slot, { name: ev.name || `slot ${ev.slot}`, team: ev.team });
+            _roster.set(slot, { name: ev.name || `slot ${slot}`, team: ev.team });
         }
         _rosterUpdatedAt = Date.now();
-    } else if (ev.type === 'DISCONNECT' && ev.slot != null) {
-        _roster.delete(ev.slot);
+    } else if (ev.type === 'DISCONNECT') {
+        _roster.delete(slot);
+        _mvp.delete(slot);
+        _streak.delete(slot);
         _rosterUpdatedAt = Date.now();
     }
 }
 
 function _slotName(slot) {
-    const e = _roster.get(typeof slot === 'string' ? parseInt(slot, 10) : slot);
+    const e = _roster.get(_clientSlot(slot));
     return e ? e.name : `#${slot}`;
 }
 
 function _slotTeam(slot) {
-    const e = _roster.get(typeof slot === 'string' ? parseInt(slot, 10) : slot);
+    const e = _roster.get(_clientSlot(slot));
     return e ? e.team : null;
 }
 
@@ -114,7 +129,8 @@ let _roundScores = [];
 const MVP_WEIGHTS = { version: 1, kill: 1.0, obj: 1.5, revive: 0.5, death: -0.3, dmg100: 0.4 };
 const _mvp = new Map();  // slot -> score
 function _mvpAdd(slot, delta) {
-    if (slot == null) return;
+    slot = _clientSlot(slot);
+    if (slot == null || !Number.isFinite(delta)) return;
     _mvp.set(slot, (_mvp.get(slot) || 0) + delta);
 }
 
@@ -158,11 +174,11 @@ function _mvpApply(ev) {
             _mvpAdd(ev.victim_slot, MVP_WEIGHTS.death);
             break;
         case 'DYNAMITE': case 'FLAG_PICKUP':
-            _mvpAdd(typeof ev.slot === 'string' ? parseInt(ev.slot, 10) : ev.slot, MVP_WEIGHTS.obj);
+            _mvpAdd(ev.slot, MVP_WEIGHTS.obj);
             break;
         case 'REVIVE': {
-            const rs = parseInt(String(ev.slots || '').split(/\s+/)[0], 10);
-            if (!Number.isNaN(rs)) _mvpAdd(rs, MVP_WEIGHTS.revive);
+            const rs = _clientSlot(String(ev.slots || '').split(/\s+/)[0]);
+            if (rs != null) _mvpAdd(rs, MVP_WEIGHTS.revive);
             break;
         }
         case 'LIVE_AGGREGATE':
@@ -242,7 +258,7 @@ function _liveKillActive() {
 function _combatApply(ev) {
     if (ev.type === 'LIVE_KILL') { _liveKillLastAt = ev.received_at || (Date.now() / 1000); }
     if (ev.type === 'KILL') {
-        const k = ev.killer_slot, v = ev.victim_slot;
+        const k = _clientSlot(ev.killer_slot), v = _clientSlot(ev.victim_slot);
         // Kill lines carry slot AND name for both parties — the densest
         // slot->name source we have. Learn from them so objective/support
         // events (slot only) resolve to names even before a TEAM_CHANGE for
@@ -255,9 +271,9 @@ function _combatApply(ev) {
             const e = _roster.get(v) || {};
             _roster.set(v, { name: ev.victim, team: e.team ?? null });
         }
-        if (k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
-        _streak.set(v, 0);
-        ev._streak = k !== v ? _streak.get(k) : 0;
+        if (k != null && k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
+        if (v != null) _streak.set(v, 0);
+        ev._streak = k != null && k !== v ? _streak.get(k) : 0;
         const kt = _slotTeam(k), vt = _slotTeam(v);
         ev._teamkill = k !== v && kt != null && kt === vt && kt !== 3;
     } else if (ev.type === 'SCORELINE') {
@@ -430,21 +446,21 @@ function _line(ev) {
             return wrap('💥', `Objective destroyed: ${escapeHtml(ev.detail || '')}`, 'text-orange-200');
         case 'DYNAMITE':
             return wrap(ev.action === 'plant' ? '🧨' : '✂️',
-                `<b>${escapeHtml(_slotName(ev.slot))}</b> ${ev.action === 'plant' ? 'planted dynamite at' : 'defused dynamite at'} <b>${escapeHtml(ev.objective || '')}</b>`,
+                `<b>${escapeHtml(_eventName(ev.name, ev.slot))}</b> ${ev.action === 'plant' ? 'planted dynamite at' : 'defused dynamite at'} <b>${escapeHtml(ev.objective || '')}</b>`,
                 'text-orange-200');
         case 'FLAG_PICKUP':
-            return wrap('🏳️', `<b>${escapeHtml(_slotName(ev.slot))}</b> picked up the objective`, 'text-amber-200');
+            return wrap('🏳️', `<b>${escapeHtml(_eventName(ev.name, ev.slot))}</b> picked up the objective`, 'text-amber-200');
         case 'REVIVE': {
             const [rs, vs] = String(ev.slots || '').split(/\s+/);
-            return wrap('💉', `<b>${escapeHtml(_slotName(rs))}</b> revived <b>${escapeHtml(_slotName(vs))}</b>`, 'text-emerald-200');
+            return wrap('💉', `<b>${escapeHtml(_eventName(ev.actor_name, rs))}</b> revived <b>${escapeHtml(_eventName(ev.target_name, vs))}</b>`, 'text-emerald-200');
         }
         case 'SHOVE': {
             const [a, b] = String(ev.slots || '').split(/\s+/);
-            return wrap('🫸', `${escapeHtml(_slotName(a))} shoved ${escapeHtml(_slotName(b))}`, 'text-slate-400');
+            return wrap('🫸', `${escapeHtml(_eventName(ev.actor_name, a))} shoved ${escapeHtml(_eventName(ev.target_name, b))}`, 'text-slate-400');
         }
         case 'SUPPLY': {
             const [g] = String(ev.slots || '').split(/\s+/);
-            return wrap('🎒', `${escapeHtml(_slotName(g))} handed out supplies`, 'text-slate-400');
+            return wrap('🎒', `${escapeHtml(_eventName(ev.actor_name, g))} handed out supplies`, 'text-slate-400');
         }
         case 'LIVE_KILL': {
             const distN = Number(ev.distance);
@@ -452,7 +468,7 @@ function _line(ev) {
             const dist = Number.isFinite(distN) && distN >= 0 ? ` <span class="text-slate-500 text-xs">${distN}u</span>` : '';
             const hp = Number.isFinite(hpN) && hpN >= 0 ? ` <span class="text-emerald-400 text-xs">${hpN}hp</span>` : '';
             return wrap('🎯',
-                `<b>${escapeHtml(_slotName(ev.killer_slot))}</b> <span class="text-slate-500">→</span> ${escapeHtml(_slotName(ev.victim_slot))}${dist}${hp}`,
+                `<b>${escapeHtml(_eventName(ev.killer, ev.killer_slot))}</b> <span class="text-slate-500">→</span> ${escapeHtml(_eventName(ev.victim, ev.victim_slot))}${dist}${hp}`,
                 'text-slate-300');
         }
         case 'KILL': {
@@ -466,7 +482,7 @@ function _line(ev) {
             return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-emerald-300 border-y border-emerald-500/20">ROUND START</div>`;
         case 'ROUND_END': {
             const top = (ev._top || [])
-                .map(sc => `${escapeHtml(sc.name || _slotName(sc.slot))} ${sc.xp} XP`)
+                .map(sc => `${escapeHtml(_eventName(sc.name, sc.slot))} ${sc.xp} XP`)
                 .join(' · ');
             return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-rose-300 border-y border-rose-500/20">ROUND END${top ? `<div class="font-normal normal-case tracking-normal text-slate-400 mt-0.5">${top}</div>` : ''}</div>`;
         }

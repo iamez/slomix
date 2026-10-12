@@ -4,7 +4,7 @@ import ts from 'typescript';
 import { expect, it } from 'vitest';
 
 const website = resolve(import.meta.dirname, '../../..');
-const version = '20261011-live-recovery';
+const version = '20261012-live-audit';
 function imports(file: string) {
   const source = ts.createSourceFile(file, readFileSync(resolve(website, file), 'utf8'),
     ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
@@ -20,4 +20,6 @@ it('invalidates the complete legacy Live import chain with one shared tonight mo
   expect(imports('js/app.js')).toContain(`./home.js?v=${version}`);
   expect(imports('js/home.js')).toContain(`./tonight.js?v=${version}`);
   expect(imports('js/tonight.js')).toContain(`./live-ticker.js?v=${version}`);
+  expect(imports('js/tonight.js')).toContain(`./live-state.js?v=${version}`);
+  expect(imports('js/live-ticker.js')).toContain(`./live-state.js?v=${version}`);
 });

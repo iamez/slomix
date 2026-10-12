@@ -31,11 +31,13 @@ Run `python3 liveview_tailer.py --check` to validate config and exit.
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import socket
 import sys
 import time
+import urllib.parse
 import urllib.request
 from collections import deque
 from pathlib import Path
@@ -122,9 +124,30 @@ def _url_allowed(url: str) -> bool:
     """https only — the internal secret rides in a header. Plain http is
     allowed solely toward loopback (local testing), never over the wire
     (coderabbit, PR #773)."""
-    if url.startswith("https://"):
-        return True
-    return url.startswith(("http://127.0.0.1", "http://localhost"))
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        if not parsed.hostname or parsed.username is not None or parsed.password is not None:
+            return False
+        # Validate the port before creating a credential-bearing request.
+        if parsed.port is not None and parsed.port == 0:
+            return False
+        if parsed.scheme == "https":
+            return True
+        if parsed.scheme != "http":
+            return False
+        if parsed.hostname == "localhost":
+            return True
+        address = ipaddress.ip_address(parsed.hostname)
+        return address.version == 4 and address.is_loopback
+    except ValueError:
+        return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """The configured endpoint is the only recipient of the internal token."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
 
 
 def _post_once(url: str, secret: str, batch: list[dict], source: str) -> bool:
@@ -144,7 +167,8 @@ def _post_once(url: str, secret: str, batch: list[dict], source: str) -> bool:
         },
     )
     try:
-        with urllib.request.urlopen(req, timeout=POST_TIMEOUT) as resp:  # noqa: S310 # nosec B310 — operator config URL, scheme checked
+        opener = urllib.request.build_opener(_NoRedirect())
+        with opener.open(req, timeout=POST_TIMEOUT) as resp:
             resp.read()
         return True
     except Exception as exc:  # noqa: BLE001 — the queue handles the failure

@@ -5,7 +5,7 @@ vi.mock('../../../js/utils.js', () => ({
   API_BASE: '/api', fetchJSON,
   escapeHtml: (value: unknown) => String(value ?? ''), safeInsertHTML: (host: HTMLElement, position: InsertPosition, html: string) => host.insertAdjacentHTML(position, html),
 }));
-vi.mock('../../../js/live-state.js?v=20260819-ladder', () => ({ getSnapshot: () => null }));
+vi.mock('../../../js/live-state.js?v=20261012-live-audit', () => ({ getSnapshot: () => null }));
 
 afterEach(() => { vi.useRealTimers(); localStorage.clear(); vi.resetModules(); fetchJSON.mockReset(); });
 
@@ -110,4 +110,68 @@ it('removes the previous worker from the DOM when its replacement read fails', a
     expect(document.getElementById('live-ticker')?.textContent).toContain('feed error');
     expect(document.getElementById('live-ticker')?.textContent).not.toContain('ROUND START');
   } finally { ticker.stopLiveTicker(); warn.mockRestore(); }
+});
+
+it('keeps historical event identity stable through slot reuse and clears the departed MVP and streak', async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = '<div id="view-live" class="active"></div><div id="live-ticker"></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true, objectives: true, support: true }));
+  let seq = 0;
+  const page = (events: Record<string, unknown>[]) => ({ events: events.map(e => ({ ...e, seq: ++seq, received_at: Date.now() / 1000 })), last_seq: seq });
+  fetchJSON.mockResolvedValueOnce(page([
+    { type: 'TEAM_CHANGE', slot: 3, team: 1, name: 'original' },
+    { type: 'TEAM_CHANGE', slot: 4, team: 2, name: 'victim' },
+    { type: 'KILL', killer_slot: 3, victim_slot: 4, killer: 'original', victim: 'victim' },
+    { type: 'KILL', killer_slot: 3, victim_slot: 4, killer: 'original', victim: 'victim' },
+  ])).mockResolvedValueOnce(page([
+    { type: 'DISCONNECT', slot: '3' },
+    { type: 'TEAM_CHANGE', slot: 3, team: 1, name: 'replacement' },
+    { type: 'KILL', killer_slot: 3, victim_slot: 4, killer: 'replacement', victim: 'victim' },
+  ])).mockResolvedValueOnce(page([
+    { type: 'LIVE_KILL', killer_slot: 3, victim_slot: 4, killer: 'original', victim: 'victim' },
+    { type: 'LIVE_KILL', killer_slot: 3, victim_slot: 4 },
+    { type: 'DYNAMITE', slot: 3, action: 'plant', objective: 'fixture' },
+    { type: 'REVIVE', slots: '3 4', actor_name: 'original', target_name: 'victim' },
+  ])).mockResolvedValue(page([]));
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker(); await vi.advanceTimersByTimeAsync(0);
+    expect(ticker.getLiveMVP()).toMatchObject({ name: 'original', score: 2 });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(ticker.getLiveMVP()).toMatchObject({ name: 'replacement', score: 1 });
+    expect(document.getElementById('live-ticker')?.textContent).not.toContain('3 streak');
+    await vi.advanceTimersByTimeAsync(3000);
+    const text = document.getElementById('live-ticker')!.textContent!;
+    expect(text).toContain('original → victim');
+    expect(text).toContain('#3 → #4');
+    expect(text).toContain('#3 planted dynamite at fixture');
+    expect(text).toContain('original revived victim');
+    expect(text).not.toContain('replacement → victim');
+  } finally { ticker.stopLiveTicker(); }
+});
+
+it('ignores invalid engine slots in roster, streak and MVP including partially numeric strings', async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = '<div id="view-live" class="active"></div><div id="live-ticker"></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true }));
+  let seq = 0;
+  const events: Record<string, unknown>[] = [];
+  for (const slot of [-1, 64, 1022, 2.5, true, null, '3bad', ...Array.from({ length: 70 }, (_, i) => 100 + i)]) {
+    events.push({ type: 'TEAM_CHANGE', slot, team: 1, name: 'invalid' },
+      ...Array.from({ length: 3 }, () => ({ type: 'KILL', killer_slot: slot, victim_slot: slot, killer: 'invalid', victim: 'invalid' })),
+      { type: 'REVIVE', slots: `${slot} 2` }, { type: 'DYNAMITE', slot, action: 'plant' });
+  }
+  fetchJSON.mockResolvedValueOnce({ events: events.map(e => ({ ...e, seq: ++seq, received_at: Date.now() / 1000 })), last_seq: events.length })
+    .mockResolvedValue({ events: [], last_seq: events.length });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker(); await vi.advanceTimersByTimeAsync(0);
+    expect(ticker.getLiveRoster().axis).toEqual([]);
+    expect(ticker.getLiveMVP()).toBeNull();
+    expect(document.getElementById('live-ticker')?.textContent).not.toContain('streak');
+  } finally { ticker.stopLiveTicker(); }
 });

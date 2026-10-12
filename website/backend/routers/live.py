@@ -33,6 +33,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from collections import deque
+from copy import deepcopy
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -51,6 +52,7 @@ _state = LiveStateReducer()
 
 _BUFFER_MAX = 1000
 _POST_MAX_EVENTS = 200
+_PROXY_MAX_BYTES = 2 * 1024 * 1024
 
 # Event types a tailer may publish — mirror of the parser's vocabulary that
 # is meaningful to spectators. SAY is included (public chat), TEAM_CHAT is
@@ -114,7 +116,7 @@ _UPSTREAM = (
 
 
 async def _proxy(path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    """Best-effort upstream GET; None on any failure (caller falls back)."""
+    """Bounded upstream GET; None on failure (caller reports unavailable)."""
     if not _UPSTREAM:
         return None
     url = f"{_UPSTREAM}/{path}"
@@ -129,7 +131,14 @@ async def _proxy(path: str, params: dict[str, Any] | None = None) -> dict[str, A
         req = urllib.request.Request(  # noqa: S310 — scheme validated above
             url, headers={"User-Agent": "slomix-live-proxy/1.0"})
         with urllib.request.urlopen(req, timeout=4) as resp:  # noqa: S310 # nosec B310
-            return json.loads(resp.read().decode("utf-8"))
+            payload = resp.read(_PROXY_MAX_BYTES + 1)
+            if len(payload) > _PROXY_MAX_BYTES:
+                raise ValueError("Live upstream response too large")
+            result = json.loads(payload.decode("utf-8"))
+            if not isinstance(result, dict):
+                raise ValueError("Live upstream response must be an object")
+            json.dumps(result, allow_nan=False)
+            return result
 
     try:
         return await asyncio.to_thread(_get)
@@ -151,51 +160,81 @@ class LiveEventBatch(BaseModel):
 @router.post("/events", dependencies=[Depends(require_internal_secret)])
 async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
     """Accept a batch of parsed live events from the log tailer."""
-    global _seq
+    global _seq, _state, _recent_livex_kills
     if len(batch.events) > _POST_MAX_EVENTS:
         raise HTTPException(status_code=413, detail="batch too large")
-    accepted = 0
     now = time.time()
     async with _lock:
-        for ev in batch.events:
-            etype = ev.type.upper()
-            if etype not in _ALLOWED_TYPES:
-                continue
-            if etype == "LIVE_KILL":
-                ks = ev.fields.get("killer_slot")
-                vs = ev.fields.get("victim_slot")
-                if isinstance(ks, int) and isinstance(vs, int):
-                    _recent_livex_kills[(ks, vs)] = now
-                    if len(_recent_livex_kills) > 64:
-                        cutoff = now - _KILL_DEDUP_SECONDS
-                        for key in [k for k, t in _recent_livex_kills.items()
-                                    if t < cutoff]:
-                            del _recent_livex_kills[key]
-            elif etype == "KILL":
-                ks = ev.fields.get("killer_slot")
-                vs = ev.fields.get("victim_slot")
-                seen = _recent_livex_kills.get((ks, vs))
-                if seen is not None and now - seen <= _KILL_DEDUP_SECONDS:
-                    continue  # LIVEX already carried this obituary
-            _seq += 1
-            record = {
-                **ev.fields,
-                "seq": _seq,
-                "type": etype,
-                "level_ms": ev.level_ms,
-                # LIVEX stamps epoch ms into level_ms; legacy3 stamps
-                # level-relative ms. Consumers must not have to guess.
-                "clock": "epoch" if etype.startswith("LIVE_") else "level",
-                "source": batch.source,
-                "received_at": now,
-            }
+        # A reducer can fail after changing several counters. Work on private
+        # state so a rejected batch cannot publish a prefix or poison retries.
+        state = deepcopy(_state)
+        recent_kills = _recent_livex_kills.copy()
+        seq = _seq
+        records = []
+        try:
+            for ev in batch.events:
+                etype = ev.type.upper()
+                if etype not in _ALLOWED_TYPES:
+                    continue
+                if etype in {"CONNECT", "DISCONNECT"}:
+                    slot = LiveStateReducer.client_slot(ev.fields)
+                    if slot is not None:
+                        for pair in [pair for pair in recent_kills if slot in pair]:
+                            del recent_kills[pair]
+                if etype == "LIVE_KILL":
+                    ks = ev.fields.get("killer_slot")
+                    vs = ev.fields.get("victim_slot")
+                    if isinstance(ks, int) and isinstance(vs, int):
+                        # Refresh insertion order; bound even a burst of unique
+                        # pairs inside the TTL to the event ring's capacity.
+                        recent_kills.pop((ks, vs), None)
+                        recent_kills[(ks, vs)] = now
+                        if len(recent_kills) > 64:
+                            cutoff = now - _KILL_DEDUP_SECONDS
+                            for key in [k for k, t in recent_kills.items()
+                                        if t < cutoff]:
+                                del recent_kills[key]
+                        while len(recent_kills) > _BUFFER_MAX:
+                            del recent_kills[next(iter(recent_kills))]
+                elif etype == "KILL":
+                    ks = ev.fields.get("killer_slot")
+                    vs = ev.fields.get("victim_slot")
+                    seen = recent_kills.get((ks, vs))
+                    if seen is not None and now - seen <= _KILL_DEDUP_SECONDS:
+                        continue  # LIVEX already carried this obituary
+                seq += 1
+                record = {
+                    **ev.fields,
+                    "seq": seq,
+                    "type": etype,
+                    "level_ms": ev.level_ms,
+                    # LIVEX stamps epoch ms into level_ms; legacy3 stamps
+                    # level-relative ms. Consumers must not have to guess.
+                    "clock": "epoch" if etype.startswith("LIVE_") else "level",
+                    "source": batch.source,
+                    "received_at": now,
+                }
+                # Refuse non-finite JSON before it can poison a later feed/state GET.
+                json.dumps(record, allow_nan=False)
+                record.update(state.event_names(record))
+                # Invalidate only an accepted map change: same-map confirmation
+                # and the reducer's rejected flipback do not change identity.
+                previous_map = state.current_map
+                state.apply(record)
+                if etype in {"ROUND_START", "INIT_GAME"} or state.current_map != previous_map:
+                    recent_kills.clear()
+                records.append(record)
+            json.dumps(state.snapshot(), allow_nan=False)
+        except (ValueError, TypeError, AttributeError, OverflowError) as exc:
+            raise HTTPException(status_code=422, detail="invalid live event fields") from exc
+        # There are no awaits between validation and publication under the lock.
+        for record in records:
             if len(_events) == _events.maxlen:
                 evicted = _events[0]
                 _evicted_by_type[evicted["type"]] = evicted["seq"]
             _events.append(record)
-            _state.apply(record)  # fold into the current-state snapshot
-            accepted += 1
-    return {"status": "ok", "accepted": accepted, "last_seq": _seq}
+        _state, _recent_livex_kills, _seq = state, recent_kills, seq
+    return {"status": "ok", "accepted": len(records), "last_seq": seq}
 
 
 @router.get("/feed")

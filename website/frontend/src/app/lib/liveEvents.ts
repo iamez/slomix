@@ -23,14 +23,19 @@ function weapon(mod: unknown): string {
   return typeof mod === 'string' ? mod.replace(/^MOD_/, '').toLowerCase().replace(/_/g, ' ') : '';
 }
 
-function who(names: SlotNames, slot: unknown, fallback = 'someone'): string {
-  const n = typeof slot === 'number' ? names.get(slot) : undefined;
-  return n ? stripEtColors(n) : fallback;
+function eventName(value: unknown, fallback = 'someone'): string {
+  return typeof value === 'string' && stripEtColors(value).trim() ? stripEtColors(value) : fallback;
 }
 
-function slots(names: SlotNames, raw: unknown): [string, string] {
-  const parts = typeof raw === 'string' ? raw.trim().split(/\s+/).map(Number) : [];
-  return [who(names, parts[0]), who(names, parts[1])];
+function slotName(slot: unknown): string {
+  const value = typeof slot === 'string' && /^-?\d+$/.test(slot) ? Number(slot) : slot;
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 && value < 64
+    ? `slot ${value}` : 'someone';
+}
+
+function slots(raw: unknown, actor?: unknown, target?: unknown): [string, string] {
+  const parts = typeof raw === 'string' ? raw.trim().split(/\s+/) : [];
+  return [eventName(actor, slotName(parts[0])), eventName(target, slotName(parts[1]))];
 }
 
 function flagName(raw: unknown): string {
@@ -41,12 +46,13 @@ function flagName(raw: unknown): string {
 /** Sentence for one event; null only for the kinds that carry nothing a
  *  reader wants (BEGIN, GAMETIME, INIT_GAME, the aggregate deltas); an
  *  unknown kind falls back to its name so nothing is silently lost. */
-export function describeEvent(e: LiveEvent, names: SlotNames): string | null {
+// The second argument remains for older callers; current names never identify history.
+export function describeEvent(e: LiveEvent, _currentNames: SlotNames): string | null {
   switch (e.type) {
     case 'KILL':
     case 'LIVE_KILL': {
-      const k = typeof e.killer === 'string' ? stripEtColors(e.killer) : who(names, e.killer_slot);
-      const v = typeof e.victim === 'string' ? stripEtColors(e.victim) : who(names, e.victim_slot);
+      const k = eventName(e.killer, slotName(e.killer_slot));
+      const v = eventName(e.victim, slotName(e.victim_slot));
       const w = weapon(e.mod);
       const extra = typeof e.distance === 'number' ? ` · ${Math.round(e.distance)} u` : '';
       const hp = typeof e.killer_health === 'number' ? ` · killer at ${e.killer_health} hp` : '';
@@ -57,34 +63,38 @@ export function describeEvent(e: LiveEvent, names: SlotNames): string | null {
       return `${team} ${String(e.verb ?? 'touched')} ${String(e.objective ?? 'an objective')}`;
     }
     case 'DYNAMITE':
-      return `${who(names, e.slot)} ${e.action === 'defuse' ? 'defused' : 'planted'} dynamite at ${String(e.objective ?? 'an objective')}`;
+      return `${eventName(e.name, slotName(e.slot))} ${e.action === 'defuse' ? 'defused' : 'planted'} dynamite at ${String(e.objective ?? 'an objective')}`;
     case 'FLAG_PICKUP':
-      return `${who(names, e.slot)} picked up ${flagName(e.flag)}`;
+      return `${eventName(e.name, slotName(e.slot))} picked up ${flagName(e.flag)}`;
     case 'OBJECTIVE_DESTROYED':
       return `objective destroyed: ${String(e.detail ?? '')}`.trim();
     case 'ANNOUNCE':
       return typeof e.text === 'string' ? e.text : null;
     case 'CALLVOTE':
-      return `${who(names, e.slot)} called a vote: ${String(e.vote ?? '')}`.trim();
+      return `${eventName(e.name, slotName(e.slot))} called a vote: ${String(e.vote ?? '')}`.trim();
     case 'VOTE_PASSED':
       return `vote passed${typeof e.vote === 'string' ? `: ${e.vote}` : ''}`;
     case 'REVIVE': {
-      const [a, b] = slots(names, e.slots);
+      const [a, b] = slots(e.slots, e.actor_name, e.target_name);
       return `${a} revived ${b}`;
     }
     case 'SUPPLY': {
-      const [a, b] = slots(names, e.slots);
+      const [a, b] = slots(e.slots, e.actor_name, e.target_name);
       return `${a} supplied ${b}`;
     }
+    case 'SHOVE': {
+      const [a, b] = slots(e.slots, e.actor_name, e.target_name);
+      return `${a} shoved ${b}`;
+    }
     case 'TEAM_CHANGE': {
-      const n = typeof e.name === 'string' ? stripEtColors(e.name) : who(names, e.slot);
+      const n = eventName(e.name, slotName(e.slot));
       const side = typeof e.team === 'number' ? SIDE[e.team] ?? `team ${e.team}` : 'a side';
       return `${n} → ${side}`;
     }
     case 'CONNECT':
-      return `${who(names, e.slot, `slot ${String(e.slot ?? '?')}`)} connected`;
+      return `${eventName(e.name, slotName(e.slot))} connected`;
     case 'DISCONNECT':
-      return `${who(names, e.slot, `slot ${String(e.slot ?? '?')}`)} left`;
+      return `${eventName(e.name, slotName(e.slot))} left`;
     case 'MAP':
     case 'LIVE_MAP':
       return `map ${String(e.map_name ?? '?')}`;
@@ -100,7 +110,7 @@ export function describeEvent(e: LiveEvent, names: SlotNames): string | null {
       return typeof e.text === 'string' ? e.text : 'score line';
     case 'SAY':
     case 'TEAM_CHAT_REDACTED':
-      return `${who(names, e.slot)}: ${e.type === 'SAY' && typeof e.text === 'string' ? e.text : '(team chat)'}`;
+      return `${eventName(e.name, slotName(e.slot))}: ${e.type === 'SAY' && typeof e.text === 'string' ? e.text : '(team chat)'}`;
     case 'BEGIN':
     case 'GAMETIME':
     case 'INIT_GAME':
@@ -135,13 +145,23 @@ function whenMs(e: LiveEvent): number {
  */
 export function foldDoubles(events: LiveEvent[]): LiveEvent[] {
   const out: LiveEvent[] = [];
-  let lastMap: { name: string; at: number } | null = null;
+  const unmatchedKills = new Set<LiveEvent>();
+  let lastMap = { name: '', at: 0 };
   for (const e of events) {
+    if (e.type === 'ROUND_START' || e.type === 'INIT_GAME') unmatchedKills.clear();
+    if (e.type === 'DISCONNECT' || e.type === 'CONNECT') {
+      for (const prior of unmatchedKills) {
+        if (String(prior.killer_slot) === String(e.slot) || String(prior.victim_slot) === String(e.slot)) unmatchedKills.delete(prior);
+      }
+    }
     if (e.type === 'LIVE_KILL') {
-      const twin = [...out].reverse().find((p) => p.type === 'KILL'
+      const twin = [...out].reverse().find((p) => unmatchedKills.has(p)
+        && ['killer', 'victim'].every((role) => typeof p[role] !== 'string' || typeof e[role] !== 'string'
+          || stripEtColors(p[role] as string) === stripEtColors(e[role] as string))
         && p.killer_slot === e.killer_slot && p.victim_slot === e.victim_slot
         && Math.abs(whenMs(p) - whenMs(e)) <= DOUBLE_WINDOW_MS);
       if (twin) {
+        unmatchedKills.delete(twin);
         if (typeof e.distance === 'number') twin.distance = e.distance;
         if (typeof e.killer_health === 'number') twin.killer_health = e.killer_health;
         continue;
@@ -157,13 +177,20 @@ export function foldDoubles(events: LiveEvent[]): LiveEvent[] {
       continue;
     }
     if (e.type === 'MAP' || e.type === 'LIVE_MAP') {
-      const name = String(e.map_name ?? '');
-      if (lastMap && lastMap.name === name && Math.abs(whenMs(e) - lastMap.at) <= 60_000) continue;
-      lastMap = { name, at: whenMs(e) };
+      const name = typeof e.map_name === 'string' ? e.map_name.trim() : '';
+      if (name) {
+        // A first/different named map establishes a new context. Repeated
+        // same-map confirmations carry no reset evidence; keep real twins.
+        if (lastMap.name !== name) unmatchedKills.clear();
+        if (lastMap.name === name && Math.abs(whenMs(e) - lastMap.at) <= 60_000) continue;
+        lastMap = { name, at: whenMs(e) };
+      }
       out.push({ ...e });
       continue;
     }
-    out.push({ ...e });
+    const copy = { ...e };
+    out.push(copy);
+    if (e.type === 'KILL') unmatchedKills.add(copy);
   }
   return out;
 }
