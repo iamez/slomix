@@ -7,13 +7,19 @@ keep requested/accepted snapshots distinct, recover failed requests, distinguish
 geometry failures, and fit authorized belief regions. Geometry verification
 reports coverage only; success does not certify gameplay alignment.
 
-Revalidation: 284 Python cases, 176 targeted frontend cases, Node 22.23.2
+Hearing reconstruction now names missing listener positions, invalid coordinates
+and uncertain audible-range boundaries separately from capture capability.
+Valid evidence survives partial reconstruction gaps. Actual ASGI requests with
+a fixture database retain these reasons for player and team views without
+claiming that modeled audibility proves hearing.
+
+Revalidation: 302 Python cases, 176 targeted frontend cases, Node 22.23.2
 TypeScript checks, Python lint and legacy JavaScript syntax checks. Existing
 functional and guard-mutation evidence remains valid for its recorded scope;
 no live deployment or new gameplay alignment is claimed by these checks.
 
-Pending: hearing reconstruction-gap reasons, broader positional validation and
-the separate runtime D4/D5 continuation. Preserve the complete original plan
+Pending: broader positional validation and the separate runtime D4/D5
+continuation. Preserve the complete original plan
 and handoff below. No service activation, database writes, push or merge is
 implied; this is a bounded review package awaiting the owner's PR decision.
 

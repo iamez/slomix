@@ -83,6 +83,7 @@ from website.backend.services.clock_inputs import (
     wave_position,
 )
 from website.backend.services.information_state import (
+    GUNFIRE_GAP_REASONS,
     HolderState,
     Locator,
     Region,
@@ -90,8 +91,8 @@ from website.backend.services.information_state import (
     apply_capability,
     contact_beliefs,
     group_by_holder,
-    gunfire_beliefs,
     obituary_beliefs,
+    reconstruct_gunfire,
 )
 from website.backend.services.information_state import to_dict as belief_payload
 from website.backend.services.reconstruction_accuracy import (
@@ -1118,7 +1119,7 @@ async def load_round_information_state(
     shots = await db.fetch_all("""
         SELECT guid, event_time, origin_x, origin_y, origin_z
         FROM proximity_shot_fired
-        WHERE round_id = $1 AND event_time <= $2 AND origin_x IS NOT NULL
+        WHERE round_id = $1 AND event_time <= $2
     """, (round_id, t_ms))
     locks = await db.fetch_all("""
         SELECT guid, target_guid, start_time FROM proximity_aim_lock
@@ -1136,10 +1137,11 @@ async def load_round_information_state(
     beliefs += contact_beliefs(
         [(r[0], _ensure_attackers(r[1])) for r in (engagements or [])],
         locate=locate)
-    beliefs += gunfire_beliefs(
-        [(r[0], r[1], float(r[2]), float(r[3]), float(r[4])) for r in (shots or [])],
+    hearing = reconstruct_gunfire(
+        [(r[0], r[1], r[2], r[3], r[4]) for r in (shots or [])],
         holders, audible_radius=AUDIBLE_GUNFIRE_RADIUS,
         locate=make_locator(tracks or {}, require_alive=True))
+    beliefs += hearing.beliefs
     beliefs += aim_lock_beliefs(
         [(r[0], r[1], r[2]) for r in (locks or [])], locate=locate)
 
@@ -1150,6 +1152,15 @@ async def load_round_information_state(
         states.setdefault(guid, HolderState(holder_guid=guid))
     apply_capability(
         states, {"capabilities": capture_policy.capabilities}, holders)
+
+    # Capture capability and reconstruction completeness are different facts.
+    # Keep valid beliefs when another shot cannot be modelled for this holder.
+    for guid, reasons in hearing.unavailable.items():
+        states[guid].unavailable["gunfire_reconstruction"] = (
+            "Gunfire reconstruction incomplete: "
+            + "; ".join(GUNFIRE_GAP_REASONS[reason] for reason in reasons)
+            + ". Admitted regions model potential audibility, not proof of hearing."
+        )
 
     # Allegiance is evaluated at the requested instant, independently of when
     # evidence was acquired. Overlapping lives cannot establish a unique side.

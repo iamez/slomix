@@ -323,8 +323,8 @@ class HolderState:
 
     holder_guid: str
     beliefs: list[BeliefItem] = field(default_factory=list)
-    #: source -> why it is unavailable. A channel that could not be captured is
-    #: named here rather than contributing silence.
+    #: source or reconstruction stage -> why coverage is incomplete. Missing
+    #: capture and modelling gaps are named separately, never as silence.
     unavailable: dict[str, str] = field(default_factory=dict)
 
 
@@ -334,55 +334,78 @@ def _capability_state(manifest: dict | None, flag: str) -> str:
     return (manifest.get("capabilities") or {}).get(flag, "unknown")
 
 
-def gunfire_beliefs(
-    shots: Iterable[tuple],
-    holders: Iterable[str],
-    *,
-    audible_radius: float,
+@dataclass(slots=True)
+class GunfireReconstruction:
+    """Admitted potential-audibility beliefs and per-holder modelling gaps."""
+
+    beliefs: list[BeliefItem] = field(default_factory=list)
+    unavailable: dict[str, tuple[str, ...]] = field(default_factory=dict)
+
+
+GUNFIRE_GAP_REASONS = {
+    "missing_listener": "living listener position at the shot time is unavailable",
+    "invalid_coordinates": "shot or listener coordinates/uncertainty are invalid",
+    "uncertain_range": "listener uncertainty intersects the model's audible-radius boundary",
+}
+
+
+def reconstruct_gunfire(
+    shots: Iterable[tuple], holders: Iterable[str], *, audible_radius: float,
     locate: Locator,
-) -> list[BeliefItem]:
-    """A shot is heard by whoever was close enough, as a REGION.
+) -> GunfireReconstruction:
+    """Model potential audibility, never actual hearing or shooter identity.
 
-    `shots` rows are (shooter_guid, event_time_ms, x, y, z).
-    `locate` must resolve a living listener at the shot time, never at the
-    replay slider time. Unknown positions cannot establish hearing. The full
-    reconstructed region must fit inside the hearing radius; its uncertainty
-    must not silently become a precise listening position.
-
-    ⛔ The shooter's telemetry coordinate never becomes the belief. What the
-    holder gets is a circle they could have localised the noise to, and it is
-    the same circle whether or not our row is exact.
-
-    ⚠️ `subject_guid` stays None. `proximity_shot_fired` has no target, and
-    firing proves a direction, not which player was perceived — so a shot can
-    never resolve WHO. That is what keeps `known_enemy_count` honest.
+    A whole event-time listener region must fit inside the radius to admit a
+    belief. A definitely outside region supplies no belief and no modelling
+    error. Missing/invalid positions and boundary intersections are explicit
+    gaps, independent of whether shot capture was enabled.
     """
     out: list[BeliefItem] = []
+    gaps: dict[str, set[str]] = defaultdict(set)
     holders = tuple(holders)
     for guid, t_ms, sx, sy, sz in shots:
-        if not all(math.isfinite(v) for v in (sx, sy, sz)):
-            continue
+        try:
+            origin = tuple(float(v) for v in (sx, sy, sz))
+            valid_origin = all(math.isfinite(v) for v in origin)
+        except (TypeError, ValueError, OverflowError):
+            valid_origin = False
         for holder in holders:
             if holder == guid:
                 continue
+            if not valid_origin:
+                gaps[holder].add("invalid_coordinates")
+                continue
             region = locate(holder, int(t_ms))
             if region is None:
+                gaps[holder].add("missing_listener")
                 continue
-            values = (region.x, region.y, region.z, region.radius)
-            if not all(math.isfinite(v) for v in values) or region.radius < 0:
+            try:
+                values = (region.x, region.y, region.z, region.radius)
+                valid_region = all(math.isfinite(v) for v in values) and region.radius >= 0
+            except (TypeError, ValueError, OverflowError):
+                valid_region = False
+            if not valid_region:
+                gaps[holder].add("invalid_coordinates")
                 continue
-            distance = math.dist((sx, sy, sz), (region.x, region.y, region.z))
+            distance = math.dist(origin, (region.x, region.y, region.z))
             if distance + region.radius > audible_radius:
+                if distance - region.radius <= audible_radius:
+                    gaps[holder].add("uncertain_range")
                 continue
             out.append(BeliefItem(
-                holder_guid=holder,
-                source="gunfire",
-                t_observed=int(t_ms),
-                region=Region(float(sx), float(sy), float(sz), GUNFIRE_REGION_RADIUS),
-                subject_guid=None,
-                capability="shot_fired",
+                holder_guid=holder, source="gunfire", t_observed=int(t_ms),
+                region=Region(*origin, GUNFIRE_REGION_RADIUS),
+                subject_guid=None, capability="shot_fired",
             ))
-    return out
+    return GunfireReconstruction(out, {holder: tuple(sorted(reasons)) for holder, reasons in gaps.items()})
+
+
+def gunfire_beliefs(
+    shots: Iterable[tuple], holders: Iterable[str], *, audible_radius: float,
+    locate: Locator,
+) -> list[BeliefItem]:
+    """Compatibility helper; loaders use reconstruct_gunfire to retain gaps."""
+    return reconstruct_gunfire(shots, holders, audible_radius=audible_radius, locate=locate).beliefs
 
 
 def counts_as_known(
