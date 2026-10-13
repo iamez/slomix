@@ -173,12 +173,17 @@ class LiveStateReducer:
             keys = ({"killer": "killer_slot", "victim": "victim_slot"}
                     if event.get("type") in {"KILL", "LIVE_KILL"} else
                     {"name": "slot"} if event.get("type") in {
-                        "DYNAMITE", "FLAG_PICKUP", "CALLVOTE", "DISCONNECT"} else {})
+                        "DYNAMITE", "FLAG_PICKUP", "CALLVOTE", "DISCONNECT", "TEAM_CHANGE"} else {})
         names = {}
+        at = event.get("received_at") or time.time()
+        # apply() will discard the old session before reducing this event.
+        # Name enrichment must not copy that discarded roster into the feed.
+        roster_current = (self._last_event_at is None
+                          or at - self._last_event_at <= _IDLE_RESET_SECONDS)
         for name_key, slot_key in keys.items():
             if isinstance(event.get(name_key), str) and event[name_key].strip():
                 continue
-            name = self._name_for_slot(self._slot(slots, slot_key))
+            name = self._name_for_slot(self._slot(slots, slot_key)) if roster_current else None
             names[name_key] = name if isinstance(name, str) and _is_named(name) else None
         return names
 

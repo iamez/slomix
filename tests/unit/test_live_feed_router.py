@@ -633,3 +633,41 @@ def test_invalid_suffix_does_not_publish_accepted_map_marker_or_advance_state(cl
     assert _post(client, [change]).status_code == 200
     last = client.get('/api/live/feed').json()['events'][-1]
     assert last['map_name'] == 'supply' and last['map_accepted'] is True
+
+
+@pytest.mark.parametrize('supplied', [{}, {'name': ''}, {'name': '  '}, {'name': None}])
+def test_team_change_freezes_missing_names_and_respects_connection_boundaries(client, supplied):
+    assert _post(client, [
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'Alice'}},
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 2, **supplied}},
+    ]).status_code == 200
+    before = client.get('/api/live/feed').json()['events']
+    assert before[-1]['name'] == 'Alice'
+    assert _post(client, [
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 2, 'name': 'Renamed'}},
+        {'type': 'CONNECT', 'fields': {'slot': 3}},
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, **supplied}},
+    ]).status_code == 200
+    after = client.get('/api/live/feed').json()['events']
+    assert after[:len(before)] == before
+    assert after[-3]['name'] == 'Renamed'
+    assert after[-1]['name'] is None
+
+
+def test_event_name_freeze_does_not_revive_roster_after_idle_reset(client, monkeypatch):
+    from types import SimpleNamespace
+
+    from website.backend.services.live_state import _IDLE_RESET_SECONDS
+
+    now = [1000.0]
+    clock = SimpleNamespace(time=lambda: now[0])
+    monkeypatch.setattr(live, 'time', clock)
+    monkeypatch.setattr(importlib.import_module('website.backend.services.live_state'), 'time', clock)
+    assert _post(client, [{'type': 'TEAM_CHANGE', 'fields': {
+        'slot': 3, 'team': 1, 'name': 'Old session'}}]).status_code == 200
+    now[0] += _IDLE_RESET_SECONDS + 1
+    assert _post(client, [{'type': 'TEAM_CHANGE', 'fields': {
+        'slot': 3, 'team': 2, 'name': ''}}]).status_code == 200
+    events = client.get('/api/live/feed').json()['events']
+    assert events[-1]['name'] is None
+    assert client.get('/api/live/state').json()['roster']['allies'][0]['name'] == 'slot 3'
