@@ -96,6 +96,32 @@ async def resolve_composite_scope(db, *, gaming_session_id=None, session_date=No
     """, (gaming_session_id,))
     if not rows:
         raise HTTPException(status_code=404, detail="No accepted non-bot rounds in this gaming session.")
+    # A linked round_id cannot disambiguate a canonical key: historical
+    # proximity links can point at the wrong round. Refuse the entire result
+    # rather than publish partial metrics or silently count both sessions.
+    collisions = await db.fetch_all(f"""
+        WITH accepted_keys AS (
+            SELECT gaming_session_id, round_start_unix, map_name, round_number,
+                   CAST(round_date AS date) AS round_date
+            FROM rounds WHERE {_ACCEPTED}
+              AND gaming_session_id IS NOT NULL AND round_start_unix IS NOT NULL
+        )
+        SELECT other.gaming_session_id
+        FROM accepted_keys chosen JOIN accepted_keys other
+          ON chosen.round_start_unix = other.round_start_unix
+         AND chosen.map_name = other.map_name
+         AND chosen.round_number = other.round_number
+         AND chosen.round_date = other.round_date
+         AND chosen.gaming_session_id <> other.gaming_session_id
+        WHERE chosen.gaming_session_id = $1
+        LIMIT 1
+    """, (gaming_session_id,))
+    if collisions:
+        raise HTTPException(status_code=409, detail={
+            "code": "ambiguous_round_key",
+            "message": "An accepted round key belongs to multiple gaming sessions; composite metrics are unavailable.",
+            "gaming_session_id": gaming_session_id,
+        })
     return CompositeScope(
         gaming_session_id=gaming_session_id,
         dates=tuple(sorted({r[3] for r in rows if r[3]})),

@@ -104,3 +104,20 @@ async def test_missing_start_is_separate_exact_fallback_not_timestamp_zero():
     assert params[5:] == ([7], ['radar'], [1], [date(2026, 8, 11)])
     assert '_rf.rid = round_id' in metric and '_rf.rd = session_date' in metric
     assert 'NOT IN (SELECT _known.round_start_unix' in metric
+
+
+@pytest.mark.asyncio
+async def test_shared_accepted_round_key_refuses_metrics_and_coverage():
+    class CollisionDB(ScopeDB):
+        async def fetch_all(self, query, params=None):
+            if 'WITH accepted_keys AS' in query:
+                self.queries.append((query, params))
+                return [(43,)]
+            return await super().fetch_all(query, params)
+
+    db = CollisionDB()
+    with pytest.raises(HTTPException) as error:
+        await get_composite_stats(db=db, gaming_session_id=42, session_date=None)
+    assert error.value.status_code == 409
+    assert error.value.detail['code'] == 'ambiguous_round_key'
+    assert not any('WITH session_pcs' in q or 'SELECT COUNT(*) FROM proximity' in q for q, _ in db.queries)

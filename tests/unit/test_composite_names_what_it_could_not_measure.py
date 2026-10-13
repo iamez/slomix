@@ -93,6 +93,8 @@ class _ScriptedDb:
         self.latest_date = latest_date
 
     async def fetch_all(self, query, params=None):
+        if "WITH accepted_keys AS" in query:
+            return []
         if "SELECT round_start_unix, map_name, round_number" in query:
             return [(1787788800, "supply", 1, "2026-08-27")]
         if "GROUP BY gaming_session_id" in query:

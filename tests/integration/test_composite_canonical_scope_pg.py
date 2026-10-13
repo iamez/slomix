@@ -137,6 +137,31 @@ async def exercise_composite_resolution(conn):
     assert by_id.json() == by_date.json()  # Bot-only session44 cannot create a false409.
     assert ambiguous.status_code == 409
     assert by_id.json()['coverage']['source_rows']['kill_outcomes'] == 3
+    # No round_id (including a plausible linked ID) may choose between two
+    # accepted sessions owning the same full canonical key.
+    anchor = "(9,44,1,true,true,'completed',6000,'supply','2026-08-12')"
+    collision = "(9,44,1,true,false,'completed',1000,'supply','2026-08-11')"
+    db = FixtureDB(PREFIX.replace(anchor, collision))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://fixture') as client:
+        shared = await client.get('/api/skill/composite?gaming_session_id=42')
+        other = await client.get('/api/skill/composite?gaming_session_id=44')
+    assert shared.status_code == other.status_code == 409
+    assert shared.json()['detail']['code'] == 'ambiguous_round_key'
+    assert not any('WITH session_pcs' in q for q, _ in db.queries)
+    # The date is part of the key. Rejected/bot/R0 neighbours do not own it.
+    for neighbour in [
+        collision.replace('2026-08-11', '2026-08-13'),
+        collision.replace('true,false', 'true,true'),
+        collision.replace('true,false', 'false,false'),
+        collision.replace('completed', 'cancelled'),
+        collision.replace('completed', 'orphan'),
+        collision.replace('(9,44,1,', '(9,44,0,'),
+        collision.replace('(9,44,1,', '(9,42,1,'),
+    ]:
+        db = FixtureDB(PREFIX.replace(anchor, neighbour))
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url='http://fixture') as client:
+            admitted = await client.get('/api/skill/composite?gaming_session_id=42')
+        assert admitted.status_code == 200, (neighbour, admitted.text)
     # Move just the timestamp-less accepted fixture to a newer date. Default
     # discovery must use the same fallback rather than silently pick old data.
     newer = PREFIX.replace("(7,42,1,true,false,NULL,NULL,'radar','2026-08-11')",
@@ -148,4 +173,5 @@ async def exercise_composite_resolution(conn):
     assert default['gaming_session_id'] == 42
     assert any(params == ('2026-08-14',) for _query, params in db.queries)
     return {'id_status': by_id.status_code, 'real_plus_bot_status': by_date.status_code,
-            'two_real_status': ambiguous.status_code, 'kill_outcomes': 3, 'default_date': '2026-08-14'}
+            'two_real_status': ambiguous.status_code, 'shared_key_status': shared.status_code,
+            'non_owner_controls': 7, 'kill_outcomes': 3, 'default_date': '2026-08-14'}
