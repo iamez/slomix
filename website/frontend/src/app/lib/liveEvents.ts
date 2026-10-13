@@ -97,6 +97,7 @@ export function describeEvent(e: LiveEvent, _currentNames: SlotNames): string | 
       return `${eventName(e.name, slotName(e.slot))} left`;
     case 'MAP':
     case 'LIVE_MAP':
+      if (e.map_accepted === false) return null;
       return `map ${String(e.map_name ?? '?')}`;
     case 'GAMETYPE':
       return `game type ${String(e.gametype ?? '?')}`;
@@ -198,6 +199,9 @@ export function foldDoubles(events: LiveEvent[]): LiveEvent[] {
       continue;
     }
     if (e.type === 'MAP' || e.type === 'LIVE_MAP') {
+      // New feeds publish the reducer's decision; delayed flipbacks are not
+      // context boundaries. Older envelopes keep their existing behavior.
+      if (e.map_accepted === false) continue;
       const name = typeof e.map_name === 'string' ? e.map_name.trim() : '';
       if (name) {
         // A first/different named map establishes a new context. Repeated

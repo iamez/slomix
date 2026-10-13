@@ -595,3 +595,41 @@ def test_name_enrichment_cannot_link_across_identity_boundary(client, boundary):
                    _named_kill(killer='new context', victim='victim')])
     events = client.get('/api/live/feed').json()['events']
     assert events[-1]['type'] == 'KILL' and 'duplicate_of' not in events[-1]
+
+
+@pytest.mark.parametrize('name,accepted', [(' supply ', True), ('radar', False), ('goldrush', True), ('', False), ('   ', False), (None, False)])
+def test_feed_marks_reducer_accepted_map_without_trusting_producer(client, monkeypatch, name, accepted):
+    monkeypatch.setattr(live.time, 'time', lambda: 1000.0)
+    _post(client, [{'type': 'MAP', 'fields': {'map_name': 'radar'}},
+                   {'type': 'MAP', 'fields': {'map_name': 'supply'}}])
+    response = _post(client, [_named_kill(killer='source killer', victim='source victim'),
+                             {'type': 'LIVE_MAP', 'fields': {'map_name': name, 'map_accepted': not accepted}},
+                             _dedup_kill('LIVE_KILL')])
+    assert response.status_code == 200
+    events = client.get('/api/live/feed').json()['events']
+    assert [e['map_accepted'] for e in events[:2]] == [True, True]
+    assert events[3]['map_accepted'] is accepted
+    expected = name.strip() if accepted else 'supply'
+    assert client.get('/api/live/state').json()['current_map'] == expected
+    assert 'map_accepted' not in events[2] and 'map_accepted' not in events[4]
+
+
+@pytest.mark.parametrize('kind', sorted(live._ALLOWED_TYPES - {'MAP', 'LIVE_MAP'}))  # noqa: SLF001
+def test_map_acceptance_marker_cannot_be_forged_on_other_events(client, kind):
+    response = _post(client, [{'type': kind, 'fields': {'map_accepted': True}}])
+    assert response.status_code == 200
+    events = client.get('/api/live/feed', params={'types': kind}).json()['events']
+    assert len(events) == 1
+    assert 'map_accepted' not in events[0]
+
+
+def test_invalid_suffix_does_not_publish_accepted_map_marker_or_advance_state(client):
+    _post(client, [{'type': 'MAP', 'fields': {'map_name': 'radar'}}])
+    before = deepcopy((live._state.__dict__, list(live._events), live._seq))  # noqa: SLF001
+    change = {'type': 'MAP', 'fields': {'map_name': 'supply', 'map_accepted': False}}
+    invalid = {'type': 'LIVE_MAP', 'fields': {'map_name': ['invalid'], 'map_accepted': True}}
+    assert _post(client, [change, invalid]).status_code == 422
+    assert (live._state.__dict__, list(live._events), live._seq) == before  # noqa: SLF001
+    assert _post(client, [change]).status_code == 200
+    last = client.get('/api/live/feed').json()['events'][-1]
+    assert last['map_name'] == 'supply' and last['map_accepted'] is True

@@ -141,3 +141,23 @@ it('does not replace known conflicting identity or an unrelated event via an enr
   expect(foldDoubles([original, conflict])).toHaveLength(2);
   expect(foldDoubles([{ seq: 1, type: 'SAY', name: 'Speaker' }, conflict])).toHaveLength(2);
 });
+
+it.each([
+  ['radar', false, 1], ['supply', true, 1], ['goldrush', true, 2], ['', false, 1],
+])('uses accepted map context for kill pairing: %s accepted=%s', (map_name, map_accepted, killCount) => {
+  const events = [
+    { seq: 1, type: 'MAP', map_name: 'radar', map_accepted: true, received_at: 999 },
+    { seq: 2, type: 'MAP', map_name: 'supply', map_accepted: true, received_at: 999.5 },
+    { seq: 3, type: 'KILL', killer_slot: 3, victim_slot: 5, killer: 'Source A', victim: 'Source B', received_at: 1000 },
+    { seq: 4, type: 'LIVE_MAP', map_name, map_accepted, received_at: 1000.5 },
+    { seq: 5, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, distance: 120, received_at: 1001 },
+  ];
+  const folded = foldDoubles(events);
+  expect(folded.filter(e => e.type === 'KILL')).toHaveLength(killCount as number);
+  if (!map_accepted) {
+    expect(folded.some(e => e.seq === 4)).toBe(false);
+    expect(describeEvent(events[3], NAMES)).toBeNull();
+  }
+  if (killCount === 1) expect(describeEvent(folded.find(e => e.type === 'KILL')!, NAMES))
+    .toBe('Source A killed Source B · 120 u');
+});

@@ -224,8 +224,9 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                 }
                 # Refuse non-finite JSON before it can poison a later feed/state GET.
                 json.dumps(record, allow_nan=False)
-                # The producer cannot forge a link to another historical row.
+                # The producer cannot forge historical links or map acceptance.
                 record.pop("duplicate_of", None)
+                record.pop("map_accepted", None)
                 if duplicate_of is not None:
                     record["duplicate_of"] = duplicate_of
                 else:
@@ -245,6 +246,11 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                 # and the reducer's rejected flipback do not change identity.
                 previous_map = state.current_map
                 state.apply(record)
+                if etype in {"MAP", "LIVE_MAP"}:
+                    map_name = record.get("map_name")
+                    record["map_accepted"] = bool(
+                        isinstance(map_name, str) and map_name.strip()
+                        and state.current_map == map_name.strip())
                 if etype in {"ROUND_START", "INIT_GAME"} or state.current_map != previous_map:
                     recent_kills.clear()
                 records.append(record)
