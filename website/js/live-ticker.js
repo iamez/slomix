@@ -62,8 +62,8 @@ let _interval = null;
 let _lastFetchOk = null;   // null = never fetched, false = feed erroring
 
 // Live roster derived from the feed: slot -> {name, team}. TEAM_CHANGE
-// carries the engine team (1=Axis, 2=Allies, 3=spectator); DISCONNECT
-// clears the slot. INIT_GAME does NOT clear — players re-announce
+// carries the engine team (1=Axis, 2=Allies, 3=spectator); CONNECT and
+// DISCONNECT clear the slot. INIT_GAME does NOT clear — players re-announce
 // themselves via userinfo right after a map load, so clearing would blink.
 const _roster = new Map();
 let _rosterUpdatedAt = 0;
@@ -87,7 +87,7 @@ function _rosterApply(ev) {
             _roster.set(slot, { name: ev.name || `slot ${slot}`, team: ev.team });
         }
         _rosterUpdatedAt = Date.now();
-    } else if (ev.type === 'DISCONNECT') {
+    } else if (ev.type === 'DISCONNECT' || ev.type === 'CONNECT') {
         _roster.delete(slot);
         _mvp.delete(slot);
         _streak.delete(slot);

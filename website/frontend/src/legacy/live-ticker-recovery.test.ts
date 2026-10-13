@@ -112,7 +112,7 @@ it('removes the previous worker from the DOM when its replacement read fails', a
   } finally { ticker.stopLiveTicker(); warn.mockRestore(); }
 });
 
-it('keeps historical event identity stable through slot reuse and clears the departed MVP and streak', async () => {
+it.each(['DISCONNECT', 'CONNECT'])('keeps historical identity and clears MVP/streak at %s', async (boundary) => {
   vi.useFakeTimers();
   document.body.innerHTML = '<div id="view-live" class="active"></div><div id="live-ticker"></div>';
   Object.defineProperty(document, 'hidden', { configurable: true, value: false });
@@ -125,7 +125,7 @@ it('keeps historical event identity stable through slot reuse and clears the dep
     { type: 'KILL', killer_slot: 3, victim_slot: 4, killer: 'original', victim: 'victim' },
     { type: 'KILL', killer_slot: 3, victim_slot: 4, killer: 'original', victim: 'victim' },
   ])).mockResolvedValueOnce(page([
-    { type: 'DISCONNECT', slot: '3' },
+    { type: boundary, slot: '3' },
     { type: 'TEAM_CHANGE', slot: 3, team: 1, name: 'replacement' },
     { type: 'KILL', killer_slot: 3, victim_slot: 4, killer: 'replacement', victim: 'victim' },
   ])).mockResolvedValueOnce(page([

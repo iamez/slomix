@@ -192,6 +192,17 @@ class LiveStateReducer:
                     kill[role] = name
                     kill['_' + role + '_pending'] = False
 
+    def _clear_connection(self, slot: int) -> dict[str, Any] | None:
+        """A new CONNECT is a boundary even if the old DISCONNECT was lost."""
+        entry = self._roster.pop(slot, None)
+        self._live_stats.pop(slot, None)
+        self._positions.pop(slot, None)
+        for kill in self._recent_kills:
+            for role in ('killer', 'victim'):
+                if kill[role + '_slot'] == slot:
+                    kill['_' + role + '_pending'] = False
+        return entry
+
     def _live_stat(self, slot: int) -> dict[str, Any]:
         return self._live_stats.setdefault(
             slot, {"kills": 0, "deaths": 0,
@@ -287,6 +298,8 @@ class LiveStateReducer:
 
         elif etype in ("CONNECT", "BEGIN"):
             slot = self._slot(ev)
+            if slot is not None and etype == "CONNECT":
+                self._clear_connection(slot)
             if slot is not None and slot not in self._roster:
                 self._roster[slot] = {"name": f"slot {slot}", "team": None,
                                       "connected_at": at, "team_since": at}
@@ -294,15 +307,7 @@ class LiveStateReducer:
         elif etype == "DISCONNECT":
             slot = self._slot(ev)
             if slot is not None:
-                entry = self._roster.pop(slot, None)
-                self._live_stats.pop(slot, None)
-                self._positions.pop(slot, None)
-                # An unresolved historical name must never bind to the next
-                # occupant of this engine slot. Known names remain unchanged.
-                for kill in self._recent_kills:
-                    for role in ('killer', 'victim'):
-                        if kill[role + '_slot'] == slot:
-                            kill['_' + role + '_pending'] = False
+                entry = self._clear_connection(slot)
                 # Only log a departure for a named player who was on a side —
                 # a bare CONNECT slot that never picked a team isn't a "left".
                 if entry and self._side(entry.get("team")) and _is_named(entry.get("name")):
