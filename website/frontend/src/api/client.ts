@@ -500,10 +500,7 @@ export const api = {
     );
   },
 
-  // Storytelling / Smart Stats (Codex SS-D — all gsid/session_date-scoped
-  // via StoryScope, EXCEPT getCompositeStats: /skill/composite is a
-  // different router, outside this program's scope-resolver conversion,
-  // and still only accepts a single session_date).
+  // Storytelling / Smart Stats: prefer the canonical gaming session ID.
   getStoryKillImpact: (scope: StoryScope, limit = 20) => {
     const params = storyScopeParams(scope);
     params.set('limit', String(limit));
@@ -546,8 +543,13 @@ export const api = {
   getStoryBoxScore: (scope: StoryScope) =>
     get<BoxScoreResponse>(`/storytelling/box-score?${storyScopeParams(scope).toString()}`),
 
-  getCompositeStats: (sessionDate: string) =>
-    get<CompositeStatsResponse>(`/skill/composite?session_date=${sessionDate}`),
+  getCompositeStats: (sessionDate: string | null, gamingSessionId?: number | null) => {
+    const params = gamingSessionId != null
+      ? storyScopeParams({ gamingSessionId })
+      : sessionDate ? storyScopeParams({ sessionDate }) : null;
+    if (!params) throw new Error('composite scope required');
+    return get<CompositeStatsResponse>(`/skill/composite?${params.toString()}`);
+  },
 
   // Auth
   getAuthMe: async (): Promise<AuthUser | null> => {

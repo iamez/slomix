@@ -48,6 +48,8 @@ class _MovementMixin:
               AND r.round_number IN (1, 2)
               AND r.is_bot_round IS DISTINCT FROM TRUE
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND (r.round_status IN ('completed', 'substitution')
+                   OR r.round_status IS NULL)
               AND pt.total_distance IS NOT NULL
             GROUP BY LEFT(pt.player_guid, 8)
         """, (scope.gaming_session_id,))
