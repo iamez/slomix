@@ -174,9 +174,8 @@ async def test_composite_session_scope_excludes_cancelled_rounds():
     rounds; a composite computed with one disagreed with the same story's
     scoreboard (sessions 153, 84, 83, 80 carry rounds that pass the
     validity+bot gates and fail the status gate)."""
-    from website.backend.routers import skill_router
-
     from tests.unit.test_composite_canonical_scope import ScopeDB
+    from website.backend.routers import skill_router
 
     db = ScopeDB()
     await skill_router.get_composite_stats(gaming_session_id=154, db=db)
