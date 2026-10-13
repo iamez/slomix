@@ -94,6 +94,7 @@ function _mergeKillEnrichment(ev) {
     for (const role of roles) {
         if (!prior[role] && typeof ev[role] === 'string' && ev[role].trim()) prior[role] = ev[role];
     }
+    _learnKillNames(ev, true);
     return true;
 }
 
@@ -314,22 +315,23 @@ function _liveKillActive() {
     return (Date.now() / 1000 - _liveKillLastAt) < 120;
 }
 
+// Learn identity independently of effects. Enrichment is historical evidence,
+// so it may fill a placeholder but must not overwrite a later roster rename.
+function _learnKillNames(ev, onlyMissing = false) {
+    for (const [rawSlot, name] of [[ev.killer_slot, ev.killer], [ev.victim_slot, ev.victim]]) {
+        const slot = _clientSlot(rawSlot);
+        if (slot == null || typeof name !== 'string' || !name.trim() || name.startsWith('#')) continue;
+        const prior = _roster.get(slot) || {};
+        if (onlyMissing && prior.name && prior.name !== `#${slot}` && prior.name !== `slot ${slot}`) continue;
+        _roster.set(slot, { name, team: prior.team ?? null });
+    }
+}
+
 function _combatApply(ev) {
     if (ev.type === 'LIVE_KILL') { _liveKillLastAt = ev.received_at || (Date.now() / 1000); }
     if (ev.type === 'KILL') {
         const k = _clientSlot(ev.killer_slot), v = _clientSlot(ev.victim_slot);
-        // Kill lines carry slot AND name for both parties — the densest
-        // slot->name source we have. Learn from them so objective/support
-        // events (slot only) resolve to names even before a TEAM_CHANGE for
-        // that slot arrives (the '#6 planted' problem after a fresh buffer).
-        if (k != null && ev.killer && !String(ev.killer).startsWith('#')) {
-            const e = _roster.get(k) || {};
-            _roster.set(k, { name: ev.killer, team: e.team ?? null });
-        }
-        if (v != null && ev.victim && !String(ev.victim).startsWith('#')) {
-            const e = _roster.get(v) || {};
-            _roster.set(v, { name: ev.victim, team: e.team ?? null });
-        }
+        _learnKillNames(ev);
         if (k != null && k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
         if (v != null) _streak.set(v, 0);
         ev._streak = k != null && k !== v ? _streak.get(k) : 0;

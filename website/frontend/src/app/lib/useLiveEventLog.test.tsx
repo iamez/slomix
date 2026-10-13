@@ -50,3 +50,29 @@ it('keeps compatibility envelope first-seen ages monotonic and cleans up on unmo
   unmount();
   expect(vi.getTimerCount()).toBe(0);
 });
+
+
+it.each(['1960-01-01', '2040-01-01'])('anchors compatibility event timestamps independently of browser time %s', (date) => {
+  vi.setSystemTime(new Date(date));
+  const { result } = renderHook(() => useLiveEventLog());
+  act(() => result.current.append([{ seq: 1, type: 'ANNOUNCE', received_at: 1000 }]));
+  expect(result.current.log.map(e => e.seq)).toEqual([1]);
+  act(() => vi.advanceTimersByTime(300000));
+  act(() => result.current.append([{ seq: 1, type: 'ANNOUNCE', received_at: 1000 }]));
+  act(() => vi.advanceTimersByTime(300001));
+  expect(result.current.log).toHaveLength(0);
+});
+
+it('adopts a source clock after untimed compatibility rows without renewing their age', () => {
+  vi.setSystemTime(new Date('2040-01-01'));
+  const { result } = renderHook(() => useLiveEventLog());
+  act(() => result.current.append([{ seq: 1, type: 'ROUND_START' }]));
+  act(() => vi.advanceTimersByTime(300000));
+  act(() => result.current.append([{ seq: 2, type: 'ANNOUNCE', received_at: 1000 }]));
+  expect(result.current.log.map(e => e.received_at)).toEqual([700, 1000]);
+  act(() => vi.advanceTimersByTime(300001));
+  expect(result.current.log.map(e => e.seq)).toEqual([2]);
+  act(() => result.current.append([], 1300.001));
+  act(() => vi.advanceTimersByTime(300000));
+  expect(result.current.log).toHaveLength(0);
+});

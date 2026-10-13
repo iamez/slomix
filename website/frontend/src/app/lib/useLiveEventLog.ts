@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LiveEvent } from './liveEvents';
 
 const RETENTION_SECONDS = 600;
-type ClockAnchor = { server: number; monotonic: number };
+type ClockAnchor = { server: number; monotonic: number; sourceBased: boolean };
 const projectedTime = (anchor: ClockAnchor) =>
   anchor.server + Math.max(0, performance.now() - anchor.monotonic) / 1000;
 const recent = (events: LiveEvent[], now: number) => events.filter((event) =>
@@ -15,12 +15,24 @@ export function useLiveEventLog() {
   const clock = useRef<ClockAnchor | null>(null);
   const clear = useCallback(() => { clock.current = null; setLog([]); }, []);
   const append = useCallback((events: LiveEvent[], serverTime?: number | null) => {
-    // Older envelopes use first-seen browser time once, then monotonic elapsed
-    // time. A browser clock adjustment must never renew the retention window.
-    const now = typeof serverTime === 'number' && Number.isFinite(serverTime)
-      ? serverTime : clock.current ? projectedTime(clock.current) : Date.now() / 1000;
-    clock.current = { server: now, monotonic: performance.now() };
-    setLog((previous) => recent([...previous, ...events
+    // A compatibility envelope can omit server_time while retaining server
+    // received_at values. Infer that clock from the newest record, never the
+    // browser wall clock; elapsed retention still advances monotonically.
+    const timestamps = events.map((event) => event.received_at)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    const explicitTime = typeof serverTime === 'number' && Number.isFinite(serverTime);
+    const sourceTime = explicitTime ? serverTime : timestamps.length ? Math.max(...timestamps) : undefined;
+    const previousTime = clock.current ? projectedTime(clock.current) : undefined;
+    const sourceBased = clock.current?.sourceBased ?? false;
+    const now = explicitTime ? serverTime : sourceTime !== undefined
+      ? sourceBased ? Math.max(previousTime ?? sourceTime, sourceTime) : sourceTime
+      : previousTime ?? Date.now() / 1000;
+    // Earlier untimed rows used a first-seen local anchor. When source time
+    // becomes available, translate that anchor without renewing their age.
+    const shift = !sourceBased && sourceTime !== undefined && previousTime !== undefined ? now - previousTime : 0;
+    clock.current = { server: now, monotonic: performance.now(), sourceBased: sourceBased || sourceTime !== undefined };
+    setLog((previous) => recent([...previous.map((event) => shift
+      ? { ...event, received_at: (event.received_at as number) + shift } : event), ...events
       .filter((event) => !previous.some((old) => old.seq === event.seq))
       .map((event) => ({ ...event, received_at: event.received_at ?? now }))], now).slice(-200));
   }, []);

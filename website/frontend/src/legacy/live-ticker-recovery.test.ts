@@ -200,10 +200,12 @@ it.each([false, true])('retains named twin evidence across polls without double 
     expect(score).toBe(1);
     await vi.advanceTimersByTimeAsync(3000);
     expect(ticker.getLiveMVP().score).toBe(score);
+    expect(ticker.getLiveMVP().name).toBe('Source A');
     const text = document.getElementById('live-ticker')!.textContent!;
     expect(text).toContain('Source A');
     expect(text).toContain('Source B');
-    expect(text.match(/Source A/g)).toHaveLength(1);
+    expect(text.match(/Source A/g)).toHaveLength(2); // One MVP badge and one obituary.
+    expect(text.match(/Source B/g)).toHaveLength(1);
     expect(text.match(/→/g)).toHaveLength(1);
     expect(text).not.toContain('#3 → #5');
     expect(text).toContain('120u');
@@ -340,5 +342,27 @@ it('does not consume a LIVE kill when its pending legacy row was evicted in the 
     await vi.advanceTimersByTimeAsync(0);
     const text = document.getElementById('live-ticker')!.textContent!;
     expect(text).toContain('#3 → #5'); expect(text).toContain('120u');
+  } finally { ticker.stopLiveTicker(); }
+});
+
+
+it('does not replace a later roster rename with historical enrichment', async () => {
+  vi.useFakeTimers();
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const now = Date.now() / 1000;
+  fetchJSON.mockResolvedValueOnce({ last_seq: 4, events: [
+    { seq: 1, type: 'ROUND_START', received_at: now },
+    { seq: 2, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, received_at: now },
+    { seq: 3, type: 'TEAM_CHANGE', slot: 3, team: 1, name: 'Current name', received_at: now + 0.1 },
+    { seq: 4, type: 'KILL', duplicate_of: 2, killer_slot: 3, victim_slot: 5, killer: 'Historical name', victim: 'Victim', received_at: now + 0.2 },
+  ] }).mockResolvedValue({ last_seq: 4, events: [] });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  ticker.startLiveTicker();
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ticker.getLiveMVP()).toMatchObject({ name: 'Current name', score: 1 });
+    expect(ticker.getLiveRoster().axis).toEqual(['Current name']);
   } finally { ticker.stopLiveTicker(); }
 });

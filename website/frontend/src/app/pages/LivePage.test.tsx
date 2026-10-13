@@ -482,3 +482,19 @@ it('enriches a previously polled LIVE_KILL once with its source names', async ()
   expect(screen.getByText(/Source A killed Source B/).textContent).toContain('120 u');
   expect(calls).toBeGreaterThanOrEqual(2);
 });
+
+
+it('shows and expires compatibility events with a browser clock far ahead of the source', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'Date'] });
+  vi.setSystemTime(new Date('2040-01-01'));
+  const client = mountFeedProbe((since) => ({ status: 'ok', stream_id: 'compat-clock', last_seq: 1,
+    oldest_seq: 1, events: since === 0
+      ? [{ seq: 1, type: 'ANNOUNCE', text: 'compatibility announcement', received_at: 1000 }] : [] }));
+  try {
+    for (let i = 0; i < 10; i++) await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    expect(screen.getByText('compatibility announcement')).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(600001); });
+    expect(screen.queryByText('compatibility announcement')).not.toBeInTheDocument();
+    expect(screen.getByText('quiet — no renderable events in the recent feed')).toBeInTheDocument();
+  } finally { cleanup(); client.clear(); vi.useRealTimers(); }
+});
