@@ -227,6 +227,7 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                 # The producer cannot forge historical links or map acceptance.
                 record.pop("duplicate_of", None)
                 record.pop("map_accepted", None)
+                record.pop("map_changed", None)
                 if duplicate_of is not None:
                     record["duplicate_of"] = duplicate_of
                 else:
@@ -251,6 +252,7 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                     record["map_accepted"] = bool(
                         isinstance(map_name, str) and map_name.strip()
                         and state.current_map == map_name.strip())
+                    record["map_changed"] = state.current_map != previous_map
                 if etype in {"ROUND_START", "INIT_GAME"} or state.current_map != previous_map:
                     recent_kills.clear()
                 records.append(record)

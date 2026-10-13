@@ -144,7 +144,9 @@ function _killBoundary(ev) {
         }
     }
     if ((ev.type === 'MAP' || ev.type === 'LIVE_MAP') && typeof ev.map_name === 'string' && ev.map_name.trim()) {
-        if (_killMap !== ev.map_name.trim()) _pendingLegacyKills.clear();
+        // A cold client may not have retained the preceding map announcement.
+        const changed = typeof ev.map_changed === 'boolean' ? ev.map_changed : _killMap !== ev.map_name.trim();
+        if (changed) _pendingLegacyKills.clear();
         _killMap = ev.map_name.trim();
     }
 }

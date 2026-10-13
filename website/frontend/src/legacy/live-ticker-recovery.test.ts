@@ -514,3 +514,21 @@ it('keeps the live-source suppression window on server time rather than browser 
     expect(document.getElementById('live-ticker')?.textContent).toContain('Legacy victim');
   } finally { ticker.stopLiveTicker(); clock.mockRestore(); }
 });
+
+
+it.each([false, true, undefined])('honors map transition metadata without a retained map announcement (%s)', async (map_changed) => {
+  vi.useFakeTimers();
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  fetchJSON.mockResolvedValueOnce({ server_time: 1000, last_seq: 3, events: [
+    { seq: 1, type: 'KILL', killer_slot: 3, victim_slot: 5, killer: 'Actor', victim: 'Target', received_at: 1000 },
+    { seq: 2, type: 'LIVE_MAP', map_name: 'supply', map_accepted: true, map_changed, received_at: 1000.5 },
+    { seq: 3, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, received_at: 1001 },
+  ] }).mockResolvedValue({ events: [], last_seq: 3 });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker(); await vi.advanceTimersByTimeAsync(0);
+    expect(ticker.getLiveMVP().score).toBe(map_changed === false ? 1 : 2);
+  } finally { ticker.stopLiveTicker(); }
+});

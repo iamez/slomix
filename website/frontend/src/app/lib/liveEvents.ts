@@ -204,10 +204,12 @@ export function foldDoubles(events: LiveEvent[]): LiveEvent[] {
       if (e.map_accepted === false) continue;
       const name = typeof e.map_name === 'string' ? e.map_name.trim() : '';
       if (name) {
-        // A first/different named map establishes a new context. Repeated
-        // same-map confirmations carry no reset evidence; keep real twins.
-        if (lastMap.name !== name) unmatchedKills.clear();
-        if (lastMap.name === name && Math.abs(whenMs(e) - lastMap.at) <= 60_000) continue;
+        // A truncated log may start with a same-map heartbeat. Only the
+        // reducer knows whether that acceptance actually changed context.
+        // Older envelopes without this marker keep the name-based fallback.
+        const changed = typeof e.map_changed === 'boolean' ? e.map_changed : lastMap.name !== name;
+        if (changed) unmatchedKills.clear();
+        if (!changed && lastMap.name === name && Math.abs(whenMs(e) - lastMap.at) <= 60_000) continue;
         lastMap = { name, at: whenMs(e) };
       }
       out.push({ ...e });

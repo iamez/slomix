@@ -161,3 +161,24 @@ it.each([
   if (killCount === 1) expect(describeEvent(folded.find(e => e.type === 'KILL')!, NAMES))
     .toBe('Source A killed Source B · 120 u');
 });
+
+
+it.each([false, true, undefined])('uses authoritative transition in a cold or truncated map context (%s)', (map_changed) => {
+  const events = [
+    { seq: 1, type: 'KILL', killer_slot: 3, victim_slot: 5, killer: 'Actor', victim: 'Target', received_at: 1000 },
+    { seq: 2, type: 'LIVE_MAP', map_name: 'supply', map_accepted: true, map_changed, received_at: 1000.5 },
+    { seq: 3, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, received_at: 1001 },
+  ];
+  expect(foldDoubles(events).filter(e => e.type === 'KILL' || e.type === 'LIVE_KILL')).toHaveLength(map_changed === false ? 1 : 2);
+});
+
+it('keeps a real transition even when a truncated log last saw the same map name', () => {
+  const folded = foldDoubles([
+    { seq: 1, type: 'MAP', map_name: 'supply', map_changed: true, received_at: 1000 },
+    { seq: 2, type: 'KILL', killer_slot: 3, victim_slot: 5, received_at: 1000.1 },
+    { seq: 3, type: 'LIVE_MAP', map_name: 'supply', map_accepted: true, map_changed: true, received_at: 1000.5 },
+    { seq: 4, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, received_at: 1001 },
+  ]);
+  expect(folded.filter(e => e.type === 'KILL' || e.type === 'LIVE_KILL')).toHaveLength(2);
+  expect(folded.filter(e => e.type === 'MAP' || e.type === 'LIVE_MAP')).toHaveLength(2);
+});
