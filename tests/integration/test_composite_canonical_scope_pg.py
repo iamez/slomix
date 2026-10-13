@@ -47,7 +47,8 @@ WITH rounds(id,gaming_session_id,round_number,is_valid,is_bot_round,round_status
 ), proximity_kill_outcome AS (
  SELECT *,'A'::text AS killer_guid_canonical,'gibbed'::text AS outcome FROM events
 ), storytelling_kill_impact AS (
- SELECT id AS kill_outcome_id,42 AS gaming_session_id,'A'::text AS killer_guid_canonical,
+ SELECT id AS kill_outcome_id,CASE WHEN id IN (30,70) THEN NULL ELSE 42 END AS gaming_session_id,
+ 'A'::text AS killer_guid_canonical,
  true AS is_crossfire FROM events
  UNION ALL SELECT 10,43,'A',true
 ), proximity_lua_trade_kill AS (
@@ -76,7 +77,7 @@ async def exercise_composite_scope(conn):
     assert tuple(counts) == (3, 3, 3, 3, 3, 3), tuple(counts)
     assert len(rows) == 1 and tuple(rows[0])[:10] == ("A", "Player", 30, 3, 3, 3, 3, 3, 3, 10.0), tuple(rows[0])
     mutant = query.replace(
-        "WHERE gaming_session_id = $1 AND kill_outcome_id IN", "WHERE gaming_session_id = $1 OR kill_outcome_id IN"
+        "AND kill_outcome_id IN", "OR kill_outcome_id IN"
     )
     assert mutant != query
     badrows = await conn.fetch(PREFIX.rstrip() + ", " + mutant.lstrip().removeprefix("WITH "), *params)

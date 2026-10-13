@@ -47,7 +47,7 @@ async def test_metrics_and_counts_share_all_canonical_keys(by_date):
     assert coverage.count('unnest($3::bigint[], $4::text[], $5::int[])') == 6
     for sql in (metric, coverage):
         assert 'round_id IN' not in sql
-        assert 'WHERE gaming_session_id = $1 AND kill_outcome_id IN' in sql
+        assert 'WHERE (gaming_session_id = $1 OR gaming_session_id IS NULL) AND kill_outcome_id IN' in sql
         assert 'session_date = ANY($2::date[])' in sql
     crossfire = metric.split('session_crossfire AS (')[1].split('session_trades AS (')[0]
     assert 'kill_outcome_id IN' in crossfire

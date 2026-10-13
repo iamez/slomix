@@ -646,9 +646,11 @@ async def get_composite_stats(
     pcs_group = "GROUP BY p.player_guid"
     pcs_alias = "p."
     # Cache rows have a reliable outcome id. Gate both the TIR numerator and
-    # cache coverage through accepted canonical outcomes, never their round_id.
+    # cache coverage through accepted outcomes, never their cached round_id.
+    # Legacy caches may lack a session stamp; a confirmed outcome supplies it.
+    # Keep rejecting an explicit conflicting stamp.
     ski_where = (
-        "WHERE gaming_session_id = $1 AND kill_outcome_id IN "
+        "WHERE (gaming_session_id = $1 OR gaming_session_id IS NULL) AND kill_outcome_id IN "
         f"(SELECT id FROM proximity_kill_outcome WHERE {round_set})"
     )
 

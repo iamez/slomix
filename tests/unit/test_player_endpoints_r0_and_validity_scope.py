@@ -190,7 +190,7 @@ async def test_composite_session_scope_excludes_cancelled_rounds():
     assert "round_id IN (SELECT id FROM rounds" not in big
     assert big.count("unnest($3::bigint[], $4::text[], $5::int[])") == 5
     assert big.count("r.round_status IN ('completed', 'substitution')") == 1
-    assert "WHERE gaming_session_id = $1 AND kill_outcome_id IN" in big
+    assert "WHERE (gaming_session_id = $1 OR gaming_session_id IS NULL) AND kill_outcome_id IN" in big
 
 
 @pytest.mark.asyncio
