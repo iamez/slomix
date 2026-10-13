@@ -90,6 +90,7 @@ from website.backend.services.information_state import (
     aim_lock_beliefs,
     apply_capability,
     contact_beliefs,
+    counts_as_known,
     group_by_holder,
     obituary_beliefs,
     reconstruct_gunfire,
@@ -1185,8 +1186,12 @@ async def load_round_information_state(
             subject for subject, side in roster.items()
             if team is not None and side != team
         )
+        # Only beliefs eligible for current metrics require subject allegiance.
+        # Faded/expired evidence can remain in history without disabling metrics.
+        # No enemy filter here: classification is the information being checked.
         if team is None or any(
-            b.subject_guid and b.subject_guid not in roster for b in state.beliefs
+            counts_as_known(b, t_ms) and b.subject_guid not in roster
+            for b in state.beliefs
         ):
             state.unavailable["enemy_roster"] = (
                 "Current allegiance is unavailable or ambiguous for the holder "

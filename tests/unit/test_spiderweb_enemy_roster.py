@@ -211,3 +211,77 @@ def test_unrelated_hearing_gap_does_not_disable_known_enemy_metrics():
     assert result['nearest_known_enemy_distance'] is not None
     union = _team_information({'holders': {'H': result}}, {'team': 'AXIS', 'members': ['H']}, 0)
     assert union['holders']['team:AXIS']['known_enemy_count'] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('t,expected,visible', [(1000, None, True), (7000, 0, True), (40000, 0, False)])
+async def test_only_metric_relevant_subjects_require_current_allegiance(t, expected, visible):
+    class AimOnly(Events):
+        async def fetch_all(self, query, params):
+            if 'SELECT player_guid, team, death_time_ms' in query:
+                return []
+            return await super().fetch_all(query, params)
+
+    tracks = {'H': [life('H', 'AXIS')]}
+    result = await load_round_information_state(
+        AimOnly(), 1, t, build_snapshot(tracks, t), {},
+        CapturePolicy(capabilities={'aim_lock': 'enabled'}), tracks,
+    )
+    holder = result['holders']['H']
+    assert holder['known_enemy_count'] == expected
+    assert ('enemy_roster' in holder['unavailable']) is (expected is None)
+    assert bool(holder['beliefs']) is visible
+    assert holder['nearest_known_enemy_distance'] is None
+    union = _team_information(result, {'team': 'AXIS', 'members': ['H']}, t)
+    assert union['holders']['team:AXIS']['known_enemy_count'] == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('unmeasured', ['enemy_roster', 'missing_holder'])
+@pytest.mark.parametrize('measured', [5, 6])
+async def test_layer4_blind_share_excludes_unmeasured_samples(monkeypatch, unmeasured, measured):
+    from types import SimpleNamespace
+
+    from scripts import spiderweb_layer4_family as family
+
+    async def tracks(*args):
+        return {'H': [life('H', 'AXIS')]}
+
+    async def engagements(*args):
+        return []
+
+    async def policy(*args):
+        return CapturePolicy()
+
+    async def end(*args):
+        return 12000
+
+    async def clock(*args):
+        return {}
+
+    async def info(_db, _rid, t, *args):
+        if t < (12 - measured) * 1000:
+            holder = {'unavailable': {'enemy_roster': 'Current allegiance missing'},
+                      'beliefs': [], 'known_enemy_count': None}
+            return {'holders': {'H': holder} if unmeasured == 'enemy_roster' else {}}
+        # Three measured blind ticks followed by measured placeable evidence.
+        beliefs = [] if t < (15 - measured) * 1000 else [{
+            'subject_guid': 'S', 'counts_as_known': True, 'region': {'radius': 10}}]
+        return {'holders': {'H': {'beliefs': beliefs, 'unavailable': {'shot_fired': 'Capture unavailable'},
+                                 'position_claim_max_radius': 1200}}}
+
+    for name, fn in [('load_round_tracks', tracks), ('load_round_engagements', engagements),
+                     ('load_capture_policy', policy), ('load_round_end_ms', end),
+                     ('load_round_clock', clock), ('load_round_information_state', info)]:
+        monkeypatch.setattr(family.rws, name, fn)
+    monkeypatch.setattr(family.rws, 'build_snapshot', lambda *a, **kw: SimpleNamespace(
+        players={'H': SimpleNamespace(alive=True, x=0, speed=200, team='AXIS')}, edges=[]))
+    monkeypatch.setattr(family.rws, 'nearest_teammate_separation', lambda snap: {})
+    rows = await family.collect_round(Events(), 1, {'map': 'supply', 'winner': 1,
+        'block': 1, 'date': '2026-10-13', 'time': '12:00'}, cadence_ms=1000, provider=None)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row['metrics']['blind_moving_share'] == (0.5 if measured == 6 else None)
+    assert row['samples']['moving'] == 12
+    assert row['samples']['blind_moving_measured'] == measured
+    assert row['samples']['blind_moving_excluded'] == {unmeasured: 12 - measured}

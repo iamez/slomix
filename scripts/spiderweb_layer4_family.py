@@ -36,6 +36,7 @@ import random
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
@@ -64,9 +65,9 @@ CANDIDATES: list[Candidate] = [
               caveat="a within-round median split cannot separate 'moved more' from 'was on the attacking side' — attackers move more and share the outcome (§7.4.1); a side-stratified test needs the attacking side per round (lua_round_teams / W5)"),
     Candidate("isolation_share", "share of alive samples with no living teammate within ISOLATION_UNITS (straight-line, §7.4: geometric separation, not route support time)", "negative",
               {"isolation_units": ISOLATION_UNITS}, kind="oracle_diagnostic"),
-    Candidate("blind_moving_share", "share of MOVING samples during which the holder held NO placeable enemy belief (subject named, region inside position_claim_max_radius, counts_as_known) — moved without knowing where any enemy was; information-consistent movement, §7.4", "negative",
-              {"moving_ups": MOVING_UPS, "placeable": "subject_guid and region.radius <= position_claim_max_radius and counts_as_known"},
-              caveat="the information state is a lower bound on what the team knew (§6.2: Discord voice is never captured); 'blind' here is 'blind to the capture', and the median is 0.89 — nearly all movement is blind on this evidence"),
+    Candidate("blind_moving_share", "share of measured MOVING samples (holder present and enemy roster available) during which the holder held NO placeable enemy belief (subject named, region inside position_claim_max_radius, counts_as_known) — moved without knowing where any enemy was; information-consistent movement, §7.4", "negative",
+              {"moving_ups": MOVING_UPS, "denominator": "moving with holder present and enemy_roster available", "minimum_measured_samples": 6, "placeable": "subject_guid and region.radius <= position_claim_max_radius and counts_as_known"},
+              caveat="the information state is a lower bound on what the team knew (§6.2: Discord voice is never captured); 'blind' here is 'blind to the capture'; missing holders and unavailable enemy rosters are excluded from numerator and denominator"),
     Candidate("exposure_share", "share of alive samples with ≥ 1 living enemy holding a clear eye-to-body ray to the player (W6 tracer, static geometry) — §7.4 exposure, ORACLE form", "negative",
               {"tracer": "services/line_of_sight.py", "validation": "W6 2026-08-22, 99.92 %"}, kind="oracle_diagnostic"),
     Candidate("push_into_wave_share", "share of MOVING samples while the ENEMY's validated reinforcement wave lands within WAVE_IMMINENT_SHARE of its interval (oracle clock, §5.6/§6.3: never a scoring fallback)", "negative",
@@ -130,7 +131,7 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
     tracer = None
     if provider is not None:
         tracer, _label = await provider.tracer_for(meta["map"])
-    acc: dict[str, dict[str, float]] = {}
+    acc: dict[str, dict[str, Any]] = {}
     for t in range(first, end_ms, cadence_ms):
         snap = rws.build_snapshot(tracks, t, engagements=engagements, velocity_max_dt_ms=velocity_max_dt)
         alive = {g: p for g, p in snap.players.items() if p.alive and p.x is not None}
@@ -148,7 +149,7 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
             if v["a_to_b"]["status"] == "clear":
                 exposed.add(b)
         for g, p in alive.items():
-            a = acc.setdefault(g, {"alive": 0, "moving": 0, "isolated": 0, "blind_moving": 0, "exposed": 0, "exposed_measured": 0, "wave_measured": 0, "push_into_wave": 0, "team": p.team or ""})
+            a = acc.setdefault(g, {"alive": 0, "moving": 0, "isolated": 0, "blind_moving": 0, "blind_moving_measured": 0, "blind_moving_excluded": {}, "exposed": 0, "exposed_measured": 0, "wave_measured": 0, "push_into_wave": 0, "team": p.team or ""})
             a["alive"] += 1
             moving = (p.speed or 0.0) > MOVING_UPS
             if moving:
@@ -162,7 +163,14 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
             # counts as known. known_enemy_count alone would not do — a public
             # obituary names an enemy without placing him, so it is rarely 0
             # (probe 2026-09-09: 0.0 for 20 of 22 rows).
-            if moving and h is not None:
+            # Missing reconstruction is not measured blindness. Other channel
+            # gaps remain independent: the metric describes captured evidence.
+            excluded = ("missing_holder" if h is None else
+                        "enemy_roster" if "enemy_roster" in h.get("unavailable", {}) else None)
+            if moving and excluded:
+                a["blind_moving_excluded"][excluded] = a["blind_moving_excluded"].get(excluded, 0) + 1
+            if moving and excluded is None:
+                a["blind_moving_measured"] += 1
                 horizon = h.get("position_claim_max_radius") or float("inf")
                 placeable = any(
                     b.get("subject_guid") and b.get("region") and b.get("counts_as_known")
@@ -202,11 +210,11 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
                 "noise": rng.random(),
                 "moving_share": a["moving"] / a["alive"],
                 "isolation_share": a["isolated"] / a["alive"],
-                "blind_moving_share": (a["blind_moving"] / a["moving"]) if a["moving"] >= 6 else None,
+                "blind_moving_share": (a["blind_moving"] / a["blind_moving_measured"]) if a["blind_moving_measured"] >= 6 else None,
                 "exposure_share": (a["exposed"] / a["exposed_measured"]) if a["exposed_measured"] else None,
                 "push_into_wave_share": (a["push_into_wave"] / a["wave_measured"]) if a["wave_measured"] >= 6 else None,
             },
-            "samples": {"alive": a["alive"], "moving": a["moving"], "exposed_measured": a["exposed_measured"], "wave_measured": a["wave_measured"]},
+            "samples": {"blind_moving_measured": a["blind_moving_measured"], "blind_moving_excluded": a["blind_moving_excluded"], "alive": a["alive"], "moving": a["moving"], "exposed_measured": a["exposed_measured"], "wave_measured": a["wave_measured"]},
         })
     return rows
 
