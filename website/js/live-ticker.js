@@ -57,6 +57,8 @@ let _filters = _loadFilters();
 let _cursor = 0;
 let _streamId = null;
 let _pollInFlight = false;
+const _pendingLegacyKills = new Set();
+let _killMap = null;
 let _events = [];          // newest last, ALL categories
 let _interval = null;
 let _lastFetchOk = null;   // null = never fetched, false = feed erroring
@@ -85,13 +87,54 @@ function _isKillEnrichment(ev) {
 }
 
 function _mergeKillEnrichment(ev) {
-    const prior = _events.find(row => row.seq === ev.duplicate_of || row.duplicate_of === ev.duplicate_of);
+    const prior = _events.find(row => row.seq === ev.duplicate_of || row._liveSeq === ev.duplicate_of || row.duplicate_of === ev.duplicate_of);
     if (!prior || prior.killer_slot !== ev.killer_slot || prior.victim_slot !== ev.victim_slot) return false;
     const roles = ['killer', 'victim'];
     if (roles.some(role => prior[role] && ev[role] && prior[role] !== ev[role])) return false;
     for (const role of roles) {
         if (!prior[role] && typeof ev[role] === 'string' && ev[role].trim()) prior[role] = ev[role];
     }
+    return true;
+}
+
+// Reverse-order twins have no server sequence link. Match only a still
+// pending obituary in the same explicit context and short receive window.
+function _killBoundary(ev) {
+    if (['ROUND_START', 'ROUND_END', 'INIT_GAME'].includes(ev.type)) _pendingLegacyKills.clear();
+    if (ev.type === 'CONNECT' || ev.type === 'DISCONNECT') {
+        const slot = _clientSlot(ev.slot);
+        if (slot != null) for (const prior of _pendingLegacyKills) {
+            if (_clientSlot(prior.killer_slot) === slot || _clientSlot(prior.victim_slot) === slot) _pendingLegacyKills.delete(prior);
+        }
+    }
+    if ((ev.type === 'MAP' || ev.type === 'LIVE_MAP') && typeof ev.map_name === 'string' && ev.map_name.trim()) {
+        if (_killMap !== ev.map_name.trim()) _pendingLegacyKills.clear();
+        _killMap = ev.map_name.trim();
+    }
+}
+
+function _mergeReverseKill(ev) {
+    if (ev.type !== 'LIVE_KILL') return false;
+    const prior = [..._pendingLegacyKills].reverse().find(row =>
+        row.killer_slot === ev.killer_slot && row.victim_slot === ev.victim_slot
+        && Number.isFinite(row.received_at) && Number.isFinite(ev.received_at)
+        && Math.abs(row.received_at - ev.received_at) <= 3);
+    if (!prior) return false;
+    if (['killer', 'victim'].some(role => prior[role] && ev[role] && prior[role] !== ev[role])) {
+        // An intervening conflicting identity makes older same-pair guesses
+        // unsafe, including a later anonymous observation of these slots.
+        for (const row of _pendingLegacyKills) {
+            if (row.killer_slot === ev.killer_slot && row.victim_slot === ev.victim_slot) _pendingLegacyKills.delete(row);
+        }
+        return false;
+    }
+    _pendingLegacyKills.delete(prior);
+    // Legacy already applied streak and pressure; LIVE may still owe MVP
+    // when another LIVE kill had suppressed the earlier legacy contribution.
+    if (!prior._mvpCounted) _mvpApply(ev);
+    const names = { killer: prior.killer || ev.killer, victim: prior.victim || ev.victim };
+    Object.assign(prior, ev, names, { seq: prior.seq, _liveSeq: ev.seq });
+    _liveKillLastAt = ev.received_at || Date.now() / 1000;
     return true;
 }
 
@@ -340,6 +383,8 @@ async function _poll() {
             || data.cursor_reset === true || data.last_seq < _cursor)) {
             _cursor = 0;
             _events = [];
+            _pendingLegacyKills.clear();
+            _killMap = null;
             _roster.clear();
             _rosterUpdatedAt = 0;
             _streak.clear();
@@ -364,6 +409,7 @@ async function _poll() {
         // rather than display stale numbers (coderabbit, PR #772). The
         // roster/map recover from /api/live/state on its own poll.
         if (data?.gap === true) {
+            _pendingLegacyKills.clear();
             _streak.clear();
             _mvp.clear();
             _roundScores = [];
@@ -378,9 +424,13 @@ async function _poll() {
             // before buffering + render — this loop was lost in a rebase and
             // its absence silently disabled attribution, pressure and MVP.
             for (const ev of fresh) {
+                if ((ev.type === 'MAP' || ev.type === 'LIVE_MAP') && ev.map_accepted === false) continue;
+                _killBoundary(ev);
+                if (_mergeReverseKill(ev)) continue;
                 const enrichment = _isKillEnrichment(ev);
                 if (enrichment && _mergeKillEnrichment(ev)) continue;
                 if (!enrichment) {
+                    if (ev.type === 'KILL') ev._mvpCounted = !_liveKillActive();
                     _rosterApply(ev);
                     _combatApply(ev);
                     _pressureApply(ev);
@@ -390,7 +440,9 @@ async function _poll() {
                 // can find its original, just as one from a later poll can.
                 // Invisible telemetry must not crowd renderable history out.
                 if (_line(ev) !== '') _events.push(ev);
-                if (_events.length > MAX_BUFFER) _events.shift();
+                if (ev.type === 'KILL' && !enrichment) _pendingLegacyKills.add(ev);
+                while (_pendingLegacyKills.size > MAX_BUFFER) _pendingLegacyKills.delete(_pendingLegacyKills.values().next().value);
+                if (_events.length > MAX_BUFFER) _pendingLegacyKills.delete(_events.shift());
             }
             for (const ev of fresh) {
                 if ((ev.seq || 0) > _cursor) _cursor = ev.seq;
@@ -416,6 +468,8 @@ async function _poll() {
         // latest fetch outcome, including recovery with no new events.
         const cutoff = Date.now() / 1000 - 600;
         _events = _events.filter(ev => (ev.received_at || 0) >= cutoff);
+        const retained = new Set(_events);
+        for (const row of _pendingLegacyKills) if (!retained.has(row)) _pendingLegacyKills.delete(row);
         renderLiveTicker();
     }
 }

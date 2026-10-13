@@ -229,3 +229,116 @@ it('renders orphaned source-name evidence while LIVE_KILL events are active', as
     expect(document.getElementById('live-ticker')!.textContent).toContain('Orphan B');
   } finally { ticker.stopLiveTicker(); }
 });
+
+it.each([false, true])('folds source-named KILL before LIVE_KILL once across polls (split=%s)', async (split) => {
+  vi.useFakeTimers();
+  localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true }));
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const now = Date.now() / 1000;
+  const named = { seq: 2, type: 'KILL', killer_slot: 3, victim_slot: 5, killer: 'Reverse A', victim: 'Reverse B', received_at: now };
+  const live = { seq: 3, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: null, victim: null, distance: 120, received_at: now + 0.5 };
+  fetchJSON.mockResolvedValueOnce({ stream_id: 'reverse', last_seq: split ? 2 : 3, events: [{ seq: 1, type: 'ROUND_START', received_at: now }, named, ...(split ? [] : [live])] })
+    .mockResolvedValueOnce({ stream_id: 'reverse', last_seq: 3, events: split ? [live] : [] })
+    .mockResolvedValue({ stream_id: 'reverse', last_seq: 6, events: [
+      { seq: 4, type: 'KILL', duplicate_of: 3, killer_slot: 3, victim_slot: 5, killer: 'Reverse A', victim: 'Reverse B', received_at: now + 0.7 },
+      { seq: 5, type: 'CONNECT', slot: 3, received_at: now + 1 },
+      { seq: 6, type: 'TEAM_CHANGE', slot: 3, team: 1, name: 'Replacement', received_at: now + 1 },
+    ] });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  ticker.startLiveTicker();
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ticker.getLiveMVP().score).toBe(1);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(ticker.getLiveMVP().score).toBe(1);
+    let text = document.getElementById('live-ticker')!.textContent!;
+    expect(text).toContain('Reverse A'); expect(text).toContain('Reverse B');
+    expect(text).toContain('120u'); expect(text).not.toContain('#3 → #5');
+    expect(text.match(/Reverse A → Reverse B/g)).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(3000);
+    text = document.getElementById('live-ticker')!.textContent!;
+    expect(text).toContain('Reverse A'); expect(text).not.toContain('Replacement →');
+    expect(text.match(/Reverse A → Reverse B/g)).toHaveLength(1);
+    expect(text).not.toContain('Reverse A killed Reverse B');
+  } finally { ticker.stopLiveTicker(); }
+});
+
+it.each([
+  [{ type: 'CONNECT', slot: 3 }, false], [{ type: 'DISCONNECT', slot: 5 }, false],
+  [{ type: 'ROUND_START' }, false], [{ type: 'ROUND_END' }, false], [{ type: 'INIT_GAME' }, false],
+  [{ type: 'MAP', map_name: 'supply' }, false], [{ type: 'LIVE_MAP', map_name: 'supply', map_accepted: true }, false],
+  [{ type: 'LIVE_MAP', map_name: 'radar', map_accepted: true }, true],
+  [{ type: 'LIVE_MAP', map_name: 'supply', map_accepted: false }, true],
+  [{ type: 'LIVE_MAP', map_name: '' }, true],
+])('reverse twins respect explicit context boundary %j (fold=%s)', async (boundary, fold) => {
+  vi.useFakeTimers();
+  localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true }));
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const now = Date.now() / 1000;
+  const events = [
+    { type: 'MAP', map_name: 'radar' },
+    { type: 'KILL', killer_slot: 3, victim_slot: 5, killer: 'Original A', victim: 'Original B' },
+    boundary,
+    { type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: null, victim: null, distance: 120 },
+  ].map((event, i) => ({ ...event, seq: i + 1, received_at: now + i / 10 }));
+  fetchJSON.mockResolvedValue({ events, last_seq: 4, stream_id: 'context' });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  ticker.startLiveTicker();
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    const text = document.getElementById('live-ticker')!.textContent!;
+    expect(text.includes('Original A → Original B')).toBe(fold);
+    expect(text.includes('#3 → #5')).toBe(!fold);
+  } finally { ticker.stopLiveTicker(); }
+});
+
+it.each(['expired', 'conflict', 'already-active'])('reverse twins handle %s without losing or duplicating MVP', async (scenario) => {
+  vi.useFakeTimers();
+  localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true }));
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const now = Date.now() / 1000;
+  const events = [
+    ...(scenario === 'already-active' ? [{ type: 'LIVE_KILL', killer_slot: 7, victim_slot: 7, received_at: now }] : []),
+    { type: 'KILL', killer_slot: 3, victim_slot: 5, killer: 'First A', victim: 'First B', received_at: now },
+    { type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: scenario === 'conflict' ? 'Other A' : null, victim: null, distance: 120, received_at: now + (scenario === 'expired' ? 4 : 0.5) },
+  ].map((event, i) => ({ ...event, seq: i + 1 }));
+  fetchJSON.mockResolvedValue({ events, last_seq: events.length, stream_id: 'bounded' });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  ticker.startLiveTicker();
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ticker.getLiveMVP().score).toBe(scenario === 'already-active' ? 1 : 2);
+    const text = document.getElementById('live-ticker')!.textContent!;
+    if (scenario === 'already-active') expect(text).toContain('First A');
+    else expect(text).not.toContain('First A');
+    if (scenario === 'conflict') expect(text).toContain('Other A');
+  } finally { ticker.stopLiveTicker(); }
+});
+
+it('does not consume a LIVE kill when its pending legacy row was evicted in the same batch', async () => {
+  vi.useFakeTimers();
+  localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true }));
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const now = Date.now() / 1000;
+  const events = [
+    { type: 'KILL', killer_slot: 3, victim_slot: 5, killer: 'Evicted A', victim: 'Evicted B' },
+    ...Array.from({ length: 200 }, () => ({ type: 'SAY', name: 'speaker', text: 'buffer row' })),
+    { type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: null, victim: null, distance: 120 },
+  ].map((event, i) => ({ ...event, seq: i + 1, received_at: now }));
+  fetchJSON.mockResolvedValue({ events, last_seq: events.length, stream_id: 'eviction' });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  ticker.startLiveTicker();
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    const text = document.getElementById('live-ticker')!.textContent!;
+    expect(text).toContain('#3 → #5'); expect(text).toContain('120u');
+  } finally { ticker.stopLiveTicker(); }
+});
