@@ -84,6 +84,49 @@ function renderAt(roundId = '11344', search = '') {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('SpiderWebPage', () => {
+  it.each([null, ''])('names absent map metadata instead of loading a disabled mesh query (%s)', async (mapName) => {
+    const empty = { ...world, map_name: mapName, players: [], edges: [], player_count: 0,
+      teams: [], clock: {}, first_position_ms: null, velocity_max_dt_ms: null,
+      information_state: { ...world.information_state, holders: {} },
+    };
+    const spy = stub((url) => url.includes('/api/replay/round/11344/web') ? empty : undefined);
+    renderAt();
+    await screen.findByText('no map is identified for this round — floor geometry cannot be requested');
+    const canvas = document.querySelector('[data-parity="spider-web.canvas"]')!;
+    expect(canvas.textContent).not.toMatch(/loading|never exported/i);
+    expect(screen.queryByRole('button', { name: 'retry floor mesh' })).toBeNull();
+    expect(spy.mock.calls.some(([url]) => String(url).includes('/assets/maps/geometry/'))).toBe(false);
+  });
+
+  it.each(['players', 'beliefs'])('retains positioned %s when map metadata is absent', async (evidence) => {
+    const holder = Object.values(povForm.information_state.holders)[0];
+    const belief = { ...holder.beliefs[0], subject_guid: 'authorized-enemy', subject_is_enemy: true,
+      region: { x: 3000, y: 0, z: 0, radius: 100 } };
+    const snapshot = { ...povForm, map_name: null,
+      players: evidence === 'players' ? povForm.players.slice(0, 1) : [], edges: [],
+      information_state: { ...povForm.information_state, holders: { [holder.holder_guid]: {
+        ...holder, beliefs: evidence === 'beliefs' ? [belief] : [],
+      } } },
+    };
+    const spy = stub((url) => url.includes('/api/replay/round/11344/web') ? snapshot : undefined);
+    renderAt('11344', '?pov=team:AXIS');
+    await screen.findByText('no map is identified for this round — floor geometry cannot be requested');
+    const canvas = document.querySelector('[data-parity="spider-web.canvas"]')!;
+    expect(screen.getByLabelText('reconstructed moment')).toBeInTheDocument();
+    expect(canvas.querySelectorAll(evidence === 'players' ? '[data-player]' : '[data-belief-subject]')).toHaveLength(1);
+    expect(canvas.textContent).not.toMatch(/floor mesh…|never exported/i);
+    expect(spy.mock.calls.some(([url]) => String(url).includes('/assets/maps/geometry/'))).toBe(false);
+  });
+
+  it('still reports loading for a named map whose mesh request is pending', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => String(input).includes('/api/replay/round/11344/web')
+      ? Promise.resolve(new Response(JSON.stringify({ ...world, players: [], edges: [], information_state: { ...world.information_state, holders: {} } })))
+      : new Promise<Response>(() => {})));
+    renderAt();
+    await waitFor(() => expect(document.querySelector('[data-parity="spider-web.canvas"]')?.textContent).toMatch(/floor mesh/i));
+    expect(screen.queryByText('no map is identified for this round — floor geometry cannot be requested')).toBeNull();
+  });
+
   it('renders the moment, both clocks and the manifest from the recorded wire', async () => {
     const spy = stub((url) => {
       if (url.includes('/api/replay/round/11344/web')) return url.includes('pov=') ? povForm : world;

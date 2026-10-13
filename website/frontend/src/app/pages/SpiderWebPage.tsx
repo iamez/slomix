@@ -329,11 +329,12 @@ export function SpiderWebPage() {
       </div>
 
       <div data-parity="spider-web.canvas">
-        {/* null = the server said 404 (never exported, a named absence);
-          * undefined = still loading OR the request failed — a failure is
-          * said below as unavailable, not as "never exported". */}
-        <SpiderWebScene snap={snap} mesh={mesh.isPending || mesh.isError ? undefined : mesh.data ?? null} pov={pov} meshError={mesh.isError} />
-        {mesh.isError && <Chip active={false} label="retry floor mesh" onClick={() => { void mesh.refetch(); }} />}
+        {/* A disabled no-map query is pending without fetching. Keep any
+          * positioned evidence visible and name why its floor is absent. */}
+        <SpiderWebScene snap={snap} mesh={!snap.map_name ? null : mesh.isPending || mesh.isError ? undefined : mesh.data ?? null}
+          pov={pov} meshError={!!snap.map_name && mesh.isError}
+          meshMissingReason={!snap.map_name ? 'no map is identified for this round — floor geometry cannot be requested' : undefined} />
+        {snap.map_name && mesh.isError && <Chip active={false} label="retry floor mesh" onClick={() => { void mesh.refetch(); }} />}
       </div>
 
       <div data-parity="spider-web.clock">

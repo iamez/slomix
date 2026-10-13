@@ -31,8 +31,9 @@ const SCALE_UNITS = 512;
 
 function clampPitch(v: number) { return Math.min(1.5, Math.max(0, v)); }
 
-/** `mesh` is undefined while the geometry is still loading, null when the
- *  map was never exported (a named absence), and the mesh otherwise. */
+/** `mesh` is undefined while geometry is loading and null for an absence.
+ *  `meshMissingReason` names missing map metadata; otherwise null means 404.
+ *  Positioned players and beliefs remain renderable without floor geometry. */
 /** How an opponent thread reads once the line-of-sight overlay is on. */
 export function losKind(e: { line_of_sight?: { a_to_b: { status: string }; b_to_a: { status: string } } | null }): 'clear' | 'one-way' | 'blocked' | 'indeterminate' | null {
   const v = e.line_of_sight;
@@ -44,7 +45,7 @@ export function losKind(e: { line_of_sight?: { a_to_b: { status: string }; b_to_
   return 'indeterminate';
 }
 
-export function SpiderWebScene({ snap, mesh, pov, meshError = false }: { snap: SpiderWebSnapshot; mesh: MapMesh | null | undefined; pov: string; meshError?: boolean }) {
+export function SpiderWebScene({ snap, mesh, pov, meshError = false, meshMissingReason }: { snap: SpiderWebSnapshot; mesh: MapMesh | null | undefined; pov: string; meshError?: boolean; meshMissingReason?: string }) {
   const [cam, setCam] = useState<Camera>(DEFAULT_CAMERA);
   // The oracle overlay, off by default: it is a diagnostic, not the picture.
   const [showLos, setShowLos] = useState(false);
@@ -108,6 +109,7 @@ export function SpiderWebScene({ snap, mesh, pov, meshError = false }: { snap: S
     return { view, floors, edges, players, labels, regions, unplaced: beliefs.unplacedSubjects, scalePx: SCALE_UNITS * view.scale * cam.zoom };
   }, [bounds, cam, mesh, snap, pov]);
 
+  if (!scene && meshMissingReason) return <Absent reason={meshMissingReason} />;
   if (!scene && meshError) return <Unavailable what="this map's floor mesh" />;
   if (!scene && mesh === undefined) return <Pending label="floor mesh" />;
   if (!scene) return <Absent reason="nobody could be placed at this moment — no floor mesh and no positioned player to frame the scene" />;
@@ -227,7 +229,7 @@ export function SpiderWebScene({ snap, mesh, pov, meshError = false }: { snap: S
         (the tracker holds one open up to 15 s after the last hit) · dashed discs = where this side believed an enemy was, opacity = confidence
       </Meta>
       {meshError ? <Unavailable what="this map's floor mesh" /> : mesh === undefined ? <Pending label="floor mesh" /> : null}
-      {mesh === null && <Meta>this map's floor mesh was never exported — players and threads draw without a stage, which is the truth, not a bug</Meta>}
+      {mesh === null && <Meta>{meshMissingReason ?? "this map's floor mesh was never exported — players and threads draw without a stage, which is the truth, not a bug"}</Meta>}
     </Stack>
   );
 }
