@@ -15,7 +15,6 @@ import pytest
 
 from website.backend.services import information_state
 from website.backend.services.information_state import (
-    UNREAD_CHANNELS,
     CONFIDENCE_FLOOR,
     DECAY_TAU_S,
     EXPIRY_BOUND,
@@ -27,6 +26,7 @@ from website.backend.services.information_state import (
     OBSERVED_OUT_OF_ACTION,
     POSITION_CLAIM_MAX_RADIUS,
     UNCERTAIN_AFTER_DOWN,
+    UNREAD_CHANNELS,
     BeliefItem,
     HolderState,
     Region,
@@ -46,6 +46,14 @@ from website.backend.services.information_state import (
 from website.backend.services.reconstruction_accuracy import reach_bound
 
 
+def _stationary_gunfire_beliefs(shots, positions, *, audible_radius):
+    """These fixtures have exact, stationary listeners at every event time."""
+    return gunfire_beliefs(
+        shots, positions, audible_radius=audible_radius,
+        locate=lambda guid, _t: Region(*positions[guid], 0.0),
+    )
+
+
 class TestGunfireResolvesNoOne:
     """⭐ The phantom squad, which §6.3 names directly."""
 
@@ -55,7 +63,7 @@ class TestGunfireResolvesNoOne:
         # ⚠️ The shooter is a candidate holder ON PURPOSE. Without them here the
         # `holder == guid` guard is never exercised and this whole class would
         # pass with that branch deleted (CodeRabbit, PR #799).
-        return gunfire_beliefs(
+        return _stationary_gunfire_beliefs(
             shots,
             {"H": (200.0, 0.0, 0.0), "SHOOTER": (100.0, 0.0, 0.0)},
             audible_radius=1500,
@@ -78,7 +86,7 @@ class TestGunfireResolvesNoOne:
 
     def test_out_of_earshot_hears_nothing(self):
         shots = [("SHOOTER", 1000, 100.0, 0.0, 0.0)]
-        assert gunfire_beliefs(shots, {"FAR": (9000.0, 0.0, 0.0)}, audible_radius=1500) == []
+        assert _stationary_gunfire_beliefs(shots, {"FAR": (9000.0, 0.0, 0.0)}, audible_radius=1500) == []
 
     def test_the_region_is_never_the_telemetry_point(self):
         """§6.3: do not expose the stored origin as a belief point."""
@@ -595,7 +603,7 @@ class TestCapabilityIsNotSilence:
 
     @staticmethod
     def _states() -> dict[str, HolderState]:
-        beliefs = gunfire_beliefs(
+        beliefs = _stationary_gunfire_beliefs(
             [("S", 1000, 0.0, 0.0, 0.0)], {"H": (10.0, 0.0, 0.0)}, audible_radius=1500)
         beliefs += aim_lock_beliefs([("H", "E1", 2000)])
         return group_by_holder(beliefs)
@@ -747,7 +755,7 @@ class TestTheTwoNumbersNeverContradict:
 
     @staticmethod
     def _heard_only() -> HolderState:
-        shots = gunfire_beliefs(
+        shots = _stationary_gunfire_beliefs(
             [("S", 1000, 1000.0, 0.0, 0.0)], {"H": (0.0, 0.0, 0.0)},
             audible_radius=5000)
         return group_by_holder(shots)["H"]
@@ -815,7 +823,7 @@ class TestKindCannotLie:
             contact_beliefs([("V", [{"guid": "A", "weapons": {"3": 1},
                                      "first_hit_ms": 1000}])])
             + aim_lock_beliefs([("H", "E1", 1000)])
-            + gunfire_beliefs([("S", 1, 0.0, 0.0, 0.0)], {"H": (1.0, 0.0, 0.0)},
+            + _stationary_gunfire_beliefs([("S", 1, 0.0, 0.0, 0.0)], {"H": (1.0, 0.0, 0.0)},
                               audible_radius=999)
             + obituary_beliefs([("V", "AXIS", 5000)], ["H"], clock={})
         )
@@ -834,7 +842,7 @@ class TestHoldersMayBeAnyIterable:
 
     @staticmethod
     def _states() -> dict[str, HolderState]:
-        beliefs = gunfire_beliefs([("S", 1000, 0.0, 0.0, 0.0)],
+        beliefs = _stationary_gunfire_beliefs([("S", 1000, 0.0, 0.0, 0.0)],
                                   {"H": (10.0, 0.0, 0.0)}, audible_radius=1500)
         beliefs += aim_lock_beliefs([("H", "E1", 2000)])
         return group_by_holder(beliefs)

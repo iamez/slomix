@@ -83,15 +83,17 @@ from website.backend.services.clock_inputs import (
     wave_position,
 )
 from website.backend.services.information_state import (
+    GUNFIRE_GAP_REASONS,
     HolderState,
     Locator,
     Region,
     aim_lock_beliefs,
     apply_capability,
     contact_beliefs,
+    counts_as_known,
     group_by_holder,
-    gunfire_beliefs,
     obituary_beliefs,
+    reconstruct_gunfire,
 )
 from website.backend.services.information_state import to_dict as belief_payload
 from website.backend.services.reconstruction_accuracy import (
@@ -259,8 +261,9 @@ def find_position_floor(path: list, target_ms: int) -> tuple[dict | None, int, i
     """
     if not path:
         return None, -1, -1
-    times = [s.get("time", 0) for s in path]
-    idx = bisect_right(times, target_ms)
+    # Search the ordered samples directly: historical hearing calls this for
+    # each shot/listener pair, so rebuilding all timestamps per lookup is costly.
+    idx = bisect_right(path, target_ms, key=lambda sample: sample.get("time", 0))
     if idx == 0:
         return None, -1, -1
     sample = path[idx - 1]
@@ -1027,7 +1030,7 @@ async def load_round_end_ms(db, round_id: int, tracks: dict[str, list]) -> int |
     return max(ends) if ends else None
 
 
-def make_locator(tracks: dict[str, list]) -> Locator:
+def make_locator(tracks: dict[str, list], *, require_alive: bool = False) -> Locator:
     """Where a named player was at an instant, as a region we can defend.
 
     ⭐ The radius is OUR error, not their eyesight. A player who was shot in the
@@ -1043,7 +1046,9 @@ def make_locator(tracks: dict[str, list]) -> Locator:
     the instant it was formed.
 
     Returns None rather than a guess when the moment cannot be reconstructed:
-    the belief then keeps its subject and loses only its place.
+    the belief then keeps its subject and loses only its place. For listener
+    admission, require_alive rejects the last position of an already ended life;
+    subject localization retains its existing last-known-position behavior.
     """
     # ⚠️ Parsed once per life, not once per belief. `path` arrives as text from
     # some drivers and a round carries hundreds of beliefs against a handful of
@@ -1056,8 +1061,8 @@ def make_locator(tracks: dict[str, list]) -> Locator:
         track_list = tracks.get(guid)
         if not track_list:
             return None
-        track, _alive, conflict = select_life(track_list, t_ms)
-        if track is None:
+        track, alive, conflict = select_life(track_list, t_ms)
+        if track is None or (require_alive and not alive):
             return None
         path = parsed.get(track[8])
         if path is None:
@@ -1115,7 +1120,7 @@ async def load_round_information_state(
     shots = await db.fetch_all("""
         SELECT guid, event_time, origin_x, origin_y, origin_z
         FROM proximity_shot_fired
-        WHERE round_id = $1 AND event_time <= $2 AND origin_x IS NOT NULL
+        WHERE round_id = $1 AND event_time <= $2
     """, (round_id, t_ms))
     locks = await db.fetch_all("""
         SELECT guid, target_guid, start_time FROM proximity_aim_lock
@@ -1133,9 +1138,20 @@ async def load_round_information_state(
     beliefs += contact_beliefs(
         [(r[0], _ensure_attackers(r[1])) for r in (engagements or [])],
         locate=locate)
-    beliefs += gunfire_beliefs(
-        [(r[0], r[1], float(r[2]), float(r[3]), float(r[4])) for r in (shots or [])],
-        positions, audible_radius=AUDIBLE_GUNFIRE_RADIUS)
+
+    def is_listener_active(guid: str, at_ms: int) -> bool | None:
+        history = (tracks or {}).get(guid)
+        if not history:
+            return None
+        _life, alive, _conflict = select_life(history, at_ms)
+        return alive
+
+    hearing = reconstruct_gunfire(
+        [(r[0], r[1], r[2], r[3], r[4]) for r in (shots or [])],
+        holders, audible_radius=AUDIBLE_GUNFIRE_RADIUS,
+        locate=make_locator(tracks or {}, require_alive=True),
+        is_listener_active=is_listener_active)
+    beliefs += hearing.beliefs
     beliefs += aim_lock_beliefs(
         [(r[0], r[1], r[2]) for r in (locks or [])], locate=locate)
 
@@ -1147,9 +1163,51 @@ async def load_round_information_state(
     apply_capability(
         states, {"capabilities": capture_policy.capabilities}, holders)
 
+    # Capture capability and reconstruction completeness are different facts.
+    # Keep valid beliefs when another shot cannot be modelled for this holder.
+    for guid, reasons in hearing.unavailable.items():
+        states[guid].gunfire_gap_times = hearing.gap_times[guid]
+        states[guid].unavailable["gunfire_reconstruction"] = (
+            "Gunfire reconstruction history incomplete: "
+            + "; ".join(GUNFIRE_GAP_REASONS[reason] for reason in reasons)
+            + ". Admitted regions model potential audibility, not proof of hearing."
+        )
+
+    # Allegiance is evaluated at the requested instant, independently of when
+    # evidence was acquired. Overlapping lives cannot establish a unique side.
+    roster = {
+        guid: team for guid, team in _roster_at(tracks or {}, t_ms).items()
+        if team in {"AXIS", "ALLIES"}
+        and not select_life(tracks[guid], t_ms)[2]
+    }
+    enemies = {}
+    friends = {}
+    for guid, state in states.items():
+        team = roster.get(guid)
+        enemies[guid] = frozenset(
+            subject for subject, side in roster.items()
+            if team is not None and side != team
+        )
+        friends[guid] = frozenset(
+            subject for subject, side in roster.items()
+            if team is not None and side == team
+        )
+        # Only beliefs eligible for current metrics require subject allegiance.
+        # Faded/expired evidence can remain in history without disabling metrics.
+        # No enemy filter here: classification is the information being checked.
+        if team is None or any(
+            counts_as_known(b, t_ms) and b.subject_guid not in roster
+            for b in state.beliefs
+        ):
+            state.unavailable["enemy_roster"] = (
+                "Current allegiance is unavailable or ambiguous for the holder "
+                "or a named subject; enemy count and nearest-enemy distance are unavailable."
+            )
+
     return {
         "holders": {
-            guid: belief_payload(state, t_ms, positions.get(guid))
+            guid: belief_payload(state, t_ms, positions.get(guid),
+                                 enemy_guids=enemies[guid], friendly_guids=friends[guid])
             for guid, state in states.items()
         },
         "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS,
@@ -1296,13 +1354,21 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
     exactly the kind of number this layer exists to refuse.
     """
     holders = information.get("holders") or {}
-    own = [holders[g] for g in pov_team["members"] if g in holders]
+    own = [holders[g] for g in sorted(pov_team["members"]) if g in holders]
 
     beliefs: list[dict] = []
-    unavailable: dict = {}
+    reasons: dict[str, set[str]] = {}
     for h in own:
         beliefs.extend(h.get("beliefs") or [])
-        unavailable.update(h.get("unavailable") or {})
+        for channel, reason in (h.get("unavailable") or {}).items():
+            reasons.setdefault(channel, set()).add(reason)
+    unavailable = {channel: "; ".join(sorted(values))
+                   for channel, values in sorted(reasons.items())}
+    if not own or len(own) != len(pov_team["members"]):
+        unavailable["team_knowledge"] = (
+            "One or more requested team members have no reconstructed holder state; "
+            "the team's known-enemy count is unavailable."
+        )
 
     named = {b.get("subject_guid") for b in beliefs
              if b.get("counts_as_known") and b.get("subject_guid")}
@@ -1312,14 +1378,19 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
         "holders": {
             f"team:{pov_team['team']}": {
                 "holder_guid": f"team:{pov_team['team']}",
-                "known_enemy_count": len(named),
+                "known_enemy_count": len(named) if not {"enemy_roster", "team_knowledge"}.intersection(unavailable) else None,
                 "nearest_known_enemy_distance": None,
                 "nearest_heard_activity_distance": None,
+                "heard_activity_distance_reconstruction_complete": bool(own) and len(own) == len(pov_team["members"]) and all(
+                    h.get("heard_activity_distance_reconstruction_complete",
+                          "gunfire_reconstruction" not in (h.get("unavailable") or {}))
+                    for h in own
+                ),
                 "beliefs": sorted(beliefs, key=lambda b: -(b.get("confidence") or 0)),
                 "unavailable": unavailable,
                 # ⚠️ The MAXIMUM across the union, not one member's.
-                # `pov_team["members"]` is a set, so `own` has no defined order
-                # and `own[0]` picked an arbitrary holder — safe today only
+                # `pov_team["members"]` is a set; before sorting, `own[0]`
+                # picked an arbitrary holder — safe today only
                 # because every holder publishes the same module constant, and
                 # a latent bug the moment one does not. The consumer uses this
                 # as a hard filter (`beliefRegions` drops regions wider than

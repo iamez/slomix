@@ -4126,7 +4126,7 @@ export interface SpiderLineOfSight {
 export interface SpiderWebSnapshot {
   round_id: number;
   t_ms: number;
-  map_name: string;
+  map_name: string | null;
   round_duration_ms: number;
   teams: string[];
   /** null for a round without tracks / without a valid manifest. */
@@ -4187,6 +4187,9 @@ export interface SpiderWebSnapshot {
 }
 
 export interface SpiderBelief {
+  /** Snapshot allegiance: true enemy, false teammate, null unknown/unattributed.
+   * Independent of confidence; absent on old recordings. */
+  subject_is_enemy?: boolean | null;
   kind: string;
   source: string;
   subject_guid: string | null;
@@ -4201,10 +4204,13 @@ export interface SpiderBelief {
 }
 export interface SpiderHolder {
   holder_guid: string;
-  known_enemy_count: number;
+  /** Null when the holder or named subjects have unavailable allegiance. */
+  known_enemy_count: number | null;
   /** An INTERVAL — the server publishes the uncertainty, not a point. */
   nearest_known_enemy_distance: { min: number; max: number } | null;
   nearest_heard_activity_distance: { min: number; max: number } | null;
+  /** Current distance-relevant modelling gaps only; not capture completeness. */
+  heard_activity_distance_reconstruction_complete?: boolean;
   beliefs: SpiderBelief[];
   position_claim_max_radius: number | null;
   /** Channels this holder cannot have, each with the server's reason. */

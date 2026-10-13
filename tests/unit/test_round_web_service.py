@@ -13,22 +13,24 @@ import json
 import pytest
 
 from website.backend.services import replay_service
-from website.backend.services.reconstruction_accuracy import position_error
 from website.backend.services.information_state import (
     EXPIRY_INTERVAL_ONLY,
     EXPIRY_VALIDATED_WAVE,
     resolve_expiry,
 )
+from website.backend.services.reconstruction_accuracy import position_error
 from website.backend.services.round_web_service import (
     AUDIBLE_GUNFIRE_RADIUS,
-    VELOCITY_SANITY_CAP_UPS,
     VELOCITY_MAX_DT_INTERVALS,
+    VELOCITY_SANITY_CAP_UPS,
     CapturePolicy,
     Edge,
     PlayerState,
     Snapshot,
     _contested_guids,
     _ensure_attackers,
+    _pov_team,
+    _roster_at,
     build_edges,
     build_snapshot,
     derive_velocity,
@@ -37,11 +39,9 @@ from website.backend.services.round_web_service import (
     load_capture_policy,
     load_round_clock,
     load_round_information_state,
-    restrict_clock_to_pov,
     make_locator,
-    _pov_team,
-    _roster_at,
     nearest_teammate_separation,
+    restrict_clock_to_pov,
     select_life,
 )
 
@@ -1982,7 +1982,12 @@ class TestInformationStateLoader:
             _InfoStubDb(), 1, 1000, _snapshot_of("A", "B"), {},
             CapturePolicy(capabilities={"shot_fired": "enabled", "aim_lock": "enabled"}))
         assert set(result["holders"]) == {"A", "B"}
-        assert all(h["known_enemy_count"] == 0 for h in result["holders"].values())
+        for holder in result["holders"].values():
+            # Without life tracks, allegiance is unknown rather than an
+            # observed zero. Keep the holder and name that evidence gap.
+            assert holder["known_enemy_count"] is None
+            assert holder["nearest_known_enemy_distance"] is None
+            assert "enemy_roster" in holder["unavailable"]
 
     @pytest.mark.asyncio
     async def test_an_unproven_channel_is_named_for_every_holder(self):

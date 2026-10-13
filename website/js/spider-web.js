@@ -104,6 +104,7 @@ const TEAM_COLOR = {
 const NEUTRAL = THEME.neutral;
 
 let loadId = 0;
+let viewId = 0;
 
 const state = {
     roundId: null,
@@ -224,7 +225,7 @@ export function boundsFromPlayers(players, margin = 512) {
 }
 
 /**
- * The enemy regions a point of view is entitled to draw.
+ * The named-subject regions a point of view is entitled to draw.
  *
  * ⭐ Under a team view an enemy is NOT a dot. The holder never knew a point —
  * they knew a place, from a contact or a crosshair or a noise, and that place
@@ -241,14 +242,15 @@ export function beliefRegions(holder) {
     // refuses to derive a distance from one that wide, and drawing it anyway
     // makes the same overclaim in pixels: a 2,500-unit circle on a 4,600-unit
     // map is not "he is somewhere here", it is the whole map. Those subjects
-    // are still KNOWN — they are reported as "position unknown" in words,
+    // remain named observations — reported as "position unknown" in words,
     // which is what the holder actually had.
     const horizon = typeof holder.position_claim_max_radius === 'number'
         ? holder.position_claim_max_radius : Infinity;
     const drawable = [];
     const unplaced = new Set();
     for (const b of holder.beliefs) {
-        if (!b || !b.subject_guid) continue;
+        // Preserve old recordings, but never draw explicitly classified allies.
+        if (!b || !b.subject_guid || b.subject_is_enemy === false) continue;
         if (!b.region) continue;
         if (b.region.radius > horizon) {
             unplaced.add(b.subject_guid);
@@ -260,6 +262,7 @@ export function beliefRegions(holder) {
             confidence: typeof b.confidence === 'number' ? b.confidence : 0,
             subject: b.subject_guid,
             source: b.source,
+            isEnemy: b.subject_is_enemy === true ? true : null,
         });
     }
     // A subject with one fresh region and one stale one is placed, not unplaced.
@@ -409,11 +412,11 @@ function drawBeliefRegions(ctx, regions, cam, view) {
         ctx.arc(c.x, c.y, px, 0, Math.PI * 2);
         // Hex + alpha suffix rather than a second rgba() literal, so the value
         // still comes from THEME and cannot drift away from it.
-        ctx.fillStyle = THEME.negative + alphaHex(a * 0.25);
+        ctx.fillStyle = (r.isEnemy ? THEME.negative : THEME.text) + alphaHex(a * 0.25);
         ctx.fill();
-        ctx.strokeStyle = THEME.negative + alphaHex(a);
+        ctx.strokeStyle = (r.isEnemy ? THEME.negative : THEME.text) + alphaHex(a);
         ctx.lineWidth = 1;
-        ctx.setLineDash([5, 4]);
+        ctx.setLineDash(r.isEnemy ? [5, 4] : [2, 4]);
         ctx.stroke();
         ctx.restore();
     }
@@ -506,7 +509,19 @@ function render(canvas) {
     // A map without floors still has people in it. Falling back to the extent
     // of the players keeps them on screen, and the banner above the canvas is
     // what says the space is missing.
-    const bounds = state.mesh ? state.mesh.bounds : boundsFromPlayers(players);
+    const info = (state.snapshot && state.snapshot.information_state) || {};
+    const holder = isTeamPov(state.pov) ? Object.values(info.holders || {})[0] : null;
+    const regions = beliefRegions(holder).regions;
+    // Fit the full extent of granted regions, including a belief-only scene.
+    // No hidden opponent positions are requested or inferred for framing.
+    const extents = [state.mesh?.bounds, boundsFromPlayers(players), ...regions.map((r) => ({
+        min: [r.x - r.radius, r.y - r.radius, r.z - r.radius],
+        max: [r.x + r.radius, r.y + r.radius, r.z + r.radius],
+    }))].filter(Boolean);
+    const bounds = extents.length ? {
+        min: [0, 1, 2].map(i => Math.min(...extents.map(b => b.min[i]))),
+        max: [0, 1, 2].map(i => Math.max(...extents.map(b => b.max[i]))),
+    } : null;
     if (!bounds) return;
 
     const view = viewportFor({ bounds }, canvas, state.camera);
@@ -515,9 +530,7 @@ function render(canvas) {
     // Enemy beliefs beneath everything else: they are the least certain thing
     // on the canvas and must not sit on top of what is known.
     if (isTeamPov(state.pov)) {
-        const info = (state.snapshot && state.snapshot.information_state) || {};
-        const holder = Object.values(info.holders || {})[0];
-        drawBeliefRegions(ctx, beliefRegions(holder).regions, state.camera, view);
+        drawBeliefRegions(ctx, regions, state.camera, view);
     }
 
     // Threads under the players: a dot must never be hidden by a line.
@@ -675,17 +688,16 @@ export function capabilityRows(policy) {
  * one applied consistently: the load returns, the caller commits.
  */
 async function loadMesh(mapName) {
+    if (!mapName) return { mesh: null, mapName, status: 'unnamed' };
     if (state.meshMapName === mapName && state.mesh) {
-        return { mesh: state.mesh, mapName };
+        return { mesh: state.mesh, mapName, status: 'ready' };
     }
     try {
-        const mesh = await fetchJSON(`${GEOMETRY_BASE}/${encodeURIComponent(mapName)}.json`);
-        return { mesh, mapName };
-    } catch {
-        // ⛔ Named, not silent. `etl_supply` has no BSP in etmain and a handful
-        // of maps were never exported; drawing an empty stage would read as an
-        // empty round.
-        return { mesh: null, mapName };
+        const mesh = await fetchJSON(`${GEOMETRY_BASE}/${encodeURIComponent(mapName)}.json`, { cachePolicy: 'no-store' });
+        return { mesh, mapName, status: 'ready' };
+    } catch (error) {
+        // Only a definitive 404 establishes missing exported geometry.
+        return { mesh: null, mapName, status: error.status === 404 ? 'missing' : 'unavailable' };
     }
 }
 
@@ -749,6 +761,7 @@ export async function loadSpiderWebView(params = {}) {
     if (!container) return;
 
     const myLoad = ++loadId;
+    const myView = ++viewId;
     const roundId = params.roundId || state.roundId;
     container.textContent = '';
 
@@ -825,6 +838,7 @@ export async function loadSpiderWebView(params = {}) {
     // `state.mesh` itself — a superseded round's floor could land under the
     // winning round's players (Codex, PR #807).
     const mapName = snapshot.map_name || '';
+    container.firstChild.textContent = 'Nalagam geometrijo…';
     const loaded = await loadMesh(mapName);
     if (myLoad !== loadId) return;
 
@@ -872,10 +886,36 @@ export async function loadSpiderWebView(params = {}) {
     header.appendChild(status);
     container.appendChild(header);
 
-    if (!state.mesh) {
-        container.appendChild(_el('p', 'text-amber-400 text-sm mb-3',
-            `Za mapo ${mapName || '?'} ni izvožene geometrije — lege so znane, prostor ni.`));
-    }
+    let meshStatus = loaded.status;
+    let meshAttempt = 0;
+    const meshNote = _el('p', 'text-amber-400 text-sm mb-3');
+    meshNote.setAttribute('aria-live', 'polite');
+    const meshRetry = _el('button', 'px-2 py-1 text-xs rounded bg-slate-800', 'Ponovi geometrijo');
+    const paintMeshStatus = () => {
+        meshNote.textContent = meshStatus === 'loading' ? 'Nalagam geometrijo…'
+            : meshStatus === 'unavailable' ? 'Geometrija trenutno ni dosegljiva; podatki o legah ostajajo prikazani.'
+                : meshStatus === 'missing' ? `Za mapo ${mapName} ni izvožene geometrije — prikazujemo razpoložljive lege brez podlage.`
+                    : meshStatus === 'unnamed' ? 'Posnetek ne določa mape; razpoložljive lege so prikazane brez podlage.' : '';
+        meshRetry.hidden = meshStatus !== 'unavailable';
+        meshRetry.disabled = meshStatus === 'loading';
+    };
+    meshRetry.addEventListener('click', async () => {
+        const attempt = ++meshAttempt;
+        meshStatus = 'loading';
+        paintMeshStatus();
+        const result = await loadMesh(mapName);
+        // Scrubbing within this view may continue; navigation must invalidate
+        // a late geometry response independently of the moment request token.
+        if (myView !== viewId || attempt !== meshAttempt || !container.contains(canvas)) return;
+        state.mesh = result.mesh;
+        state.meshMapName = result.mapName;
+        meshStatus = result.status;
+        paintMeshStatus();
+        redraw();
+    });
+    paintMeshStatus();
+    container.appendChild(meshNote);
+    container.appendChild(meshRetry);
 
     // ⭐ Point of view. §6.4 makes `world` a NAMED diagnostic, so it is spelled
     // out as one rather than being the unlabelled default.
@@ -897,10 +937,8 @@ export async function loadSpiderWebView(params = {}) {
         btn.dataset.pov = value;
         povButtons.push(btn);
         btn.addEventListener('click', async () => {
-            if (state.pov === value) return;
-            state.pov = value;
-            await goTo(state.tMs);
-            paintPov();
+            if (requestedPov === value) return;
+            await goTo(requestedMs, value);
         });
         povBar.appendChild(btn);
     }
@@ -934,20 +972,26 @@ export async function loadSpiderWebView(params = {}) {
             return;
         }
         const holder = Object.values(info.holders || {})[0] || {};
-        const known = holder.known_enemy_count || 0;
-        const unplaced = beliefRegions(holder).unplacedSubjects.length;
+        const known = typeof holder.known_enemy_count === 'number' && Number.isFinite(holder.known_enemy_count)
+            && !holder.unavailable?.enemy_roster ? holder.known_enemy_count : null;
+        const unplacedSubjects = beliefRegions(holder).unplacedSubjects;
+        const unplaced = unplacedSubjects.length;
+        const unknownUnplaced = unplacedSubjects.filter((subject) => holder.beliefs?.some(
+            (b) => b.subject_guid === subject && b.subject_is_enemy !== true)).length;
         povNote.className = 'text-[11px] leading-relaxed mb-2 text-slate-400';
         povNote.textContent =
-            `Lege ${withheld.length} nasprotnikov so ZADRŽANE na strežniku, ne skrite `
-            + 'pri risanju. Nasprotnik je narisan samo kot regija, ki jo je ta ekipa '
-            + 'lahko sklepala, in ta se s časom širi. '
-            + (known
+            `Lege ${withheld.length} igralcev so ZADRŽANE na strežniku, ne skrite `
+            + 'pri risanju. Zaznani subjekt je narisan samo kot regija, ki jo je ta ekipa '
+            + 'lahko sklepala, in ta se s časom širi. Nevtralna pikčasta regija pomeni: pripadnost neznana; rdeča črtkana regija: nasprotnik. '
+            + (known == null
+                ? 'Število znanih nasprotnikov ni na voljo: rekonstrukcija znanja ekipe ali pripadnost ekip ni zanesljiva.'
+                : known
                 ? `Trenutno pozna ${known} ${known === 1 ? 'nasprotnika' : 'nasprotnikov'}.`
                 : 'V tem trenutku ta ekipa ni vedela za nobenega nasprotnika.')
             + (unplaced
-                ? ` Pri ${unplaced} od njih je regija že širša od `
+                ? ` Pri ${unplaced} poimenovanih zaznavah je regija že širša od `
                   + `${Math.round(horizonOf(holder))} enot, zato ni narisana: `
-                  + 'ekipa ve, da obstaja, ne pa več kje je.'
+                  + `trenutna lega ni določena (${unknownUnplaced} s pripadnostjo neznano).`
                 : '')
             + ' ⚠️ Lege soigralcev so prikazane kot znane — to je poenostavitev '
             + '(glasovni kanal ni zajet), ne meritev.';
@@ -988,21 +1032,54 @@ export async function loadSpiderWebView(params = {}) {
     const readout = _el('span', 'text-xs font-mono text-slate-300 tabular-nums',
         `t = ${state.tMs || 0} ms`);
 
-    const goTo = async (nextMs) => {
+    // Requested controls may move ahead; shared state always describes the
+    // successfully rendered snapshot. A failed request must not relabel it.
+    let requestedMs = state.tMs;
+    let requestedPov = state.pov;
+    let failedTarget = null;
+    const requestStatus = _el('span', 'text-xs text-amber-400');
+    requestStatus.setAttribute('role', 'status');
+    const retry = _el('button', 'px-2 py-1 text-xs rounded bg-slate-800', 'Poskusi znova');
+    retry.hidden = true;
+    retry.addEventListener('click', () => {
+        if (failedTarget) goTo(failedTarget.tMs, failedTarget.pov);
+    });
+    const goTo = async (nextMs, nextPov = requestedPov) => {
         const clamped = Math.max(0, Math.min(Number(slider.max), Math.round(nextMs)));
-        state.tMs = clamped;
+        requestedMs = clamped;
+        requestedPov = nextPov;
+        failedTarget = null;
         slider.value = String(clamped);
-        readout.textContent = `t = ${clamped} ms`;
+        requestStatus.textContent = `Nalagam t = ${clamped} ms · ${nextPov}`;
+        retry.hidden = true;
+        // Never show the oracle scene while a different POV is being requested.
+        canvas.hidden = nextPov !== state.pov;
         const mine = ++loadId;
         let fresh;
         try {
-            fresh = await loadMoment(roundId, clamped, state.pov);
+            fresh = await loadMoment(roundId, clamped, nextPov);
         } catch {
+            if (mine !== loadId) return;
+            failedTarget = { tMs: clamped, pov: nextPov };
+            requestedMs = state.tMs;
+            requestedPov = state.pov;
+            slider.value = String(state.tMs);
+            canvas.hidden = false;
+            requestStatus.textContent = 'Posodobitev ni uspela. Prikazan je zadnji uspešno naloženi trenutek in pogled.';
+            retry.hidden = false;
             return;
         }
         if (mine !== loadId) return;
         state.snapshot = fresh;
+        state.tMs = fresh.t_ms;
+        state.pov = nextPov;
+        requestedMs = state.tMs;
+        slider.value = String(state.tMs);
+        readout.textContent = `t = ${state.tMs} ms`;
+        canvas.hidden = false;
+        requestStatus.textContent = '';
         status.textContent = statusLine(state.snapshot);
+        paintPov();
         paintPovNote();
         paintPanels();
         redraw();
@@ -1012,11 +1089,13 @@ export async function loadSpiderWebView(params = {}) {
                                   ['+200 ms', 200], ['+1 s', 1000]]) {
         const btn = _el('button', 'px-2 py-1 text-xs rounded bg-slate-800 '
             + 'hover:bg-slate-700 text-slate-200 font-mono', label);
-        btn.addEventListener('click', () => goTo(state.tMs + delta));
+        btn.addEventListener('click', () => goTo(requestedMs + delta));
         controls.appendChild(btn);
     }
     controls.appendChild(slider);
     controls.appendChild(readout);
+    controls.appendChild(requestStatus);
+    controls.appendChild(retry);
     slider.addEventListener('change', () => goTo(Number(slider.value)));
     container.appendChild(controls);
 

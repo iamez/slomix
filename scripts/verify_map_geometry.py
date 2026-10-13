@@ -31,8 +31,11 @@ the engine's own constant rather than anything this pipeline could have chosen.
 The export and the engine agree about where the ground is, from two sources
 that have never read each other.
 
-The SPREAD is what a failure would show: a consistent height means the geometry
-is right and the offset is a convention, a scattered one means it is not.
+This is a COVERAGE SCREEN, not an alignment certificate. The reported standing
+spread is conditional on the 0..MAX_RISE filter, so it cannot independently
+validate alignment or prove that these samples were standing. Exit zero only
+means every requested map supplied data and met the floor-coverage screen.
+Independent stance/collision evidence is still needed to validate alignment.
 
 ⛔ Samples with no floor beneath them are reported, never dropped. A player over
 a gap is either a real hole in the export (a floor we filtered away) or a jump,
@@ -126,6 +129,10 @@ async def main() -> int:
     manifest = json.loads((args.geometry / "manifest.json").read_text())
     wanted = args.maps or [n for n, e in manifest["maps"].items() if e.get("available")]
 
+    if not wanted:
+        print("  ⛔ Ni izbranih map; geometrija ni bila preverjena.")
+        return 1
+
     await init_db_pool()
     db = get_db_pool()
 
@@ -136,11 +143,13 @@ async def main() -> int:
         mesh_path = args.geometry / f"{name}.json"
         if not mesh_path.exists():
             print(f"  {name:<20s} ⚠️ ni izvožene geometrije")
+            failures.append(f"{name}: geometry unavailable")
             continue
         vertices, indexes = load_mesh(mesh_path)
         positions = await sample_positions(db, name, args.samples)
         if not positions:
             print(f"  {name:<20s} ⚠️ ni zapisanih leg igralcev")
+            failures.append(f"{name}: player samples unavailable")
             continue
 
         rises: list[float] = []
@@ -171,8 +180,10 @@ async def main() -> int:
             rises.append(rise)
 
         if not rises:
-            failures.append(f"{name}: no sample found any floor")
-            print(f"  {name:<20s} ⛔ noben vzorec ni našel tal")
+            failures.append(f"{name}: no samples within the standing-height band; "
+                            f"unsupported={unsupported}, high={airborne}")
+            print(f"  {name:<20s} ⛔ ni vzorcev v višinskem pasu 0–{MAX_RISE:g}; "
+                  f"brez tal={unsupported}, nad pasom={airborne}")
             continue
 
         rises.sort()
@@ -180,9 +191,10 @@ async def main() -> int:
                          rises[(len(rises) * 9) // 10])
         spread = p90 - p10
         share_unsupported = unsupported / len(positions)
-        # ⭐ The spread is the verdict, not the offset. A constant height above
-        # the floor is the origin convention; a scattered one is wrong geometry.
-        bad = spread > 128.0 or share_unsupported > 0.25
+        # The spread is descriptive only: rises were already restricted to
+        # 0..96, so the old spread >128 predicate could never fail. Keep the
+        # existing coverage threshold without inventing an alignment threshold.
+        bad = share_unsupported > 0.25
         if bad:
             failures.append(
                 f"{name}: spread {spread:.0f}, unsupported {100*share_unsupported:.0f}%")
@@ -193,11 +205,11 @@ async def main() -> int:
 
     print()
     if failures:
-        print("  ⛔ MAPE, KI NE DRŽIJO SVOJIH IGRALCEV:")
+        print("  ⛔ PREVERJANJE POKRITOSTI NI USPELO ALI PODATKI NISO NA VOLJO:")
         for f in failures:
             print(f"      {f}")
     else:
-        print("  ✅ vsaka preverjena mapa drži igralce, ki so po njej hodili")
+        print("  ✅ Preverjanje pokritosti vzorcev uspešno; poravnava ni potrjena.")
     return 1 if failures else 0
 
 
