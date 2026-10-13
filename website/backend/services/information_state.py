@@ -542,12 +542,15 @@ def to_dict(
     Public friendly observations remain visible but do not become enemies.
     """
     live = [b for b in state.beliefs if b.confidence(t_ms) >= DISPLAY_FLOOR]
+    # A classified subset is evidence, not a complete enemy roster. Preserve
+    # its beliefs, but do not publish a definitive count or nearest distance.
+    roster_available = "enemy_roster" not in state.unavailable
     return {
         "holder_guid": state.holder_guid,
-        "known_enemy_count": known_enemy_count(state, t_ms, enemy_guids=enemy_guids),
+        "known_enemy_count": known_enemy_count(state, t_ms, enemy_guids=enemy_guids) if roster_available else None,
         "nearest_known_enemy_distance": (
             nearest_known_enemy_distance(state, t_ms, holder_pos, enemy_guids=enemy_guids)
-            if holder_pos else None
+            if holder_pos and roster_available else None
         ),
         "nearest_heard_activity_distance": (
             nearest_heard_activity_distance(state, t_ms, holder_pos)

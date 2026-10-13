@@ -681,3 +681,32 @@ it('frames only explicitly classified enemy regions, including low-confidence en
   expect(document.querySelector('[data-belief-subject="friendly"]')).toBeNull();
   expect(screen.queryByText(/known but not placed/)).toBeNull();
 });
+
+
+it.each([[null, true], [0, true], [1, true], [0, false], [1, false]] as const)(
+  'labels uncertain enemy metrics unavailable (count=%s uncertain=%s)', async (count, uncertain) => {
+    const snapshot = { ...world, information_state: { ...world.information_state, holders: {
+      H: { holder_guid: 'H', known_enemy_count: count,
+        nearest_known_enemy_distance: { min: 100, max: 200 }, nearest_heard_activity_distance: null,
+        position_claim_max_radius: 700, beliefs: [], notes: [],
+        unavailable: uncertain ? { enemy_roster: 'Allegiance unavailable' } : {} },
+    } } };
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return snapshot;
+      if (url.includes('/assets/maps/geometry/')) return { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: null };
+      return undefined;
+    });
+    renderAt();
+    await waitFor(() => expect(document.querySelector('[data-parity="spider-web.beliefs"]')).not.toBeNull());
+    const panel = document.querySelector('[data-parity="spider-web.beliefs"]')!;
+    if (uncertain) {
+      expect(panel.textContent).toContain('enemy count unavailable');
+      expect(panel.textContent).toContain('enemy distance unavailable');
+      expect(panel.textContent).not.toContain('knows of');
+      expect(panel.textContent).not.toContain('nearest known');
+    } else {
+      expect(panel.textContent).toContain(`knows of ${count}`);
+      expect(panel.textContent).toContain('nearest known');
+    }
+  },
+);

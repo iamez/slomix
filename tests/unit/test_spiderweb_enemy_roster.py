@@ -41,7 +41,7 @@ async def information(tracks, t=2000):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('subject_team,expected,unknown', [
-    ('AXIS', 0, False), ('ALLIES', 1, False), ('SPECTATOR', 0, True), (None, 0, True),
+    ('AXIS', 0, False), ('ALLIES', 1, False), ('SPECTATOR', None, True), (None, None, True),
 ])
 async def test_loader_retains_friendly_obituary_without_enemy_metrics(subject_team, expected, unknown):
     tracks = {'H': [life('H', 'AXIS')], 'S': [life('S', subject_team, identity=2)]}
@@ -84,7 +84,7 @@ async def test_unknown_or_conflicting_allegiance_never_invents_an_enemy(uncertai
         guid = 'H' if uncertain == 'holder_overlap' else 'S'
         tracks[guid].append(life(guid, 'ALLIES', identity=3))
     holder = (await information(tracks))['holders']['H']
-    assert holder['known_enemy_count'] == 0
+    assert holder['known_enemy_count'] is None
     assert holder['nearest_known_enemy_distance'] is None
     assert 'enemy_roster' in holder['unavailable']
     assert all(b['subject_is_enemy'] is False for b in holder['beliefs'] if b['subject_guid'])
@@ -114,7 +114,7 @@ async def test_team_union_deduplicates_enemy_and_excludes_friendly_subjects():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('team,expected', [('AXIS', 0), ('ALLIES', 1)])
+@pytest.mark.parametrize('team,expected', [('AXIS', 0), ('ALLIES', 1), (None, None)])
 async def test_real_asgi_route_propagates_roster_to_player_and_team_pov(monkeypatch, team, expected):
     import httpx
     from fastapi import FastAPI
@@ -167,3 +167,47 @@ def test_enemy_classification_survives_below_known_confidence_floor():
     payload = to_dict(state, 6000, (0, 0, 0), enemy_guids=frozenset({'S'}))
     assert payload['beliefs'][0]['subject_is_enemy'] is True
     assert payload['beliefs'][0]['counts_as_known'] is False
+
+
+@pytest.mark.parametrize('partial', [False, True])
+def test_unavailable_roster_has_null_metrics_but_preserves_classified_evidence(partial):
+    beliefs = [BeliefItem(holder_guid='H', source='aim_lock', t_observed=0,
+                         subject_guid='S', region=Region(100, 0, 0, 10))] if partial else []
+    beliefs.append(BeliefItem(holder_guid='H', source='gunfire', t_observed=0,
+                             subject_guid=None, region=Region(200, 0, 0, 10)))
+    state = HolderState('H', beliefs)
+    state.unavailable['enemy_roster'] = 'Named subject allegiance missing'
+    result = to_dict(state, 0, (0, 0, 0), enemy_guids=frozenset({'S'}))
+    assert result['known_enemy_count'] is None
+    assert result['nearest_known_enemy_distance'] is None
+    assert result['nearest_heard_activity_distance'] is not None
+    assert any(b['counts_as_known'] for b in result['beliefs']) is partial
+    assert len(result['beliefs']) == len(beliefs)
+    union = _team_information({'holders': {'H': result}}, {'team': 'AXIS', 'members': ['H']}, 0)
+    assert union['holders']['team:AXIS']['known_enemy_count'] is None
+
+
+def test_team_union_cannot_turn_a_members_unknown_count_into_a_partial_number():
+    known = to_dict(HolderState('H', [BeliefItem(
+        holder_guid='H', source='aim_lock', t_observed=0, subject_guid='S',
+        region=Region(100, 0, 0, 10),
+    )]), 0, (0, 0, 0), enemy_guids=frozenset({'S'}))
+    unknown_state = HolderState('H2', [])
+    unknown_state.unavailable['enemy_roster'] = 'Holder allegiance ambiguous'
+    unknown = to_dict(unknown_state, 0, None, enemy_guids=frozenset())
+    result = _team_information({'holders': {'H': known, 'H2': unknown}},
+                               {'team': 'AXIS', 'members': ['H', 'H2']}, 0)
+    holder = result['holders']['team:AXIS']
+    assert holder['known_enemy_count'] is None
+    assert any(b['counts_as_known'] for b in holder['beliefs'])
+
+
+def test_unrelated_hearing_gap_does_not_disable_known_enemy_metrics():
+    state = HolderState('H', [BeliefItem(holder_guid='H', source='aim_lock', t_observed=0,
+                                        subject_guid='S', region=Region(100, 0, 0, 10))])
+    state.unavailable['shot_fired'] = 'Capture unavailable'
+    result = to_dict(state, 0, (0, 0, 0), enemy_guids=frozenset({'S'}))
+    assert result['known_enemy_count'] == 1
+    assert result['nearest_known_enemy_distance'] is not None
+    union = _team_information({'holders': {'H': result}}, {'team': 'AXIS', 'members': ['H']}, 0)
+    assert union['holders']['team:AXIS']['known_enemy_count'] == 1

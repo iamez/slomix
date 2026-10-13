@@ -971,17 +971,20 @@ export async function loadSpiderWebView(params = {}) {
             return;
         }
         const holder = Object.values(info.holders || {})[0] || {};
-        const known = holder.known_enemy_count || 0;
+        const known = typeof holder.known_enemy_count === 'number' && Number.isFinite(holder.known_enemy_count)
+            && !holder.unavailable?.enemy_roster ? holder.known_enemy_count : null;
         const unplaced = beliefRegions(holder).unplacedSubjects.length;
         povNote.className = 'text-[11px] leading-relaxed mb-2 text-slate-400';
         povNote.textContent =
             `Lege ${withheld.length} nasprotnikov so ZADRŽANE na strežniku, ne skrite `
             + 'pri risanju. Nasprotnik je narisan samo kot regija, ki jo je ta ekipa '
             + 'lahko sklepala, in ta se s časom širi. '
-            + (known
+            + (known == null
+                ? 'Število znanih nasprotnikov ni na voljo: pripadnost ekip ni zanesljiva.'
+                : known
                 ? `Trenutno pozna ${known} ${known === 1 ? 'nasprotnika' : 'nasprotnikov'}.`
                 : 'V tem trenutku ta ekipa ni vedela za nobenega nasprotnika.')
-            + (unplaced
+            + (unplaced && known != null
                 ? ` Pri ${unplaced} od njih je regija že širša od `
                   + `${Math.round(horizonOf(holder))} enot, zato ni narisana: `
                   + 'ekipa ve, da obstaja, ne pa več kje je.'

@@ -1190,7 +1190,7 @@ async def load_round_information_state(
         ):
             state.unavailable["enemy_roster"] = (
                 "Current allegiance is unavailable or ambiguous for the holder "
-                "or a named subject; unclassified subjects are excluded from enemy metrics."
+                "or a named subject; enemy count and nearest-enemy distance are unavailable."
             )
 
     return {
@@ -1361,7 +1361,7 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
         "holders": {
             f"team:{pov_team['team']}": {
                 "holder_guid": f"team:{pov_team['team']}",
-                "known_enemy_count": len(named),
+                "known_enemy_count": len(named) if "enemy_roster" not in unavailable else None,
                 "nearest_known_enemy_distance": None,
                 "nearest_heard_activity_distance": None,
                 "beliefs": sorted(beliefs, key=lambda b: -(b.get("confidence") or 0)),

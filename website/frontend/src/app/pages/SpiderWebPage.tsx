@@ -156,8 +156,10 @@ function Beliefs({ snap }: { snap: SpiderWebSnapshot }) {
             <Stack key={h.holder_guid} gap={1} style={{ minWidth: 200 }}>
               <span style={{ fontSize: 'var(--fs-row)' }}>{nameOf(h.holder_guid)}</span>
               <Meta>
-                knows of {figure(h.known_enemy_count)} {h.known_enemy_count === 1 ? 'enemy' : 'enemies'}
-                {h.nearest_known_enemy_distance != null && <> · nearest known {span(h.nearest_known_enemy_distance)}</>}
+                {h.known_enemy_count == null || h.unavailable?.enemy_roster
+                  ? <>enemy count unavailable · enemy distance unavailable</>
+                  : <>knows of {figure(h.known_enemy_count)} {h.known_enemy_count === 1 ? 'enemy' : 'enemies'}
+                    {h.nearest_known_enemy_distance != null && <> · nearest known {span(h.nearest_known_enemy_distance)}</>}</>}
                 {h.nearest_heard_activity_distance != null && <> · heard within {span(h.nearest_heard_activity_distance)}</>}
                 {h.position_claim_max_radius != null && <> · claims within {figure(Math.round(h.position_claim_max_radius))}</>}
               </Meta>

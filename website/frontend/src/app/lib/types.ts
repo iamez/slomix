@@ -4126,7 +4126,7 @@ export interface SpiderLineOfSight {
 export interface SpiderWebSnapshot {
   round_id: number;
   t_ms: number;
-  map_name: string;
+  map_name: string | null;
   round_duration_ms: number;
   teams: string[];
   /** null for a round without tracks / without a valid manifest. */
@@ -4203,7 +4203,8 @@ export interface SpiderBelief {
 }
 export interface SpiderHolder {
   holder_guid: string;
-  known_enemy_count: number;
+  /** Null when the holder or named subjects have unavailable allegiance. */
+  known_enemy_count: number | null;
   /** An INTERVAL — the server publishes the uncertainty, not a point. */
   nearest_known_enemy_distance: { min: number; max: number } | null;
   nearest_heard_activity_distance: { min: number; max: number } | null;

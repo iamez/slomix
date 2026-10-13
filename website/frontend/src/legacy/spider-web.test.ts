@@ -1124,6 +1124,30 @@ describe('opening a different round', () => {
     expect(y - radius).toBeGreaterThanOrEqual(0); expect(y + radius).toBeLessThanOrEqual(canvas.height);
   });
 
+  it.each([[null, true], [0, true], [1, true], [0, false], [1, false]])(
+    'does not present unavailable enemy metrics as zero (count=%s unavailable=%s)', async (count, unavailable) => {
+      const roundId = 12070 + Number(count ?? 2) + (unavailable ? 0 : 10);
+      vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).includes('/geometry/')) return new Response('', { status: 404 });
+        return new Response(JSON.stringify({ ...geometrySnapshot(roundId, 'fixture-roster'), information_state: { holders: {
+          'team:AXIS': { holder_guid: 'team:AXIS', known_enemy_count: count, beliefs: [],
+            unavailable: unavailable ? { enemy_roster: 'Allegiance unavailable' } : {} },
+        } } }));
+      }));
+      await loadSpiderWebView({ roundId: String(roundId) });
+      const host = document.getElementById('spider-web-container')!;
+      (host.querySelector('[data-pov="team:AXIS"]') as HTMLButtonElement).click();
+      await vi.waitFor(() => {
+        if (unavailable) {
+          expect(host.textContent).toContain('Število znanih nasprotnikov ni na voljo');
+          expect(host.textContent).not.toContain('ni vedela za nobenega nasprotnika');
+          expect(host.textContent).not.toContain('Trenutno pozna');
+        } else if (count === 0) expect(host.textContent).toContain('ni vedela za nobenega nasprotnika');
+        else expect(host.textContent).toContain('Trenutno pozna 1');
+      });
+    },
+  );
+
 });
 
 
