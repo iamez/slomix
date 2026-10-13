@@ -13,7 +13,7 @@ from website.backend.dependencies import get_db, require_internal_secret
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import fetch_identity_links
-from website.backend.services.composite_scope import resolve_composite_scope
+from website.backend.services.composite_scope import composite_round_join_sql, resolve_composite_scope
 from website.backend.services.skill_rating_service import (
     CONSTANT,
     MIN_ROUNDS,
@@ -531,7 +531,7 @@ async def get_composite_stats(
             scope_lookup_failed = False
             try:
                 row = await db.fetch_one(
-                    """
+                    f"""
                     -- Each MAX runs through the SAME gates as the coverage
                     -- counts (:508, Codex on #848): a source whose newest rows
                     -- live only in invalid or bot rounds must not pick the
@@ -541,41 +541,31 @@ async def get_composite_stats(
                     -- (2026-08-27), so this is shape, not behaviour.
                     SELECT GREATEST(
                         (SELECT MAX(t.session_date) FROM proximity_kill_outcome t
-                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
-                            AND r.map_name = t.map_name AND r.round_number = t.round_number
-                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
+                          JOIN rounds r ON {composite_round_join_sql()}
                           WHERE r.is_valid IS DISTINCT FROM FALSE
                             AND r.is_bot_round IS DISTINCT FROM TRUE
                             AND r.round_number IN (1, 2)
                             AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)),
                         (SELECT MAX(t.session_date) FROM proximity_crossfire_opportunity t
-                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
-                            AND r.map_name = t.map_name AND r.round_number = t.round_number
-                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
+                          JOIN rounds r ON {composite_round_join_sql()}
                           WHERE r.is_valid IS DISTINCT FROM FALSE
                             AND r.is_bot_round IS DISTINCT FROM TRUE
                             AND r.round_number IN (1, 2)
                             AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)),
                         (SELECT MAX(t.session_date) FROM proximity_lua_trade_kill t
-                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
-                            AND r.map_name = t.map_name AND r.round_number = t.round_number
-                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
+                          JOIN rounds r ON {composite_round_join_sql()}
                           WHERE r.is_valid IS DISTINCT FROM FALSE
                             AND r.is_bot_round IS DISTINCT FROM TRUE
                             AND r.round_number IN (1, 2)
                             AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)),
                         (SELECT MAX(t.session_date) FROM proximity_combat_position t
-                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
-                            AND r.map_name = t.map_name AND r.round_number = t.round_number
-                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
+                          JOIN rounds r ON {composite_round_join_sql()}
                           WHERE r.is_valid IS DISTINCT FROM FALSE
                             AND r.is_bot_round IS DISTINCT FROM TRUE
                             AND r.round_number IN (1, 2)
                             AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)),
                         (SELECT MAX(t.session_date) FROM proximity_spawn_timing t
-                          JOIN rounds r ON r.round_start_unix = t.round_start_unix
-                            AND r.map_name = t.map_name AND r.round_number = t.round_number
-                            AND SUBSTR(CAST(r.round_date AS TEXT), 1, 10) = CAST(t.session_date AS TEXT)
+                          JOIN rounds r ON {composite_round_join_sql()}
                           WHERE r.is_valid IS DISTINCT FROM FALSE
                             AND r.is_bot_round IS DISTINCT FROM TRUE
                             AND r.round_number IN (1, 2)
