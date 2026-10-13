@@ -15,7 +15,8 @@ function imports(file: string) {
 it('invalidates the complete legacy Live import chain with one shared tonight module', () => {
   const document = new DOMParser().parseFromString(readFileSync(resolve(website, 'index.html'), 'utf8'), 'text/html');
   expect(document.querySelector('script[type="module"][src^="js/app.js"]')?.getAttribute('src'))
-    .toBe(`js/app.js?v=${version}`);
+    .toBe('js/app.js?v=20261013-live-spider-merged');
+  expect(imports('js/app.js')).toContain('./spider-web.js?v=20261012-spider-geometry');
   expect(imports('js/app.js')).toContain(`./tonight.js?v=${version}`);
   expect(imports('js/app.js')).toContain(`./home.js?v=${version}`);
   expect(imports('js/home.js')).toContain(`./tonight.js?v=${version}`);

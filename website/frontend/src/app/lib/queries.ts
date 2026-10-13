@@ -1579,19 +1579,20 @@ export function useProxRoundTracks(roundId: number | null) {
  *  within the SAME point of view. Across a switch the oracle's players and
  *  beliefs would be drawn under a team's label until the request landed
  *  (Codex on #1005), so a snapshot of another view is not a placeholder. */
-export function sameView(prev: SpiderWebSnapshot | undefined, pov: string): SpiderWebSnapshot | undefined {
-  if (!prev) return undefined;
+export function sameView(prev: SpiderWebSnapshot | undefined, pov: string, roundId: number | null): SpiderWebSnapshot | undefined {
+  if (!prev || prev.round_id !== roundId) return undefined;
   return (prev.information_state?.pov ?? 'world') === pov ? prev : undefined;
 }
 
 export function useSpiderWebMoment(roundId: number | null, tMs: number, pov: string) {
-  return useQuery({
+  return useQuery<SpiderWebSnapshot>({
     queryKey: ['spider-web', roundId, tMs, pov],
     enabled: roundId != null,
-    placeholderData: (prev) => sameView(prev, pov),
-    queryFn: () =>
+    placeholderData: (prev) => sameView(prev, pov, roundId),
+    queryFn: ({ signal }) =>
       apiGet('/api/replay/round/{round_id}/web', {
         pathParams: { round_id: roundId! },
+        signal,
         query: { t: Math.round(tMs), ...(pov !== 'world' ? { pov } : {}) },
       }) as Promise<SpiderWebSnapshot>,
     staleTime: 5 * 60 * 1000,

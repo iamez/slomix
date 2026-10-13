@@ -735,14 +735,14 @@ export function useStoryBoxScore(scope: StoryScope | null) {
 // Composite advanced stats: TIR / CI / KPI / SDS / CP (the "stories WITH numbers"
 // numerical layer). Endpoint already produces clean 0-100 scaled values per
 // player; Story page uses this hook to wire CompositeStatsPanel.
-export function useStoryComposite(sessionDate: string | null) {
+export function useStoryComposite(sessionDate: string | null, gamingSessionId?: number | null) {
   return useQuery({
-    queryKey: ['story-composite', sessionDate],
+    queryKey: ['story-composite', gamingSessionId ?? null, gamingSessionId != null ? null : sessionDate],
     queryFn: () => {
-      if (!sessionDate) throw new Error('sessionDate required');
-      return api.getCompositeStats(sessionDate);
+      if (!sessionDate && gamingSessionId == null) throw new Error('composite scope required');
+      return api.getCompositeStats(sessionDate, gamingSessionId);
     },
-    enabled: !!sessionDate,
+    enabled: gamingSessionId != null || !!sessionDate,
     staleTime: 60_000,
   });
 }

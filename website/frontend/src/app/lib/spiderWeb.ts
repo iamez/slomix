@@ -133,6 +133,7 @@ export function placeLabels<T extends Label>(labels: T[], minX = 70, minY = 13):
 }
 
 export interface BeliefLike {
+  subject_is_enemy?: boolean | null;
   subject_guid?: string | null;
   region?: { x: number; y: number; z: number; radius: number } | null;
   confidence?: number;
@@ -142,7 +143,7 @@ export interface HolderLike { beliefs?: BeliefLike[]; position_claim_max_radius?
 
 export interface DrawableRegion {
   x: number; y: number; z: number; radius: number; confidence: number;
-  subject: string; source: string | null;
+  subject: string; source: string | null; isEnemy: boolean | null;
 }
 
 /** The published horizon, or Infinity when a view does not carry one. */
@@ -151,7 +152,7 @@ export function horizonOf(holder: HolderLike | null | undefined): number {
 }
 
 /**
- * The enemy regions a point of view is entitled to draw.
+ * The named-subject regions a point of view is entitled to draw.
  *
  * ⭐ Under a team view an enemy is NOT a dot. The holder never knew a point —
  * they knew a place, from a contact or a crosshair or a noise, and that
@@ -163,7 +164,7 @@ export function horizonOf(holder: HolderLike | null | undefined): number {
  * drawing either as an enemy position would invent one. ⛔ Past the
  * published horizon a region is not drawn either — a 2,500-unit circle on a
  * 4,600-unit map is not "he is somewhere here", it is the whole map. Those
- * subjects stay KNOWN: they are returned as `unplacedSubjects`, in words.
+ * subjects remain named observations in `unplacedSubjects`, not enemy counts.
  */
 export function beliefRegions(holder: HolderLike | null | undefined): { regions: DrawableRegion[]; unplacedSubjects: string[] } {
   if (holder == null || !Array.isArray(holder.beliefs)) return { regions: [], unplacedSubjects: [] };
@@ -171,13 +172,14 @@ export function beliefRegions(holder: HolderLike | null | undefined): { regions:
   const drawable: DrawableRegion[] = [];
   const unplaced = new Set<string>();
   for (const b of holder.beliefs) {
-    if (b == null || !b.subject_guid) continue;
+    // Older recordings lack classification; explicit non-enemies never draw.
+    if (b == null || !b.subject_guid || b.subject_is_enemy === false) continue;
     if (!b.region) continue;
     if (b.region.radius > horizon) { unplaced.add(b.subject_guid); continue; }
     drawable.push({
       x: b.region.x, y: b.region.y, z: b.region.z, radius: b.region.radius,
       confidence: typeof b.confidence === 'number' ? b.confidence : 0,
-      subject: b.subject_guid, source: b.source ?? null,
+      subject: b.subject_guid, source: b.source ?? null, isEnemy: b.subject_is_enemy === true ? true : null,
     });
   }
   // A subject with one fresh region and one stale one is placed, not unplaced.
@@ -251,4 +253,18 @@ export function floorBands(mesh: { vertices: number[]; indexes: number[] }, cam:
     t: (b + 0.5) / bands,
     d: tris.sort((p, q) => p.depth - q.depth).map((tri) => `M${tri.d[0]}L${tri.d[1]}L${tri.d[2]}Z`).join(''),
   })).filter((band) => band.d !== '');
+}
+
+
+/** Frame only evidence granted to this POV, including the full region extent. */
+export function authorizedBounds(players: Parameters<typeof boundsFromPlayers>[0], regions: DrawableRegion[], mesh?: Bounds | null): Bounds | null {
+  const bounds = [mesh, boundsFromPlayers(players), ...regions.map((r) => ({
+    min: [r.x - r.radius, r.y - r.radius, r.z - r.radius],
+    max: [r.x + r.radius, r.y + r.radius, r.z + r.radius],
+  }))].filter((b): b is Bounds => b != null);
+  if (bounds.length === 0) return null;
+  return {
+    min: [0, 1, 2].map((i) => Math.min(...bounds.map((b) => b.min[i]))),
+    max: [0, 1, 2].map((i) => Math.max(...bounds.map((b) => b.max[i]))),
+  };
 }

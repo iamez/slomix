@@ -116,4 +116,5 @@ async def test_scopes_by_gaming_session_id_and_gates_bot_rounds():
     assert "r.gaming_session_id = $1" in sql
     assert "r.is_bot_round IS DISTINCT FROM TRUE" in sql
     assert "r.is_valid IS DISTINCT FROM FALSE" in sql
+    assert "AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)" in sql
     assert params == (144,)

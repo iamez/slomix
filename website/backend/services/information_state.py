@@ -323,9 +323,11 @@ class HolderState:
 
     holder_guid: str
     beliefs: list[BeliefItem] = field(default_factory=list)
-    #: source -> why it is unavailable. A channel that could not be captured is
-    #: named here rather than contributing silence.
+    #: source or reconstruction stage -> why coverage is incomplete. Missing
+    #: capture and modelling gaps are named separately, never as silence.
     unavailable: dict[str, str] = field(default_factory=dict)
+    # None means gap timing was not supplied; retain fail-closed compatibility.
+    gunfire_gap_times: tuple[int, ...] | None = None
 
 
 def _capability_state(manifest: dict | None, flag: str) -> str:
@@ -334,43 +336,98 @@ def _capability_state(manifest: dict | None, flag: str) -> str:
     return (manifest.get("capabilities") or {}).get(flag, "unknown")
 
 
-def gunfire_beliefs(
-    shots: Iterable[tuple],
-    holders: dict[str, tuple[float, float, float]],
-    *,
-    audible_radius: float,
-) -> list[BeliefItem]:
-    """A shot is heard by whoever was close enough, as a REGION.
+@dataclass(slots=True)
+class GunfireReconstruction:
+    """Admitted potential-audibility beliefs and per-holder modelling gaps."""
 
-    `shots` rows are (shooter_guid, event_time_ms, x, y, z).
+    beliefs: list[BeliefItem] = field(default_factory=list)
+    unavailable: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    gap_times: dict[str, tuple[int, ...]] = field(default_factory=dict)
 
-    ⛔ The shooter's telemetry coordinate never becomes the belief. What the
-    holder gets is a circle they could have localised the noise to, and it is
-    the same circle whether or not our row is exact.
 
-    ⚠️ `subject_guid` stays None. `proximity_shot_fired` has no target, and
-    firing proves a direction, not which player was perceived — so a shot can
-    never resolve WHO. That is what keeps `known_enemy_count` honest.
+GUNFIRE_GAP_REASONS = {
+    "missing_listener": "living listener position at the shot time is unavailable",
+    "invalid_coordinates": "shot or listener coordinates/uncertainty are invalid",
+    "uncertain_range": "listener uncertainty intersects the model's audible-radius boundary",
+}
+
+
+def reconstruct_gunfire(
+    shots: Iterable[tuple], holders: Iterable[str], *, audible_radius: float,
+    locate: Locator, is_listener_active: Callable[[str, int], bool | None] | None = None,
+) -> GunfireReconstruction:
+    """Model potential audibility, never actual hearing or shooter identity.
+
+    A whole event-time listener region must fit inside the radius to admit a
+    belief. A definitely outside region supplies no belief and no modelling
+    error. Missing/invalid positions and boundary intersections are explicit
+    gaps, independent of whether shot capture was enabled.
     """
     out: list[BeliefItem] = []
+    gaps: dict[str, set[str]] = defaultdict(set)
+    gap_times: dict[str, set[int]] = defaultdict(set)
+
+    def record_gap(holder, reason, at_ms):
+        gaps[holder].add(reason)
+        gap_times[holder].add(int(at_ms))
+
+    holders = tuple(holders)
     for guid, t_ms, sx, sy, sz in shots:
-        for holder, (hx, hy, hz) in holders.items():
+        try:
+            origin = tuple(float(v) for v in (sx, sy, sz))
+            valid_origin = all(math.isfinite(v) for v in origin)
+        except (TypeError, ValueError, OverflowError):
+            valid_origin = False
+        for holder in holders:
             if holder == guid:
                 continue
-            if math.dist((sx, sy, sz), (hx, hy, hz)) > audible_radius:
+            # Known absence of a living listener is not missing telemetry.
+            # Unknown history still requires a position or an explicit gap.
+            if is_listener_active is not None and is_listener_active(holder, int(t_ms)) is False:
+                continue
+            if not valid_origin:
+                record_gap(holder, "invalid_coordinates", t_ms)
+                continue
+            region = locate(holder, int(t_ms))
+            if region is None:
+                record_gap(holder, "missing_listener", t_ms)
+                continue
+            try:
+                values = (region.x, region.y, region.z, region.radius)
+                valid_region = all(math.isfinite(v) for v in values) and region.radius >= 0
+            except (TypeError, ValueError, OverflowError):
+                valid_region = False
+            if not valid_region:
+                record_gap(holder, "invalid_coordinates", t_ms)
+                continue
+            distance = math.dist(origin, (region.x, region.y, region.z))
+            if distance + region.radius > audible_radius:
+                if distance - region.radius <= audible_radius:
+                    record_gap(holder, "uncertain_range", t_ms)
                 continue
             out.append(BeliefItem(
-                holder_guid=holder,
-                source="gunfire",
-                t_observed=int(t_ms),
-                region=Region(float(sx), float(sy), float(sz), GUNFIRE_REGION_RADIUS),
-                subject_guid=None,
-                capability="shot_fired",
+                holder_guid=holder, source="gunfire", t_observed=int(t_ms),
+                region=Region(*origin, GUNFIRE_REGION_RADIUS),
+                subject_guid=None, capability="shot_fired",
             ))
-    return out
+    return GunfireReconstruction(
+        out, {holder: tuple(sorted(reasons)) for holder, reasons in gaps.items()},
+        {holder: tuple(sorted(times)) for holder, times in gap_times.items()},
+    )
 
 
-def counts_as_known(belief: BeliefItem, t_ms: int, *, floor: float = CONFIDENCE_FLOOR) -> bool:
+def gunfire_beliefs(
+    shots: Iterable[tuple], holders: Iterable[str], *, audible_radius: float,
+    locate: Locator,
+) -> list[BeliefItem]:
+    """Compatibility helper; loaders use reconstruct_gunfire to retain gaps."""
+    return reconstruct_gunfire(shots, holders, audible_radius=audible_radius, locate=locate).beliefs
+
+
+def counts_as_known(
+    belief: BeliefItem, t_ms: int, *, floor: float = CONFIDENCE_FLOOR,
+    enemy_guids: frozenset[str] | None = None,
+) -> bool:
     """Whether this item is an enemy the holder could name RIGHT NOW.
 
     ⭐ ONE rule, used by both `known_enemy_count` and the payload flag. They
@@ -385,12 +442,16 @@ def counts_as_known(belief: BeliefItem, t_ms: int, *, floor: float = CONFIDENCE_
     """
     return (
         bool(belief.subject_guid)
+        and (enemy_guids is None or belief.subject_guid in enemy_guids)
         and belief.roster_state != UNCERTAIN_AFTER_DOWN
         and belief.confidence(t_ms) >= floor
     )
 
 
-def known_enemy_count(state: HolderState, t_ms: int, *, floor: float = CONFIDENCE_FLOOR) -> int | str:
+def known_enemy_count(
+    state: HolderState, t_ms: int, *, floor: float = CONFIDENCE_FLOOR,
+    enemy_guids: frozenset[str] | None = None,
+) -> int | str:
     """Distinct enemies this holder could name — not a count of belief items.
 
     ⛔ §6.3 names the trap directly: `proximity_shot_fired` emits one row per
@@ -402,14 +463,14 @@ def known_enemy_count(state: HolderState, t_ms: int, *, floor: float = CONFIDENC
     promoting them would reintroduce the phantom squad through the back door.
     """
     subjects = {
-        b.subject_guid for b in state.beliefs if counts_as_known(b, t_ms, floor=floor)
+        b.subject_guid for b in state.beliefs if counts_as_known(b, t_ms, floor=floor, enemy_guids=enemy_guids)
     }
     return len(subjects)
 
 
 def _nearest(
     state: HolderState, t_ms: int, holder_pos: tuple[float, float, float],
-    *, resolved: bool, floor: float,
+    *, resolved: bool, floor: float, enemy_guids: frozenset[str] | None = None,
 ) -> dict | None:
     # ⭐ The two bounds come from DIFFERENT beliefs, and that is the point.
     #
@@ -430,6 +491,10 @@ def _nearest(
             continue
         if bool(belief.subject_guid) is not resolved:
             continue
+        if resolved and not counts_as_known(
+            belief, t_ms, floor=floor, enemy_guids=enemy_guids
+        ):
+            continue
         region = belief.region_at(t_ms)
         # ⭐ Past the horizon the belief still exists and still names its
         # subject — it simply stops supporting a claim about distance. Dropping
@@ -446,7 +511,7 @@ def _nearest(
 
 def nearest_known_enemy_distance(
     state: HolderState, t_ms: int, holder_pos: tuple[float, float, float],
-    *, floor: float = CONFIDENCE_FLOOR,
+    *, floor: float = CONFIDENCE_FLOOR, enemy_guids: frozenset[str] | None = None,
 ) -> dict | None:
     """How close the nearest enemy the holder could NAME might be.
 
@@ -460,7 +525,8 @@ def nearest_known_enemy_distance(
     scalar: a region 400 units wide seen from 900 away is "between 500 and
     1,300", and reporting 900 would be a number the holder never had.
     """
-    return _nearest(state, t_ms, holder_pos, resolved=True, floor=floor)
+    return _nearest(state, t_ms, holder_pos, resolved=True, floor=floor,
+                    enemy_guids=enemy_guids)
 
 
 def nearest_heard_activity_distance(
@@ -476,31 +542,70 @@ def nearest_heard_activity_distance(
     return _nearest(state, t_ms, holder_pos, resolved=False, floor=floor)
 
 
-def to_dict(state: HolderState, t_ms: int, holder_pos: tuple[float, float, float] | None) -> dict:
-    """The holder's picture, with every channel's availability stated."""
+def _gunfire_gap_affects_distance(observed_ms: int, t_ms: int) -> bool:
+    """Could this unmodelled shot still enter the current distance aggregate?
+
+    The hypothetical region is only an age bound, never admitted evidence or a
+    claimed origin. Use the same confidence and growing radius as a real shot.
+    """
+    candidate = BeliefItem(holder_guid="", source="gunfire", t_observed=observed_ms,
+                           region=Region(0, 0, 0, GUNFIRE_REGION_RADIUS))
+    return (candidate.confidence(t_ms) >= CONFIDENCE_FLOOR
+            and candidate.region_at(t_ms).radius <= POSITION_CLAIM_MAX_RADIUS)
+
+
+def to_dict(
+    state: HolderState, t_ms: int, holder_pos: tuple[float, float, float] | None,
+    *, enemy_guids: frozenset[str] | None = None,
+    friendly_guids: frozenset[str] = frozenset(),
+) -> dict:
+    """The holder's picture, with every channel's availability stated.
+
+    Production callers must supply the enemies classified at snapshot time,
+    including an empty set when allegiance is unknown. None preserves the
+    low-level API for callers that already supply enemy-only named beliefs.
+    Friendly subjects must be explicitly classified; every other named subject
+    has unknown allegiance. Public friendly observations remain visible.
+    """
     live = [b for b in state.beliefs if b.confidence(t_ms) >= DISPLAY_FLOOR]
+    # A classified subset is evidence, not a complete enemy roster. Preserve
+    # its beliefs, but do not publish a definitive count or nearest distance.
+    roster_available = "enemy_roster" not in state.unavailable
+    # Completeness of currently distance-relevant modelling only, not capture.
+    hearing_complete = ("gunfire_reconstruction" not in state.unavailable or
+                        state.gunfire_gap_times is not None and not any(
+                            _gunfire_gap_affects_distance(at, t_ms) for at in state.gunfire_gap_times))
     return {
         "holder_guid": state.holder_guid,
-        "known_enemy_count": known_enemy_count(state, t_ms),
+        "known_enemy_count": known_enemy_count(state, t_ms, enemy_guids=enemy_guids) if roster_available else None,
         "nearest_known_enemy_distance": (
-            nearest_known_enemy_distance(state, t_ms, holder_pos) if holder_pos else None
+            nearest_known_enemy_distance(state, t_ms, holder_pos, enemy_guids=enemy_guids)
+            if holder_pos and roster_available else None
         ),
         "nearest_heard_activity_distance": (
             nearest_heard_activity_distance(state, t_ms, holder_pos)
-            if holder_pos else None
+            if holder_pos and hearing_complete else None
         ),
+        "heard_activity_distance_reconstruction_complete": hearing_complete,
         "beliefs": [
             {
                 "kind": b.kind,
                 "source": b.source,
                 "subject_guid": b.subject_guid,
+                # Allegiance is separate from confidence and positional expiry.
+                # None also names missing or ambiguous subject/holder allegiance.
+                "subject_is_enemy": (
+                    (True if enemy_guids is None or b.subject_guid in enemy_guids
+                     else False if b.subject_guid in friendly_guids else None)
+                    if b.subject_guid else None
+                ),
                 "roster_state": b.roster_state,
                 "t_observed": b.t_observed,
                 "confidence": round(b.confidence(t_ms), 3),
                 # Whether this item is inside `known_enemy_count`. Carried per
                 # item so the panel can fade a belief out without ever showing
                 # something the count has already discarded.
-                "counts_as_known": counts_as_known(b, t_ms),
+                "counts_as_known": counts_as_known(b, t_ms, enemy_guids=enemy_guids),
                 "capability": b.capability,
                 "expiry_basis": b.expiry_basis,
                 # ⚠️ The GROWN region, not the stored one. Publishing the

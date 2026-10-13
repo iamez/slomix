@@ -40,6 +40,48 @@ pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
 KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
+
+## 2026-10-13 — Spiderweb review recovery and versioned research evidence
+
+Timeline failures now restore ordinary controls to the rendered time/POV;
+only explicit retry retains the failed target.207 combined frontend tests and
+typecheck pass, including four control sequences; two mutations fail/restored.
+Layer4 collection/analysis validates schema, metric definition, cadence, LOS
+and measured counts before reuse; old/mixed evidence and accidental append are
+rejected before DB startup or output writes.115 targeted tests and four failed,
+restored mutations pass; actual CLI accepts synthetic versioned rows and rejects
+old/mixed inputs. Historical manifest remains unchanged and explicitly labelled;
+no revised corpus median/effects are asserted. Independent reviews pass.
+
+This remains an undeployed25-file slice. Fresh CI/review and the standard420s
+cycle are required; ordered #1088 delivery must refresh main after #1087 merge.
+
+
+## 2026-10-12 — Bounded Spiderweb correctness review
+
+The review branch selects the completed Spiderweb source/tests onto current
+main without importing the runtime integration history. Hearing uses event-time
+listener positions; enemy metrics use the current roster. Legacy and SPA views
+keep requested/accepted snapshots distinct, recover failed requests, distinguish
+geometry failures, and fit authorized belief regions. Geometry verification
+reports coverage only; success does not certify gameplay alignment.
+
+Hearing reconstruction now names missing listener positions, invalid coordinates
+and uncertain audible-range boundaries separately from capture capability.
+Valid evidence survives partial reconstruction gaps. Actual ASGI requests with
+a fixture database retain these reasons for player and team views without
+claiming that modeled audibility proves hearing.
+
+Revalidation: 302 Python cases, 176 targeted frontend cases, Node 22.23.2
+TypeScript checks, Python lint and legacy JavaScript syntax checks. Existing
+functional and guard-mutation evidence remains valid for its recorded scope;
+no live deployment or new gameplay alignment is claimed by these checks.
+
+Pending: broader positional validation and the separate runtime D4/D5
+continuation. Preserve the complete original plan
+and handoff below. No service activation, database writes, push or merge is
+implied; this is a bounded review package awaiting the owner's PR decision.
+
 ## 2026-10-11 — CI-generated contracts reconciled
 
 Full CI identified stale OpenAPI description, datapoint ledger and displaced

@@ -36,6 +36,7 @@ import random
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
@@ -55,6 +56,62 @@ WAVE_IMMINENT_SHARE = 0.25
 DEFAULT_CADENCE_MS = 5000
 SEED = 20260909
 RESAMPLES = 2000
+# Bump the metric version whenever collection semantics change. Unversioned
+# historical rows cannot be upgraded without recollecting their source data.
+DATASET_SCHEMA_VERSION = 1
+METRIC_DEFINITION_VERSION = "measured_enemy_knowledge_v2"
+
+
+def dataset_contract(cadence_ms: int, los_enabled: bool) -> dict:
+    if type(cadence_ms) is not int or cadence_ms <= 0:
+        raise ValueError("Dataset cadence must be a positive integer")
+    return {"schema_version": DATASET_SCHEMA_VERSION,
+            "metric_definition_version": METRIC_DEFINITION_VERSION,
+            "cadence_ms": cadence_ms, "los_enabled": los_enabled}
+
+
+def read_dataset(path: Path, *, cadence_ms: int, los_enabled: bool | None = None) -> list[dict]:
+    """Reject historical, mixed or inconsistent evidence before reuse/analysis."""
+    rows = []
+    expected = None if los_enabled is None else dataset_contract(cadence_ms, los_enabled)
+    with path.open() as fh:
+        for number, line in enumerate(fh, 1):
+            try:
+                row = json.loads(line)
+                contract = row["dataset_contract"]
+                if (type(contract["los_enabled"]) is not bool
+                        or type(contract["schema_version"]) is not int
+                        or type(contract["cadence_ms"]) is not int):
+                    raise ValueError("invalid LOS mode")
+                expected = expected or dataset_contract(cadence_ms, contract["los_enabled"])
+                if contract != expected:
+                    raise ValueError("incompatible dataset contract")
+                samples = row["samples"]
+                counts = [samples[key] for key in ("alive", "moving", "blind_moving_measured", "blind_moving")]
+                if any(type(value) is not int or value < 0 for value in counts):
+                    raise ValueError("invalid sample counts")
+                alive, moving, measured, blind = counts
+                excluded = samples["blind_moving_excluded"]
+                if not isinstance(excluded, dict) or set(excluded) - {"missing_holder", "enemy_roster"}:
+                    raise ValueError("invalid exclusion reasons")
+                if any(type(value) is not int or value < 0 for value in excluded.values()):
+                    raise ValueError("invalid excluded sample counts")
+                if not 0 <= blind <= measured <= moving <= alive or sum(excluded.values()) + measured != moving:
+                    raise ValueError("inconsistent measured denominator")
+                metric = row["metrics"]["blind_moving_share"]
+                if measured < 6:
+                    if metric is not None:
+                        raise ValueError("insufficient measured samples")
+                elif (type(metric) not in (int, float) or not math.isfinite(metric)
+                      or not math.isclose(metric, blind / measured, rel_tol=1e-12, abs_tol=1e-12)):
+                    raise ValueError("metric does not match measured denominator")
+                # Required analysis/resume identity fields must also be present.
+                for key in ("block", "round_id", "player", "won", "order_key"):
+                    row[key]
+            except (ValueError, KeyError, TypeError) as exc:
+                raise ValueError(f"Invalid Layer 4 dataset row {number}: {exc}; recollect into a new file") from exc
+            rows.append(row)
+    return rows
 
 CANDIDATES: list[Candidate] = [
     Candidate("dpm", "damage given × 60 / seconds played, from player_comprehensive_stats for that round", "positive",
@@ -64,9 +121,9 @@ CANDIDATES: list[Candidate] = [
               caveat="a within-round median split cannot separate 'moved more' from 'was on the attacking side' — attackers move more and share the outcome (§7.4.1); a side-stratified test needs the attacking side per round (lua_round_teams / W5)"),
     Candidate("isolation_share", "share of alive samples with no living teammate within ISOLATION_UNITS (straight-line, §7.4: geometric separation, not route support time)", "negative",
               {"isolation_units": ISOLATION_UNITS}, kind="oracle_diagnostic"),
-    Candidate("blind_moving_share", "share of MOVING samples during which the holder held NO placeable enemy belief (subject named, region inside position_claim_max_radius, counts_as_known) — moved without knowing where any enemy was; information-consistent movement, §7.4", "negative",
-              {"moving_ups": MOVING_UPS, "placeable": "subject_guid and region.radius <= position_claim_max_radius and counts_as_known"},
-              caveat="the information state is a lower bound on what the team knew (§6.2: Discord voice is never captured); 'blind' here is 'blind to the capture', and the median is 0.89 — nearly all movement is blind on this evidence"),
+    Candidate("blind_moving_share", "share of measured MOVING samples (holder present and enemy roster available) during which the holder held NO placeable enemy belief (subject named, region inside position_claim_max_radius, counts_as_known) — moved without knowing where any enemy was; information-consistent movement, §7.4", "negative",
+              {"moving_ups": MOVING_UPS, "denominator": "moving with holder present and enemy_roster available", "minimum_measured_samples": 6, "placeable": "subject_guid and region.radius <= position_claim_max_radius and counts_as_known"},
+              caveat="the information state is a lower bound on what the team knew (§6.2: Discord voice is never captured); 'blind' here is 'blind to the capture'; missing holders and unavailable enemy rosters are excluded from numerator and denominator"),
     Candidate("exposure_share", "share of alive samples with ≥ 1 living enemy holding a clear eye-to-body ray to the player (W6 tracer, static geometry) — §7.4 exposure, ORACLE form", "negative",
               {"tracer": "services/line_of_sight.py", "validation": "W6 2026-08-22, 99.92 %"}, kind="oracle_diagnostic"),
     Candidate("push_into_wave_share", "share of MOVING samples while the ENEMY's validated reinforcement wave lands within WAVE_IMMINENT_SHARE of its interval (oracle clock, §5.6/§6.3: never a scoring fallback)", "negative",
@@ -130,7 +187,7 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
     tracer = None
     if provider is not None:
         tracer, _label = await provider.tracer_for(meta["map"])
-    acc: dict[str, dict[str, float]] = {}
+    acc: dict[str, dict[str, Any]] = {}
     for t in range(first, end_ms, cadence_ms):
         snap = rws.build_snapshot(tracks, t, engagements=engagements, velocity_max_dt_ms=velocity_max_dt)
         alive = {g: p for g, p in snap.players.items() if p.alive and p.x is not None}
@@ -148,7 +205,7 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
             if v["a_to_b"]["status"] == "clear":
                 exposed.add(b)
         for g, p in alive.items():
-            a = acc.setdefault(g, {"alive": 0, "moving": 0, "isolated": 0, "blind_moving": 0, "exposed": 0, "exposed_measured": 0, "wave_measured": 0, "push_into_wave": 0, "team": p.team or ""})
+            a = acc.setdefault(g, {"alive": 0, "moving": 0, "isolated": 0, "blind_moving": 0, "blind_moving_measured": 0, "blind_moving_excluded": {}, "exposed": 0, "exposed_measured": 0, "wave_measured": 0, "push_into_wave": 0, "team": p.team or ""})
             a["alive"] += 1
             moving = (p.speed or 0.0) > MOVING_UPS
             if moving:
@@ -162,7 +219,14 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
             # counts as known. known_enemy_count alone would not do — a public
             # obituary names an enemy without placing him, so it is rarely 0
             # (probe 2026-09-09: 0.0 for 20 of 22 rows).
-            if moving and h is not None:
+            # Missing reconstruction is not measured blindness. Other channel
+            # gaps remain independent: the metric describes captured evidence.
+            excluded = ("missing_holder" if h is None else
+                        "enemy_roster" if "enemy_roster" in h.get("unavailable", {}) else None)
+            if moving and excluded:
+                a["blind_moving_excluded"][excluded] = a["blind_moving_excluded"].get(excluded, 0) + 1
+            if moving and excluded is None:
+                a["blind_moving_measured"] += 1
                 horizon = h.get("position_claim_max_radius") or float("inf")
                 placeable = any(
                     b.get("subject_guid") and b.get("region") and b.get("counts_as_known")
@@ -193,6 +257,7 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
             continue
         rng = random.Random(f"{SEED}:{rid}:{g}")  # noqa: S311 — the negative control
         rows.append({
+            "dataset_contract": dataset_contract(cadence_ms, provider is not None),
             "block": meta["block"], "round_id": rid, "player": g, "team": a["team"],
             "won": 1 if (a["team"] or "").upper() == winner else 0,
             "order_key": f"{meta['date']} {meta['time']}",
@@ -202,16 +267,26 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
                 "noise": rng.random(),
                 "moving_share": a["moving"] / a["alive"],
                 "isolation_share": a["isolated"] / a["alive"],
-                "blind_moving_share": (a["blind_moving"] / a["moving"]) if a["moving"] >= 6 else None,
+                "blind_moving_share": (a["blind_moving"] / a["blind_moving_measured"]) if a["blind_moving_measured"] >= 6 else None,
                 "exposure_share": (a["exposed"] / a["exposed_measured"]) if a["exposed_measured"] else None,
                 "push_into_wave_share": (a["push_into_wave"] / a["wave_measured"]) if a["wave_measured"] >= 6 else None,
             },
-            "samples": {"alive": a["alive"], "moving": a["moving"], "exposed_measured": a["exposed_measured"], "wave_measured": a["wave_measured"]},
+            "samples": {"blind_moving": a["blind_moving"], "blind_moving_measured": a["blind_moving_measured"], "blind_moving_excluded": a["blind_moving_excluded"], "alive": a["alive"], "moving": a["moving"], "exposed_measured": a["exposed_measured"], "wave_measured": a["wave_measured"]},
         })
     return rows
 
 
 async def collect(args) -> None:
+    # Refuse incompatible/resumed evidence before importing application setup
+    # or opening a database connection. A fresh collect never appends silently.
+    out = Path(args.out)
+    dataset_contract(args.cadence_ms, not args.skip_los)
+    done = set()
+    if out.exists() and out.stat().st_size:
+        if not args.resume:
+            raise ValueError("Layer 4 output already exists; use validated --resume or a new file")
+        done = {row["round_id"] for row in read_dataset(
+            out, cadence_ms=args.cadence_ms, los_enabled=not args.skip_los)}
     from website.backend import dependencies as dep
     await dep.init_db_pool()
     db = dep.get_db_pool()
@@ -219,16 +294,7 @@ async def collect(args) -> None:
     if args.limit:
         rounds = rounds[: args.limit]
     provider = None if args.skip_los else los.GeometryProvider()
-    out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    done = set()
-    if out.exists() and args.resume:
-        with out.open() as fh:
-            for line in fh:
-                try:
-                    done.add(json.loads(line)["round_id"])
-                except (ValueError, KeyError):
-                    continue
     t_start = time.perf_counter()
     n_rows = 0
     with out.open("a") as fh:
@@ -254,20 +320,20 @@ def _fmt(x: float | None, digits: int = 3) -> str:
 
 
 def analyse(args) -> None:
-    rows: list[Row] = []
-    with Path(args.rows).open() as fh:
-        for line in fh:
-            d = json.loads(line)
-            rows.append(Row(block=d["block"], round_id=d["round_id"], player=d["player"], won=d["won"], metrics=d["metrics"], order_key=d["order_key"]))
+    records = read_dataset(Path(args.rows), cadence_ms=args.cadence_ms)
+    if not records:
+        raise ValueError("Layer 4 analysis requires a nonempty versioned dataset")
+    rows = [Row(block=d["block"], round_id=d["round_id"], player=d["player"], won=d["won"],
+                metrics=d["metrics"], order_key=d["order_key"]) for d in records]
     result = l4.analyse(rows, CANDIDATES, resamples=args.resamples, seed=SEED)
     filters = [
         "rounds: round_number in (1, 2), is_valid not false, not a bot round, winner_team in (1, 2), gaming_session_id set, ≥ 1 linked player_track",
-        f"players: ≥ 6 alive samples at a {args.cadence_ms} ms cadence (30 s alive); moving-based shares need ≥ 6 moving samples; wave share needs a validated enemy clock",
+        f"players: ≥ 6 alive samples at a {args.cadence_ms} ms cadence ({6 * args.cadence_ms / 1000:g} s alive); blind share needs ≥ 6 measured moving samples (holder present, enemy roster available); wave share needs ≥ 6 moving samples with a validated enemy clock",
         "exposure: only on maps with a BSP in the indexed etmain tree; else null",
     ]
     man = l4.manifest(CANDIDATES, cutoff=result["cutoff"], outcome="the player's team is rounds.winner_team (1 = Axis, 2 = Allies) for that round",
                       filters=filters, seed=SEED, resamples=args.resamples,
-                      extra={"cadence_ms": args.cadence_ms, "rows": len(rows), "blocks": result["blocks"], "collected_from": str(Path(args.rows).name)})
+                      extra={"dataset_contract": records[0]["dataset_contract"], "cadence_ms": args.cadence_ms, "rows": len(rows), "blocks": result["blocks"], "collected_from": str(Path(args.rows).name)})
     lines = [
         f"# Layer 4 family — §8 table ({time.strftime('%Y-%m-%d')})", "",
         f"manifest sha256 `{man['sha256']}` · rows {len(rows)} · blocks discovery {result['blocks']['discovery']} / confirmation {result['blocks']['confirmation']} · confirmation starts at `{result['cutoff']}` · {args.resamples} block resamples, seed {SEED}", "",
