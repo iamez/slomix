@@ -61,6 +61,7 @@ const _pendingLegacyKills = new Set();
 let _killMap = null;
 let _events = [];          // newest last, ALL categories
 let _interval = null;
+let _clock = null;
 let _lastFetchOk = null;   // null = never fetched, false = feed erroring
 
 // Live roster derived from the feed: slot -> {name, team}. TEAM_CHANGE
@@ -69,6 +70,40 @@ let _lastFetchOk = null;   // null = never fetched, false = feed erroring
 // themselves via userinfo right after a map load, so clearing would blink.
 const _roster = new Map();
 let _rosterUpdatedAt = 0;
+
+// Project server receive time with local monotonic elapsed time. Compatibility
+// pages may omit server_time; their newest timestamp establishes the same clock.
+function _feedNow() {
+    return _clock ? _clock.server + Math.max(0, performance.now() - _clock.monotonic) / 1000 : Date.now() / 1000;
+}
+
+function _anchorFeedClock(data) {
+    const times = (Array.isArray(data?.events) ? data.events : []).map(ev => ev.received_at)
+        .filter(value => typeof value === 'number' && Number.isFinite(value));
+    const explicit = typeof data?.server_time === 'number' && Number.isFinite(data.server_time);
+    const source = explicit ? data.server_time : times.length ? Math.max(...times) : undefined;
+    const previous = _clock ? _feedNow() : undefined;
+    const sourceBased = _clock?.sourceBased ?? false;
+    const now = explicit ? source : source !== undefined
+        ? sourceBased ? Math.max(previous ?? source, source) : source
+        : previous ?? Date.now() / 1000;
+    // Untimed first-seen compatibility rows retain their age when source time
+    // arrives. Do not renew them, nor rewind on an old compatibility replay.
+    if (!sourceBased && source !== undefined && previous !== undefined) {
+        const shift = now - previous;
+        for (const ev of _events) ev.received_at += shift;
+        if (_roundStartRecv != null) _roundStartRecv += shift;
+        if (_liveKillLastAt != null) _liveKillLastAt += shift;
+    }
+    _clock = { server: now, monotonic: performance.now(), sourceBased: sourceBased || source !== undefined };
+}
+
+function _expireEvents() {
+    const cutoff = _feedNow() - 600;
+    _events = _events.filter(ev => Number.isFinite(ev.received_at) && ev.received_at >= cutoff);
+    const retained = new Set(_events);
+    for (const row of _pendingLegacyKills) if (!retained.has(row)) _pendingLegacyKills.delete(row);
+}
 
 function _clientSlot(value) {
     if (typeof value === 'string' && /^-?\d+$/.test(value)) value = Number(value);
@@ -135,7 +170,8 @@ function _mergeReverseKill(ev) {
     if (!prior._mvpCounted) _mvpApply(ev);
     const names = { killer: prior.killer || ev.killer, victim: prior.victim || ev.victim };
     Object.assign(prior, ev, names, { seq: prior.seq, _liveSeq: ev.seq });
-    _liveKillLastAt = ev.received_at || Date.now() / 1000;
+    _liveKillLastAt = ev.received_at ?? _feedNow();
+    _learnKillNames(prior, true);
     return true;
 }
 
@@ -308,11 +344,11 @@ function _pressureApply(ev) {
 // LIVE_KILL, treat it as the authority and drop legacy KILL rows from the
 // display (they still feed streak/MVP via _combatApply, so state is single-
 // counted below by keying off victim+killer only on LIVE_KILL when active).
-let _liveKillLastAt = 0;
+let _liveKillLastAt = null;
 // Active only while LIVE_KILLs are actually arriving: a permanent latch made
 // kills vanish from the feed forever if the LIVEX tailer died (2026-08-18).
 function _liveKillActive() {
-    return (Date.now() / 1000 - _liveKillLastAt) < 120;
+    return _liveKillLastAt != null && (_feedNow() - _liveKillLastAt) < 120;
 }
 
 // Learn identity independently of effects. Enrichment is historical evidence,
@@ -328,7 +364,10 @@ function _learnKillNames(ev, onlyMissing = false) {
 }
 
 function _combatApply(ev) {
-    if (ev.type === 'LIVE_KILL') { _liveKillLastAt = ev.received_at || (Date.now() / 1000); }
+    if (ev.type === 'LIVE_KILL') {
+        _liveKillLastAt = ev.received_at ?? _feedNow();
+        _learnKillNames(ev, true);
+    }
     if (ev.type === 'KILL' || ev.type === 'LIVE_KILL') {
         const k = _clientSlot(ev.killer_slot), v = _clientSlot(ev.victim_slot);
         // Both accepted obituary sources advance the same life. Twin merges
@@ -377,7 +416,7 @@ function _viewActive() {
 
 async function _poll() {
     if (!_viewActive()) { stopLiveTicker(); return; }
-    if (_pollInFlight) return;
+    if (_pollInFlight) { renderLiveTicker(); return; }
     _pollInFlight = true;
     try {
         let data = await fetchJSON(
@@ -389,6 +428,7 @@ async function _poll() {
             || data.cursor_reset === true || data.last_seq < _cursor)) {
             _cursor = 0;
             _events = [];
+            _clock = null;
             _pendingLegacyKills.clear();
             _killMap = null;
             _roster.clear();
@@ -400,7 +440,7 @@ async function _poll() {
             _roundStartRecv = null;
             _momentum = 50;
             _flash = null;
-            _liveKillLastAt = 0;
+            _liveKillLastAt = null;
             _holdCurve = [];
             _defenderSide = null;
             // A new worker may already have advanced past the old cursor.
@@ -408,6 +448,7 @@ async function _poll() {
             data = await fetchJSON(`${API_BASE}/live/feed?since=0`,
                 { cachePolicy: 'no-store', credentials: 'same-origin' });
         }
+        _anchorFeedClock(data);
         if (data?.stream_id != null) _streamId = data.stream_id;
         // Only the server can distinguish hidden telemetry from missing
         // history. A reported gap makes per-round derived state
@@ -430,6 +471,7 @@ async function _poll() {
             // before buffering + render — this loop was lost in a rebase and
             // its absence silently disabled attribution, pressure and MVP.
             for (const ev of fresh) {
+                if (ev.received_at == null) ev.received_at = _feedNow();
                 if ((ev.type === 'MAP' || ev.type === 'LIVE_MAP') && ev.map_accepted === false) continue;
                 _killBoundary(ev);
                 if (_mergeReverseKill(ev)) continue;
@@ -459,7 +501,7 @@ async function _poll() {
         // point per poll while a round is live, capped to ~15 min of 3 s
         // polls. ROUND_START clears via _roundStartRecv going null->set.
         if (_roundStartRecv != null) {
-            const el = Date.now() / 1000 - _roundStartRecv;
+            const el = _feedNow() - _roundStartRecv;
             _samples.push({ t: el, m: _momentum, h: _interpHold(el) });
             if (_samples.length > 300) _samples = _samples.slice(-300);
         } else if (_samples.length) {
@@ -472,10 +514,6 @@ async function _poll() {
         _pollInFlight = false;
         // Silence and failed requests age the buffer too. Always render the
         // latest fetch outcome, including recovery with no new events.
-        const cutoff = Date.now() / 1000 - 600;
-        _events = _events.filter(ev => (ev.received_at || 0) >= cutoff);
-        const retained = new Set(_events);
-        for (const row of _pendingLegacyKills) if (!retained.has(row)) _pendingLegacyKills.delete(row);
         renderLiveTicker();
     }
 }
@@ -497,7 +535,7 @@ function _mmssLocal(sec) {
 
 function _ago(receivedAt) {
     if (!receivedAt) return '';
-    const s = Math.max(0, Math.round(Date.now() / 1000 - receivedAt));
+    const s = Math.max(0, Math.round(_feedNow() - receivedAt));
     if (s < 60) return `${s}s ago`;
     return `${Math.floor(s / 60)}m ago`;
 }
@@ -650,10 +688,11 @@ function _roundObjectiveStrip(elapsed) {
 
 /** Re-render into the #live-ticker shell if present (idempotent). */
 export function renderLiveTicker() {
+    _expireEvents();
     const host = document.getElementById('live-ticker');
     if (!host) return;
     const fresh = _events.length
-        ? (Date.now() / 1000 - (_events[_events.length - 1].received_at || 0)) < 120
+        ? (_feedNow() - (_events[_events.length - 1].received_at ?? 0)) < 120
         : false;
     const botBadge = liveRosterHasBots()
         ? '<span class="px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-black tracking-wider">BOT TEST</span>'
@@ -669,7 +708,7 @@ export function renderLiveTicker() {
     if (_roundStartRecv != null && _events.length) {
         // Wall-clock elapsed from server timestamps — never level_ms, which
         // mixes legacy monotonic ms and LIVEX epoch-ms (review: two tailers).
-        const nowRecv = _events[_events.length - 1].received_at || (Date.now() / 1000);
+        const nowRecv = _feedNow();
         const elapsed = Math.max(0, nowRecv - _roundStartRecv);
         const hold = _interpHold(elapsed);
         const momA = Math.round(_momentum);

@@ -74,7 +74,7 @@ it('expires old rows and clears derived scores on an empty gap response', async 
   const received = Date.now() / 1000;
   fetchJSON.mockResolvedValueOnce({ last_seq: 1, events: [
     { seq: 1, type: 'REVIVE', slots: '1 2', received_at: received },
-  ] }).mockResolvedValue({ events: [], last_seq: 2, gap: true });
+  ] }).mockResolvedValue({ events: [], last_seq: 2, gap: true, server_time: received + 601 });
   // @ts-expect-error existing JS module has no declaration file
   const ticker = await import('../../../js/live-ticker.js');
   try {
@@ -401,3 +401,116 @@ it.each(['death', 'continuity', 'live-first', 'legacy-first'] as const)(
     } finally { ticker.stopLiveTicker(); }
   },
 );
+
+
+it.each([[7200, true], [-7200, true], [7200, false], [-7200, false]] as const)(
+  'retains fresh server rows despite browser skew and expires through failed polls (skew=%s header=%s)', async (skew, header) => {
+    vi.useFakeTimers(); vi.setSystemTime((1000 + skew) * 1000);
+    let mono = 0;
+    const clock = vi.spyOn(performance, 'now').mockImplementation(() => mono);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    fetchJSON.mockResolvedValueOnce({ server_time: header ? 1000 : undefined, last_seq: 1,
+      events: [{ seq: 1, type: 'ANNOUNCE', text: 'clock row', received_at: 1000 }] }).mockRejectedValue(new Error('offline'));
+    // @ts-expect-error existing JS module has no declaration file
+    const ticker = await import('../../../js/live-ticker.js');
+    try {
+      ticker.startLiveTicker(); await vi.advanceTimersByTimeAsync(0);
+      expect(document.getElementById('live-ticker')?.textContent).toContain('clock row');
+      expect(document.getElementById('live-ticker')?.textContent).toContain('0s ago');
+      mono = 599000; vi.setSystemTime((1000 - skew * 2) * 1000);
+      await vi.advanceTimersByTimeAsync(3000);
+      expect(document.getElementById('live-ticker')?.textContent).toContain('clock row');
+      expect(document.getElementById('live-ticker')?.textContent).toContain('feed error');
+      mono = 601000; await vi.advanceTimersByTimeAsync(3000);
+      expect(document.getElementById('live-ticker')?.textContent).not.toContain('clock row');
+      expect(document.getElementById('live-ticker')?.textContent).toContain('feed error');
+    } finally { ticker.stopLiveTicker(); clock.mockRestore(); warn.mockRestore(); }
+  },
+);
+
+it('does not renew replayed compatibility rows and resets the clock for a replacement stream', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(90000000);
+  let mono = 0; const clock = vi.spyOn(performance, 'now').mockImplementation(() => mono);
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const old = { stream_id: 'old', last_seq: 1, events: [{ seq: 1, type: 'ANNOUNCE', text: 'clock row', received_at: 1000 }] };
+  fetchJSON.mockResolvedValue(old);
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker(); await vi.advanceTimersByTimeAsync(0);
+    mono = 601000; await vi.advanceTimersByTimeAsync(3000);
+    expect(document.getElementById('live-ticker')?.textContent).not.toContain('clock row');
+    fetchJSON.mockResolvedValue({ stream_id: 'new', last_seq: 1, server_time: 100,
+      events: [{ seq: 1, type: 'ANNOUNCE', text: 'clock row', received_at: 100 }] });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(document.getElementById('live-ticker')?.textContent).toContain('clock row');
+    expect(document.getElementById('live-ticker')?.textContent).toContain('0s ago');
+  } finally { ticker.stopLiveTicker(); clock.mockRestore(); }
+});
+
+it('preserves untimed first-seen age when later source timestamps establish the clock', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(90000000);
+  let mono = 0; const clock = vi.spyOn(performance, 'now').mockImplementation(() => mono);
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  fetchJSON.mockResolvedValueOnce({ last_seq: 1, events: [{ seq: 1, type: 'ANNOUNCE', text: 'clock row' }] })
+    .mockResolvedValueOnce({ server_time: 1000, last_seq: 1, events: [] })
+    .mockResolvedValue({ last_seq: 1, events: [] });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker(); await vi.advanceTimersByTimeAsync(0);
+    mono = 599000; await vi.advanceTimersByTimeAsync(3000);
+    expect(document.getElementById('live-ticker')?.textContent).toContain('clock row');
+    mono = 601000; await vi.advanceTimersByTimeAsync(3000);
+    expect(document.getElementById('live-ticker')?.textContent).not.toContain('clock row');
+  } finally { ticker.stopLiveTicker(); clock.mockRestore(); }
+});
+
+it.each([false, true])('learns directly named LIVE kills without overwriting newer identity or double effects (reverse=%s)', async (reverse) => {
+  vi.useFakeTimers(); vi.setSystemTime(90000000);
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const live = { type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: 'Named actor', victim: 'Named victim', received_at: 1000 };
+  const events = [{ type: 'ROUND_START', received_at: 1000 },
+    ...(reverse ? [{ type: 'KILL', killer_slot: 3, victim_slot: 5, received_at: 1000 }] : []), live];
+  fetchJSON.mockResolvedValueOnce({ server_time: 1000, last_seq: events.length, events: events.map((e, i) => ({ ...e, seq: i + 1 })) })
+    .mockResolvedValueOnce({ server_time: 1001, last_seq: 10, events: [
+      { seq: 9, type: 'TEAM_CHANGE', slot: 3, team: 1, name: 'Current actor', received_at: 1001 },
+      { seq: 10, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 6, killer: 'Historical actor', victim: 'Next victim', received_at: 1001 },
+    ] }).mockResolvedValue({ events: [], last_seq: 10 });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker(); await vi.advanceTimersByTimeAsync(0);
+    expect(ticker.getLiveMVP()).toMatchObject({ name: 'Named actor', score: 1 });
+    expect(ticker.getLiveRoster().spectators).toContain('Named victim');
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(ticker.getLiveMVP()).toMatchObject({ name: 'Current actor', score: 2 });
+    expect(ticker.getLiveRoster().axis).toEqual(['Current actor']);
+  } finally { ticker.stopLiveTicker(); }
+});
+
+it('keeps the live-source suppression window on server time rather than browser wall time', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(90000000);
+  let mono = 0; const clock = vi.spyOn(performance, 'now').mockImplementation(() => mono);
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  fetchJSON.mockResolvedValueOnce({ server_time: 1000, last_seq: 3, events: [
+    { seq: 1, type: 'ROUND_START', received_at: 1000 },
+    { seq: 2, type: 'KILL', killer_slot: 9, victim_slot: 8, killer: 'Legacy actor', victim: 'Legacy victim', received_at: 1000 },
+    { seq: 3, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: 'Live actor', victim: 'Live victim', received_at: 1000 },
+  ] }).mockResolvedValue({ last_seq: 3, events: [] });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  try {
+    ticker.startLiveTicker(); await vi.advanceTimersByTimeAsync(0);
+    document.querySelector<HTMLInputElement>('input[data-live-cat="kills"]')!.click();
+    expect(document.getElementById('live-ticker')?.textContent).not.toContain('Legacy victim');
+    mono = 121000; await vi.advanceTimersByTimeAsync(3000);
+    expect(document.getElementById('live-ticker')?.textContent).toContain('Legacy victim');
+  } finally { ticker.stopLiveTicker(); clock.mockRestore(); }
+});
