@@ -55,7 +55,7 @@ validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
 | 1 the web (reconstruction of a round at one moment) | §4 | **built and merged** (#792, 2026-08-21; fixes #793). `GET /api/replay/round/{id}/web?t=<ms>` in `website/backend/routers/replay_router.py`, logic in `website/backend/services/round_web_service.py` | SPA page `SpiderWebPage.tsx` (`/spider-web/round/:roundId`, phase 5 slice SW-1, #880) |
 | 2 the clock | §5 | built inside layer 1's response: clock quality is a server verdict (`validated`, `internally_consistent_unvalidated`, `validation_failed`, …, `round_web_service.py` ~858) and the page shows it as a badge; **withheld** is a separate axis, not a sixth state | same endpoint/page |
 | 3 information state (what a team *could* know) | §6 | **computed and drawn** (#991 the belief tables, 2026-09-08; SW-2 the scene, 2026-09-09): per holder, the beliefs the server grants, counts and distances as intervals, and under a team or player point of view the belief REGIONS as dashed discs at the radius the server grew, opacity = confidence, past the published horizon named in words | `website/backend/services/information_state.py`; `website/frontend/src/app/pages/SpiderWebPage.tsx`, `components/SpiderWebScene.tsx`, `lib/spiderWeb.ts` |
-| 4 movement quality | §7 | **the protocol is code, no signal ships** (SW-4, 2026-09-09): `services/layer4_family.py` is §8.6 — within-round median split, chronological 70/30 split of whole `gaming_session_id` blocks, block bootstrap with a max-T simultaneous interval, verdict rule, frozen family manifest with sha256; `scripts/spiderweb_layer4_family.py collect|analyse` walks every eligible round at a 5 s cadence through layers 1–3 and the W6 tracer and runs the protocol. The family and the verdicts are in `docs/spiderweb/layer4_family_manifest.json` and the table below. §7.5 stands: weights are choices, not facts, and nothing here has earned one | `docs/spiderweb/layer4_family_manifest.json` |
+| 4 movement quality | §7 | **the protocol is code, no signal ships** (SW-4, 2026-09-09): `services/layer4_family.py` is §8.6 — within-round median split, chronological 70/30 split of whole `gaming_session_id` blocks, block bootstrap with a max-T simultaneous interval, verdict rule, frozen family manifest with sha256; `scripts/spiderweb_layer4_family.py collect|analyse` walks every eligible round at a 5 s cadence through layers 1–3 and the W6 tracer and runs the protocol. The historical family and verdicts are in `docs/spiderweb/layer4_family_manifest.json` and the table below; the revised measured-denominator family has not been recollected. §7.5 stands: weights are choices, not facts, and nothing here has earned one | `docs/spiderweb/layer4_family_manifest.json` |
 | validation W6 (offline trace vs engine) | §8, §10 C4 | **done, 2026-08-21/22**: 26,695 paired segments on all 8 project maps, agreement **99.92 %**, 0 hard errors; two maps at exactly 100 %; cost 9–13 µs per trace | `scripts/build_w6_trace_fixtures.py`, `scripts/compare_w6_engine_vs_offline.py`, `tests/unit/test_w6_control_expectations.py`; report is local (`docs/research/W6_OFFLINE_VS_ENGINE_2026-08-22.md`, not in the repo) |
 
 ## What was measured (numbers a reviewer can hold us to)
@@ -88,7 +88,19 @@ validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
   **cannot be reproduced offline**. W6 therefore compares `-2` against our
   world tracer; `-1` is diagnostics only.
 
-## Layer 4 — the §8 table (2026-09-09, manifest `72bdfc31…`)
+## Layer 4 — historical §8 table (2026-09-09, manifest `72bdfc31…`)
+
+**Historical evidence, not validation of the current metric (2026-10-13).**
+The frozen manifest below is preserved unchanged for reproducibility. Its
+`blind_moving_share` used all moving samples as the denominator. The current
+`measured_enemy_knowledge_v2` definition excludes missing holder states and
+unavailable enemy rosters from both numerator and denominator, and requires at
+least six measured moving samples. Its dataset schema is version 1; every row
+records the metric version, cadence and LOS mode. Resume and analysis reject
+unversioned, mixed or inconsistent rows rather than relabelling old evidence.
+**The revised family has not been recollected or re-analysed.** Its median,
+effects, coverage and verdicts remain unmeasured; the historical 0.89 median
+must not be attributed to the revised metric.
 
 901 rounds, 57 gaming-session blocks (39 discovery / 18 confirmation, confirmation from
 2026-07-16), 5,622 (player, round) rows at a 5 s cadence, 2,000 block resamples, seed 20260909.
@@ -102,7 +114,7 @@ Full table with intervals: `docs/spiderweb/layer4_family_manifest.json`
 | `noise` | negative control | −0.020 | −0.003 [−0.044, +0.037] | fails, as it must |
 | `moving_share` | candidate | +0.034 | +0.108 [+0.047, +0.167] | passes the arithmetic; **not shipped** — a within-round split cannot separate "moved more" from "was on the attacking side", which shares the outcome (§7.4.1); needs the attacking side per round |
 | `isolation_share` | oracle diagnostic | +0.081 | +0.032 | fails: wrong direction (the isolated win MORE — attackers spread out) |
-| `blind_moving_share` | candidate | +0.010 | −0.007 | fails: no direction; median 0.89 — on captured evidence almost all movement is "blind" (§6.2 lower bound) |
+| `blind_moving_share` | candidate | +0.010 | −0.007 | historical result only: no direction; old-denominator median 0.89; revised metric unmeasured |
 | `exposure_share` | oracle diagnostic | −0.043 | −0.038 [−0.096, +0.019] | fails: simultaneous interval includes zero |
 | `push_into_wave_share` | oracle diagnostic | −0.049 | −0.116 [−0.214, −0.018] | passes the arithmetic; oracle clock, does not ship (§6.4, P6); coverage 4,131/5,622 rows (validated enemy clock only) |
 
@@ -141,7 +153,7 @@ mean anything about a player.
   view, a 512-unit scale bar, per-player points of view and the moment in
   the URL. The legacy module's own tests travelled with it
   (`lib/spiderWeb.test.ts`, 48). Line of sight followed in SW-3 (below).
-- Layer 4 has no code beyond the exposure diagnostic above; its harness is SW-4 (PLAN). The owner's positional score is a goal, not a
+- Layer 4 has the SW-4 research harness above, but no validated player score. The owner's positional score is a goal, not a
   deliverable: any new metric must say which threads it joins
   (`proximity_*` samples, `storytelling_kill_impact`, W6 LOS, spawn timing,
   reaction metrics) and follow the measurement discipline that already

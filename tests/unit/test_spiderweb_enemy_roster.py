@@ -240,7 +240,7 @@ async def test_only_metric_relevant_subjects_require_current_allegiance(t, expec
 @pytest.mark.asyncio
 @pytest.mark.parametrize('unmeasured', ['enemy_roster', 'missing_holder'])
 @pytest.mark.parametrize('measured', [5, 6])
-async def test_layer4_blind_share_excludes_unmeasured_samples(monkeypatch, unmeasured, measured):
+async def test_layer4_blind_share_excludes_unmeasured_samples(monkeypatch, tmp_path, unmeasured, measured):
     from types import SimpleNamespace
 
     from scripts import spiderweb_layer4_family as family
@@ -286,6 +286,11 @@ async def test_layer4_blind_share_excludes_unmeasured_samples(monkeypatch, unmea
     assert row['samples']['moving'] == 12
     assert row['samples']['blind_moving_measured'] == measured
     assert row['samples']['blind_moving_excluded'] == {unmeasured: 12 - measured}
+    import json
+
+    saved = tmp_path / 'collected.jsonl'
+    saved.write_text(json.dumps(row) + '\n')
+    assert family.read_dataset(saved, cadence_ms=1000, los_enabled=False) == rows
 
 
 @pytest.mark.asyncio
@@ -337,3 +342,131 @@ def test_team_union_preserves_each_holders_unknown_classification():
     holder = union['holders']['team:AXIS']
     assert [b['subject_is_enemy'] for b in holder['beliefs']] == [True, None]
     assert holder['known_enemy_count'] is None
+
+
+def _layer4_row():
+    from scripts import spiderweb_layer4_family as family
+
+    return {'dataset_contract': family.dataset_contract(1000, False),
+            'block': 1, 'round_id': 1, 'player': 'synthetic', 'won': 1, 'order_key': '2026-01-01',
+            'metrics': {'blind_moving_share': 0.5},
+            'samples': {'alive': 12, 'moving': 12, 'blind_moving': 3,
+                        'blind_moving_measured': 6, 'blind_moving_excluded': {'missing_holder': 6}}}
+
+
+@pytest.mark.parametrize('fault', ['unversioned', 'old-version', 'mixed-los', 'cadence', 'denominator', 'missing-samples', 'malformed'])
+def test_layer4_analysis_rejects_incompatible_evidence_before_writing(tmp_path, fault):
+    import json
+    from types import SimpleNamespace
+
+    from scripts import spiderweb_layer4_family as family
+
+    row = _layer4_row()
+    original = json.dumps(row)
+    if fault == 'unversioned':
+        row.pop('dataset_contract')
+    elif fault == 'old-version':
+        row['dataset_contract']['metric_definition_version'] = 'all_moving_v1'
+    elif fault == 'mixed-los':
+        row['dataset_contract']['los_enabled'] = True
+    elif fault == 'cadence':
+        row['dataset_contract']['cadence_ms'] = 5000
+    elif fault == 'denominator':
+        row['metrics']['blind_moving_share'] = 0.25  # Old all-moving denominator.
+    elif fault == 'missing-samples':
+        row.pop('samples')
+    path = tmp_path / 'rows.jsonl'
+    path.write_text(original + '\n' + ('{' if fault == 'malformed' else json.dumps(row)) + '\n')
+    args = SimpleNamespace(rows=str(path), cadence_ms=1000, resamples=10,
+                           out_md=str(tmp_path / 'result.md'), out_manifest=str(tmp_path / 'manifest.json'))
+    with pytest.raises(ValueError, match='recollect'):
+        family.analyse(args)
+    assert not (tmp_path / 'result.md').exists()
+    assert not (tmp_path / 'manifest.json').exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('resume,versioned', [(True, False), (False, False), (False, True)])
+async def test_layer4_collect_rejects_old_or_accidental_append_before_db(tmp_path, monkeypatch, resume, versioned):
+    import json
+    import sys
+    from types import SimpleNamespace
+
+    from scripts import spiderweb_layer4_family as family
+
+    touched = []
+    async def forbidden():
+        touched.append('database')
+        pytest.fail('Collection opened database before validating existing evidence')
+
+    import website.backend
+    dep = SimpleNamespace(init_db_pool=forbidden)
+    monkeypatch.setitem(sys.modules, 'website.backend.dependencies', dep)
+    monkeypatch.setattr(website.backend, 'dependencies', dep, raising=False)
+    row = _layer4_row()
+    if not versioned:
+        row.pop('dataset_contract')
+    path = tmp_path / 'rows.jsonl'
+    original = json.dumps(row) + '\n'
+    path.write_text(original)
+    with pytest.raises(ValueError):
+        await family.collect(SimpleNamespace(out=str(path), resume=resume, cadence_ms=1000, skip_los=True))
+    assert touched == []
+    assert path.read_text() == original
+
+
+@pytest.mark.asyncio
+async def test_layer4_resume_validates_contract_then_skips_completed_rounds(tmp_path, monkeypatch):
+    import json
+    import sys
+    from types import SimpleNamespace
+
+    import website.backend
+    from scripts import spiderweb_layer4_family as family
+
+    calls = []
+    async def init():
+        calls.append('init')
+    async def rounds(*args):
+        return [(1, 1, 'supply', 1, '2026-01-01', '12:00', 1)]
+    async def forbidden(*args, **kwargs):
+        pytest.fail('Resumed collector repeated an already completed round')
+
+    dep = SimpleNamespace(init_db_pool=init, get_db_pool=lambda: SimpleNamespace(fetch_all=rounds))
+    monkeypatch.setitem(sys.modules, 'website.backend.dependencies', dep)
+    monkeypatch.setattr(website.backend, 'dependencies', dep, raising=False)
+    monkeypatch.setattr(family, 'collect_round', forbidden)
+    path = tmp_path / 'rows.jsonl'
+    original = json.dumps(_layer4_row()) + '\n'
+    path.write_text(original)
+    await family.collect(SimpleNamespace(out=str(path), resume=True, cadence_ms=1000, skip_los=True, limit=0))
+    assert calls == ['init'] and path.read_text() == original
+
+
+def test_layer4_current_analysis_versions_its_manifest(tmp_path):
+    import hashlib
+    import json
+    from types import SimpleNamespace
+
+    from scripts import spiderweb_layer4_family as family
+
+    rows = []
+    for block in range(1, 5):
+        for player in range(4):
+            row = _layer4_row()
+            row.update(block=block, round_id=block, player=str(player), won=player % 2,
+                       order_key=f'2026-01-0{block}')
+            row['samples']['blind_moving'] = (player % 2) * 6
+            row['metrics']['blind_moving_share'] = player % 2
+            rows.append(row)
+    path = tmp_path / 'rows.jsonl'
+    path.write_text(''.join(json.dumps(row) + '\n' for row in rows))
+    output = tmp_path / 'manifest.json'
+    family.analyse(SimpleNamespace(rows=str(path), cadence_ms=1000, resamples=10,
+                                  out_md=str(tmp_path / 'table.md'), out_manifest=str(output)))
+    manifest = json.loads(output.read_text())
+    assert manifest['dataset_contract'] == family.dataset_contract(1000, False)
+    assert manifest['rows'] == len(rows) == 16
+    digest = manifest.pop('sha256')
+    manifest.pop('result')
+    assert hashlib.sha256(json.dumps(manifest, sort_keys=True, ensure_ascii=False).encode()).hexdigest() == digest
