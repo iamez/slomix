@@ -226,7 +226,8 @@ def test_legacy_kill_deduped_against_livex(client):
     when the LIVEX one already landed (same slots, within the window)."""
     _post(client, [
         {"type": "LIVE_KILL", "level_ms": 1786480915000,
-         "fields": {"killer_slot": 3, "victim_slot": 5, "mod_id": 34}},
+         "fields": {"killer_slot": 3, "victim_slot": 5, "mod_id": 34,
+                    "killer": "vid", "victim": "lgz"}},
         {"type": "KILL", "level_ms": 100,
          "fields": {"killer_slot": 3, "victim_slot": 5,
                     "killer": "vid", "victim": "lgz", "mod": "MOD_MP40"}},
@@ -515,3 +516,82 @@ def test_dedup_init_game_same_map_starts_new_context(client):
                              {'type': 'LIVE_MAP', 'fields': {'map_name': 'supply'}}, _dedup_kill('KILL')])
     assert response.json()['accepted'] == 4
     assert client.get('/api/live/state').json()['current_map'] == 'supply'
+
+
+def _named_kill(**names):
+    return {'type': 'KILL', 'fields': {'killer_slot': 3, 'victim_slot': 5, **names}}
+
+
+@pytest.mark.parametrize('separate_batches', [False, True])
+def test_named_twin_survives_same_and_later_http_batch(client, separate_batches):
+    first = _dedup_kill('LIVE_KILL')
+    named = _named_kill(killer='source killer', victim='source victim')
+    if separate_batches:
+        assert _post(client, [first]).json()['accepted'] == 1
+        initial = client.get('/api/live/feed').json()
+        assert initial['events'][0]['killer'] is None
+        assert _post(client, [named]).json()['accepted'] == 1
+        assert client.get(f"/api/live/feed?since={initial['last_seq']}").json()['events'][0]['duplicate_of'] == 1
+    else:
+        assert _post(client, [first, named]).json()['accepted'] == 2
+    events = client.get('/api/live/feed').json()['events']
+    assert events[0]['killer'] is None  # Original published row was not rewritten.
+    assert events[1]['duplicate_of'] == events[0]['seq']
+    assert (events[1]['killer'], events[1]['victim']) == ('source killer', 'source victim')
+    assert _post(client, [named, named]).json()['accepted'] == 0
+    state = client.get('/api/live/state').json()
+    assert len(state['recent_kills']) == 1
+    assert (state['recent_kills'][0]['killer'], state['recent_kills'][0]['victim']) == ('source killer', 'source victim')
+    assert '_seq' not in state['recent_kills'][0]
+
+
+def test_partial_names_keep_one_original_identity_and_survive_roster_replacement(client):
+    _post(client, [_dedup_kill('LIVE_KILL'), _named_kill(killer='source killer')])
+    _post(client, [_named_kill(victim='source victim')])
+    events = client.get('/api/live/feed').json()['events']
+    assert [e.get('duplicate_of') for e in events] == [None, 1, 1]
+    _post(client, [{'type': 'CONNECT', 'fields': {'slot': 3}},
+                   {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'replacement'}}])
+    kill = client.get('/api/live/state').json()['recent_kills'][0]
+    assert kill['killer'] == 'source killer'
+    assert client.get('/api/live/feed').json()['events'][:3] == events
+
+
+@pytest.mark.parametrize('kind', ['KILL', 'LIVE_KILL', 'SAY'])
+def test_duplicate_link_is_server_owned_for_every_record(client, kind):
+    assert _post(client, [{'type': kind, 'fields': {'duplicate_of': 999}}]).json()['accepted'] == 1
+    assert 'duplicate_of' not in client.get('/api/live/feed').json()['events'][0]
+
+
+def test_invalid_suffix_rolls_back_name_enrichment_and_its_retry_cache(client):
+    _post(client, [_dedup_kill('LIVE_KILL')])
+    before = deepcopy((live._state.__dict__, live._recent_livex_kills, list(live._events)))  # noqa: SLF001
+    named = _named_kill(killer='source killer', victim='source victim')
+    invalid = {'type': 'MAP', 'fields': {'map_name': ['invalid']}}
+    assert _post(client, [named, invalid]).status_code == 422
+    assert (live._state.__dict__, live._recent_livex_kills, list(live._events)) == before  # noqa: SLF001
+    assert _post(client, [named]).json()['accepted'] == 1
+    assert _post(client, [named]).json()['accepted'] == 0
+
+
+def test_known_conflicting_identity_is_not_overwritten_or_silently_lost(client):
+    first = _dedup_kill('LIVE_KILL')
+    first['fields']['killer'] = 'known original'
+    _post(client, [first, _named_kill(killer='different source', victim='source victim')])
+    events = client.get('/api/live/feed').json()['events']
+    assert len(events) == 2 and 'duplicate_of' not in events[1]
+    assert events[0]['killer'] == 'known original'
+    assert events[1]['killer'] == 'different source'
+
+
+@pytest.mark.parametrize('boundary', [
+    {'type': 'CONNECT', 'fields': {'slot': 3}},
+    {'type': 'DISCONNECT', 'fields': {'slot': 5}},
+    {'type': 'ROUND_START'}, {'type': 'INIT_GAME'},
+    {'type': 'MAP', 'fields': {'map_name': 'radar'}},
+])
+def test_name_enrichment_cannot_link_across_identity_boundary(client, boundary):
+    _post(client, [_dedup_kill('LIVE_KILL'), boundary,
+                   _named_kill(killer='new context', victim='victim')])
+    events = client.get('/api/live/feed').json()['events']
+    assert events[-1]['type'] == 'KILL' and 'duplicate_of' not in events[-1]

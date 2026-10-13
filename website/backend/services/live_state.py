@@ -407,6 +407,18 @@ class LiveStateReducer:
                 st["damage_given"] += int(ev.get("damage_given") or 0)
                 st["damage_received"] += int(ev.get("damage_received") or 0)
 
+        elif etype == "KILL" and type(ev.get("duplicate_of")) is int:
+            # Ingest-owned correlation supplies missing source names only;
+            # never resolve this historical observation through today's roster.
+            for kill in self._recent_kills:
+                if kill.get("_seq") == ev["duplicate_of"]:
+                    for role in ("killer", "victim"):
+                        name = ev.get(role)
+                        if kill[role] is None and isinstance(name, str) and _is_named(name):
+                            kill[role] = name
+                            kill["_" + role + "_pending"] = False
+                    break
+
         elif etype == "LIVE_KILL":
             victim = self._slot(ev, "victim_slot")
             if victim is not None:
@@ -424,7 +436,7 @@ class LiveStateReducer:
             killer_name = killer_name if _is_named(killer_name) else None
             victim_name = victim_name if _is_named(victim_name) else None
             self._recent_kills.append({
-                "killer_slot": killer, "victim_slot": victim,
+                "killer_slot": killer, "victim_slot": victim, "_seq": ev.get("seq"),
                 "killer": killer_name, "victim": victim_name,
                 "_killer_pending": killer is not None and killer_name is None,
                 "_victim_pending": victim is not None and victim_name is None,
@@ -545,7 +557,7 @@ class LiveStateReducer:
 
         recent_kills = [
             {**{k: v for k, v in k_.items()
-                if k not in {"at", "_killer_pending", "_victim_pending"}},
+                if k not in {"at", "_seq", "_killer_pending", "_victim_pending"}},
              "age_seconds": int(now - k_["at"])}
             for k_ in self._recent_kills
             if (now - k_["at"]) <= _OBJECTIVE_WINDOW_SECONDS

@@ -117,3 +117,27 @@ it('still pairs real twins across same-map confirmation or empty map metadata', 
     expect(foldDoubles(events).filter(e => e.type === 'KILL')).toHaveLength(1);
   }
 });
+
+it('merges later source names by server-owned sequence without rewriting input history', () => {
+  const original = { seq: 1, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: null, victim: null, distance: 120 };
+  const named = { seq: 2, type: 'KILL', duplicate_of: 1, killer_slot: 3, victim_slot: 5, killer: 'Source A', victim: 'Source B' };
+  expect(foldDoubles([original])).toHaveLength(1);
+  const folded = foldDoubles([original, named]);
+  expect(folded).toHaveLength(1);
+  expect(folded[0]).toMatchObject({ seq: 1, killer: 'Source A', victim: 'Source B', distance: 120 });
+  expect(original.killer).toBeNull();
+  expect(describeEvent(folded[0], new Map([[3, 'Replacement']]))).toContain('Source A killed Source B');
+});
+
+it('shows orphaned enrichment and combines partial names even when the original left the window', () => {
+  const first = { seq: 2, type: 'KILL', duplicate_of: 1, killer_slot: 3, victim_slot: 5, killer: 'A' };
+  const second = { seq: 3, type: 'KILL', duplicate_of: 1, killer_slot: 3, victim_slot: 5, victim: 'B' };
+  expect(foldDoubles([first, second])).toEqual([{ ...first, victim: 'B' }]);
+});
+
+it('does not replace known conflicting identity or an unrelated event via an enrichment link', () => {
+  const original = { seq: 1, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: 'Original' };
+  const conflict = { seq: 2, type: 'KILL', duplicate_of: 1, killer_slot: 3, victim_slot: 5, killer: 'Other' };
+  expect(foldDoubles([original, conflict])).toHaveLength(2);
+  expect(foldDoubles([{ seq: 1, type: 'SAY', name: 'Speaker' }, conflict])).toHaveLength(2);
+});

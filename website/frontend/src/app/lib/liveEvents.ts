@@ -140,14 +140,32 @@ function whenMs(e: LiveEvent): number {
  * objective replaces it (the DYNAMITE line names the player); a MAP or
  * LIVE_MAP naming the map already announced within 60 s is dropped; a
  * LIVE_KILL within 3 s of a KILL with the same slots lends the KILL its
- * distance and killer health and disappears. Returns newest-last, like the
- * feed.
+ * distance and killer health and disappears. A server-linked named KILL
+ * fills missing names on its LIVE_KILL, even across polls. Returns newest-last.
  */
 export function foldDoubles(events: LiveEvent[]): LiveEvent[] {
   const out: LiveEvent[] = [];
   const unmatchedKills = new Set<LiveEvent>();
+  const correlatedKills = new Map<number, LiveEvent>();
   let lastMap = { name: '', at: 0 };
   for (const e of events) {
+    // Additive source-name evidence can arrive in a later HTTP poll. The
+    // server owns this exact sequence link; no current roster lookup is used.
+    if (e.type === 'KILL' && typeof e.duplicate_of === 'number'
+        && Number.isSafeInteger(e.duplicate_of) && e.duplicate_of > 0 && e.duplicate_of < e.seq) {
+      const prior = correlatedKills.get(e.duplicate_of);
+      if (prior && prior.killer_slot === e.killer_slot && prior.victim_slot === e.victim_slot
+          && ['killer', 'victim'].every((role) => !prior[role] || !e[role] || prior[role] === e[role])) {
+        for (const role of ['killer', 'victim']) {
+          if (!prior[role] && typeof e[role] === 'string' && String(e[role]).trim()) prior[role] = e[role];
+        }
+        continue;
+      }
+      const copy = { ...e };
+      out.push(copy);
+      if (!prior) correlatedKills.set(e.duplicate_of, copy);
+      continue;
+    }
     if (e.type === 'ROUND_START' || e.type === 'INIT_GAME') unmatchedKills.clear();
     if (e.type === 'DISCONNECT' || e.type === 'CONNECT') {
       for (const prior of unmatchedKills) {
@@ -162,11 +180,14 @@ export function foldDoubles(events: LiveEvent[]): LiveEvent[] {
         && Math.abs(whenMs(p) - whenMs(e)) <= DOUBLE_WINDOW_MS);
       if (twin) {
         unmatchedKills.delete(twin);
+        correlatedKills.set(e.seq, twin);
         if (typeof e.distance === 'number') twin.distance = e.distance;
         if (typeof e.killer_health === 'number') twin.killer_health = e.killer_health;
         continue;
       }
-      out.push({ ...e, type: 'KILL' });
+      const copy = { ...e, type: 'KILL' };
+      out.push(copy);
+      correlatedKills.set(e.seq, copy);
       continue;
     }
     if (e.type === 'DYNAMITE') {

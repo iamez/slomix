@@ -34,6 +34,7 @@ import urllib.request
 import uuid
 from collections import deque
 from copy import deepcopy
+from dataclasses import dataclass, replace
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -96,8 +97,22 @@ _seq = 0
 _evicted_by_type: dict[str, int] = {}
 _stream_id = uuid.uuid4().hex
 _lock = asyncio.Lock()
-# (killer_slot, victim_slot) -> received_at of the last LIVE_KILL
-_recent_livex_kills: dict[tuple[int, int], float] = {}
+
+
+@dataclass(frozen=True)
+class _KillTwin:
+    at: float
+    seq: int
+    names: tuple[str | None, str | None]
+
+
+def _kill_names(fields):
+    return tuple(value if isinstance(value, str) and value.strip() else None
+                 for value in (fields.get("killer"), fields.get("victim")))
+
+
+# Immutable values keep a rejected batch from changing published dedup identity.
+_recent_livex_kills: dict[tuple[int, int], _KillTwin] = {}
 
 # Dev mirror (2026-08-18): the tailers on the game server post ONLY to prod,
 # so the dev ring is empty by construction and the Live page could never be
@@ -181,27 +196,20 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                     if slot is not None:
                         for pair in [pair for pair in recent_kills if slot in pair]:
                             del recent_kills[pair]
-                if etype == "LIVE_KILL":
-                    ks = ev.fields.get("killer_slot")
-                    vs = ev.fields.get("victim_slot")
-                    if isinstance(ks, int) and isinstance(vs, int):
-                        # Refresh insertion order; bound even a burst of unique
-                        # pairs inside the TTL to the event ring's capacity.
-                        recent_kills.pop((ks, vs), None)
-                        recent_kills[(ks, vs)] = now
-                        if len(recent_kills) > 64:
-                            cutoff = now - _KILL_DEDUP_SECONDS
-                            for key in [k for k, t in recent_kills.items()
-                                        if t < cutoff]:
-                                del recent_kills[key]
-                        while len(recent_kills) > _BUFFER_MAX:
-                            del recent_kills[next(iter(recent_kills))]
-                elif etype == "KILL":
-                    ks = ev.fields.get("killer_slot")
-                    vs = ev.fields.get("victim_slot")
-                    seen = recent_kills.get((ks, vs))
-                    if seen is not None and now - seen <= _KILL_DEDUP_SECONDS:
-                        continue  # LIVEX already carried this obituary
+                duplicate_of = None
+                if etype == "KILL":
+                    pair = (ev.fields.get("killer_slot"), ev.fields.get("victim_slot"))
+                    seen = recent_kills.get(pair)
+                    if seen is not None and now - seen.at <= _KILL_DEDUP_SECONDS:
+                        names = _kill_names(ev.fields)
+                        conflicting = any(old and new and old != new for old, new in zip(seen.names, names))
+                        adds_names = any(new and not old for old, new in zip(seen.names, names))
+                        if not conflicting:
+                            if not adds_names:
+                                continue  # Genuine twin/retry without new source information.
+                            duplicate_of = seen.seq
+                            recent_kills[pair] = replace(seen, names=tuple(
+                                old or new for old, new in zip(seen.names, names)))
                 seq += 1
                 record = {
                     **ev.fields,
@@ -216,7 +224,23 @@ async def ingest_events(batch: LiveEventBatch) -> dict[str, Any]:
                 }
                 # Refuse non-finite JSON before it can poison a later feed/state GET.
                 json.dumps(record, allow_nan=False)
-                record.update(state.event_names(record))
+                # The producer cannot forge a link to another historical row.
+                record.pop("duplicate_of", None)
+                if duplicate_of is not None:
+                    record["duplicate_of"] = duplicate_of
+                else:
+                    record.update(state.event_names(record))
+                if etype == "LIVE_KILL":
+                    ks, vs = record.get("killer_slot"), record.get("victim_slot")
+                    if isinstance(ks, int) and isinstance(vs, int):
+                        recent_kills.pop((ks, vs), None)
+                        recent_kills[(ks, vs)] = _KillTwin(now, seq, _kill_names(record))
+                        if len(recent_kills) > 64:
+                            cutoff = now - _KILL_DEDUP_SECONDS
+                            for key in [k for k, twin in recent_kills.items() if twin.at < cutoff]:
+                                del recent_kills[key]
+                        while len(recent_kills) > _BUFFER_MAX:
+                            del recent_kills[next(iter(recent_kills))]
                 # Invalidate only an accepted map change: same-map confirmation
                 # and the reducer's rejected flipback do not change identity.
                 previous_map = state.current_map

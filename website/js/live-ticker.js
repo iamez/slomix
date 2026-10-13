@@ -79,6 +79,22 @@ function _eventName(name, slot) {
     return valid == null ? '?' : `#${valid}`;
 }
 
+function _isKillEnrichment(ev) {
+    return ev.type === 'KILL' && Number.isSafeInteger(ev.duplicate_of)
+        && ev.duplicate_of > 0 && ev.duplicate_of < ev.seq;
+}
+
+function _mergeKillEnrichment(ev) {
+    const prior = _events.find(row => row.seq === ev.duplicate_of || row.duplicate_of === ev.duplicate_of);
+    if (!prior || prior.killer_slot !== ev.killer_slot || prior.victim_slot !== ev.victim_slot) return false;
+    const roles = ['killer', 'victim'];
+    if (roles.some(role => prior[role] && ev[role] && prior[role] !== ev[role])) return false;
+    for (const role of roles) {
+        if (!prior[role] && typeof ev[role] === 'string' && ev[role].trim()) prior[role] = ev[role];
+    }
+    return true;
+}
+
 function _rosterApply(ev) {
     const slot = _clientSlot(ev.slot);
     if (slot == null) return;
@@ -362,20 +378,23 @@ async function _poll() {
             // before buffering + render — this loop was lost in a rebase and
             // its absence silently disabled attribution, pressure and MVP.
             for (const ev of fresh) {
-                _rosterApply(ev);
-                _combatApply(ev);
-                _pressureApply(ev);
-                _mvpApply(ev);
+                const enrichment = _isKillEnrichment(ev);
+                if (enrichment && _mergeKillEnrichment(ev)) continue;
+                if (!enrichment) {
+                    _rosterApply(ev);
+                    _combatApply(ev);
+                    _pressureApply(ev);
+                    _mvpApply(ev);
+                }
+                // Buffer incrementally so an enrichment in this very response
+                // can find its original, just as one from a later poll can.
+                // Invisible telemetry must not crowd renderable history out.
+                if (_line(ev) !== '') _events.push(ev);
+                if (_events.length > MAX_BUFFER) _events.shift();
             }
             for (const ev of fresh) {
                 if ((ev.seq || 0) > _cursor) _cursor = ev.seq;
             }
-            // Only renderable rows may occupy the buffer: invisible types
-            // used to crowd out the 200 slots and leave one stale revive on
-            // screen. Expiry runs for every poll outcome below.
-            _events = _events
-                .concat(fresh.filter(ev => _line(ev) !== ''))
-                .slice(-MAX_BUFFER);
         }
         _momentum = 50 + (_momentum - 50) * _MOM_DECAY;
         // Momentum/hold TIMELINE samples (Sofascore pattern, Val A): one
@@ -623,7 +642,7 @@ export function renderLiveTicker() {
     }
     const visible = _events.filter(e =>
         _filters[_TYPE_TO_CAT[e.type]] === true
-        && !(e.type === 'KILL' && _liveKillActive()));  // LIVE_KILL supersedes legacy
+        && !(e.type === 'KILL' && _liveKillActive() && !_isKillEnrichment(e)));  // LIVE_KILL supersedes legacy
     const rows = visible.slice(-MAX_SHOWN).reverse().map(_line).filter(Boolean).join('');
     host.textContent = '';
     safeInsertHTML(host, 'beforeend', `

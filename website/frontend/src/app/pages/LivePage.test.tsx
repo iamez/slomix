@@ -448,3 +448,37 @@ it('expires ticker rows through failed polls without calling the unavailable fee
     cleanup(); client.clear(); vi.useRealTimers();
   }
 });
+
+it('enriches a previously polled LIVE_KILL once with its source names', async () => {
+  const now = Date.now() / 1000;
+  const pages = [
+    { status: 'ok', stream_id: 'named-proof', oldest_seq: 1, last_seq: 2, server_time: now, events: [
+      { seq: 1, type: 'ROUND_START', received_at: now },
+      { seq: 2, type: 'LIVE_KILL', level_ms: 1000, killer_slot: 3, victim_slot: 5, killer: null, victim: null, distance: 120, received_at: now },
+    ] },
+    { status: 'ok', stream_id: 'named-proof', oldest_seq: 1, last_seq: 3, server_time: now, events: [
+      { seq: 3, type: 'KILL', level_ms: 1000, duplicate_of: 2, killer_slot: 3, victim_slot: 5, killer: 'Source A', victim: 'Source B', received_at: now },
+    ] },
+  ];
+  let calls = 0;
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+    const pathname = String(input).split('?')[0];
+    const body = pathname === '/api/live/feed'
+      ? pages[calls++] ?? { ...pages[1], events: [] }
+      : {
+        '/api/live/state': liveState,
+        '/api/server-activity/history': serverHist,
+        '/api/voice-activity/history': voiceHist,
+        '/api/monitoring/status': monitoring,
+        '/api/status': health,
+        '/api/stats/tonight': tonightQuiet,
+      }[pathname];
+    if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+  }));
+  render(<QueryClientProvider client={makeQueryClient()}><MemoryRouter><LivePage /></MemoryRouter></QueryClientProvider>);
+  await waitFor(() => expect(screen.getByText(/Source A killed Source B/)).toBeInTheDocument());
+  expect(screen.getAllByText(/Source A killed Source B/)).toHaveLength(1);
+  expect(screen.getByText(/Source A killed Source B/).textContent).toContain('120 u');
+  expect(calls).toBeGreaterThanOrEqual(2);
+});

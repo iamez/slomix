@@ -175,3 +175,57 @@ it('ignores invalid engine slots in roster, streak and MVP including partially n
     expect(document.getElementById('live-ticker')?.textContent).not.toContain('streak');
   } finally { ticker.stopLiveTicker(); }
 });
+
+it.each([false, true])('retains named twin evidence across polls without double effects (split=%s)', async (split) => {
+  vi.useFakeTimers();
+  localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true }));
+  vi.setSystemTime(new Date('2026-10-13T12:00:00Z'));
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const now = Date.now() / 1000;
+  const original = { seq: 2, type: 'LIVE_KILL', killer_slot: 3, victim_slot: 5, killer: null, victim: null, distance: 120, received_at: now };
+  const named = { seq: 3, type: 'KILL', duplicate_of: 2, killer_slot: 3, victim_slot: 5, killer: 'Source A', victim: 'Source B', received_at: now + 0.5 };
+  const start = { seq: 1, type: 'ROUND_START', received_at: now };
+  let polls = 0;
+  fetchJSON.mockImplementation(async () => {
+    const events = polls++ === 0 ? [start, original, ...(split ? [] : [named])] : split && polls === 2 ? [named] : [];
+    return { status: 'ok', stream_id: 'fixture', last_seq: 3, events };
+  });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  ticker.startLiveTicker();
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    const score = ticker.getLiveMVP().score;
+    expect(score).toBe(1);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(ticker.getLiveMVP().score).toBe(score);
+    const text = document.getElementById('live-ticker')!.textContent!;
+    expect(text).toContain('Source A');
+    expect(text).toContain('Source B');
+    expect(text.match(/Source A/g)).toHaveLength(1);
+    expect(text.match(/→/g)).toHaveLength(1);
+    expect(text).not.toContain('#3 → #5');
+    expect(text).toContain('120u');
+  } finally { ticker.stopLiveTicker(); }
+});
+
+it('renders orphaned source-name evidence while LIVE_KILL events are active', async () => {
+  vi.useFakeTimers();
+  localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true }));
+  document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+  Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+  const now = Date.now() / 1000;
+  fetchJSON.mockResolvedValue({ status: 'ok', stream_id: 'fixture', last_seq: 20, events: [
+    { seq: 19, type: 'LIVE_KILL', killer_slot: 1, victim_slot: 2, received_at: now },
+    { seq: 20, type: 'KILL', duplicate_of: 5, killer_slot: 3, victim_slot: 4, killer: 'Orphan A', victim: 'Orphan B', received_at: now },
+  ] });
+  // @ts-expect-error existing JS module has no declaration file
+  const ticker = await import('../../../js/live-ticker.js');
+  ticker.startLiveTicker();
+  try {
+    await vi.advanceTimersByTimeAsync(0);
+    expect(document.getElementById('live-ticker')!.textContent).toContain('Orphan A');
+    expect(document.getElementById('live-ticker')!.textContent).toContain('Orphan B');
+  } finally { ticker.stopLiveTicker(); }
+});
