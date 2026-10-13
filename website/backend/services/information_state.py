@@ -351,7 +351,7 @@ GUNFIRE_GAP_REASONS = {
 
 def reconstruct_gunfire(
     shots: Iterable[tuple], holders: Iterable[str], *, audible_radius: float,
-    locate: Locator,
+    locate: Locator, is_listener_active: Callable[[str, int], bool | None] | None = None,
 ) -> GunfireReconstruction:
     """Model potential audibility, never actual hearing or shooter identity.
 
@@ -371,6 +371,10 @@ def reconstruct_gunfire(
             valid_origin = False
         for holder in holders:
             if holder == guid:
+                continue
+            # Known absence of a living listener is not missing telemetry.
+            # Unknown history still requires a position or an explicit gap.
+            if is_listener_active is not None and is_listener_active(holder, int(t_ms)) is False:
                 continue
             if not valid_origin:
                 gaps[holder].add("invalid_coordinates")
@@ -554,6 +558,12 @@ def to_dict(
                 "kind": b.kind,
                 "source": b.source,
                 "subject_guid": b.subject_guid,
+                # Allegiance is separate from confidence and positional expiry.
+                # None is reserved for unattributed activity, never an enemy.
+                "subject_is_enemy": (
+                    bool(enemy_guids is None or b.subject_guid in enemy_guids)
+                    if b.subject_guid else None
+                ),
                 "roster_state": b.roster_state,
                 "t_observed": b.t_observed,
                 "confidence": round(b.confidence(t_ms), 3),

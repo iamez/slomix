@@ -1125,3 +1125,17 @@ describe('opening a different round', () => {
   });
 
 });
+
+
+it('excludes friendly regions and unplaced labels without dropping low-confidence enemies', () => {
+  const result = beliefRegions({ position_claim_max_radius: 500, beliefs: [
+    { subject_guid: 'friendly', subject_is_enemy: false, counts_as_known: false,
+      region: { x: 90000, y: 0, z: 0, radius: 100 } },
+    { subject_guid: 'friendly-old', subject_is_enemy: false, counts_as_known: false,
+      region: { x: 0, y: 0, z: 0, radius: 90000 } },
+    { subject_guid: 'enemy', subject_is_enemy: true, counts_as_known: false, confidence: 0.12,
+      region: { x: 0, y: 0, z: 0, radius: 100 } },
+  ] });
+  expect(result.regions.map((r) => r.subject)).toEqual(['enemy']);
+  expect(result.unplacedSubjects).toEqual([]);
+});

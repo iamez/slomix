@@ -87,6 +87,7 @@ async def test_unknown_or_conflicting_allegiance_never_invents_an_enemy(uncertai
     assert holder['known_enemy_count'] == 0
     assert holder['nearest_known_enemy_distance'] is None
     assert 'enemy_roster' in holder['unavailable']
+    assert all(b['subject_is_enemy'] is False for b in holder['beliefs'] if b['subject_guid'])
 
 
 @pytest.mark.parametrize('enemies,expected', [(frozenset(), 0), (frozenset({'S'}), 1)])
@@ -96,6 +97,7 @@ def test_distance_count_and_flag_share_the_enemy_filter(enemies, expected):
     payload = to_dict(state, 0, (0, 0, 0), enemy_guids=enemies)
     assert payload['known_enemy_count'] == expected
     assert payload['beliefs'][0]['counts_as_known'] is bool(expected)
+    assert payload['beliefs'][0]['subject_is_enemy'] is bool(expected)
     assert (payload['nearest_known_enemy_distance'] is not None) is bool(expected)
     assert len(payload['beliefs']) == 1
 
@@ -141,6 +143,7 @@ async def test_real_asgi_route_propagates_roster_to_player_and_team_pov(monkeypa
             holder = response.json()['information_state']['holders'][pov]
             assert holder['known_enemy_count'] == expected
             assert any(b['subject_guid'] == 'S' for b in holder['beliefs'])
+            assert all(b['subject_is_enemy'] is bool(expected) for b in holder['beliefs'] if b['subject_guid'] == 'S')
             assert {b['subject_guid'] for b in holder['beliefs'] if b['counts_as_known']} == (
                 {'S'} if expected else set()
             )
@@ -156,3 +159,11 @@ def test_uncertain_roster_belief_cannot_return_distance_while_count_is_zero():
     assert payload['beliefs']
     assert payload['known_enemy_count'] == 0
     assert payload['nearest_known_enemy_distance'] is None
+
+
+def test_enemy_classification_survives_below_known_confidence_floor():
+    state = HolderState('H', [BeliefItem(holder_guid='H', source='aim_lock', t_observed=0,
+                                        subject_guid='S', region=Region(100, 0, 0, 10))])
+    payload = to_dict(state, 6000, (0, 0, 0), enemy_guids=frozenset({'S'}))
+    assert payload['beliefs'][0]['subject_is_enemy'] is True
+    assert payload['beliefs'][0]['counts_as_known'] is False

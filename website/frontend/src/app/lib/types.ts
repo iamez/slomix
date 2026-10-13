@@ -4187,6 +4187,8 @@ export interface SpiderWebSnapshot {
 }
 
 export interface SpiderBelief {
+  /** Snapshot allegiance; independent of confidence. Absent on old recordings. */
+  subject_is_enemy?: boolean | null;
   kind: string;
   source: string;
   subject_guid: string | null;

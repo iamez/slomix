@@ -133,6 +133,7 @@ export function placeLabels<T extends Label>(labels: T[], minX = 70, minY = 13):
 }
 
 export interface BeliefLike {
+  subject_is_enemy?: boolean | null;
   subject_guid?: string | null;
   region?: { x: number; y: number; z: number; radius: number } | null;
   confidence?: number;
@@ -171,7 +172,8 @@ export function beliefRegions(holder: HolderLike | null | undefined): { regions:
   const drawable: DrawableRegion[] = [];
   const unplaced = new Set<string>();
   for (const b of holder.beliefs) {
-    if (b == null || !b.subject_guid) continue;
+    // Older recordings lack classification; explicit non-enemies never draw.
+    if (b == null || !b.subject_guid || b.subject_is_enemy === false) continue;
     if (!b.region) continue;
     if (b.region.radius > horizon) { unplaced.add(b.subject_guid); continue; }
     drawable.push({

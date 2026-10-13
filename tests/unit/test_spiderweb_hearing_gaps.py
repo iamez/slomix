@@ -141,3 +141,45 @@ async def test_real_asgi_retains_gap_for_player_and_team_without_claiming_captur
             assert 'not proof of hearing' in holder['unavailable']['gunfire_reconstruction']
             assert 'gunfire' not in holder['unavailable']
             assert payload['capture_policy']['capabilities']['shot_fired'] == 'enabled'
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('state', ['dead', 'not_joined', 'no_sample', 'no_history'])
+@pytest.mark.parametrize('origin', [(0, 0, 0), (None, 0, 0)])
+async def test_event_time_inactive_listener_is_not_a_reconstruction_failure(state, origin):
+    lives = tracks()
+    if state == 'dead':
+        old = lives['H'][0]
+        lives['H'] = [(*old[:5], 1000, *old[6:]),
+                      ('H', 'Holder', 'AXIS', 'MEDIC', 1500, None,
+                       [{'time': 1500, 'x': 100, 'y': 0, 'z': 0}], 'supply', 2)]
+    elif state == 'not_joined':
+        old = lives['H'][0]
+        lives['H'] = [(*old[:4], 1500, old[5],
+                       [{'time': 1500, 'x': 100, 'y': 0, 'z': 0}], *old[7:])]
+    elif state == 'no_sample':
+        lives['H'][0][6][0]['time'] = 1500
+    payload = await load_round_information_state(
+        ShotDB(origin), 1, 2000, build_snapshot(lives, 2000), {},
+        CapturePolicy(capabilities={'shot_fired': 'enabled'}),
+        None if state == 'no_history' else lives,
+    )
+    holder = payload['holders']['H']
+    assert holder['beliefs'] == []
+    assert ('gunfire_reconstruction' in holder['unavailable']) is (state in {'no_sample', 'no_history'})
+
+
+def test_team_union_keeps_all_distinct_channel_reasons_in_stable_order():
+    from website.backend.services.round_web_service import _team_information
+
+    holders = {
+        'H': {'beliefs': [], 'unavailable': {'gunfire_reconstruction': 'missing listener', 'capture': 'unknown'}},
+        'H2': {'beliefs': [], 'unavailable': {'gunfire_reconstruction': 'invalid coordinates'}},
+        'H3': {'beliefs': [], 'unavailable': {'gunfire_reconstruction': 'missing listener'}},
+        'ENEMY': {'beliefs': [], 'unavailable': {'gunfire_reconstruction': 'enemy private gap'}},
+    }
+    results = [_team_information({'holders': holders}, {'team': 'AXIS', 'members': members}, 2000)
+               ['holders']['team:AXIS']['unavailable']
+               for members in [('H', 'H2', 'H3'), ('H3', 'H2', 'H')]]
+    assert results[0] == results[1]
+    assert results[0] == {'capture': 'unknown', 'gunfire_reconstruction': 'invalid coordinates; missing listener'}

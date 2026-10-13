@@ -249,7 +249,8 @@ export function beliefRegions(holder) {
     const drawable = [];
     const unplaced = new Set();
     for (const b of holder.beliefs) {
-        if (!b || !b.subject_guid) continue;
+        // Preserve old recordings, but never draw explicitly classified allies.
+        if (!b || !b.subject_guid || b.subject_is_enemy === false) continue;
         if (!b.region) continue;
         if (b.region.radius > horizon) {
             unplaced.add(b.subject_guid);

@@ -1137,10 +1137,19 @@ async def load_round_information_state(
     beliefs += contact_beliefs(
         [(r[0], _ensure_attackers(r[1])) for r in (engagements or [])],
         locate=locate)
+
+    def is_listener_active(guid: str, at_ms: int) -> bool | None:
+        history = (tracks or {}).get(guid)
+        if not history:
+            return None
+        _life, alive, _conflict = select_life(history, at_ms)
+        return alive
+
     hearing = reconstruct_gunfire(
         [(r[0], r[1], r[2], r[3], r[4]) for r in (shots or [])],
         holders, audible_radius=AUDIBLE_GUNFIRE_RADIUS,
-        locate=make_locator(tracks or {}, require_alive=True))
+        locate=make_locator(tracks or {}, require_alive=True),
+        is_listener_active=is_listener_active)
     beliefs += hearing.beliefs
     beliefs += aim_lock_beliefs(
         [(r[0], r[1], r[2]) for r in (locks or [])], locate=locate)
@@ -1333,13 +1342,16 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
     exactly the kind of number this layer exists to refuse.
     """
     holders = information.get("holders") or {}
-    own = [holders[g] for g in pov_team["members"] if g in holders]
+    own = [holders[g] for g in sorted(pov_team["members"]) if g in holders]
 
     beliefs: list[dict] = []
-    unavailable: dict = {}
+    reasons: dict[str, set[str]] = {}
     for h in own:
         beliefs.extend(h.get("beliefs") or [])
-        unavailable.update(h.get("unavailable") or {})
+        for channel, reason in (h.get("unavailable") or {}).items():
+            reasons.setdefault(channel, set()).add(reason)
+    unavailable = {channel: "; ".join(sorted(values))
+                   for channel, values in sorted(reasons.items())}
 
     named = {b.get("subject_guid") for b in beliefs
              if b.get("counts_as_known") and b.get("subject_guid")}
@@ -1355,8 +1367,8 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
                 "beliefs": sorted(beliefs, key=lambda b: -(b.get("confidence") or 0)),
                 "unavailable": unavailable,
                 # ⚠️ The MAXIMUM across the union, not one member's.
-                # `pov_team["members"]` is a set, so `own` has no defined order
-                # and `own[0]` picked an arbitrary holder — safe today only
+                # `pov_team["members"]` is a set; before sorting, `own[0]`
+                # picked an arbitrary holder — safe today only
                 # because every holder publishes the same module constant, and
                 # a latent bug the moment one does not. The consumer uses this
                 # as a hard filter (`beliefRegions` drops regions wider than

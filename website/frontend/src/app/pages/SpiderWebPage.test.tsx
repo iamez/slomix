@@ -660,3 +660,24 @@ describe('authorized scene framing', () => {
     expect(screen.queryByText(/no floor mesh/)).toBeNull();
   });
 });
+
+
+it('frames only explicitly classified enemy regions, including low-confidence enemies', () => {
+  const holder = Object.values(povForm.information_state.holders)[0];
+  const belief = { kind: 'position_region', source: 'aim_lock', roster_state: null, t_observed: 0,
+    confidence: 0.12, counts_as_known: false, capability: null, expiry_basis: null };
+  const shaped: SpiderWebSnapshot = { ...povForm, players: [], edges: [], information_state: {
+    ...povForm.information_state, holders: { [holder.holder_guid]: { ...holder,
+      beliefs: [
+        { ...belief, subject_guid: 'enemy', subject_is_enemy: true, region: { x: 0, y: 0, z: 0, radius: 100 } },
+        { ...belief, subject_guid: 'friendly', subject_is_enemy: false, region: { x: 90000, y: 0, z: 0, radius: 100 } },
+        { ...belief, subject_guid: 'friendly-old', subject_is_enemy: false, region: { x: 0, y: 0, z: 0, radius: 90000 } },
+      ] } },
+  } };
+  render(<SpiderWebScene snap={shaped} mesh={null} pov="team:AXIS" />);
+  expect(document.querySelectorAll('[data-belief-subject]')).toHaveLength(1);
+  const enemy = document.querySelector('[data-belief-subject="enemy"]')!;
+  expect(Number(enemy.getAttribute('r'))).toBeGreaterThan(100);
+  expect(document.querySelector('[data-belief-subject="friendly"]')).toBeNull();
+  expect(screen.queryByText(/known but not placed/)).toBeNull();
+});
