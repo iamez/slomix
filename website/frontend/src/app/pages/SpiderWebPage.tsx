@@ -160,7 +160,10 @@ function Beliefs({ snap }: { snap: SpiderWebSnapshot }) {
                   ? <>enemy count unavailable · enemy distance unavailable</>
                   : <>knows of {figure(h.known_enemy_count)} {h.known_enemy_count === 1 ? 'enemy' : 'enemies'}
                     {h.nearest_known_enemy_distance != null && <> · nearest known {span(h.nearest_known_enemy_distance)}</>}</>}
-                {h.nearest_heard_activity_distance != null && <> · heard within {span(h.nearest_heard_activity_distance)}</>}
+                {h.heard_activity_distance_reconstruction_complete === false
+                  || (h.heard_activity_distance_reconstruction_complete == null && h.unavailable?.gunfire_reconstruction)
+                  ? <> · heard distance unavailable</>
+                  : h.nearest_heard_activity_distance != null && <> · heard within {span(h.nearest_heard_activity_distance)}</>}
                 {h.position_claim_max_radius != null && <> · claims within {figure(Math.round(h.position_claim_max_radius))}</>}
               </Meta>
               {Object.entries(h.unavailable ?? {}).map(([channel, why]) => (

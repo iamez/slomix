@@ -326,6 +326,8 @@ class HolderState:
     #: source or reconstruction stage -> why coverage is incomplete. Missing
     #: capture and modelling gaps are named separately, never as silence.
     unavailable: dict[str, str] = field(default_factory=dict)
+    # None means gap timing was not supplied; retain fail-closed compatibility.
+    gunfire_gap_times: tuple[int, ...] | None = None
 
 
 def _capability_state(manifest: dict | None, flag: str) -> str:
@@ -340,6 +342,7 @@ class GunfireReconstruction:
 
     beliefs: list[BeliefItem] = field(default_factory=list)
     unavailable: dict[str, tuple[str, ...]] = field(default_factory=dict)
+    gap_times: dict[str, tuple[int, ...]] = field(default_factory=dict)
 
 
 GUNFIRE_GAP_REASONS = {
@@ -362,6 +365,12 @@ def reconstruct_gunfire(
     """
     out: list[BeliefItem] = []
     gaps: dict[str, set[str]] = defaultdict(set)
+    gap_times: dict[str, set[int]] = defaultdict(set)
+
+    def record_gap(holder, reason, at_ms):
+        gaps[holder].add(reason)
+        gap_times[holder].add(int(at_ms))
+
     holders = tuple(holders)
     for guid, t_ms, sx, sy, sz in shots:
         try:
@@ -377,11 +386,11 @@ def reconstruct_gunfire(
             if is_listener_active is not None and is_listener_active(holder, int(t_ms)) is False:
                 continue
             if not valid_origin:
-                gaps[holder].add("invalid_coordinates")
+                record_gap(holder, "invalid_coordinates", t_ms)
                 continue
             region = locate(holder, int(t_ms))
             if region is None:
-                gaps[holder].add("missing_listener")
+                record_gap(holder, "missing_listener", t_ms)
                 continue
             try:
                 values = (region.x, region.y, region.z, region.radius)
@@ -389,19 +398,22 @@ def reconstruct_gunfire(
             except (TypeError, ValueError, OverflowError):
                 valid_region = False
             if not valid_region:
-                gaps[holder].add("invalid_coordinates")
+                record_gap(holder, "invalid_coordinates", t_ms)
                 continue
             distance = math.dist(origin, (region.x, region.y, region.z))
             if distance + region.radius > audible_radius:
                 if distance - region.radius <= audible_radius:
-                    gaps[holder].add("uncertain_range")
+                    record_gap(holder, "uncertain_range", t_ms)
                 continue
             out.append(BeliefItem(
                 holder_guid=holder, source="gunfire", t_observed=int(t_ms),
                 region=Region(*origin, GUNFIRE_REGION_RADIUS),
                 subject_guid=None, capability="shot_fired",
             ))
-    return GunfireReconstruction(out, {holder: tuple(sorted(reasons)) for holder, reasons in gaps.items()})
+    return GunfireReconstruction(
+        out, {holder: tuple(sorted(reasons)) for holder, reasons in gaps.items()},
+        {holder: tuple(sorted(times)) for holder, times in gap_times.items()},
+    )
 
 
 def gunfire_beliefs(
@@ -530,6 +542,18 @@ def nearest_heard_activity_distance(
     return _nearest(state, t_ms, holder_pos, resolved=False, floor=floor)
 
 
+def _gunfire_gap_affects_distance(observed_ms: int, t_ms: int) -> bool:
+    """Could this unmodelled shot still enter the current distance aggregate?
+
+    The hypothetical region is only an age bound, never admitted evidence or a
+    claimed origin. Use the same confidence and growing radius as a real shot.
+    """
+    candidate = BeliefItem(holder_guid="", source="gunfire", t_observed=observed_ms,
+                           region=Region(0, 0, 0, GUNFIRE_REGION_RADIUS))
+    return (candidate.confidence(t_ms) >= CONFIDENCE_FLOOR
+            and candidate.region_at(t_ms).radius <= POSITION_CLAIM_MAX_RADIUS)
+
+
 def to_dict(
     state: HolderState, t_ms: int, holder_pos: tuple[float, float, float] | None,
     *, enemy_guids: frozenset[str] | None = None,
@@ -547,6 +571,10 @@ def to_dict(
     # A classified subset is evidence, not a complete enemy roster. Preserve
     # its beliefs, but do not publish a definitive count or nearest distance.
     roster_available = "enemy_roster" not in state.unavailable
+    # Completeness of currently distance-relevant modelling only, not capture.
+    hearing_complete = ("gunfire_reconstruction" not in state.unavailable or
+                        state.gunfire_gap_times is not None and not any(
+                            _gunfire_gap_affects_distance(at, t_ms) for at in state.gunfire_gap_times))
     return {
         "holder_guid": state.holder_guid,
         "known_enemy_count": known_enemy_count(state, t_ms, enemy_guids=enemy_guids) if roster_available else None,
@@ -556,8 +584,9 @@ def to_dict(
         ),
         "nearest_heard_activity_distance": (
             nearest_heard_activity_distance(state, t_ms, holder_pos)
-            if holder_pos else None
+            if holder_pos and hearing_complete else None
         ),
+        "heard_activity_distance_reconstruction_complete": hearing_complete,
         "beliefs": [
             {
                 "kind": b.kind,

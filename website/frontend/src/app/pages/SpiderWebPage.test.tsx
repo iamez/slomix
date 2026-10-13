@@ -790,3 +790,26 @@ it('does not claim silence when only anonymous gunfire and reconstruction gaps a
   expect(screen.getByText('no drawable named-subject region is granted at this moment')).toBeInTheDocument();
   expect(document.body.textContent).not.toMatch(/nothing has been seen|knew of no enemy/);
 });
+it.each([[undefined, true, false], [false, true, false], [false, false, false], [true, true, true], [undefined, false, true]] as const)(
+  'qualifies heard distance independently of historical gaps (complete=%s gap=%s)', async (complete, gap, show) => {
+    const snapshot = { ...world, information_state: { ...world.information_state, holders: {
+      H: { holder_guid: 'H', known_enemy_count: 0, nearest_known_enemy_distance: null,
+        nearest_heard_activity_distance: { min: 123, max: 456 },
+        heard_activity_distance_reconstruction_complete: complete,
+        position_claim_max_radius: 1000, beliefs: [], notes: [],
+        unavailable: { enemy_roster: 'Independent allegiance gap', ...(gap ? { gunfire_reconstruction: 'Missing shot history' } : {}) } },
+    } } };
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return snapshot;
+      if (url.includes('/assets/maps/geometry/')) return { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: null };
+      return undefined;
+    });
+    renderAt();
+    await waitFor(() => expect(document.querySelector('[data-parity="spider-web.beliefs"]')).not.toBeNull());
+    const text = document.querySelector('[data-parity="spider-web.beliefs"]')!.textContent!;
+    expect(text.includes('heard within')).toBe(show);
+    expect(text.includes('heard distance unavailable')).toBe(!show);
+    expect(text).toContain('enemy count unavailable');
+    if (gap) expect(text).toContain('Missing shot history');
+  },
+);

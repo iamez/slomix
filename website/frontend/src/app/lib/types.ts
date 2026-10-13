@@ -4209,6 +4209,8 @@ export interface SpiderHolder {
   /** An INTERVAL — the server publishes the uncertainty, not a point. */
   nearest_known_enemy_distance: { min: number; max: number } | null;
   nearest_heard_activity_distance: { min: number; max: number } | null;
+  /** Current distance-relevant modelling gaps only; not capture completeness. */
+  heard_activity_distance_reconstruction_complete?: boolean;
   beliefs: SpiderBelief[];
   position_claim_max_radius: number | null;
   /** Channels this holder cannot have, each with the server's reason. */

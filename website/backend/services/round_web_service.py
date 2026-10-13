@@ -1166,8 +1166,9 @@ async def load_round_information_state(
     # Capture capability and reconstruction completeness are different facts.
     # Keep valid beliefs when another shot cannot be modelled for this holder.
     for guid, reasons in hearing.unavailable.items():
+        states[guid].gunfire_gap_times = hearing.gap_times[guid]
         states[guid].unavailable["gunfire_reconstruction"] = (
-            "Gunfire reconstruction incomplete: "
+            "Gunfire reconstruction history incomplete: "
             + "; ".join(GUNFIRE_GAP_REASONS[reason] for reason in reasons)
             + ". Admitted regions model potential audibility, not proof of hearing."
         )
@@ -1363,6 +1364,11 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
             reasons.setdefault(channel, set()).add(reason)
     unavailable = {channel: "; ".join(sorted(values))
                    for channel, values in sorted(reasons.items())}
+    if not own or len(own) != len(pov_team["members"]):
+        unavailable["team_knowledge"] = (
+            "One or more requested team members have no reconstructed holder state; "
+            "the team's known-enemy count is unavailable."
+        )
 
     named = {b.get("subject_guid") for b in beliefs
              if b.get("counts_as_known") and b.get("subject_guid")}
@@ -1372,9 +1378,14 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
         "holders": {
             f"team:{pov_team['team']}": {
                 "holder_guid": f"team:{pov_team['team']}",
-                "known_enemy_count": len(named) if "enemy_roster" not in unavailable else None,
+                "known_enemy_count": len(named) if not {"enemy_roster", "team_knowledge"}.intersection(unavailable) else None,
                 "nearest_known_enemy_distance": None,
                 "nearest_heard_activity_distance": None,
+                "heard_activity_distance_reconstruction_complete": bool(own) and len(own) == len(pov_team["members"]) and all(
+                    h.get("heard_activity_distance_reconstruction_complete",
+                          "gunfire_reconstruction" not in (h.get("unavailable") or {}))
+                    for h in own
+                ),
                 "beliefs": sorted(beliefs, key=lambda b: -(b.get("confidence") or 0)),
                 "unavailable": unavailable,
                 # ⚠️ The MAXIMUM across the union, not one member's.
