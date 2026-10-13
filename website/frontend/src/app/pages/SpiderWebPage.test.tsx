@@ -296,7 +296,7 @@ describe('SpiderWebPage — the scene (SW-2)', () => {
     }
   });
 
-  it('under a team view names the enemies known but not placed, and states the own-team simplification', async () => {
+  it('under a team view names the enemies named observations not placed, and states the own-team simplification', async () => {
     // The recording, at 1:00: every contact region this side holds has
     // widened past the 1,000-unit horizon (1,761–4,222 units). Drawing one
     // would claim the whole map; the side still knows three enemies exist.
@@ -309,7 +309,7 @@ describe('SpiderWebPage — the scene (SW-2)', () => {
     const subjects = new Set(holder.beliefs.filter((b) => b.subject_guid && b.region).map((b) => b.subject_guid));
     expect(holder.beliefs.some((b) => b.subject_guid && b.region && b.region.radius <= horizon)).toBe(false);
     expect(subjects.size).toBe(3);
-    await waitFor(() => expect(screen.getByText(/known but not placed \(region wider than the published horizon\)/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/named observations not placed \(region wider than the published horizon\)/)).toBeInTheDocument());
     expect(svg.querySelectorAll('[data-belief-subject]').length).toBe(0);
     // only the pov's own side is placed as dots; the enemy is a region, never a dot
     expect(svg.querySelectorAll('[data-player]').length).toBe(povForm.players.length);
@@ -338,10 +338,11 @@ describe('SpiderWebPage — the scene (SW-2)', () => {
     await waitFor(() => expect(svg.querySelectorAll('[data-belief-subject]').length).toBe(1));
     const disc = svg.querySelector('[data-belief-subject]')!;
     expect(disc.getAttribute('data-belief-subject')).toBe(holder.beliefs[fresh].subject_guid);
-    expect(disc.getAttribute('stroke-dasharray')).toBe('5 4');
+    // This older recording has no allegiance field: preserve its region as unknown.
+    expect(disc.getAttribute('stroke-dasharray')).toBe('2 4');
     expect(Number(disc.getAttribute('stroke-opacity'))).toBeCloseTo(0.4, 5);
     // the other two subjects stay known in words
-    expect(screen.getByText(/known but not placed/).textContent).not.toContain(holder.beliefs[fresh].subject_guid!.slice(0, 8));
+    expect(screen.getByText(/named observations not placed/).textContent).not.toContain(holder.beliefs[fresh].subject_guid!.slice(0, 8));
   });
 
   it('keeps the moment and the view in the URL, and a nudge reloads the next moment', async () => {
@@ -722,7 +723,7 @@ it('frames only explicitly classified enemy regions, including low-confidence en
   const enemy = document.querySelector('[data-belief-subject="enemy"]')!;
   expect(Number(enemy.getAttribute('r'))).toBeGreaterThan(100);
   expect(document.querySelector('[data-belief-subject="friendly"]')).toBeNull();
-  expect(screen.queryByText(/known but not placed/)).toBeNull();
+  expect(screen.queryByText(/named observations not placed/)).toBeNull();
 });
 
 
@@ -753,3 +754,39 @@ it.each([[null, true], [0, true], [1, true], [0, false], [1, false]] as const)(
     }
   },
 );
+
+
+it.each([null, undefined] as const)('retains authorized unknown allegiance regions (%s) with neutral labels', (classification) => {
+  const holder = Object.values(povForm.information_state.holders)[0];
+  const belief = { ...holder.beliefs[0], subject_guid: 'uncertain', subject_is_enemy: classification,
+    region: { x: 0, y: 0, z: 0, radius: 100 } };
+  const snap = { ...povForm, players: [], edges: [], information_state: {
+    ...povForm.information_state, holders: { [holder.holder_guid]: { ...holder, beliefs: [belief,
+      { ...belief, subject_guid: 'known-enemy', subject_is_enemy: true },
+      { ...belief, subject_guid: 'friend', subject_is_enemy: false },
+      { ...belief, subject_guid: 'uncertain-unplaced', region: { x: 0, y: 0, z: 0, radius: 99999 } },
+    ] } },
+  } };
+  render(<SpiderWebScene snap={snap} mesh={null} pov="team:AXIS" />);
+  const unknown = document.querySelector('[data-belief-subject="uncertain"]')!;
+  expect(unknown).not.toBeNull();
+  expect(unknown.getAttribute('data-belief-allegiance')).toBe('unknown');
+  expect(unknown.getAttribute('stroke')).toBe('var(--color-text-400)');
+  expect(unknown.textContent).toContain('allegiance unknown');
+  expect(document.querySelector('[data-belief-subject="friend"]')).toBeNull();
+  expect(document.querySelector('[data-belief-subject="known-enemy"]')?.getAttribute('data-belief-allegiance')).toBe('enemy');
+  expect(screen.getByText(/named observations not placed/).textContent).toContain('allegiance unknown');
+});
+
+
+it('does not claim silence when only anonymous gunfire and reconstruction gaps are granted', () => {
+  const holder = Object.values(povForm.information_state.holders)[0];
+  const snap = { ...povForm, information_state: { ...povForm.information_state, holders: {
+    [holder.holder_guid]: { ...holder, unavailable: { gunfire_reconstruction: 'Listener position missing' },
+      beliefs: [{ ...holder.beliefs[0], source: 'gunfire', subject_guid: null, subject_is_enemy: null,
+        region: { x: 100, y: 0, z: 0, radius: 100 } }] },
+  } } };
+  render(<SpiderWebScene snap={snap} mesh={null} pov="team:AXIS" />);
+  expect(screen.getByText('no drawable named-subject region is granted at this moment')).toBeInTheDocument();
+  expect(document.body.textContent).not.toMatch(/nothing has been seen|knew of no enemy/);
+});

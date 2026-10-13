@@ -1180,11 +1180,16 @@ async def load_round_information_state(
         and not select_life(tracks[guid], t_ms)[2]
     }
     enemies = {}
+    friends = {}
     for guid, state in states.items():
         team = roster.get(guid)
         enemies[guid] = frozenset(
             subject for subject, side in roster.items()
             if team is not None and side != team
+        )
+        friends[guid] = frozenset(
+            subject for subject, side in roster.items()
+            if team is not None and side == team
         )
         # Only beliefs eligible for current metrics require subject allegiance.
         # Faded/expired evidence can remain in history without disabling metrics.
@@ -1200,7 +1205,8 @@ async def load_round_information_state(
 
     return {
         "holders": {
-            guid: belief_payload(state, t_ms, positions.get(guid), enemy_guids=enemies[guid])
+            guid: belief_payload(state, t_ms, positions.get(guid),
+                                 enemy_guids=enemies[guid], friendly_guids=friends[guid])
             for guid, state in states.items()
         },
         "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS,

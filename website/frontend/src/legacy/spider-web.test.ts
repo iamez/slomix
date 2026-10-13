@@ -1124,6 +1124,35 @@ describe('opening a different round', () => {
     expect(y - radius).toBeGreaterThanOrEqual(0); expect(y + radius).toBeLessThanOrEqual(canvas.height);
   });
 
+  it('draws unknown allegiance neutrally and labels unplaced observations', async () => {
+    const strokes: string[] = [];
+    const dashes: number[][] = [];
+    const canvasProto = Object.getPrototypeOf(document.createElement('canvas'));
+    vi.spyOn(canvasProto, 'getContext').mockReturnValue(new Proxy({}, {
+      get: (_t, prop) => prop === 'setLineDash' ? (dash: number[]) => dashes.push(dash)
+        : prop === 'measureText' ? () => ({ width: 0 }) : () => undefined,
+      set: (_t, prop, value: string) => { if (prop === 'strokeStyle') strokes.push(value); return true; },
+    }) as CanvasRenderingContext2D);
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).includes('/geometry/')) return new Response('', { status: 404 });
+      const b = { subject_guid: 'uncertain', subject_is_enemy: null, confidence: 0.8,
+        region: { x: 100, y: 0, z: 0, radius: 100 } };
+      return new Response(JSON.stringify({ ...geometrySnapshot(12155, 'fixture-unknown'), information_state: { holders: {
+        'team:AXIS': { known_enemy_count: null, unavailable: { enemy_roster: 'Allegiance unknown' },
+          position_claim_max_radius: 700, beliefs: [b, { ...b, subject_guid: 'unplaced',
+            region: { x: 100, y: 0, z: 0, radius: 90000 } }] },
+      } } }));
+    }));
+    await loadSpiderWebView({ roundId: '12155' });
+    const host = document.getElementById('spider-web-container')!;
+    (host.querySelector('[data-pov="team:AXIS"]') as HTMLButtonElement).click();
+    await vi.waitFor(() => expect(dashes).toContainEqual([2, 4]));
+    expect(strokes).toContain(THEME.text + alphaHex(0.5));
+    expect(strokes).not.toContain(THEME.negative + alphaHex(0.5));
+    expect(host.textContent).toContain('pripadnost neznana');
+    expect(host.textContent).toContain('1 s pripadnostjo neznano');
+  });
+
   it.each([[null, true], [0, true], [1, true], [0, false], [1, false]])(
     'does not present unavailable enemy metrics as zero (count=%s unavailable=%s)', async (count, unavailable) => {
       const roundId = 12070 + Number(count ?? 2) + (unavailable ? 0 : 10);

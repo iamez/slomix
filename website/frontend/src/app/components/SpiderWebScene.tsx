@@ -103,7 +103,7 @@ export function SpiderWebScene({ snap, mesh, pov, meshError = false, meshMissing
       });
     const players = snap.players.map((p) => ({ p, s: at.get(p.guid)! })).sort((a, b) => a.s.depth - b.s.depth);
     const labels = placeLabels(players.map(({ p, s }) => ({ x: s.x + 8, y: s.y + 3, text: p.name ? stripEtColors(p.name) : p.guid.slice(0, 8) })));
-    // Enemy beliefs are drawn only for a view that has them: the world view is
+    // Subject beliefs are drawn only for a view that has them: the world view is
     // the oracle and already shows every true position.
     const regions = beliefs.regions.map((r) => ({ r, s: P(r.x, r.y, r.z), px: Math.max(3, r.radius * view.scale * cam.zoom) }));
     return { view, floors, edges, players, labels, regions, unplaced: beliefs.unplacedSubjects, scalePx: SCALE_UNITS * view.scale * cam.zoom };
@@ -145,11 +145,11 @@ export function SpiderWebScene({ snap, mesh, pov, meshError = false, meshMissing
         {scene.regions.map(({ r, s, px }, i) => (
           <circle
             key={`${r.subject}-${String(i)}`} cx={s.x} cy={s.y} r={px}
-            data-belief-subject={r.subject}
-            fill="var(--color-neg)" fillOpacity={Math.max(0.08, Math.min(0.5, r.confidence)) * 0.25}
-            stroke="var(--color-neg)" strokeOpacity={Math.max(0.08, Math.min(0.5, r.confidence))} strokeDasharray="5 4"
+            data-belief-subject={r.subject} data-belief-allegiance={r.isEnemy ? 'enemy' : 'unknown'}
+            fill={r.isEnemy ? 'var(--color-neg)' : 'var(--color-text-400)'} fillOpacity={Math.max(0.08, Math.min(0.5, r.confidence)) * 0.25}
+            stroke={r.isEnemy ? 'var(--color-neg)' : 'var(--color-text-400)'} strokeOpacity={Math.max(0.08, Math.min(0.5, r.confidence))} strokeDasharray={r.isEnemy ? '5 4' : '2 4'}
           >
-            <title>{`${nameOf(r.subject)} · believed within ${figure(Math.round(r.radius))} units from ${(r.source ?? 'a cue').replace(/_/g, ' ')} · confidence ${r.confidence.toFixed(2)}`}</title>
+            <title>{`${nameOf(r.subject)} · ${r.isEnemy ? 'enemy' : 'allegiance unknown'} · believed within ${figure(Math.round(r.radius))} units from ${(r.source ?? 'a cue').replace(/_/g, ' ')} · confidence ${r.confidence.toFixed(2)}`}</title>
           </circle>
         ))}
         {scene.edges.map(({ e, a, b, style }) => {
@@ -215,18 +215,17 @@ export function SpiderWebScene({ snap, mesh, pov, meshError = false, meshMissing
           </Meta></div>
         : <div data-parity="spider-web.line-of-sight"><Meta>line of sight not traced: {los.reason}</Meta></div>)}
       {scene.unplaced.length > 0 && (
-        <Meta>known but not placed (region wider than the published horizon): {scene.unplaced.map(nameOf).join(', ')} — this side knows they exist, not where they are</Meta>
+        <Meta>named observations not placed (region wider than the published horizon): {scene.unplaced.map((guid) => `${nameOf(guid)} · ${holder?.beliefs.some((b) => b.subject_guid === guid && b.subject_is_enemy !== true) ? 'allegiance unknown' : 'enemy'}`).join(', ')} — no current position is claimed</Meta>
       )}
-      {/* "Knew of nobody" is a measured empty result; a view the server could
-        * not resolve (pov_unavailable set) is not measured at all, and the
-        * beliefs panel below says so — this line must not speak for it. */}
+      {/* Describe granted geometry only, never absence of hearing or seeing.
+        * The beliefs panel separately names an unresolved point of view. */}
       {(isTeamPov(pov) || isPlayerPov(pov)) && !snap.information_state?.pov_unavailable && scene.regions.length === 0 && scene.unplaced.length === 0 && (
-        <Meta>at this moment this view knew of no enemy position — nothing has been seen, hit or heard closely enough to place anyone</Meta>
+        <Meta>no drawable named-subject region is granted at this moment</Meta>
       )}
       <Meta>
         ring = measured position uncertainty (p90 for the sample's age), dashed when two tracks claimed the player · hollow dot = down ·
         threads are geometric distance, not sight: grey between teammates, negative between opponents, solid where an engagement was open
-        (the tracker holds one open up to 15 s after the last hit) · dashed discs = where this side believed an enemy was, opacity = confidence
+        (the tracker holds one open up to 15 s after the last hit) · dashed discs = granted subject regions, negative = enemy, neutral dotted = allegiance unknown, opacity = confidence
       </Meta>
       {meshError ? <Unavailable what="this map's floor mesh" /> : mesh === undefined ? <Pending label="floor mesh" /> : null}
       {mesh === null && <Meta>{meshMissingReason ?? "this map's floor mesh was never exported — players and threads draw without a stage, which is the truth, not a bug"}</Meta>}

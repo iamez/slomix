@@ -87,14 +87,15 @@ async def test_unknown_or_conflicting_allegiance_never_invents_an_enemy(uncertai
     assert holder['known_enemy_count'] is None
     assert holder['nearest_known_enemy_distance'] is None
     assert 'enemy_roster' in holder['unavailable']
-    assert all(b['subject_is_enemy'] is False for b in holder['beliefs'] if b['subject_guid'])
+    assert all(b['subject_is_enemy'] is None for b in holder['beliefs'] if b['subject_guid'])
 
 
 @pytest.mark.parametrize('enemies,expected', [(frozenset(), 0), (frozenset({'S'}), 1)])
 def test_distance_count_and_flag_share_the_enemy_filter(enemies, expected):
     state = HolderState('H', [BeliefItem(holder_guid='H', source='aim_lock', t_observed=0,
                                         subject_guid='S', region=Region(100, 0, 0, 10))])
-    payload = to_dict(state, 0, (0, 0, 0), enemy_guids=enemies)
+    payload = to_dict(state, 0, (0, 0, 0), enemy_guids=enemies,
+                      friendly_guids=frozenset() if enemies else frozenset({'S'}))
     assert payload['known_enemy_count'] == expected
     assert payload['beliefs'][0]['counts_as_known'] is bool(expected)
     assert payload['beliefs'][0]['subject_is_enemy'] is bool(expected)
@@ -143,7 +144,7 @@ async def test_real_asgi_route_propagates_roster_to_player_and_team_pov(monkeypa
             holder = response.json()['information_state']['holders'][pov]
             assert holder['known_enemy_count'] == expected
             assert any(b['subject_guid'] == 'S' for b in holder['beliefs'])
-            assert all(b['subject_is_enemy'] is bool(expected) for b in holder['beliefs'] if b['subject_guid'] == 'S')
+            assert all(b['subject_is_enemy'] is (None if expected is None else bool(expected)) for b in holder['beliefs'] if b['subject_guid'] == 'S')
             assert {b['subject_guid'] for b in holder['beliefs'] if b['counts_as_known']} == (
                 {'S'} if expected else set()
             )
@@ -285,3 +286,54 @@ async def test_layer4_blind_share_excludes_unmeasured_samples(monkeypatch, unmea
     assert row['samples']['moving'] == 12
     assert row['samples']['blind_moving_measured'] == measured
     assert row['samples']['blind_moving_excluded'] == {unmeasured: 12 - measured}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('case,expected', [
+    ('enemy', True), ('teammate', False), ('self', False),
+    ('subject_missing', None), ('subject_spectator', None), ('subject_conflict', None),
+    ('holder_missing', None), ('holder_spectator', None), ('holder_conflict', None),
+])
+async def test_allegiance_classification_keeps_unknown_distinct_from_teammate(case, expected):
+    tracks = {'H': [life('H', 'AXIS')], 'S': [life('S', 'ALLIES', identity=2)]}
+    subject = 'H' if case == 'self' else 'S'
+    if case == 'teammate':
+        tracks['S'] = [life('S', 'AXIS', identity=2)]
+    for role, guid in [('holder', 'H'), ('subject', 'S')]:
+        if case == role + '_missing':
+            tracks[guid] = [life(guid, None, identity=3)]
+        elif case == role + '_spectator':
+            tracks[guid] = [life(guid, 'SPECTATOR', identity=3)]
+        elif case == role + '_conflict':
+            tracks[guid].append(life(guid, 'AXIS', identity=3))
+
+    class AimOnly(Events):
+        async def fetch_all(self, query, params):
+            if 'SELECT player_guid, team, death_time_ms' in query:
+                return []
+            if 'FROM proximity_aim_lock' in query:
+                return [('H', subject, 1000)]
+            return await super().fetch_all(query, params)
+
+    result = await load_round_information_state(
+        AimOnly(), 1, 1000, build_snapshot(tracks, 1000), {},
+        CapturePolicy(capabilities={'aim_lock': 'enabled'}), tracks,
+    )
+    holder = result['holders']['H']
+    assert holder['beliefs'][0]['subject_is_enemy'] is expected
+    assert holder['beliefs'][0]['region'] is not None
+    assert holder['beliefs'][0]['counts_as_known'] is (expected is True)
+    assert holder['known_enemy_count'] == (None if expected is None else int(expected))
+
+
+def test_team_union_preserves_each_holders_unknown_classification():
+    belief = BeliefItem(holder_guid='H', source='aim_lock', t_observed=0,
+                        subject_guid='S', region=Region(100, 0, 0, 10))
+    known = to_dict(HolderState('H', [belief]), 0, (0, 0, 0), enemy_guids=frozenset({'S'}))
+    uncertain = HolderState('H2', [belief], unavailable={'enemy_roster': 'Holder allegiance missing'})
+    unknown = to_dict(uncertain, 0, (0, 0, 0), enemy_guids=frozenset())
+    union = _team_information({'holders': {'H': known, 'H2': unknown}},
+                              {'team': 'AXIS', 'members': ['H', 'H2']}, 0)
+    holder = union['holders']['team:AXIS']
+    assert [b['subject_is_enemy'] for b in holder['beliefs']] == [True, None]
+    assert holder['known_enemy_count'] is None

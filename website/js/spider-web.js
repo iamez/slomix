@@ -225,7 +225,7 @@ export function boundsFromPlayers(players, margin = 512) {
 }
 
 /**
- * The enemy regions a point of view is entitled to draw.
+ * The named-subject regions a point of view is entitled to draw.
  *
  * ⭐ Under a team view an enemy is NOT a dot. The holder never knew a point —
  * they knew a place, from a contact or a crosshair or a noise, and that place
@@ -242,7 +242,7 @@ export function beliefRegions(holder) {
     // refuses to derive a distance from one that wide, and drawing it anyway
     // makes the same overclaim in pixels: a 2,500-unit circle on a 4,600-unit
     // map is not "he is somewhere here", it is the whole map. Those subjects
-    // are still KNOWN — they are reported as "position unknown" in words,
+    // remain named observations — reported as "position unknown" in words,
     // which is what the holder actually had.
     const horizon = typeof holder.position_claim_max_radius === 'number'
         ? holder.position_claim_max_radius : Infinity;
@@ -262,6 +262,7 @@ export function beliefRegions(holder) {
             confidence: typeof b.confidence === 'number' ? b.confidence : 0,
             subject: b.subject_guid,
             source: b.source,
+            isEnemy: b.subject_is_enemy === true ? true : null,
         });
     }
     // A subject with one fresh region and one stale one is placed, not unplaced.
@@ -411,11 +412,11 @@ function drawBeliefRegions(ctx, regions, cam, view) {
         ctx.arc(c.x, c.y, px, 0, Math.PI * 2);
         // Hex + alpha suffix rather than a second rgba() literal, so the value
         // still comes from THEME and cannot drift away from it.
-        ctx.fillStyle = THEME.negative + alphaHex(a * 0.25);
+        ctx.fillStyle = (r.isEnemy ? THEME.negative : THEME.text) + alphaHex(a * 0.25);
         ctx.fill();
-        ctx.strokeStyle = THEME.negative + alphaHex(a);
+        ctx.strokeStyle = (r.isEnemy ? THEME.negative : THEME.text) + alphaHex(a);
         ctx.lineWidth = 1;
-        ctx.setLineDash([5, 4]);
+        ctx.setLineDash(r.isEnemy ? [5, 4] : [2, 4]);
         ctx.stroke();
         ctx.restore();
     }
@@ -973,21 +974,24 @@ export async function loadSpiderWebView(params = {}) {
         const holder = Object.values(info.holders || {})[0] || {};
         const known = typeof holder.known_enemy_count === 'number' && Number.isFinite(holder.known_enemy_count)
             && !holder.unavailable?.enemy_roster ? holder.known_enemy_count : null;
-        const unplaced = beliefRegions(holder).unplacedSubjects.length;
+        const unplacedSubjects = beliefRegions(holder).unplacedSubjects;
+        const unplaced = unplacedSubjects.length;
+        const unknownUnplaced = unplacedSubjects.filter((subject) => holder.beliefs?.some(
+            (b) => b.subject_guid === subject && b.subject_is_enemy !== true)).length;
         povNote.className = 'text-[11px] leading-relaxed mb-2 text-slate-400';
         povNote.textContent =
-            `Lege ${withheld.length} nasprotnikov so ZADRŽANE na strežniku, ne skrite `
-            + 'pri risanju. Nasprotnik je narisan samo kot regija, ki jo je ta ekipa '
-            + 'lahko sklepala, in ta se s časom širi. '
+            `Lege ${withheld.length} igralcev so ZADRŽANE na strežniku, ne skrite `
+            + 'pri risanju. Zaznani subjekt je narisan samo kot regija, ki jo je ta ekipa '
+            + 'lahko sklepala, in ta se s časom širi. Nevtralna pikčasta regija pomeni: pripadnost neznana; rdeča črtkana regija: nasprotnik. '
             + (known == null
-                ? 'Število znanih nasprotnikov ni na voljo: pripadnost ekip ni zanesljiva.'
+                ? 'Število znanih nasprotnikov ni na voljo: rekonstrukcija znanja ekipe ali pripadnost ekip ni zanesljiva.'
                 : known
                 ? `Trenutno pozna ${known} ${known === 1 ? 'nasprotnika' : 'nasprotnikov'}.`
                 : 'V tem trenutku ta ekipa ni vedela za nobenega nasprotnika.')
-            + (unplaced && known != null
-                ? ` Pri ${unplaced} od njih je regija že širša od `
+            + (unplaced
+                ? ` Pri ${unplaced} poimenovanih zaznavah je regija že širša od `
                   + `${Math.round(horizonOf(holder))} enot, zato ni narisana: `
-                  + 'ekipa ve, da obstaja, ne pa več kje je.'
+                  + `trenutna lega ni določena (${unknownUnplaced} s pripadnostjo neznano).`
                 : '')
             + ' ⚠️ Lege soigralcev so prikazane kot znane — to je poenostavitev '
             + '(glasovni kanal ni zajet), ne meritev.';

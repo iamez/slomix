@@ -533,13 +533,15 @@ def nearest_heard_activity_distance(
 def to_dict(
     state: HolderState, t_ms: int, holder_pos: tuple[float, float, float] | None,
     *, enemy_guids: frozenset[str] | None = None,
+    friendly_guids: frozenset[str] = frozenset(),
 ) -> dict:
     """The holder's picture, with every channel's availability stated.
 
     Production callers must supply the enemies classified at snapshot time,
     including an empty set when allegiance is unknown. None preserves the
     low-level API for callers that already supply enemy-only named beliefs.
-    Public friendly observations remain visible but do not become enemies.
+    Friendly subjects must be explicitly classified; every other named subject
+    has unknown allegiance. Public friendly observations remain visible.
     """
     live = [b for b in state.beliefs if b.confidence(t_ms) >= DISPLAY_FLOOR]
     # A classified subset is evidence, not a complete enemy roster. Preserve
@@ -562,9 +564,10 @@ def to_dict(
                 "source": b.source,
                 "subject_guid": b.subject_guid,
                 # Allegiance is separate from confidence and positional expiry.
-                # None is reserved for unattributed activity, never an enemy.
+                # None also names missing or ambiguous subject/holder allegiance.
                 "subject_is_enemy": (
-                    bool(enemy_guids is None or b.subject_guid in enemy_guids)
+                    (True if enemy_guids is None or b.subject_guid in enemy_guids
+                     else False if b.subject_guid in friendly_guids else None)
                     if b.subject_guid else None
                 ),
                 "roster_state": b.roster_state,

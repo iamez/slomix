@@ -143,7 +143,7 @@ export interface HolderLike { beliefs?: BeliefLike[]; position_claim_max_radius?
 
 export interface DrawableRegion {
   x: number; y: number; z: number; radius: number; confidence: number;
-  subject: string; source: string | null;
+  subject: string; source: string | null; isEnemy: boolean | null;
 }
 
 /** The published horizon, or Infinity when a view does not carry one. */
@@ -152,7 +152,7 @@ export function horizonOf(holder: HolderLike | null | undefined): number {
 }
 
 /**
- * The enemy regions a point of view is entitled to draw.
+ * The named-subject regions a point of view is entitled to draw.
  *
  * ⭐ Under a team view an enemy is NOT a dot. The holder never knew a point —
  * they knew a place, from a contact or a crosshair or a noise, and that
@@ -164,7 +164,7 @@ export function horizonOf(holder: HolderLike | null | undefined): number {
  * drawing either as an enemy position would invent one. ⛔ Past the
  * published horizon a region is not drawn either — a 2,500-unit circle on a
  * 4,600-unit map is not "he is somewhere here", it is the whole map. Those
- * subjects stay KNOWN: they are returned as `unplacedSubjects`, in words.
+ * subjects remain named observations in `unplacedSubjects`, not enemy counts.
  */
 export function beliefRegions(holder: HolderLike | null | undefined): { regions: DrawableRegion[]; unplacedSubjects: string[] } {
   if (holder == null || !Array.isArray(holder.beliefs)) return { regions: [], unplacedSubjects: [] };
@@ -179,7 +179,7 @@ export function beliefRegions(holder: HolderLike | null | undefined): { regions:
     drawable.push({
       x: b.region.x, y: b.region.y, z: b.region.z, radius: b.region.radius,
       confidence: typeof b.confidence === 'number' ? b.confidence : 0,
-      subject: b.subject_guid, source: b.source ?? null,
+      subject: b.subject_guid, source: b.source ?? null, isEnemy: b.subject_is_enemy === true ? true : null,
     });
   }
   // A subject with one fresh region and one stale one is placed, not unplaced.

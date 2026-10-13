@@ -133,7 +133,7 @@ function Beliefs({ snap }: { snap: SpiderWebSnapshot }) {
   const columns: DataColumn<Row>[] = [
     { key: 'holder', label: 'who knows', width: 120, align: 'left', sortValue: (r) => r.holder },
     { key: 'kind', label: 'belief', format: (r) => r.kind.replace(/_/g, ' '), sortValue: (r) => r.kind },
-    { key: 'subject', label: 'about', format: (r) => nameOf(r.subject_guid), sortValue: (r) => nameOf(r.subject_guid) },
+    { key: 'subject', label: 'about', format: (r) => r.subject_guid ? `${nameOf(r.subject_guid)} · ${r.subject_is_enemy === true ? 'enemy' : r.subject_is_enemy === false ? 'teammate' : 'allegiance unknown'}` : nameOf(r.subject_guid), sortValue: (r) => nameOf(r.subject_guid) },
     { key: 'roster_state', label: 'state', format: (r) => r.roster_state?.replace(/_/g, ' ') ?? <Meta>—</Meta>, sortValue: (r) => r.roster_state },
     { key: 'source', label: 'from', format: (r) => r.source?.replace(/_/g, ' ') ?? <Meta>—</Meta>, sortValue: (r) => r.source },
     { key: 't_observed', label: 'seen at', align: 'right', format: (r) => (r.t_observed == null ? <Meta>—</Meta> : mmss(r.t_observed / 1000)), sortValue: (r) => r.t_observed },
