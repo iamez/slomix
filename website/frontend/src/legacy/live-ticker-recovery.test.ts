@@ -366,3 +366,38 @@ it('does not replace a later roster rename with historical enrichment', async ()
     expect(ticker.getLiveRoster().axis).toEqual(['Current name']);
   } finally { ticker.stopLiveTicker(); }
 });
+
+
+it.each(['death', 'continuity', 'live-first', 'legacy-first'] as const)(
+  'keeps accepted kill streak continuity through legacy fallback (%s)', async (scenario) => {
+    vi.useFakeTimers();
+    localStorage.setItem('slomix.liveFeedFilters.v1', JSON.stringify({ kills: true }));
+    document.body.innerHTML = '<div id="view-live" class="active"><div id="live-ticker"></div></div>';
+    Object.defineProperty(document, 'hidden', { configurable: true, value: false });
+    const now = Date.now() / 1000;
+    const kill = (seq: number, type: string, killer_slot = 3, victim_slot = 5) => ({
+      seq, type, killer_slot, victim_slot, killer: 'Source A', victim: 'Source B', received_at: now,
+    });
+    const events = scenario === 'death'
+      ? [kill(2, 'KILL'), kill(3, 'KILL'), kill(4, 'LIVE_KILL', 5, 3)]
+      : scenario === 'continuity' ? [kill(2, 'LIVE_KILL'), kill(3, 'LIVE_KILL')]
+      : scenario === 'live-first' ? [kill(2, 'LIVE_KILL'), { ...kill(3, 'KILL'), duplicate_of: 2 }]
+      : [kill(2, 'KILL'), kill(3, 'LIVE_KILL')];
+    const fallback = { ...kill(5, 'KILL'), received_at: now + 124, _streak: undefined as number | undefined };
+    fetchJSON.mockResolvedValueOnce({ last_seq: 4, events: [{ seq: 1, type: 'ROUND_START', received_at: now }, ...events] })
+      .mockResolvedValue({ last_seq: 4, events: [] });
+    // @ts-expect-error existing JS module has no declaration file
+    const ticker = await import('../../../js/live-ticker.js');
+    ticker.startLiveTicker();
+    try {
+      await vi.advanceTimersByTimeAsync(121000);
+      fetchJSON.mockResolvedValueOnce({ last_seq: 5, events: [fallback] });
+      await vi.advanceTimersByTimeAsync(3000);
+      const expected = scenario === 'death' ? 1 : scenario === 'continuity' ? 3 : 2;
+      expect(fallback._streak).toBe(expected);
+      const text = document.getElementById('live-ticker')!.textContent!;
+      if (expected === 3) expect(text).toContain('🔥 3 streak');
+      else expect(text).not.toContain('🔥 3 streak');
+    } finally { ticker.stopLiveTicker(); }
+  },
+);

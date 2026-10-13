@@ -329,14 +329,18 @@ function _learnKillNames(ev, onlyMissing = false) {
 
 function _combatApply(ev) {
     if (ev.type === 'LIVE_KILL') { _liveKillLastAt = ev.received_at || (Date.now() / 1000); }
-    if (ev.type === 'KILL') {
+    if (ev.type === 'KILL' || ev.type === 'LIVE_KILL') {
         const k = _clientSlot(ev.killer_slot), v = _clientSlot(ev.victim_slot);
-        _learnKillNames(ev);
+        // Both accepted obituary sources advance the same life. Twin merges
+        // skip this function, so switching sources cannot double a streak.
         if (k != null && k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
         if (v != null) _streak.set(v, 0);
         ev._streak = k != null && k !== v ? _streak.get(k) : 0;
-        const kt = _slotTeam(k), vt = _slotTeam(v);
-        ev._teamkill = k !== v && kt != null && kt === vt && kt !== 3;
+        if (ev.type === 'KILL') {
+            _learnKillNames(ev);
+            const kt = _slotTeam(k), vt = _slotTeam(v);
+            ev._teamkill = k !== v && kt != null && kt === vt && kt !== 3;
+        }
     } else if (ev.type === 'SCORELINE') {
         _roundScores.push(ev);
     } else if (ev.type === 'ROUND_END') {
