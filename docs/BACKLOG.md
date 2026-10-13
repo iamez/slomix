@@ -1,3 +1,18 @@
+## 2026-10-13 — Spiderweb review recovery and versioned research evidence
+
+Timeline failures now restore ordinary controls to the rendered time/POV;
+only explicit retry retains the failed target.207 combined frontend tests and
+typecheck pass, including four control sequences; two mutations fail/restored.
+Layer4 collection/analysis validates schema, metric definition, cadence, LOS
+and measured counts before reuse; old/mixed evidence and accidental append are
+rejected before DB startup or output writes.115 targeted tests and four failed,
+restored mutations pass; actual CLI accepts synthetic versioned rows and rejects
+old/mixed inputs. Historical manifest remains unchanged and explicitly labelled;
+no revised corpus median/effects are asserted. Independent reviews pass.
+
+This remains an undeployed25-file slice. Fresh CI/review and the standard420s
+cycle are required; ordered #1088 delivery must refresh main after #1087 merge.
+
 ## 2026-10-12 — Bounded Spiderweb correctness review
 
 The review branch selects the completed Spiderweb source/tests onto current
