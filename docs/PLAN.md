@@ -1,3 +1,15 @@
+## 2026-10-13 — Live delivery incorporates merged Spiderweb
+
+#1087 merged at a73aaf9e5673663f1a5539eb0bc30ae9bd2f8558; its tree is
+identical to the reviewed94982f1b. #1088 incorporates that main through an
+ordinary merge, retaining both plan histories and both legacy module graphs
+under entry version20261013-live-spider-merged. The combined rehearsal passed
+371frontend tests/typecheck, HTTP static imports and actual ASGI→bothDOM
+Live/Spiderweb proofs. Source/test blob comparison validates the final tree.
+Fresh CI/review and the full420-second cycle remain required before1088merge.
+No service activation or deployment follows; native runtime acceptance remains
+pending the owner-started private PG and the preserved D4/D5/handover gates.
+
 ## 2026-10-13 — Spiderweb review recovery and versioned research evidence
 
 Timeline failures now restore ordinary controls to the rendered time/POV;
@@ -37,6 +49,43 @@ Pending: broader positional validation and the separate runtime D4/D5
 continuation. Preserve the complete original plan
 and handoff below. No service activation, database writes, push or merge is
 implied; this is a bounded review package awaiting the owner's PR decision.
+
+## 2026-10-12 — Bounded Live correctness and recovery review slice
+
+This main-based 25-file branch contains the audited Live backend, tailer and
+both clients, separate from issue PR #1086 and Spiderweb PR #1087. The full
+runtime plan and integration history remain in their existing checkout; this
+is a review slice, not a new plan or a deployment.
+
+Invalid ingest batches publish nothing. JSON/proxy/cache/player state are
+bounded, unconfirmed maps and feed failures are explicit, and retention keeps
+advancing through failed polls. Historical names are captured at ingest time;
+unknowns stay unknown rather than adopting a later slot occupant. Current
+roster/MVP state is cleared on disconnect and restricted to engine slots 0–63.
+Kill pairing respects lifecycle, round and accepted map boundaries while
+retaining same-context retransmission suppression. Support actors retain known
+names; malformed slot strings cannot fabricate player zero. Tailer authority
+validation and redirect refusal prevent forwarding its internal token.
+
+PR-branch proof: 201 Python tests, 46 frontend tests, typecheck, changed-file
+Ruff and legacy syntax pass. Negative guard mutations were observed failing and
+restored with byte comparison. Actual synthetic tail/parser/publisher-to-ASGI
+and React/legacy DOM proofs cover delivery failure/retry, cursor recovery,
+retention, map uncertainty and reused-slot history. Runtime/DOM harnesses and
+raw evidence remain local, not in the public diff. Native game/network/browser
+acceptance and durable exactly-once delivery are not claimed.
+
+The first full CI exposed stale generated datapoint scope metadata after the
+new Live hook. The official generator updates seven dependency-count notes;
+read/unread/dropped counts and the unread baseline are unchanged. The duplicate
+HANDOFF checkpoint is omitted from this slice to retain the 25-file cap; the
+canonical PLAN/BACKLOG checkpoint and existing handoff routing remain intact.
+
+No service, database or game-server changes. Refresh the later branch against
+main after merging either this or #1087; preserve both entry cache/import edits.
+Merge requires explicit owner permission for this PR number. Runtime resumes
+with the isolated native CLI R1/R2 gate and explicit default-OFF worker session;
+immutable delivery, owner activation and D4/D5 acceptance remain separate.
 
 ## 2026-10-12 — Ordered merge reconciliation
 

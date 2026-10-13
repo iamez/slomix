@@ -6,7 +6,7 @@
  */
 
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML, sparklineSVG } from './utils.js';
-import { loadHomeTonightCard } from './tonight.js?v=20261011-live-recovery';
+import { loadHomeTonightCard } from './tonight.js?v=20261012-live-audit';
 
 function _card({ title, accent, bodyHtml, href, cta }) {
     const link = href

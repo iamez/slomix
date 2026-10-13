@@ -18,7 +18,7 @@
  * @module live-ticker
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
-import { getSnapshot } from './live-state.js?v=20260819-ladder';
+import { getSnapshot } from './live-state.js?v=20261012-live-audit';
 
 const POLL_MS = 3000;
 const MAX_BUFFER = 200;   // events kept client-side (all categories)
@@ -57,36 +57,149 @@ let _filters = _loadFilters();
 let _cursor = 0;
 let _streamId = null;
 let _pollInFlight = false;
+const _pendingLegacyKills = new Set();
+let _killMap = null;
 let _events = [];          // newest last, ALL categories
 let _interval = null;
+let _clock = null;
 let _lastFetchOk = null;   // null = never fetched, false = feed erroring
 
 // Live roster derived from the feed: slot -> {name, team}. TEAM_CHANGE
-// carries the engine team (1=Axis, 2=Allies, 3=spectator); DISCONNECT
-// clears the slot. INIT_GAME does NOT clear — players re-announce
+// carries the engine team (1=Axis, 2=Allies, 3=spectator); CONNECT and
+// DISCONNECT clear the slot. INIT_GAME does NOT clear — players re-announce
 // themselves via userinfo right after a map load, so clearing would blink.
 const _roster = new Map();
 let _rosterUpdatedAt = 0;
 
+// Project server receive time with local monotonic elapsed time. Compatibility
+// pages may omit server_time; their newest timestamp establishes the same clock.
+function _feedNow() {
+    return _clock ? _clock.server + Math.max(0, performance.now() - _clock.monotonic) / 1000 : Date.now() / 1000;
+}
+
+function _anchorFeedClock(data) {
+    const times = (Array.isArray(data?.events) ? data.events : []).map(ev => ev.received_at)
+        .filter(value => typeof value === 'number' && Number.isFinite(value));
+    const explicit = typeof data?.server_time === 'number' && Number.isFinite(data.server_time);
+    const source = explicit ? data.server_time : times.length ? Math.max(...times) : undefined;
+    const previous = _clock ? _feedNow() : undefined;
+    const sourceBased = _clock?.sourceBased ?? false;
+    const now = explicit ? source : source !== undefined
+        ? sourceBased ? Math.max(previous ?? source, source) : source
+        : previous ?? Date.now() / 1000;
+    // Untimed first-seen compatibility rows retain their age when source time
+    // arrives. Do not renew them, nor rewind on an old compatibility replay.
+    if (!sourceBased && source !== undefined && previous !== undefined) {
+        const shift = now - previous;
+        for (const ev of _events) ev.received_at += shift;
+        if (_roundStartRecv != null) _roundStartRecv += shift;
+        if (_liveKillLastAt != null) _liveKillLastAt += shift;
+    }
+    _clock = { server: now, monotonic: performance.now(), sourceBased: sourceBased || source !== undefined };
+}
+
+function _expireEvents() {
+    const cutoff = _feedNow() - 600;
+    _events = _events.filter(ev => Number.isFinite(ev.received_at) && ev.received_at >= cutoff);
+    const retained = new Set(_events);
+    for (const row of _pendingLegacyKills) if (!retained.has(row)) _pendingLegacyKills.delete(row);
+}
+
+function _clientSlot(value) {
+    if (typeof value === 'string' && /^-?\d+$/.test(value)) value = Number(value);
+    return Number.isInteger(value) && value >= 0 && value < 64 ? value : null;
+}
+
+function _eventName(name, slot) {
+    if (typeof name === 'string' && name.trim()) return name;
+    const valid = _clientSlot(slot);
+    return valid == null ? '?' : `#${valid}`;
+}
+
+function _isKillEnrichment(ev) {
+    return ev.type === 'KILL' && Number.isSafeInteger(ev.duplicate_of)
+        && ev.duplicate_of > 0 && ev.duplicate_of < ev.seq;
+}
+
+function _mergeKillEnrichment(ev) {
+    const prior = _events.find(row => row.seq === ev.duplicate_of || row._liveSeq === ev.duplicate_of || row.duplicate_of === ev.duplicate_of);
+    if (!prior || prior.killer_slot !== ev.killer_slot || prior.victim_slot !== ev.victim_slot) return false;
+    const roles = ['killer', 'victim'];
+    if (roles.some(role => prior[role] && ev[role] && prior[role] !== ev[role])) return false;
+    for (const role of roles) {
+        if (!prior[role] && typeof ev[role] === 'string' && ev[role].trim()) prior[role] = ev[role];
+    }
+    _learnKillNames(ev, true);
+    return true;
+}
+
+// Reverse-order twins have no server sequence link. Match only a still
+// pending obituary in the same explicit context and short receive window.
+function _killBoundary(ev) {
+    if (['ROUND_START', 'ROUND_END', 'INIT_GAME'].includes(ev.type)) _pendingLegacyKills.clear();
+    if (ev.type === 'CONNECT' || ev.type === 'DISCONNECT') {
+        const slot = _clientSlot(ev.slot);
+        if (slot != null) for (const prior of _pendingLegacyKills) {
+            if (_clientSlot(prior.killer_slot) === slot || _clientSlot(prior.victim_slot) === slot) _pendingLegacyKills.delete(prior);
+        }
+    }
+    if ((ev.type === 'MAP' || ev.type === 'LIVE_MAP') && typeof ev.map_name === 'string' && ev.map_name.trim()) {
+        // A cold client may not have retained the preceding map announcement.
+        const changed = typeof ev.map_changed === 'boolean' ? ev.map_changed : _killMap !== ev.map_name.trim();
+        if (changed) _pendingLegacyKills.clear();
+        _killMap = ev.map_name.trim();
+    }
+}
+
+function _mergeReverseKill(ev) {
+    if (ev.type !== 'LIVE_KILL') return false;
+    const prior = [..._pendingLegacyKills].reverse().find(row =>
+        row.killer_slot === ev.killer_slot && row.victim_slot === ev.victim_slot
+        && Number.isFinite(row.received_at) && Number.isFinite(ev.received_at)
+        && Math.abs(row.received_at - ev.received_at) <= 3);
+    if (!prior) return false;
+    if (['killer', 'victim'].some(role => prior[role] && ev[role] && prior[role] !== ev[role])) {
+        // An intervening conflicting identity makes older same-pair guesses
+        // unsafe, including a later anonymous observation of these slots.
+        for (const row of _pendingLegacyKills) {
+            if (row.killer_slot === ev.killer_slot && row.victim_slot === ev.victim_slot) _pendingLegacyKills.delete(row);
+        }
+        return false;
+    }
+    _pendingLegacyKills.delete(prior);
+    // Legacy already applied streak and pressure; LIVE may still owe MVP
+    // when another LIVE kill had suppressed the earlier legacy contribution.
+    if (!prior._mvpCounted) _mvpApply(ev);
+    const names = { killer: prior.killer || ev.killer, victim: prior.victim || ev.victim };
+    Object.assign(prior, ev, names, { seq: prior.seq, _liveSeq: ev.seq });
+    _liveKillLastAt = ev.received_at ?? _feedNow();
+    _learnKillNames(prior, true);
+    return true;
+}
+
 function _rosterApply(ev) {
-    if (ev.type === 'TEAM_CHANGE' && ev.slot != null) {
+    const slot = _clientSlot(ev.slot);
+    if (slot == null) return;
+    if (ev.type === 'TEAM_CHANGE') {
         if (ev.team === 1 || ev.team === 2 || ev.team === 3) {
-            _roster.set(ev.slot, { name: ev.name || `slot ${ev.slot}`, team: ev.team });
+            _roster.set(slot, { name: ev.name || `slot ${slot}`, team: ev.team });
         }
         _rosterUpdatedAt = Date.now();
-    } else if (ev.type === 'DISCONNECT' && ev.slot != null) {
-        _roster.delete(ev.slot);
+    } else if (ev.type === 'DISCONNECT' || ev.type === 'CONNECT') {
+        _roster.delete(slot);
+        _mvp.delete(slot);
+        _streak.delete(slot);
         _rosterUpdatedAt = Date.now();
     }
 }
 
 function _slotName(slot) {
-    const e = _roster.get(typeof slot === 'string' ? parseInt(slot, 10) : slot);
+    const e = _roster.get(_clientSlot(slot));
     return e ? e.name : `#${slot}`;
 }
 
 function _slotTeam(slot) {
-    const e = _roster.get(typeof slot === 'string' ? parseInt(slot, 10) : slot);
+    const e = _roster.get(_clientSlot(slot));
     return e ? e.team : null;
 }
 
@@ -114,7 +227,8 @@ let _roundScores = [];
 const MVP_WEIGHTS = { version: 1, kill: 1.0, obj: 1.5, revive: 0.5, death: -0.3, dmg100: 0.4 };
 const _mvp = new Map();  // slot -> score
 function _mvpAdd(slot, delta) {
-    if (slot == null) return;
+    slot = _clientSlot(slot);
+    if (slot == null || !Number.isFinite(delta)) return;
     _mvp.set(slot, (_mvp.get(slot) || 0) + delta);
 }
 
@@ -158,11 +272,11 @@ function _mvpApply(ev) {
             _mvpAdd(ev.victim_slot, MVP_WEIGHTS.death);
             break;
         case 'DYNAMITE': case 'FLAG_PICKUP':
-            _mvpAdd(typeof ev.slot === 'string' ? parseInt(ev.slot, 10) : ev.slot, MVP_WEIGHTS.obj);
+            _mvpAdd(ev.slot, MVP_WEIGHTS.obj);
             break;
         case 'REVIVE': {
-            const rs = parseInt(String(ev.slots || '').split(/\s+/)[0], 10);
-            if (!Number.isNaN(rs)) _mvpAdd(rs, MVP_WEIGHTS.revive);
+            const rs = _clientSlot(String(ev.slots || '').split(/\s+/)[0]);
+            if (rs != null) _mvpAdd(rs, MVP_WEIGHTS.revive);
             break;
         }
         case 'LIVE_AGGREGATE':
@@ -232,34 +346,42 @@ function _pressureApply(ev) {
 // LIVE_KILL, treat it as the authority and drop legacy KILL rows from the
 // display (they still feed streak/MVP via _combatApply, so state is single-
 // counted below by keying off victim+killer only on LIVE_KILL when active).
-let _liveKillLastAt = 0;
+let _liveKillLastAt = null;
 // Active only while LIVE_KILLs are actually arriving: a permanent latch made
 // kills vanish from the feed forever if the LIVEX tailer died (2026-08-18).
 function _liveKillActive() {
-    return (Date.now() / 1000 - _liveKillLastAt) < 120;
+    return _liveKillLastAt != null && (_feedNow() - _liveKillLastAt) < 120;
+}
+
+// Learn identity independently of effects. Enrichment is historical evidence,
+// so it may fill a placeholder but must not overwrite a later roster rename.
+function _learnKillNames(ev, onlyMissing = false) {
+    for (const [rawSlot, name] of [[ev.killer_slot, ev.killer], [ev.victim_slot, ev.victim]]) {
+        const slot = _clientSlot(rawSlot);
+        if (slot == null || typeof name !== 'string' || !name.trim() || name.startsWith('#')) continue;
+        const prior = _roster.get(slot) || {};
+        if (onlyMissing && prior.name && prior.name !== `#${slot}` && prior.name !== `slot ${slot}`) continue;
+        _roster.set(slot, { name, team: prior.team ?? null });
+    }
 }
 
 function _combatApply(ev) {
-    if (ev.type === 'LIVE_KILL') { _liveKillLastAt = ev.received_at || (Date.now() / 1000); }
-    if (ev.type === 'KILL') {
-        const k = ev.killer_slot, v = ev.victim_slot;
-        // Kill lines carry slot AND name for both parties — the densest
-        // slot->name source we have. Learn from them so objective/support
-        // events (slot only) resolve to names even before a TEAM_CHANGE for
-        // that slot arrives (the '#6 planted' problem after a fresh buffer).
-        if (k != null && ev.killer && !String(ev.killer).startsWith('#')) {
-            const e = _roster.get(k) || {};
-            _roster.set(k, { name: ev.killer, team: e.team ?? null });
+    if (ev.type === 'LIVE_KILL') {
+        _liveKillLastAt = ev.received_at ?? _feedNow();
+        _learnKillNames(ev, true);
+    }
+    if (ev.type === 'KILL' || ev.type === 'LIVE_KILL') {
+        const k = _clientSlot(ev.killer_slot), v = _clientSlot(ev.victim_slot);
+        // Both accepted obituary sources advance the same life. Twin merges
+        // skip this function, so switching sources cannot double a streak.
+        if (k != null && k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
+        if (v != null) _streak.set(v, 0);
+        ev._streak = k != null && k !== v ? _streak.get(k) : 0;
+        if (ev.type === 'KILL') {
+            _learnKillNames(ev);
+            const kt = _slotTeam(k), vt = _slotTeam(v);
+            ev._teamkill = k !== v && kt != null && kt === vt && kt !== 3;
         }
-        if (v != null && ev.victim && !String(ev.victim).startsWith('#')) {
-            const e = _roster.get(v) || {};
-            _roster.set(v, { name: ev.victim, team: e.team ?? null });
-        }
-        if (k !== v) _streak.set(k, (_streak.get(k) || 0) + 1);
-        _streak.set(v, 0);
-        ev._streak = k !== v ? _streak.get(k) : 0;
-        const kt = _slotTeam(k), vt = _slotTeam(v);
-        ev._teamkill = k !== v && kt != null && kt === vt && kt !== 3;
     } else if (ev.type === 'SCORELINE') {
         _roundScores.push(ev);
     } else if (ev.type === 'ROUND_END') {
@@ -296,7 +418,7 @@ function _viewActive() {
 
 async function _poll() {
     if (!_viewActive()) { stopLiveTicker(); return; }
-    if (_pollInFlight) return;
+    if (_pollInFlight) { renderLiveTicker(); return; }
     _pollInFlight = true;
     try {
         let data = await fetchJSON(
@@ -308,6 +430,9 @@ async function _poll() {
             || data.cursor_reset === true || data.last_seq < _cursor)) {
             _cursor = 0;
             _events = [];
+            _clock = null;
+            _pendingLegacyKills.clear();
+            _killMap = null;
             _roster.clear();
             _rosterUpdatedAt = 0;
             _streak.clear();
@@ -317,7 +442,7 @@ async function _poll() {
             _roundStartRecv = null;
             _momentum = 50;
             _flash = null;
-            _liveKillLastAt = 0;
+            _liveKillLastAt = null;
             _holdCurve = [];
             _defenderSide = null;
             // A new worker may already have advanced past the old cursor.
@@ -325,6 +450,7 @@ async function _poll() {
             data = await fetchJSON(`${API_BASE}/live/feed?since=0`,
                 { cachePolicy: 'no-store', credentials: 'same-origin' });
         }
+        _anchorFeedClock(data);
         if (data?.stream_id != null) _streamId = data.stream_id;
         // Only the server can distinguish hidden telemetry from missing
         // history. A reported gap makes per-round derived state
@@ -332,6 +458,7 @@ async function _poll() {
         // rather than display stale numbers (coderabbit, PR #772). The
         // roster/map recover from /api/live/state on its own poll.
         if (data?.gap === true) {
+            _pendingLegacyKills.clear();
             _streak.clear();
             _mvp.clear();
             _roundScores = [];
@@ -346,27 +473,37 @@ async function _poll() {
             // before buffering + render — this loop was lost in a rebase and
             // its absence silently disabled attribution, pressure and MVP.
             for (const ev of fresh) {
-                _rosterApply(ev);
-                _combatApply(ev);
-                _pressureApply(ev);
-                _mvpApply(ev);
+                if (ev.received_at == null) ev.received_at = _feedNow();
+                if ((ev.type === 'MAP' || ev.type === 'LIVE_MAP') && ev.map_accepted === false) continue;
+                _killBoundary(ev);
+                if (_mergeReverseKill(ev)) continue;
+                const enrichment = _isKillEnrichment(ev);
+                if (enrichment && _mergeKillEnrichment(ev)) continue;
+                if (!enrichment) {
+                    if (ev.type === 'KILL') ev._mvpCounted = !_liveKillActive();
+                    _rosterApply(ev);
+                    _combatApply(ev);
+                    _pressureApply(ev);
+                    _mvpApply(ev);
+                }
+                // Buffer incrementally so an enrichment in this very response
+                // can find its original, just as one from a later poll can.
+                // Invisible telemetry must not crowd renderable history out.
+                if (_line(ev) !== '') _events.push(ev);
+                if (ev.type === 'KILL' && !enrichment) _pendingLegacyKills.add(ev);
+                while (_pendingLegacyKills.size > MAX_BUFFER) _pendingLegacyKills.delete(_pendingLegacyKills.values().next().value);
+                if (_events.length > MAX_BUFFER) _pendingLegacyKills.delete(_events.shift());
             }
             for (const ev of fresh) {
                 if ((ev.seq || 0) > _cursor) _cursor = ev.seq;
             }
-            // Only renderable rows may occupy the buffer: invisible types
-            // used to crowd out the 200 slots and leave one stale revive on
-            // screen. Expiry runs for every poll outcome below.
-            _events = _events
-                .concat(fresh.filter(ev => _line(ev) !== ''))
-                .slice(-MAX_BUFFER);
         }
         _momentum = 50 + (_momentum - 50) * _MOM_DECAY;
         // Momentum/hold TIMELINE samples (Sofascore pattern, Val A): one
         // point per poll while a round is live, capped to ~15 min of 3 s
         // polls. ROUND_START clears via _roundStartRecv going null->set.
         if (_roundStartRecv != null) {
-            const el = Date.now() / 1000 - _roundStartRecv;
+            const el = _feedNow() - _roundStartRecv;
             _samples.push({ t: el, m: _momentum, h: _interpHold(el) });
             if (_samples.length > 300) _samples = _samples.slice(-300);
         } else if (_samples.length) {
@@ -379,8 +516,6 @@ async function _poll() {
         _pollInFlight = false;
         // Silence and failed requests age the buffer too. Always render the
         // latest fetch outcome, including recovery with no new events.
-        const cutoff = Date.now() / 1000 - 600;
-        _events = _events.filter(ev => (ev.received_at || 0) >= cutoff);
         renderLiveTicker();
     }
 }
@@ -402,7 +537,7 @@ function _mmssLocal(sec) {
 
 function _ago(receivedAt) {
     if (!receivedAt) return '';
-    const s = Math.max(0, Math.round(Date.now() / 1000 - receivedAt));
+    const s = Math.max(0, Math.round(_feedNow() - receivedAt));
     if (s < 60) return `${s}s ago`;
     return `${Math.floor(s / 60)}m ago`;
 }
@@ -430,21 +565,21 @@ function _line(ev) {
             return wrap('💥', `Objective destroyed: ${escapeHtml(ev.detail || '')}`, 'text-orange-200');
         case 'DYNAMITE':
             return wrap(ev.action === 'plant' ? '🧨' : '✂️',
-                `<b>${escapeHtml(_slotName(ev.slot))}</b> ${ev.action === 'plant' ? 'planted dynamite at' : 'defused dynamite at'} <b>${escapeHtml(ev.objective || '')}</b>`,
+                `<b>${escapeHtml(_eventName(ev.name, ev.slot))}</b> ${ev.action === 'plant' ? 'planted dynamite at' : 'defused dynamite at'} <b>${escapeHtml(ev.objective || '')}</b>`,
                 'text-orange-200');
         case 'FLAG_PICKUP':
-            return wrap('🏳️', `<b>${escapeHtml(_slotName(ev.slot))}</b> picked up the objective`, 'text-amber-200');
+            return wrap('🏳️', `<b>${escapeHtml(_eventName(ev.name, ev.slot))}</b> picked up the objective`, 'text-amber-200');
         case 'REVIVE': {
             const [rs, vs] = String(ev.slots || '').split(/\s+/);
-            return wrap('💉', `<b>${escapeHtml(_slotName(rs))}</b> revived <b>${escapeHtml(_slotName(vs))}</b>`, 'text-emerald-200');
+            return wrap('💉', `<b>${escapeHtml(_eventName(ev.actor_name, rs))}</b> revived <b>${escapeHtml(_eventName(ev.target_name, vs))}</b>`, 'text-emerald-200');
         }
         case 'SHOVE': {
             const [a, b] = String(ev.slots || '').split(/\s+/);
-            return wrap('🫸', `${escapeHtml(_slotName(a))} shoved ${escapeHtml(_slotName(b))}`, 'text-slate-400');
+            return wrap('🫸', `${escapeHtml(_eventName(ev.actor_name, a))} shoved ${escapeHtml(_eventName(ev.target_name, b))}`, 'text-slate-400');
         }
         case 'SUPPLY': {
             const [g] = String(ev.slots || '').split(/\s+/);
-            return wrap('🎒', `${escapeHtml(_slotName(g))} handed out supplies`, 'text-slate-400');
+            return wrap('🎒', `${escapeHtml(_eventName(ev.actor_name, g))} handed out supplies`, 'text-slate-400');
         }
         case 'LIVE_KILL': {
             const distN = Number(ev.distance);
@@ -452,7 +587,7 @@ function _line(ev) {
             const dist = Number.isFinite(distN) && distN >= 0 ? ` <span class="text-slate-500 text-xs">${distN}u</span>` : '';
             const hp = Number.isFinite(hpN) && hpN >= 0 ? ` <span class="text-emerald-400 text-xs">${hpN}hp</span>` : '';
             return wrap('🎯',
-                `<b>${escapeHtml(_slotName(ev.killer_slot))}</b> <span class="text-slate-500">→</span> ${escapeHtml(_slotName(ev.victim_slot))}${dist}${hp}`,
+                `<b>${escapeHtml(_eventName(ev.killer, ev.killer_slot))}</b> <span class="text-slate-500">→</span> ${escapeHtml(_eventName(ev.victim, ev.victim_slot))}${dist}${hp}`,
                 'text-slate-300');
         }
         case 'KILL': {
@@ -466,7 +601,7 @@ function _line(ev) {
             return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-emerald-300 border-y border-emerald-500/20">ROUND START</div>`;
         case 'ROUND_END': {
             const top = (ev._top || [])
-                .map(sc => `${escapeHtml(sc.name || _slotName(sc.slot))} ${sc.xp} XP`)
+                .map(sc => `${escapeHtml(_eventName(sc.name, sc.slot))} ${sc.xp} XP`)
                 .join(' · ');
             return `<div class="py-1.5 my-1 text-center text-xs font-black tracking-widest text-rose-300 border-y border-rose-500/20">ROUND END${top ? `<div class="font-normal normal-case tracking-normal text-slate-400 mt-0.5">${top}</div>` : ''}</div>`;
         }
@@ -555,10 +690,11 @@ function _roundObjectiveStrip(elapsed) {
 
 /** Re-render into the #live-ticker shell if present (idempotent). */
 export function renderLiveTicker() {
+    _expireEvents();
     const host = document.getElementById('live-ticker');
     if (!host) return;
     const fresh = _events.length
-        ? (Date.now() / 1000 - (_events[_events.length - 1].received_at || 0)) < 120
+        ? (_feedNow() - (_events[_events.length - 1].received_at ?? 0)) < 120
         : false;
     const botBadge = liveRosterHasBots()
         ? '<span class="px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-black tracking-wider">BOT TEST</span>'
@@ -574,7 +710,7 @@ export function renderLiveTicker() {
     if (_roundStartRecv != null && _events.length) {
         // Wall-clock elapsed from server timestamps — never level_ms, which
         // mixes legacy monotonic ms and LIVEX epoch-ms (review: two tailers).
-        const nowRecv = _events[_events.length - 1].received_at || (Date.now() / 1000);
+        const nowRecv = _feedNow();
         const elapsed = Math.max(0, nowRecv - _roundStartRecv);
         const hold = _interpHold(elapsed);
         const momA = Math.round(_momentum);
@@ -607,7 +743,7 @@ export function renderLiveTicker() {
     }
     const visible = _events.filter(e =>
         _filters[_TYPE_TO_CAT[e.type]] === true
-        && !(e.type === 'KILL' && _liveKillActive()));  // LIVE_KILL supersedes legacy
+        && !(e.type === 'KILL' && _liveKillActive() && !_isKillEnrichment(e)));  // LIVE_KILL supersedes legacy
     const rows = visible.slice(-MAX_SHOWN).reverse().map(_line).filter(Boolean).join('');
     host.textContent = '';
     safeInsertHTML(host, 'beforeend', `

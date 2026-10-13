@@ -13,7 +13,8 @@ import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { mmss } from '../components/RoundsTable';
 import { useTickingSeconds } from '../lib/liveClock';
-import { describeEvent, foldDoubles, type LiveEvent } from '../lib/liveEvents';
+import { useLiveEventLog } from '../lib/useLiveEventLog';
+import { describeEvent, foldDoubles } from '../lib/liveEvents';
 import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
 import { svgPath } from '../lib/spark';
@@ -286,7 +287,7 @@ export function LivePage() {
   const tonight = useTonight();
   const running = state.data?.is_live === true && state.data.game_state === 'live';
   const elapsed = useTickingSeconds(state.data?.round_elapsed_seconds ?? null, state.dataUpdatedAt, running);
-  const mesh = useMapMesh(state.data?.is_live ? state.data.current_map : null);
+  const mesh = useMapMesh(state.data?.is_live && state.data.map_confirmed !== false ? state.data.current_map : null);
   const importedMaps = new Set((tonight.data?.maps ?? []).map((m) => m.map).filter((m): m is string => m != null));
   // The feed cursor ADVANCES: since=0 fetches the newest ring page, every
   // later poll asks only for seq > since, per the /api/live/feed contract.
@@ -294,7 +295,7 @@ export function LivePage() {
   const [since, setSince] = useState(0);
   const [stream, setStream] = useState<string | null>(null);
   const [generation, setGeneration] = useState(0);
-  const [log, setLog] = useState<LiveEvent[]>([]);
+  const { log, append, clear } = useLiveEventLog();
   const [gapNote, setGapNote] = useState<string | null>(null);
   const feed = useLiveFeed(since, generation);
   const feedData = feed.data;
@@ -303,7 +304,7 @@ export function LivePage() {
     const changedStream = stream != null && feedData.stream_id != null && stream !== feedData.stream_id;
     if (feedData.stream_id != null) setStream(feedData.stream_id);
     if (changedStream || feedData.cursor_reset || feedData.last_seq < since) {
-      setLog([]);
+      clear();
       setGapNote('feed restarted — reloading recent events');
       setSince(0);
       // A new cache generation must not replay the previous worker's since=0 page.
@@ -313,15 +314,18 @@ export function LivePage() {
     if (feedData.gap === true) {
       setGapNote('some events expired or were skipped between polls');
     }
-    if (feedData.events.length > 0) {
-      setLog((prev) => [...prev, ...feedData.events.filter((e) => !prev.some((p) => p.seq === e.seq))].slice(-200));
-    }
+    append(feedData.events, feedData.server_time);
     if (feedData.last_seq > since) setSince(feedData.last_seq);
-  }, [feedData, since, stream]);
+  }, [feedData, feed.dataUpdatedAt, since, stream, append, clear]);
   const server = useServerActivityHistory(24);
   const voice = useVoiceActivityHistory(24);
   const monitoring = useMonitoringStatus();
   const health = useApiHealth();
+  // A control-only page can be nonempty while producing no spectator lines.
+  const names = new Map<number, string>();
+  const roster = state.data?.roster;
+  for (const m of [...(roster?.axis ?? []), ...(roster?.allies ?? []), ...(roster?.spectators ?? [])]) names.set(m.slot, m.name);
+  const lines = foldDoubles(log).map((e) => ({ seq: e.seq, text: describeEvent(e, names) })).filter((l) => l.text != null);
 
   return (
     <Stack gap={7} style={{ paddingTop: 'var(--space-7)' }}>
@@ -329,11 +333,15 @@ export function LivePage() {
         <Lbl>live · the server right now</Lbl>
         <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: 'var(--track-title)', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
           {state.isError ? 'live updates unavailable' : !state.data ? 'checking live updates' : state.data.is_live
-            ? `${state.data.current_map != null ? mapLabel(state.data.current_map) : 'unknown map'} · live`
+            ? state.data.map_confirmed === false ? 'live updates · map unconfirmed'
+              : `${state.data.current_map != null ? mapLabel(state.data.current_map) : 'unknown map'} · live`
             : 'no recent live updates'}
         </h1>
         {state.data && (
           <>
+            {state.data.map_confirmed === false && state.data.current_map != null && (
+              <Meta>last reported map: {mapLabel(state.data.current_map)} · awaiting a fresh server announcement</Meta>
+            )}
             <Meta>
               {state.data.is_live
                 ? `${figure(state.data.roster.player_count)} playing${state.data.round_number != null ? ` · round ${figure(state.data.round_number)}` : ''}${state.data.roster.has_bots ? ' · bots present' : ''}`
@@ -346,7 +354,7 @@ export function LivePage() {
         )}
         {state.isError && <Unavailable what="live state" />}
         {state.data && <NowStrip state={state.data} elapsed={elapsed} beatFromDb={tonight.data?.current?.beat_seconds ?? null} importedMaps={importedMaps} />}
-        {state.data?.is_live && <LiveMiniMap state={state.data} mesh={mesh.data} />}
+        {state.data?.is_live && state.data.map_confirmed !== false && <LiveMiniMap state={state.data} mesh={mesh.data} />}
       </Stack>
 
       <TonightBoard q={tonight} liveElapsed={elapsed} />
@@ -363,34 +371,24 @@ export function LivePage() {
 
       <div data-parity="live.feed">
         <SectionHead label="the ticker" aside={feed.data ? `seq ${figure(feed.data.last_seq)}${feed.data.server_time != null ? ` · server clock ${utcStamp(feed.data.server_time)}` : ''}` : undefined} />
-        {feed.isPending && log.length === 0 && <Pending label="feed" />}
+        {feed.isPending && lines.length === 0 && <Pending label="feed" />}
         {feed.isError && <Unavailable what="feed" />}
         {gapNote != null && <Meta>{gapNote}</Meta>}
-        {feed.data && log.length === 0 && (
+        {feed.data && !feed.isError && lines.length === 0 && (
           <div style={{ marginTop: 'var(--space-2)' }}>
-            <Absent reason="quiet — no renderable events since this page loaded" />
+            <Absent reason="quiet — no renderable events in the recent feed" />
           </div>
         )}
-        {log.length > 0 && (() => {
-          // Names for slots come from the roster the reducer keeps; the
-          // doubles (POPUP+DYNAMITE, MAP+LIVE_MAP, KILL+LIVE_KILL) fold into
-          // one line each; a kind with nothing to say (BEGIN, GAMETIME) is
-          // skipped rather than printed as its type name (audit 2026-09-07).
-          const names = new Map<number, string>();
-          const roster = state.data?.roster;
-          for (const m of [...(roster?.axis ?? []), ...(roster?.allies ?? []), ...(roster?.spectators ?? [])]) names.set(m.slot, m.name);
-          const lines = foldDoubles(log).map((e) => ({ seq: e.seq, text: describeEvent(e, names) })).filter((l) => l.text != null);
-          return (
-            <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)', maxHeight: 260, overflowY: 'auto' }}>
-              {lines.slice(-40).reverse().map((l) => (
-                <Cluster key={l.seq} gap={3} align="baseline" justify="between" className="row" style={{ padding: 'var(--space-1) 0' }}>
-                  <span style={{ fontSize: 'var(--fs-small)' }}>{l.text}</span>
-                  <Meta>#{figure(l.seq)}</Meta>
-                </Cluster>
-              ))}
-            </Stack>
-          );
-        })()}
+        {lines.length > 0 && (
+          <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)', maxHeight: 260, overflowY: 'auto' }}>
+            {lines.slice(-40).reverse().map((l) => (
+              <Cluster key={l.seq} gap={3} align="baseline" justify="between" className="row" style={{ padding: 'var(--space-1) 0' }}>
+                <span style={{ fontSize: 'var(--fs-small)' }}>{l.text}</span>
+                <Meta>#{figure(l.seq)}</Meta>
+              </Cluster>
+            ))}
+          </Stack>
+        )}
       </div>
 
       <div data-parity="live.server-activity">

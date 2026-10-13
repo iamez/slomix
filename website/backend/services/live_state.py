@@ -43,7 +43,11 @@ _ROSTER_LINGER_SECONDS = 600
 # change is a dueling-sources ping-pong (legacy3 MAP vs LIVEX LIVE_MAP), not
 # a real remap — ignore it.
 _MAP_FLIPBACK_SECONDS = 60
-# How long a recent objective action stays surfaced in the snapshot.
+# ET:Legacy 732518efb1c479dcd29b13361f30a2e92df1cf2a,
+# src/qcommon/q_shared.h: MAX_CLIENTS=64 (absolute limit). World/entity
+# sentinels are not player identities; their kill events remain in the feed.
+_MAX_CLIENTS = 64
+# Maximum recent kill rows retained independently of their age.
 _RECENT_KILLS_MAX = 30
 _POSITION_FRESH_SECONDS = 60
 
@@ -124,11 +128,24 @@ class LiveStateReducer:
         v = ev.get(key)
         if isinstance(v, bool):
             return None
-        if isinstance(v, int):
-            return v
         if isinstance(v, str) and v.lstrip("-").isdigit():
-            return int(v)
+            try:
+                v = int(v)
+            except ValueError:
+                return None
+        if isinstance(v, int) and 0 <= v < _MAX_CLIENTS:
+            return v
         return None
+
+    @property
+    def current_map(self) -> str | None:
+        """Last accepted map identity, not a freshness or availability claim."""
+        return self._current_map
+
+    @staticmethod
+    def client_slot(event: dict[str, Any], key: str = "slot") -> int | None:
+        """Normalize a player slot using the reducer's engine-domain contract."""
+        return LiveStateReducer._slot(event, key)
 
     def _name_for_slot(self, slot: int | None) -> str | None:
         """Resolve an engine slot to the current roster name (None if unknown —
@@ -137,6 +154,59 @@ class LiveStateReducer:
             return None
         entry = self._roster.get(slot)
         return entry["name"] if entry else None
+
+    def event_names(self, event: dict[str, Any]) -> dict[str, str | None]:
+        """Freeze known names at this event's position in the ingest stream.
+
+        Unknowns stay unknown in the feed even if a later event names or reuses
+        the slot. Unlike current-state pending names, history is never rebound.
+        Explicit source names (including legacy KILL/SAY) remain authoritative.
+        """
+        slots = dict(event)
+        if event.get("type") in {"REVIVE", "SUPPLY", "SHOVE"}:
+            pair = event.get("slots")
+            pair = pair.split() if isinstance(pair, str) else []
+            slots = {"actor_slot": pair[0] if pair else None,
+                     "target_slot": pair[1] if len(pair) > 1 else None}
+            keys = {"actor_name": "actor_slot", "target_name": "target_slot"}
+        else:
+            keys = ({"killer": "killer_slot", "victim": "victim_slot"}
+                    if event.get("type") in {"KILL", "LIVE_KILL"} else
+                    {"name": "slot"} if event.get("type") in {
+                        "DYNAMITE", "FLAG_PICKUP", "CALLVOTE", "DISCONNECT", "TEAM_CHANGE"} else {})
+        names = {}
+        at = event.get("received_at") or time.time()
+        # apply() will discard the old session before reducing this event.
+        # Name enrichment must not copy that discarded roster into the feed.
+        roster_current = (self._last_event_at is None
+                          or at - self._last_event_at <= _IDLE_RESET_SECONDS)
+        for name_key, slot_key in keys.items():
+            if isinstance(event.get(name_key), str) and event[name_key].strip():
+                continue
+            name = self._name_for_slot(self._slot(slots, slot_key)) if roster_current else None
+            names[name_key] = name if isinstance(name, str) and _is_named(name) else None
+        return names
+
+    def _resolve_pending_kill_names(self, slot: int, name: str) -> None:
+        """Fill missing names only until this connection explicitly ends."""
+        if not _is_named(name):
+            return
+        for kill in self._recent_kills:
+            for role in ('killer', 'victim'):
+                if kill[role + '_slot'] == slot and kill['_' + role + '_pending']:
+                    kill[role] = name
+                    kill['_' + role + '_pending'] = False
+
+    def _clear_connection(self, slot: int) -> dict[str, Any] | None:
+        """A new CONNECT is a boundary even if the old DISCONNECT was lost."""
+        entry = self._roster.pop(slot, None)
+        self._live_stats.pop(slot, None)
+        self._positions.pop(slot, None)
+        for kill in self._recent_kills:
+            for role in ('killer', 'victim'):
+                if kill[role + '_slot'] == slot:
+                    kill['_' + role + '_pending'] = False
+        return entry
 
     def _live_stat(self, slot: int) -> dict[str, Any]:
         return self._live_stats.setdefault(
@@ -229,9 +299,12 @@ class LiveStateReducer:
                     if self._side(team) and _is_named(entry["name"]):
                         self._record_change(entry["name"],
                                             "switched" if was_side else "joined", team, at)
+            self._resolve_pending_kill_names(slot, entry["name"])
 
         elif etype in ("CONNECT", "BEGIN"):
             slot = self._slot(ev)
+            if slot is not None and etype == "CONNECT":
+                self._clear_connection(slot)
             if slot is not None and slot not in self._roster:
                 self._roster[slot] = {"name": f"slot {slot}", "team": None,
                                       "connected_at": at, "team_since": at}
@@ -239,7 +312,7 @@ class LiveStateReducer:
         elif etype == "DISCONNECT":
             slot = self._slot(ev)
             if slot is not None:
-                entry = self._roster.pop(slot, None)
+                entry = self._clear_connection(slot)
                 # Only log a departure for a named player who was on a side —
                 # a bare CONNECT slot that never picked a team isn't a "left".
                 if entry and self._side(entry.get("team")) and _is_named(entry.get("name")):
@@ -339,6 +412,18 @@ class LiveStateReducer:
                 st["damage_given"] += int(ev.get("damage_given") or 0)
                 st["damage_received"] += int(ev.get("damage_received") or 0)
 
+        elif etype == "KILL" and type(ev.get("duplicate_of")) is int:
+            # Ingest-owned correlation supplies missing source names only;
+            # never resolve this historical observation through today's roster.
+            for kill in self._recent_kills:
+                if kill.get("_seq") == ev["duplicate_of"]:
+                    for role in ("killer", "victim"):
+                        name = ev.get(role)
+                        if kill[role] is None and isinstance(name, str) and _is_named(name):
+                            kill[role] = name
+                            kill["_" + role + "_pending"] = False
+                    break
+
         elif etype == "LIVE_KILL":
             victim = self._slot(ev, "victim_slot")
             if victim is not None:
@@ -350,8 +435,16 @@ class LiveStateReducer:
             # the map; a mini map would draw a line from the origin.
             distance = ev.get("distance")
             no_killer = isinstance(distance, (int, float)) and distance < 0
+            killer = None if no_killer else killer
+            killer_name = self._name_for_slot(killer)
+            victim_name = self._name_for_slot(victim)
+            killer_name = killer_name if _is_named(killer_name) else None
+            victim_name = victim_name if _is_named(victim_name) else None
             self._recent_kills.append({
-                "killer_slot": None if no_killer else killer, "victim_slot": victim,
+                "killer_slot": killer, "victim_slot": victim, "_seq": ev.get("seq"),
+                "killer": killer_name, "victim": victim_name,
+                "_killer_pending": killer is not None and killer_name is None,
+                "_victim_pending": victim is not None and victim_name is None,
                 "killer_pos": None if no_killer else _xy(ev.get("killer_pos")),
                 "victim_pos": _xy(ev.get("victim_pos")),
                 "distance": None if no_killer else distance,
@@ -362,8 +455,8 @@ class LiveStateReducer:
 
         elif etype == "LIVE_MOVEMENT":
             for entry in ev.get("players") or []:
-                slot = entry.get("slot") if isinstance(entry, dict) else None
-                if isinstance(slot, int):
+                slot = self._slot(entry) if isinstance(entry, dict) else None
+                if slot is not None:
                     # A moving player is alive (corpses don't emit positions).
                     self._live_stat(slot)["alive"] = True
                     if entry.get("x") is not None and entry.get("y") is not None:
@@ -468,9 +561,8 @@ class LiveStateReducer:
         ] if is_live else []
 
         recent_kills = [
-            {**{k: v for k, v in k_.items() if k != "at"},
-             "killer": self._name_for_slot(k_["killer_slot"]) if k_["killer_slot"] is not None else None,
-             "victim": self._name_for_slot(k_["victim_slot"]) if k_["victim_slot"] is not None else None,
+            {**{k: v for k, v in k_.items()
+                if k not in {"at", "_seq", "_killer_pending", "_victim_pending"}},
              "age_seconds": int(now - k_["at"])}
             for k_ in self._recent_kills
             if (now - k_["at"]) <= _OBJECTIVE_WINDOW_SECONDS

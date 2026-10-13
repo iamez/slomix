@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -25,7 +25,7 @@ const monitoring = monitoringJson satisfies MonitoringStatus;
 const health = statusJson satisfies ApiHealth;
 const tonight = tonightJson satisfies TonightStatus;
 const tonightQuiet = tonightQuietJson satisfies TonightStatus;
-const eveningFeed = eveningFeedJson as unknown as LiveFeed;
+const eveningFeed = { ...eveningFeedJson, server_time: eveningFeedJson.recorded_at } as unknown as LiveFeed;
 
 function stub() {
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
@@ -228,6 +228,7 @@ describe('LivePage — the evening', () => {
   it('draws the mini map from the positions and kills the state carries, and nothing without them', async () => {
     const withPositions: LiveState = {
       ...inSecondHalf,
+      map_confirmed: true,
       roster: {
         ...inSecondHalf.roster,
         axis: [{ slot: 3, name: '^1one^7', on_server_seconds: 100, on_side_seconds: 100, pos: { x: 100, y: -200, yaw: 90, age_seconds: 4 }, live: { kills: 1, deaths: 0, damage: 50, dpm: null, alive: true } }],
@@ -377,4 +378,123 @@ it('reports a failed state request without claiming the server is empty', async 
   mountFeedProbe(() => feed, () => Promise.reject(new Error('offline')));
   expect(await screen.findByRole('heading', { name: 'live updates unavailable' })).toBeInTheDocument();
   expect(screen.queryByText('nobody on')).not.toBeInTheDocument();
+});
+
+it('does not present a retained unconfirmed map as the live map', async () => {
+  mountFeedProbe(() => feed, () => Promise.resolve({
+    ...liveState, is_live: true, game_state: 'warmup', current_map: 'supply',
+    map_confirmed: false, map_age_seconds: 86400,
+    roster: { ...liveState.roster, axis: [{ slot: 3, name: 'fixture',
+      on_server_seconds: 1, on_side_seconds: 1, pos: { x: 10, y: 20, yaw: null, age_seconds: 0 } }] },
+  }));
+  expect(await screen.findByRole('heading', { name: 'live updates · map unconfirmed' })).toBeInTheDocument();
+  expect(screen.getByText(/last reported map: supply/)).toBeInTheDocument();
+  expect(screen.queryByRole('heading', { name: 'supply · live' })).not.toBeInTheDocument();
+  expect(screen.queryByText(/no floor mesh exported for this map/)).not.toBeInTheDocument();
+  expect(screen.queryByLabelText(/placed, .* recent kills/)).not.toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/assets/maps/geometry/'))).toBe(false);
+});
+
+it('explains an empty ticker when the feed only contains nonrenderable control events', async () => {
+  const client = mountFeedProbe((since) => ({ status: 'ok', stream_id: 'control', last_seq: 1, oldest_seq: since === 0 ? 1 : null,
+    events: since === 0 ? [{ seq: 1, type: 'BEGIN' }] : [] }));
+  await waitFor(() => expect(client.getQueryData(['live-feed', 0, 1])).toBeDefined());
+  await waitFor(() => expect(screen.getByText('quiet — no renderable events in the recent feed')).toBeInTheDocument());
+  client.clear();
+});
+
+it('expires retained ticker rows on an empty successful poll using the server clock', async () => {
+  let now = 1000;
+  const client = mountFeedProbe((since) => ({ status: 'ok', stream_id: 'quiet',
+    server_time: now, last_seq: 1, oldest_seq: since === 0 ? 1 : null, events: since === 0
+      ? [{ seq: 1, type: 'ANNOUNCE', text: 'old announcement', received_at: 1000 }] : [] }));
+  await screen.findByText('old announcement');
+  now = 1601;
+  await client.invalidateQueries({ queryKey: ['live-feed'] });
+  await waitFor(() => expect(screen.queryByText('old announcement')).not.toBeInTheDocument());
+  expect(screen.getByText('quiet — no renderable events in the recent feed')).toBeInTheDocument();
+  client.clear();
+});
+
+it('keeps compatibility with a backend that has no map confirmation field', async () => {
+  const { map_confirmed: _unused, ...olderState } = liveState;
+  mountFeedProbe(() => feed, () => Promise.resolve({
+    ...olderState, is_live: true, game_state: 'warmup', current_map: 'supply',
+  }));
+  expect(await screen.findByRole('heading', { name: 'supply · live' })).toBeInTheDocument();
+});
+
+
+it('expires ticker rows through failed polls without calling the unavailable feed quiet', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance'] });
+  let failed = false;
+  const client = mountFeedProbe((since) => {
+    if (failed) throw new Error('offline');
+    return { status: 'ok', stream_id: 'ttl', server_time: 1000, last_seq: 1,
+      oldest_seq: 1, events: since === 0
+        ? [{ seq: 1, type: 'ANNOUNCE', text: 'expiring during outage', received_at: 1000 }] : [] };
+  });
+  try {
+    for (let i = 0; i < 10; i++) await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    expect(screen.getByText('expiring during outage')).toBeInTheDocument();
+    failed = true;
+    await act(async () => { await client.invalidateQueries({ queryKey: ['live-feed'] }); await vi.advanceTimersByTimeAsync(10); });
+    expect(screen.getByText('feed: unavailable')).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(600001); });
+    expect(screen.queryByText('expiring during outage')).not.toBeInTheDocument();
+    expect(screen.getByText('feed: unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('quiet — no renderable events in the recent feed')).not.toBeInTheDocument();
+  } finally {
+    cleanup(); client.clear(); vi.useRealTimers();
+  }
+});
+
+it('enriches a previously polled LIVE_KILL once with its source names', async () => {
+  const now = Date.now() / 1000;
+  const pages = [
+    { status: 'ok', stream_id: 'named-proof', oldest_seq: 1, last_seq: 2, server_time: now, events: [
+      { seq: 1, type: 'ROUND_START', received_at: now },
+      { seq: 2, type: 'LIVE_KILL', level_ms: 1000, killer_slot: 3, victim_slot: 5, killer: null, victim: null, distance: 120, received_at: now },
+    ] },
+    { status: 'ok', stream_id: 'named-proof', oldest_seq: 1, last_seq: 3, server_time: now, events: [
+      { seq: 3, type: 'KILL', level_ms: 1000, duplicate_of: 2, killer_slot: 3, victim_slot: 5, killer: 'Source A', victim: 'Source B', received_at: now },
+    ] },
+  ];
+  let calls = 0;
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+    const pathname = String(input).split('?')[0];
+    const body = pathname === '/api/live/feed'
+      ? pages[calls++] ?? { ...pages[1], events: [] }
+      : {
+        '/api/live/state': liveState,
+        '/api/server-activity/history': serverHist,
+        '/api/voice-activity/history': voiceHist,
+        '/api/monitoring/status': monitoring,
+        '/api/status': health,
+        '/api/stats/tonight': tonightQuiet,
+      }[pathname];
+    if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+  }));
+  render(<QueryClientProvider client={makeQueryClient()}><MemoryRouter><LivePage /></MemoryRouter></QueryClientProvider>);
+  await waitFor(() => expect(screen.getByText(/Source A killed Source B/)).toBeInTheDocument());
+  expect(screen.getAllByText(/Source A killed Source B/)).toHaveLength(1);
+  expect(screen.getByText(/Source A killed Source B/).textContent).toContain('120 u');
+  expect(calls).toBeGreaterThanOrEqual(2);
+});
+
+
+it('shows and expires compatibility events with a browser clock far ahead of the source', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance', 'Date'] });
+  vi.setSystemTime(new Date('2040-01-01'));
+  const client = mountFeedProbe((since) => ({ status: 'ok', stream_id: 'compat-clock', last_seq: 1,
+    oldest_seq: 1, events: since === 0
+      ? [{ seq: 1, type: 'ANNOUNCE', text: 'compatibility announcement', received_at: 1000 }] : [] }));
+  try {
+    for (let i = 0; i < 10; i++) await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    expect(screen.getByText('compatibility announcement')).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(600001); });
+    expect(screen.queryByText('compatibility announcement')).not.toBeInTheDocument();
+    expect(screen.getByText('quiet — no renderable events in the recent feed')).toBeInTheDocument();
+  } finally { cleanup(); client.clear(); vi.useRealTimers(); }
 });

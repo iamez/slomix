@@ -71,6 +71,7 @@ async function _poll() {
         if (seq !== _pollSeq) return;
         _lastOk = false;
         console.warn('live state poll failed', e);
+        renderLiveState();
     }
 }
 
@@ -94,6 +95,7 @@ function _tick() {
 
 export function startLiveState() {
     if (_interval) return;
+    renderLiveState();
     _poll();
     _interval = setInterval(_poll, POLL_MS);
     _ticker = setInterval(_tick, 1000);
@@ -226,7 +228,10 @@ export function renderLiveState() {
     const host = document.getElementById('live-state');
     if (!host) return;
     const s = _snapshot;
-    if (!s) { host.textContent = ''; return; }
+    if (!s) {
+        host.textContent = _lastOk === false ? 'state unavailable' : 'checking live updates';
+        return;
+    }
 
     const [dotColor, stateLabel] = _STATE_BADGE[s.game_state] || _STATE_BADGE.unknown;
     const r = s.roster || { axis: [], allies: [], spectators: [] };

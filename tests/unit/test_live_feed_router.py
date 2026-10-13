@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import importlib
 import os
+from copy import deepcopy
+from io import BytesIO
 
 import pytest
 from fastapi import FastAPI
@@ -84,6 +86,87 @@ def test_batch_size_cap(client):
     assert r.status_code == 413
 
 
+@pytest.mark.parametrize("invalid", [
+    {"type": "MAP", "fields": {"map_name": ["supply"]}},
+    {"type": "LIVE_AGGREGATE", "fields": {
+        "slot": 3, "kills": 7, "damage_given": "invalid"}},
+    {"type": "KILL", "fields": {"killer_slot": [], "victim_slot": 5}},
+    {"type": "LIVE_MOVEMENT", "fields": {"players": 17}},
+])
+def test_invalid_batch_publishes_nothing_and_next_batch_recovers(client, monkeypatch, invalid):
+    """A rejected batch cannot consume cursors, evict rows or apply deltas."""
+    monkeypatch.setattr(live.time, "time", lambda: 1000.0)
+    monkeypatch.setattr(live, "_events", type(live._events)(maxlen=2))  # noqa: SLF001
+    assert _post(client, [
+        {"type": "MAP", "fields": {"map_name": "supply"}},
+        {"type": "CONNECT", "fields": {"slot": 3, "name": "fixture"}},
+    ]).status_code == 200
+    before = deepcopy((list(live._events), live._seq, live._state.__dict__,  # noqa: SLF001
+                       live._recent_livex_kills, live._evicted_by_type))  # noqa: SLF001
+    response = _post(client, [
+        {"type": "LIVE_KILL", "fields": {"killer_slot": 3, "victim_slot": 5}},
+        {"type": "LIVE_AGGREGATE", "fields": {"slot": 3, "kills": 2}},
+        invalid,
+    ])
+    assert response.status_code == 422
+    assert (list(live._events), live._seq, live._state.__dict__,  # noqa: SLF001
+            live._recent_livex_kills, live._evicted_by_type) == before  # noqa: SLF001
+    assert client.get("/api/live/state").status_code == 200
+    recovery = _post(client, [{"type": "KILL", "fields": {
+        "killer_slot": 3, "victim_slot": 5}}])
+    assert recovery.json()["accepted"] == 1  # no poisoned duplicate latch
+    assert recovery.json()["last_seq"] == 3
+    assert client.get("/api/live/feed").json()["events"][-1]["seq"] == 3
+
+
+def test_nonfinite_payload_cannot_poison_feed(client):
+    response = client.post("/api/live/events", content=(
+        '{"events":[{"type":"SAY","fields":{"text":NaN}}]}'
+    ), headers={"Content-Type": "application/json",
+                "X-Internal-Token": os.environ["INTERNAL_API_SECRET"]})
+    assert response.status_code == 422
+    assert client.get("/api/live/feed").json()["last_seq"] == 0
+
+
+def test_kill_duplicate_cache_has_a_hard_bound(client, monkeypatch):
+    monkeypatch.setattr(live.time, "time", lambda: 1000.0)
+    for start in range(0, 1200, 200):
+        assert _post(client, [
+            {"type": "LIVE_KILL", "fields": {"killer_slot": n, "victim_slot": 1}}
+            for n in range(start, start + 200)
+        ]).status_code == 200
+    assert len(live._recent_livex_kills) <= live._BUFFER_MAX  # noqa: SLF001
+    assert _post(client, [{"type": "KILL", "fields": {
+        "killer_slot": 1199, "victim_slot": 1}}]).json()["accepted"] == 0
+
+
+@pytest.mark.parametrize("payload", [b'[]', b'17', b'{}' + b' ' * 80,
+                                    b'{"n":NaN}', b'{"n":Infinity}', b'{"n":1e400}'])
+def test_upstream_nonobject_or_oversized_body_is_unavailable(client, monkeypatch, payload):
+    monkeypatch.setattr(live, "_UPSTREAM", "https://fixture.invalid/api/live")
+    monkeypatch.setattr(live, "_PROXY_MAX_BYTES", 64, raising=False)
+    monkeypatch.setattr(live.urllib.request, "urlopen", lambda *a, **kw: BytesIO(payload))
+    assert client.get("/api/live/feed").status_code == 503
+
+
+def test_upstream_valid_object_at_size_limit_remains_available(client, monkeypatch):
+    monkeypatch.setattr(live, "_UPSTREAM", "https://fixture.invalid/api/live")
+    monkeypatch.setattr(live, "_PROXY_MAX_BYTES", 64)
+    reads = []
+
+    class Response(BytesIO):
+        def read(self, size=-1):
+            reads.append(size)
+            return super().read(size)
+
+    payload = b'{"status":"ok","events":[]}'.ljust(64, b' ')
+    monkeypatch.setattr(live.urllib.request, "urlopen", lambda *a, **kw: Response(payload))
+    response = client.get("/api/live/feed")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok", "events": []}
+    assert reads == [65]
+
+
 def test_status_reports_freshness(client):
     s0 = client.get("/api/live/status").json()
     assert s0["buffered"] == 0 and s0["newest_age_seconds"] is None
@@ -143,7 +226,8 @@ def test_legacy_kill_deduped_against_livex(client):
     when the LIVEX one already landed (same slots, within the window)."""
     _post(client, [
         {"type": "LIVE_KILL", "level_ms": 1786480915000,
-         "fields": {"killer_slot": 3, "victim_slot": 5, "mod_id": 34}},
+         "fields": {"killer_slot": 3, "victim_slot": 5, "mod_id": 34,
+                    "killer": "vid", "victim": "lgz"}},
         {"type": "KILL", "level_ms": 100,
          "fields": {"killer_slot": 3, "victim_slot": 5,
                     "killer": "vid", "victim": "lgz", "mod": "MOD_MP40"}},
@@ -282,3 +366,312 @@ def test_evicted_visible_event_only_gaps_for_matching_filter(client, monkeypatch
     assert client.get('/api/live/feed?since=1').json()['gap'] is True
     assert client.get('/api/live/feed?since=1&types=ROUND_START').json()['gap'] is False
     assert client.get('/api/live/feed?since=1&types=ROUND_END').json()['gap'] is True
+
+
+@pytest.mark.asyncio
+async def test_feed_freezes_event_names_before_later_slot_reuse(monkeypatch):
+    """The real ASGI feed must carry identity, not require a current roster join."""
+    import httpx
+
+    monkeypatch.setattr(live, '_events', type(live._events)(maxlen=live._BUFFER_MAX))  # noqa: SLF001
+    monkeypatch.setattr(live, '_state', live.LiveStateReducer())
+    monkeypatch.setattr(live, '_UPSTREAM', '')
+    monkeypatch.setattr(live, '_recent_livex_kills', {})
+    monkeypatch.setattr(live, '_evicted_by_type', {})
+    monkeypatch.setattr(live, '_seq', 0)
+    monkeypatch.setenv('INTERNAL_API_SECRET', 'fixture-local-only')
+    app = FastAPI()
+    app.include_router(live.router, prefix='/api/live')
+    headers = {'X-Internal-Token': os.environ['INTERNAL_API_SECRET']}
+    snapshots = []
+    original_snapshot = live.LiveStateReducer.snapshot
+
+    def counted_snapshot(self, *args, **kwargs):
+        snapshots.append(1)
+        return original_snapshot(self, *args, **kwargs)
+
+    monkeypatch.setattr(live.LiveStateReducer, 'snapshot', counted_snapshot)
+    batch = [
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'original'}},
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 4, 'team': 2, 'name': 'victim'}},
+        {'type': 'LIVE_KILL', 'fields': {'killer_slot': 3, 'victim_slot': 4}},
+        {'type': 'DISCONNECT', 'fields': {'slot': 3}},
+        {'type': 'LIVE_KILL', 'fields': {'killer_slot': 3, 'victim_slot': 4}},
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'replacement'}},
+        {'type': 'LIVE_KILL', 'fields': {'killer_slot': 3, 'victim_slot': 4}},
+        {'type': 'KILL', 'fields': {'killer_slot': 8, 'victim_slot': 9,
+                                  'killer': 'source killer', 'victim': 'source victim'}},
+        {'type': 'SAY', 'fields': {'name': 'source speaker', 'text': 'hello'}},
+        {'type': 'DYNAMITE', 'fields': {'slot': 3, 'action': 'plant', 'objective': 'fixture'}},
+        {'type': 'LIVE_KILL', 'fields': {'killer_slot': 64, 'victim_slot': -1}},
+        *[{'type': kind, 'fields': {'slots': '3 4'}} for kind in ('REVIVE', 'SUPPLY', 'SHOVE')],
+    ]
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://fixture') as c:
+        result = await c.post('/api/live/events', json={'events': batch}, headers=headers)
+        assert result.status_code == 200, result.text
+        assert len(snapshots) == 1  # existing batch validation, never a snapshot per event
+        before = (await c.get('/api/live/feed')).json()['events']
+        kills = [e for e in before if e['type'] in {'KILL', 'LIVE_KILL'}]
+        assert [(e['killer'], e['victim']) for e in kills] == [
+            ('original', 'victim'), (None, 'victim'), ('replacement', 'victim'),
+            ('source killer', 'source victim'), (None, None),
+        ]
+        assert next(e for e in before if e['type'] == 'DISCONNECT')['name'] == 'original'
+        assert next(e for e in before if e['type'] == 'SAY')['name'] == 'source speaker'
+        assert next(e for e in before if e['type'] == 'DYNAMITE')['name'] == 'replacement'
+        for event in [e for e in before if e['type'] in {'REVIVE', 'SUPPLY', 'SHOVE'}]:
+            assert (event['actor_name'], event['target_name']) == ('replacement', 'victim')
+        result = await c.post('/api/live/events', json={'events': [
+            {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'later rename'}},
+        ]}, headers=headers)
+        assert result.status_code == 200
+        after = (await c.get('/api/live/feed')).json()['events']
+        assert after[:len(before)] == before
+
+
+def _dedup_kill(kind, killer=3, victim=5):
+    return {'type': kind, 'fields': {'killer_slot': killer, 'victim_slot': victim}}
+
+
+@pytest.mark.parametrize('kind', ['CONNECT', 'DISCONNECT'])
+@pytest.mark.parametrize('slot', [3, 5, '3', '5'])
+def test_dedup_does_not_cross_slot_lifecycle(client, kind, slot):
+    events = [_dedup_kill('LIVE_KILL'), {'type': kind, 'fields': {'slot': slot}},
+              _dedup_kill('KILL')]
+    response = _post(client, events)
+    assert response.status_code == 200
+    assert response.json()['accepted'] == 3
+    assert [e['type'] for e in client.get('/api/live/feed').json()['events']] == [
+        'LIVE_KILL', kind, 'KILL',
+    ]
+
+
+def test_dedup_lifecycle_preserves_other_pairs(client):
+    response = _post(client, [_dedup_kill('LIVE_KILL'), _dedup_kill('LIVE_KILL', 7, 8),
+                             {'type': 'DISCONNECT', 'fields': {'slot': 3}},
+                             _dedup_kill('KILL'), _dedup_kill('KILL', 7, 8)])
+    assert response.json()['accepted'] == 4
+    assert [e['killer_slot'] for e in client.get('/api/live/feed').json()['events']
+            if e['type'] == 'KILL'] == [3]
+
+
+@pytest.mark.parametrize('boundary', ['MAP', 'LIVE_MAP', 'ROUND_START', 'INIT_GAME'])
+def test_dedup_does_not_cross_accepted_map_or_round_reset(client, boundary):
+    _post(client, [{'type': 'MAP', 'fields': {'map_name': 'supply'}}])
+    response = _post(client, [_dedup_kill('LIVE_KILL'),
+                             {'type': boundary, 'fields': {'map_name': 'radar'}},
+                             _dedup_kill('KILL')])
+    assert response.status_code == 200 and response.json()['accepted'] == 3
+
+
+@pytest.mark.parametrize('confirmation', ['same', 'rejected_flipback', 'empty'])
+def test_dedup_survives_map_confirmation_or_rejected_change(client, confirmation):
+    _post(client, [{'type': 'MAP', 'fields': {'map_name': 'radar'}},
+                   {'type': 'MAP', 'fields': {'map_name': 'supply'}}])
+    name = {'same': 'supply', 'rejected_flipback': 'radar', 'empty': ''}[confirmation]
+    response = _post(client, [_dedup_kill('LIVE_KILL'),
+                             {'type': 'LIVE_MAP', 'fields': {'map_name': name}},
+                             _dedup_kill('KILL')])
+    assert response.status_code == 200 and response.json()['accepted'] == 2
+
+
+@pytest.mark.parametrize('action', ['lifecycle', 'map', 'round'])
+def test_rejected_batch_retains_unconsumed_dedup_state(client, action):
+    _post(client, [{'type': 'MAP', 'fields': {'map_name': 'supply'}}, _dedup_kill('LIVE_KILL')])
+    event = {'lifecycle': {'type': 'DISCONNECT', 'fields': {'slot': 3}},
+             'map': {'type': 'MAP', 'fields': {'map_name': 'radar'}},
+             'round': {'type': 'ROUND_START'}}[action]
+    response = _post(client, [event, {'type': 'MAP', 'fields': {'map_name': ['invalid']}}])
+    assert response.status_code == 422
+    assert _post(client, [_dedup_kill('KILL')]).json()['accepted'] == 0
+
+
+def test_dedup_reconnected_player_kill_remains_in_actual_feed(client):
+    events = [
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'first occupant'}},
+        _dedup_kill('LIVE_KILL'),
+        {'type': 'DISCONNECT', 'fields': {'slot': 3}},
+        {'type': 'CONNECT', 'fields': {'slot': 3}},
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'next occupant'}},
+        {**_dedup_kill('KILL'), 'fields': {'killer_slot': 3, 'victim_slot': 5,
+                                        'killer': 'next occupant', 'victim': 'victim'}},
+    ]
+    response = _post(client, events)
+    assert response.status_code == 200 and response.json()['accepted'] == 6
+    kills = [e for e in client.get('/api/live/feed').json()['events'] if e['type'] in {'KILL', 'LIVE_KILL'}]
+    assert [(e['type'], e['killer']) for e in kills] == [
+        ('LIVE_KILL', 'first occupant'), ('KILL', 'next occupant'),
+    ]
+    print('ASGI lifecycle proof: accepted=6, feed kills=2, distinct occupant names retained')
+
+
+def test_dedup_keeps_same_context_retransmission_suppression(client):
+    response = _post(client, [_dedup_kill('LIVE_KILL'), _dedup_kill('KILL'), _dedup_kill('KILL')])
+    assert response.status_code == 200 and response.json()['accepted'] == 1
+
+
+def test_dedup_init_game_same_map_starts_new_context(client):
+    _post(client, [{'type': 'MAP', 'fields': {'map_name': 'supply'}}, {'type': 'ROUND_START'}])
+    response = _post(client, [_dedup_kill('LIVE_KILL'), {'type': 'INIT_GAME'},
+                             {'type': 'LIVE_MAP', 'fields': {'map_name': 'supply'}}, _dedup_kill('KILL')])
+    assert response.json()['accepted'] == 4
+    assert client.get('/api/live/state').json()['current_map'] == 'supply'
+
+
+def _named_kill(**names):
+    return {'type': 'KILL', 'fields': {'killer_slot': 3, 'victim_slot': 5, **names}}
+
+
+@pytest.mark.parametrize('separate_batches', [False, True])
+def test_named_twin_survives_same_and_later_http_batch(client, separate_batches):
+    first = _dedup_kill('LIVE_KILL')
+    named = _named_kill(killer='source killer', victim='source victim')
+    if separate_batches:
+        assert _post(client, [first]).json()['accepted'] == 1
+        initial = client.get('/api/live/feed').json()
+        assert initial['events'][0]['killer'] is None
+        assert _post(client, [named]).json()['accepted'] == 1
+        assert client.get(f"/api/live/feed?since={initial['last_seq']}").json()['events'][0]['duplicate_of'] == 1
+    else:
+        assert _post(client, [first, named]).json()['accepted'] == 2
+    events = client.get('/api/live/feed').json()['events']
+    assert events[0]['killer'] is None  # Original published row was not rewritten.
+    assert events[1]['duplicate_of'] == events[0]['seq']
+    assert (events[1]['killer'], events[1]['victim']) == ('source killer', 'source victim')
+    assert _post(client, [named, named]).json()['accepted'] == 0
+    state = client.get('/api/live/state').json()
+    assert len(state['recent_kills']) == 1
+    assert (state['recent_kills'][0]['killer'], state['recent_kills'][0]['victim']) == ('source killer', 'source victim')
+    assert '_seq' not in state['recent_kills'][0]
+
+
+def test_partial_names_keep_one_original_identity_and_survive_roster_replacement(client):
+    _post(client, [_dedup_kill('LIVE_KILL'), _named_kill(killer='source killer')])
+    _post(client, [_named_kill(victim='source victim')])
+    events = client.get('/api/live/feed').json()['events']
+    assert [e.get('duplicate_of') for e in events] == [None, 1, 1]
+    _post(client, [{'type': 'CONNECT', 'fields': {'slot': 3}},
+                   {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'replacement'}}])
+    kill = client.get('/api/live/state').json()['recent_kills'][0]
+    assert kill['killer'] == 'source killer'
+    assert client.get('/api/live/feed').json()['events'][:3] == events
+
+
+@pytest.mark.parametrize('kind', ['KILL', 'LIVE_KILL', 'SAY'])
+def test_duplicate_link_is_server_owned_for_every_record(client, kind):
+    assert _post(client, [{'type': kind, 'fields': {'duplicate_of': 999}}]).json()['accepted'] == 1
+    assert 'duplicate_of' not in client.get('/api/live/feed').json()['events'][0]
+
+
+def test_invalid_suffix_rolls_back_name_enrichment_and_its_retry_cache(client):
+    _post(client, [_dedup_kill('LIVE_KILL')])
+    before = deepcopy((live._state.__dict__, live._recent_livex_kills, list(live._events)))  # noqa: SLF001
+    named = _named_kill(killer='source killer', victim='source victim')
+    invalid = {'type': 'MAP', 'fields': {'map_name': ['invalid']}}
+    assert _post(client, [named, invalid]).status_code == 422
+    assert (live._state.__dict__, live._recent_livex_kills, list(live._events)) == before  # noqa: SLF001
+    assert _post(client, [named]).json()['accepted'] == 1
+    assert _post(client, [named]).json()['accepted'] == 0
+
+
+def test_known_conflicting_identity_is_not_overwritten_or_silently_lost(client):
+    first = _dedup_kill('LIVE_KILL')
+    first['fields']['killer'] = 'known original'
+    _post(client, [first, _named_kill(killer='different source', victim='source victim')])
+    events = client.get('/api/live/feed').json()['events']
+    assert len(events) == 2 and 'duplicate_of' not in events[1]
+    assert events[0]['killer'] == 'known original'
+    assert events[1]['killer'] == 'different source'
+
+
+@pytest.mark.parametrize('boundary', [
+    {'type': 'CONNECT', 'fields': {'slot': 3}},
+    {'type': 'DISCONNECT', 'fields': {'slot': 5}},
+    {'type': 'ROUND_START'}, {'type': 'INIT_GAME'},
+    {'type': 'MAP', 'fields': {'map_name': 'radar'}},
+])
+def test_name_enrichment_cannot_link_across_identity_boundary(client, boundary):
+    _post(client, [_dedup_kill('LIVE_KILL'), boundary,
+                   _named_kill(killer='new context', victim='victim')])
+    events = client.get('/api/live/feed').json()['events']
+    assert events[-1]['type'] == 'KILL' and 'duplicate_of' not in events[-1]
+
+
+@pytest.mark.parametrize('name,accepted', [(' supply ', True), ('radar', False), ('goldrush', True), ('', False), ('   ', False), (None, False)])
+def test_feed_marks_reducer_accepted_map_without_trusting_producer(client, monkeypatch, name, accepted):
+    monkeypatch.setattr(live.time, 'time', lambda: 1000.0)
+    _post(client, [{'type': 'MAP', 'fields': {'map_name': 'radar'}},
+                   {'type': 'MAP', 'fields': {'map_name': 'supply'}}])
+    response = _post(client, [_named_kill(killer='source killer', victim='source victim'),
+                             {'type': 'LIVE_MAP', 'fields': {'map_name': name, 'map_accepted': not accepted, 'map_changed': name != 'goldrush'}},
+                             _dedup_kill('LIVE_KILL')])
+    assert response.status_code == 200
+    events = client.get('/api/live/feed').json()['events']
+    assert [e['map_accepted'] for e in events[:2]] == [True, True]
+    assert [e['map_changed'] for e in events[:2]] == [True, True]
+    assert events[3]['map_accepted'] is accepted
+    assert events[3]['map_changed'] is (name == 'goldrush')
+    expected = name.strip() if accepted else 'supply'
+    assert client.get('/api/live/state').json()['current_map'] == expected
+    assert 'map_accepted' not in events[2] and 'map_accepted' not in events[4]
+
+
+@pytest.mark.parametrize('kind', sorted(live._ALLOWED_TYPES - {'MAP', 'LIVE_MAP'}))  # noqa: SLF001
+def test_map_acceptance_marker_cannot_be_forged_on_other_events(client, kind):
+    response = _post(client, [{'type': kind, 'fields': {'map_accepted': True, 'map_changed': True}}])
+    assert response.status_code == 200
+    events = client.get('/api/live/feed', params={'types': kind}).json()['events']
+    assert len(events) == 1
+    assert 'map_accepted' not in events[0]
+    assert 'map_changed' not in events[0]
+
+
+def test_invalid_suffix_does_not_publish_accepted_map_marker_or_advance_state(client):
+    _post(client, [{'type': 'MAP', 'fields': {'map_name': 'radar'}}])
+    before = deepcopy((live._state.__dict__, list(live._events), live._seq))  # noqa: SLF001
+    change = {'type': 'MAP', 'fields': {'map_name': 'supply', 'map_accepted': False, 'map_changed': False}}
+    invalid = {'type': 'LIVE_MAP', 'fields': {'map_name': ['invalid'], 'map_accepted': True}}
+    assert _post(client, [change, invalid]).status_code == 422
+    assert (live._state.__dict__, list(live._events), live._seq) == before  # noqa: SLF001
+    assert _post(client, [change]).status_code == 200
+    last = client.get('/api/live/feed').json()['events'][-1]
+    assert last['map_name'] == 'supply' and last['map_accepted'] is True
+    assert last['map_changed'] is True
+
+
+@pytest.mark.parametrize('supplied', [{}, {'name': ''}, {'name': '  '}, {'name': None}])
+def test_team_change_freezes_missing_names_and_respects_connection_boundaries(client, supplied):
+    assert _post(client, [
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, 'name': 'Alice'}},
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 2, **supplied}},
+    ]).status_code == 200
+    before = client.get('/api/live/feed').json()['events']
+    assert before[-1]['name'] == 'Alice'
+    assert _post(client, [
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 2, 'name': 'Renamed'}},
+        {'type': 'CONNECT', 'fields': {'slot': 3}},
+        {'type': 'TEAM_CHANGE', 'fields': {'slot': 3, 'team': 1, **supplied}},
+    ]).status_code == 200
+    after = client.get('/api/live/feed').json()['events']
+    assert after[:len(before)] == before
+    assert after[-3]['name'] == 'Renamed'
+    assert after[-1]['name'] is None
+
+
+def test_event_name_freeze_does_not_revive_roster_after_idle_reset(client, monkeypatch):
+    from types import SimpleNamespace
+
+    from website.backend.services.live_state import _IDLE_RESET_SECONDS
+
+    now = [1000.0]
+    clock = SimpleNamespace(time=lambda: now[0])
+    monkeypatch.setattr(live, 'time', clock)
+    monkeypatch.setattr(importlib.import_module('website.backend.services.live_state'), 'time', clock)
+    assert _post(client, [{'type': 'TEAM_CHANGE', 'fields': {
+        'slot': 3, 'team': 1, 'name': 'Old session'}}]).status_code == 200
+    now[0] += _IDLE_RESET_SECONDS + 1
+    assert _post(client, [{'type': 'TEAM_CHANGE', 'fields': {
+        'slot': 3, 'team': 2, 'name': ''}}]).status_code == 200
+    events = client.get('/api/live/feed').json()['events']
+    assert events[-1]['name'] is None
+    assert client.get('/api/live/state').json()['roster']['allies'][0]['name'] == 'slot 3'
