@@ -85,10 +85,7 @@ export default function Story({ params }: { params?: Record<string, string> }) {
   }, [params]);
 
   const [gamingSessionId, setGamingSessionId] = useState<number | null>(initialGsid);
-  // Single ISO date — used both as the legacy resolution input (when no
-  // gsid is known yet) and as the one param useStoryComposite still needs
-  // (/skill/composite is a different router, outside this program's
-  // gsid conversion).
+  // Single ISO date is the legacy resolution input until a gsid is known.
   const [sessionDate, setSessionDate] = useState<string | null>(
     initialGsid == null ? (params?.date ?? null) : null,
   );
@@ -151,8 +148,7 @@ export default function Story({ params }: { params?: Record<string, string> }) {
   const { data: synergyData, isLoading: synergyLoading } = useStorySynergy(scope);
   const { data: pwcData, isLoading: pwcLoading } = useStoryWinContribution(scope);
   const { data: boxData, isLoading: boxLoading } = useStoryBoxScore(scope);
-  // /skill/composite isn't gsid-aware — needs the resolved single date.
-  const { data: compositeData } = useStoryComposite(sessionDate);
+  const { data: compositeData } = useStoryComposite(sessionDate, gamingSessionId);
 
   const entries = useMemo(() => kis?.entries ?? [], [kis]);
   const totalKills = kis?.total_kills ?? 0;
