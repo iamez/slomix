@@ -984,6 +984,51 @@ describe('opening a different round', () => {
   });
 
 
+  it.each(['slider', 'step', 'pov', 'retry'] as const)(
+    'keeps normal controls on the rendered POV after failure: %s', async (action) => {
+      const roundId = 11910 + ['slider', 'step', 'pov', 'retry'].indexOf(action);
+      let fail = false;
+      const calls: { t: number; pov: string | null }[] = [];
+      vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'http://fixture');
+        const t = Number(url.searchParams.get('t'));
+        const pov = url.searchParams.get('pov') || 'world';
+        calls.push({ t, pov });
+        if (fail) return Promise.reject(new Error('HTTP 429'));
+        return Promise.resolve({ ok: true, json: async () => ({
+          ...geometrySnapshot(roundId, ''), map_name: null, t_ms: t,
+        }) } as Response);
+      }));
+      await loadSpiderWebView({ roundId: String(roundId) });
+      const host = document.getElementById('spider-web-container')!;
+      const slider = host.querySelector('input[type="range"]') as HTMLInputElement;
+      const button = (label: string) => [...host.querySelectorAll('button')]
+        .find(b => b.textContent === label)!;
+      fail = true;
+      slider.value = '2000';
+      slider.dispatchEvent(new Event('change'));
+      await vi.waitFor(() => expect(host.textContent).toContain('Posodobitev ni uspela'));
+      (host.querySelector('[data-pov="team:AXIS"]') as HTMLButtonElement).click();
+      await vi.waitFor(() => expect(host.textContent).toContain('Posodobitev ni uspela'));
+      expect(calls.at(-1)).toEqual({ t: 0, pov: 'team:AXIS' });
+      expect(slider.value).toBe('0');
+      expect(host.querySelector('[data-pov="world"]')?.className).toContain('bg-slate-700');
+      fail = false;
+      if (action === 'slider') {
+        slider.value = '400';
+        slider.dispatchEvent(new Event('change'));
+      } else if (action === 'step') button('+200 ms').click();
+      else if (action === 'pov') {
+        (host.querySelector('[data-pov="team:AXIS"]') as HTMLButtonElement).click();
+      } else button('Poskusi znova').click();
+      await vi.waitFor(() => expect(host.querySelector('[role="status"]')?.textContent).toBe(''));
+      expect(calls.at(-1)).toEqual({
+        t: action === 'slider' ? 400 : action === 'step' ? 200 : 0,
+        pov: action === 'slider' || action === 'step' ? 'world' : 'team:AXIS',
+      });
+    },
+  );
+
   it('hides the old POV while loading and ignores a superseded failure', async () => {
     let rejectOld: ((reason: Error) => void) | undefined;
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {

@@ -1036,15 +1036,19 @@ export async function loadSpiderWebView(params = {}) {
     // successfully rendered snapshot. A failed request must not relabel it.
     let requestedMs = state.tMs;
     let requestedPov = state.pov;
+    let failedTarget = null;
     const requestStatus = _el('span', 'text-xs text-amber-400');
     requestStatus.setAttribute('role', 'status');
     const retry = _el('button', 'px-2 py-1 text-xs rounded bg-slate-800', 'Poskusi znova');
     retry.hidden = true;
-    retry.addEventListener('click', () => goTo(requestedMs, requestedPov));
+    retry.addEventListener('click', () => {
+        if (failedTarget) goTo(failedTarget.tMs, failedTarget.pov);
+    });
     const goTo = async (nextMs, nextPov = requestedPov) => {
         const clamped = Math.max(0, Math.min(Number(slider.max), Math.round(nextMs)));
         requestedMs = clamped;
         requestedPov = nextPov;
+        failedTarget = null;
         slider.value = String(clamped);
         requestStatus.textContent = `Nalagam t = ${clamped} ms · ${nextPov}`;
         retry.hidden = true;
@@ -1056,6 +1060,9 @@ export async function loadSpiderWebView(params = {}) {
             fresh = await loadMoment(roundId, clamped, nextPov);
         } catch {
             if (mine !== loadId) return;
+            failedTarget = { tMs: clamped, pov: nextPov };
+            requestedMs = state.tMs;
+            requestedPov = state.pov;
             slider.value = String(state.tMs);
             canvas.hidden = false;
             requestStatus.textContent = 'Posodobitev ni uspela. Prikazan je zadnji uspešno naloženi trenutek in pogled.';
