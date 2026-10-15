@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import discord
 
@@ -444,18 +444,34 @@ class _EndstatsPipelineMixin:
         """
         if not (round_date and round_time and map_name and round_number):
             return None, "missing_endstats_identity"
-        target_secs = self._hhmmss_to_seconds(round_time)
-        if target_secs is None:
+        def timestamp(date, time):
+            # Match the local-naive timestamp convention of stats filenames.
+            if not isinstance(date, str) or not isinstance(time, str):
+                raise ValueError('Missing filename timestamp')
+            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date) or not re.fullmatch(r'\d{6}', time):
+                raise ValueError('Invalid filename timestamp')
+            return datetime.strptime(f'{date} {time}', '%Y-%m-%d %H%M%S')  # noqa: DTZ007 -- filename timestamps are local-naive
+
+        try:
+            target = timestamp(round_date, round_time)
+            earliest = (target - timedelta(seconds=30)).strftime('%Y-%m-%d')
+            latest = (target + timedelta(seconds=30)).strftime('%Y-%m-%d')
+        except (ValueError, OverflowError):
             return None, "invalid_endstats_time"
+        # Include both calendar dates when the tight window crosses midnight;
+        # uniqueness is checked over the ENTIRE window, not first per date.
         rows = await self.db_adapter.fetch_all(
-            "SELECT id, round_time FROM rounds "
-            "WHERE round_date = ? AND map_name = ? AND round_number = ?",
-            (round_date, map_name, round_number),
+            "SELECT id, round_date, round_time FROM rounds "
+            "WHERE round_date BETWEEN ? AND ? AND map_name = ? AND round_number = ?",
+            (earliest, latest, map_name, round_number),
         )
         candidates = set()
         for row in rows:
-            row_secs = self._hhmmss_to_seconds(row[1])
-            if row_secs is not None and abs(row_secs - target_secs) <= 30:
+            try:
+                candidate = timestamp(row[1], row[2])
+            except ValueError:
+                continue
+            if abs((candidate - target).total_seconds()) <= 30:
                 candidates.add(row[0])
         if len(candidates) == 1:
             return candidates.pop(), "narrow_time_match"
