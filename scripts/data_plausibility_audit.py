@@ -1280,7 +1280,7 @@ def render_markdown(results: list[RuleResult], generated_at: str,
         )
     lines.append("")
 
-    lines.append("## Rules (by violation count)")
+    lines.append("## Rules (by finding count)")
     lines.append("")
     lines.append("| Rule | Table | Severity | Total | Backfill | Pre-arming | Live | Note |")
     lines.append("|---|---|---|---:|---:|---:|---:|---|")
@@ -1299,15 +1299,17 @@ def render_markdown(results: list[RuleResult], generated_at: str,
         lines.append("")
         lines.append(r.rule.note)
         lines.append("")
+        finding_label = "candidates" if r.rule.finding_kind == "nomination" else "violations"
         if r.rule.armed_from:
             lines.append(
-                f"- Total violations: **{r.total}** (backfill: {r.backfill}, "
+                f"- Total {finding_label}: **{r.total}** (backfill: {r.backfill}, "
                 f"before this rule was armed on {r.rule.armed_from}: {r.pre_arming}, "
                 f"live: {r.live})")
         else:
-            lines.append(f"- Total violations: **{r.total}** (backfill: {r.backfill}, live: {r.live})")
+            lines.append(f"- Total {finding_label}: **{r.total}** (backfill: {r.backfill}, live: {r.live})")
         if r.top_rows:
-            lines.append("- Top offending rows:")
+            lines.append("- Top candidate rows:" if r.rule.finding_kind == "nomination"
+                         else "- Top offending rows:")
             for row in r.top_rows:
                 pairs = ", ".join(f"{k}={v}" for k, v in row.items())
                 lines.append(f"  - {pairs}")
@@ -1317,19 +1319,28 @@ def render_markdown(results: list[RuleResult], generated_at: str,
         lines.extend(render_trend_markdown(trends))
 
     live_rules = [r for r in results if r.live > 0]
-    lines.append("## LIVE violations (capture bugs — headline section)")
+    lines.append("## LIVE findings")
     lines.append("")
+    lines.append(
+        "LIVE denotes the rule's date scope, not new findings today. "
+        "The same finding can recur in daily reports."
+    )
     if not live_rules:
-        lines.append("None. Every violation found traces to pre-2026 backfill rows only.")
-    else:
-        lines.append(
-            "Every rule below fired on rows captured by the CURRENT live pipeline "
-            f"(round_date >= {PROVENANCE_CUTOFF}), not old backfill noise. These are active bugs, not history."
-        )
-        lines.append("")
+        lines.append("No findings in the live scope.")
+    for kind, heading, label in (
+        ("invariant", "Invariant violations", "violations"),
+        ("nomination", "Candidates for review", "candidates"),
+    ):
+        group = [r for r in live_rules if r.rule.finding_kind == kind]
+        if not group:
+            continue
+        lines.extend(["", f"### {heading}", ""])
+        if kind == "nomination":
+            lines.append("Candidates require source verification; they are not confirmed capture bugs.")
+            lines.append("")
         lines.extend(
-            f"- `{r.rule.name}` ({r.rule.severity}): **{r.live}** live violations — {r.rule.note}"
-            for r in sorted(live_rules, key=lambda r: r.live, reverse=True)
+            f"- `{r.rule.name}` ({r.rule.severity}): **{r.live}** live {label} — {r.rule.note}"
+            for r in sorted(group, key=lambda r: r.live, reverse=True)
         )
     lines.append("")
     return "\n".join(lines)

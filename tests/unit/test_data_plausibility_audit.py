@@ -640,3 +640,26 @@ def test_nomination_classification_is_validated_and_default_is_invariant():
         validate_rules([replace(RULES[0], finding_kind="muted")])
     nominations = [r.name for r in RULES if r.finding_kind == "nomination"]
     assert nominations == ["rounds_r2_whole_lobby_outscored_r1"]
+
+
+@pytest.mark.parametrize('with_invariant', [False, True])
+def test_markdown_keeps_nominations_out_of_confirmed_violations(with_invariant):
+    from scripts.data_plausibility_audit import RuleResult, render_markdown
+
+    nomination = next(r for r in RULES if r.finding_kind == 'nomination')
+    results = [RuleResult(nomination, 2, 1, 1, [{'id': 42}])]
+    if with_invariant:
+        results.append(RuleResult(RULES[0], 3, 1, 2, []))
+    report = render_markdown(results, 'fixture')
+    assert 'These are active bugs' not in report
+    assert '## Rules (by finding count)' in report
+    assert 'Total candidates: **2**' in report
+    assert 'Top candidate rows:' in report
+    candidates = report.split('### Candidates for review', 1)[1]
+    assert nomination.name in candidates
+    assert '**1** live candidates' in candidates
+    if with_invariant:
+        violations = report.split('### Invariant violations', 1)[1].split('### Candidates for review', 1)[0]
+        assert RULES[0].name in violations
+        assert nomination.name not in violations
+        assert '**2** live violations' in violations
