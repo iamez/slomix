@@ -192,6 +192,8 @@ class Rule:
     # predicate instead, which hides the backlog entirely rather than parking
     # it in a column. Arming is the better half of that idea.)
     armed_from: str = ""
+    # Classification changes wording only; nominations still count and alert.
+    finding_kind: str = "invariant"
 
 
 # Base gates. Applied to every rule on that table, in addition to the rule's
@@ -645,6 +647,7 @@ RULES: list[Rule] = [
     ),
     Rule(
         name="rounds_r2_whole_lobby_outscored_r1",
+        finding_kind="nomination",
         table="rounds",
         tier="T1",
         severity="medium",
@@ -664,8 +667,8 @@ RULES: list[Rule] = [
             "  AND (p2.kills < p1.kills OR p2.damage_given < p1.damage_given))"
         ),
         note=(
-            "Every shared player (4+) beat their own R1 on BOTH kills and "
-            "damage in R2 — the signature of a raw cumulative R2 row that "
+            "Shared-player comparisons (4+ joined rows) have at least as many kills and "
+            "damage in R2 as R1 — the signature of a raw cumulative R2 row that "
             "slipped past pairing. A nomination, not a verdict: "
             "scripts/repair_inverted_r2_cumulative_rounds.py makes the final "
             "call against the original stats file (a genuine whole-lobby R2 "
@@ -1056,6 +1059,8 @@ def validate_rules(rules: list[Rule]) -> None:
     if dupes:
         raise ValueError(f"Duplicate rule names: {sorted(dupes)}")
     for r in rules:
+        if r.finding_kind not in {"invariant", "nomination"}:
+            raise ValueError(f"{r.name}: invalid finding_kind {r.finding_kind!r}")
         if r.tier not in VALID_TIERS:
             raise ValueError(f"{r.name}: invalid tier {r.tier!r}")
         if r.severity not in VALID_SEVERITIES:
@@ -1185,6 +1190,7 @@ class RuleResult:
             "table": self.rule.table,
             "tier": self.rule.tier,
             "severity": self.rule.severity,
+            "finding_kind": self.rule.finding_kind,
             "note": self.rule.note,
             "total": self.total,
             "backfill": self.backfill,

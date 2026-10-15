@@ -82,3 +82,27 @@ def test_the_thread_runner_hands_the_sentinel_both_classes():
     src = inspect.getsource(_MonitorTasksMixin._run_audit_in_thread)  # noqa: SLF001
     assert "run_trend_audit" in src and "TREND_RULES" in src
     assert '"trends"' in src and '"rules"' in src
+
+
+def test_actual_nomination_payload_stays_visible_without_claiming_corruption():
+    from scripts.data_plausibility_audit import RULES, RuleResult, unacknowledged_live_count
+
+    rule = next(r for r in RULES if r.name == "rounds_r2_whole_lobby_outscored_r1")
+    result = RuleResult(rule, total=1, backfill=0, live=1, top_rows=[])
+    payload = {"rules": [result.to_dict()], "trends": []}
+    assert payload["rules"][0]["finding_kind"] == "nomination"
+    assert unacknowledged_live_count([result]) == 1
+    body = _MonitorTasksMixin._summarize_audit_payload(payload)  # noqa: SLF001
+    assert "kandidati za preverjanje, ne potrjene napake" in body
+    assert "kršitve pravil" not in body
+    assert rule.name in body and ": 1" in body
+    assert "isti zadetek" in body
+    assert _MonitorTasksMixin._summarize_audit_payload(payload) == body  # noqa: SLF001
+
+
+def test_mixed_nomination_and_legacy_invariant_both_remain_visible():
+    payload = {"rules": [{"name": "candidate", "live": 1, "finding_kind": "nomination"},
+                         {"name": "broken", "live": 2}], "trends": []}
+    body = _MonitorTasksMixin._summarize_audit_payload(payload)  # noqa: SLF001
+    assert "kršitve pravil" in body and "kandidati za preverjanje" in body
+    assert "`candidate`: 1" in body and "`broken`: 2" in body

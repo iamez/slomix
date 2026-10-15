@@ -630,3 +630,13 @@ def test_an_armed_rule_carries_history_and_a_quiet_present(db_conn, rule):
     assert live == 0, (
         f"{rule.name}: {live} row(s) on or after {rule.armed_from}, which is "
         f"exactly what this rule is armed to catch")
+
+
+def test_nomination_classification_is_validated_and_default_is_invariant():
+    from dataclasses import replace
+
+    assert Rule("default", "rounds", "T1", "medium", "TRUE", "test").finding_kind == "invariant"
+    with pytest.raises(ValueError, match="invalid finding_kind"):
+        validate_rules([replace(RULES[0], finding_kind="muted")])
+    nominations = [r.name for r in RULES if r.finding_kind == "nomination"]
+    assert nominations == ["rounds_r2_whole_lobby_outscored_r1"]

@@ -1101,7 +1101,8 @@ class _MonitorTasksMixin:
         # written down in the rule and the repair is already tracked. Alerting
         # on it daily would train the reader to ignore this message, and the
         # next real finding would arrive into that habit.
-        live = [(r.get("name", "?"), int(r.get("live", 0) or 0))
+        live = [(r.get("name", "?"), int(r.get("live", 0) or 0),
+                 r.get("finding_kind", "invariant"))
                 for r in rules
                 if isinstance(r, dict) and (r.get("live") or 0) > 0
                 and not r.get("acknowledged")]
@@ -1127,9 +1128,17 @@ class _MonitorTasksMixin:
 
         parts: list[str] = []
         if live:
-            lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])
-            more = f"\n… in še {len(live) - 8} pravil" if len(live) > 8 else ""
-            parts.append(f"{len(live)} pravil se je sprožilo na ŽIVIH vrsticah:\n{lines}{more}")
+            for kind, label in (("invariant", "kršitve pravil"),
+                                ("nomination", "kandidati za preverjanje, ne potrjene napake")):
+                findings = [(name, n) for name, n, finding_kind in live
+                            if (finding_kind == "nomination") == (kind == "nomination")]
+                if not findings:
+                    continue
+                lines = "\n".join(f"• `{name}`: {n}" for name, n in findings[:8])
+                more = f"\n… in še {len(findings) - 8} pravil" if len(findings) > 8 else ""
+                parts.append(f"ŽIVE vrstice — {label}:\n{lines}{more}")
+            parts.append("ŽIVE označuje časovni obseg pravila, ne novih dogodkov danes; "
+                         "isti zadetek se lahko ponovi pri dnevnem pregledu.")
         if shifted:
             lines = "\n".join(f"• `{name}`: {months}" for name, months in shifted[:8])
             more = f"\n… in še {len(shifted) - 8} metrik" if len(shifted) > 8 else ""
@@ -1184,7 +1193,7 @@ class _MonitorTasksMixin:
             return
         logger.error("[DATA-AUDIT] %s", body.replace("\n", " | "))
         try:
-            await self.alert_admins("Data-plausibility audit: žive kršitve", body)
+            await self.alert_admins("Data-plausibility audit: ugotovitve za pregled", body)
         except Exception:
             logger.error("[DATA-AUDIT] alert failed", exc_info=True)
 
