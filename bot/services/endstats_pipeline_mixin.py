@@ -17,7 +17,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import discord
 
@@ -26,6 +26,8 @@ from shared.endstats_retry import (
     alias_endstats_marker,
     bound_endstats_publish_failures,
     claim_endstats_marker,
+    clear_endstats_poll,
+    defer_endstats_poll,
     endstats_filename_gate_query,
     endstats_retry_enabled,
     release_endstats_marker,
@@ -436,42 +438,60 @@ class _EndstatsPipelineMixin:
         stats_filename: str,
         round_meta: dict,
     ) -> tuple:
+        """Bind only one round within the existing 30-second filename window.
+
+        Missing or ambiguous candidates remain pending. A broad fuzzy match
+        can bind a previous play while the actual stats import is still pending.
+        The shared metadata linker remains unchanged for its other callers.
         """
-        Resolve round_id for an endstats file.
+        if not (round_date and round_time and map_name and round_number):
+            return None, "missing_endstats_identity"
+        def timestamp(date, time, *, stored=False):
+            # Capture timestamps lose leading zeros when stored numerically:
+            # 4918 names 004918, not strptime's variable-width 04:09:18.
+            # Match capture_candidates/stopwatch_pairing, not permissive parsing.
+            if not isinstance(date, str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', date):
+                raise ValueError('Invalid filename date')
+            if stored:
+                if type(time) not in (str, int):
+                    raise ValueError('Invalid stored timestamp')
+                raw_time = str(time).strip()
+                if re.fullmatch(r'[0-9]{1,6}', raw_time):
+                    raw_time = raw_time.zfill(6)
+                elif re.fullmatch(r'[0-9]{2}:[0-9]{2}:[0-9]{2}', raw_time):
+                    raw_time = raw_time.replace(':', '')
+                else:
+                    raise ValueError('Invalid stored timestamp')
+            else:
+                if not isinstance(time, str) or not re.fullmatch(r'[0-9]{6}', time):
+                    raise ValueError('Invalid filename timestamp')
+                raw_time = time
+            return datetime.strptime(f'{date} {raw_time}', '%Y-%m-%d %H%M%S')  # noqa: DTZ007 -- local-naive capture timestamp
 
-        Uses narrow time window (30s) to match endstats to the correct round,
-        handling replayed maps (same map played multiple times in a session).
-        Falls back to fuzzy round_linker if narrow match fails.
-
-        Returns (round_id, resolve_method).
-        """
-        # Narrow time match: endstats timestamp is within ~2s of stats timestamp,
-        # but we use 30s window for safety. This prevents matching against a
-        # different play of the same map (which would be 5+ minutes apart).
-        if round_date and round_time and map_name and round_number:
-            target_secs = self._hhmmss_to_seconds(round_time)
-            if target_secs is not None:
-                rows = await self.db_adapter.fetch_all(
-                    "SELECT id, round_time FROM rounds "
-                    "WHERE round_date = ? AND map_name = ? AND round_number = ?",
-                    (round_date, map_name, round_number),
-                )
-                if rows:
-                    best_id = None
-                    best_diff = 31  # 30-second max window
-                    for row in rows:
-                        row_secs = self._hhmmss_to_seconds(row[1])
-                        if row_secs is not None:
-                            diff = abs(row_secs - target_secs)
-                            if diff < best_diff:
-                                best_diff = diff
-                                best_id = row[0]
-                    if best_id is not None:
-                        return best_id, "narrow_time_match"
-
-        # Fallback: fuzzy round_linker (45min window, for edge cases)
-        round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
-        return round_id, "round_linker"
+        try:
+            target = timestamp(round_date, round_time)
+            earliest = (target - timedelta(seconds=30)).strftime('%Y-%m-%d')
+            latest = (target + timedelta(seconds=30)).strftime('%Y-%m-%d')
+        except (ValueError, OverflowError):
+            return None, "invalid_endstats_time"
+        # Include both calendar dates when the tight window crosses midnight;
+        # uniqueness is checked over the ENTIRE window, not first per date.
+        rows = await self.db_adapter.fetch_all(
+            "SELECT id, round_date, round_time FROM rounds "
+            "WHERE round_date BETWEEN ? AND ? AND map_name = ? AND round_number = ?",
+            (earliest, latest, map_name, round_number),
+        )
+        candidates = set()
+        for row in rows:
+            try:
+                candidate = timestamp(row[1], row[2], stored=True)
+            except ValueError:
+                continue
+            if abs((candidate - target).total_seconds()) <= 30:
+                candidates.add(row[0])
+        if len(candidates) == 1:
+            return candidates.pop(), "narrow_time_match"
+        return None, "ambiguous_narrow_time_match" if candidates else "waiting_narrow_time_match"
 
     async def _is_endstats_round_already_processed(
         self,
@@ -1259,6 +1279,7 @@ class _EndstatsPipelineMixin:
                 logger.error(f"❌ Failed to parse endstats: {filename}")
                 return
 
+            poll_filename = filename
             # Select richest endstats when split files exist
             endstats_data, local_path, filename = self._select_richest_endstats(
                 endstats_data, local_path, filename, parse_endstats_file, logger
@@ -1292,26 +1313,19 @@ class _EndstatsPipelineMixin:
             )
 
             if not round_id:
-                # Track retry attempts to prevent infinite loop
-                attempt = self.endstats_retry_counts.get(filename, 0) + 1
+                # No identity is not a processed file. Keep it discoverable by
+                # polling after delayed stats import, including beyond the retry
+                # budget. Bound the counter and emit the budget warning once.
+                defer_endstats_poll(self, poll_filename, filename)
+                previous = self.endstats_retry_counts.get(filename, 0)
+                attempt = min(previous + 1, self.endstats_retry_max_attempts + 1)
                 self.endstats_retry_counts[filename] = attempt
-
-                if attempt > self.endstats_retry_max_attempts:
+                if previous == self.endstats_retry_max_attempts:
                     logger.error(
-                        f"❌ Endstats polling retry limit reached ({self.endstats_retry_max_attempts}) "
-                        f"for {filename} — marking as failed"
+                        "Endstats binding still pending after %s polls: %s; "
+                        "keeping file eligible for later stats import",
+                        self.endstats_retry_max_attempts, filename,
                     )
-                    try:
-                        await self.db_adapter.execute(
-                            "INSERT INTO processed_endstats_files (filename, success, error_message) "
-                            "VALUES ($1, FALSE, $2) ON CONFLICT (filename) DO NOTHING",
-                            (filename, f"round_id_unresolved_after_{self.endstats_retry_max_attempts}_attempts"),
-                        )
-                    except Exception as mark_err:
-                        logger.debug(f"Failed to mark endstats as failed: {mark_err}")
-                    self.endstats_retry_counts.pop(filename, None)
-                    # Keep in processed set so it won't be retried
-                    return
 
                 self._log_endstats_transition(
                     logger,
@@ -1325,6 +1339,7 @@ class _EndstatsPipelineMixin:
                 release_endstats_marker(self, marker_claim, legacy_filename=filename)
                 return
 
+            clear_endstats_poll(self, poll_filename, filename)
             self._log_endstats_transition(
                 logger,
                 source,
