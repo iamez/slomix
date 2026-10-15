@@ -18,7 +18,7 @@ import discord
 
 from bot.core.utils import validate_stats_filename
 from bot.logging_config import get_logger
-from shared.endstats_retry import endstats_filename_gate_query
+from shared.endstats_retry import clear_endstats_poll, endstats_filename_gate_query, endstats_poll_due
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -120,6 +120,7 @@ class _WebhookHandlerMixin:
             cutoff_time = self.bot_startup_time - timedelta(hours=lookback_hours)
 
             if file_datetime < cutoff_time:
+                clear_endstats_poll(self, filename)
                 logger.debug(
                     f"⏭️ Endstats {filename} older than lookback window "
                     f"({lookback_hours}h before startup) - skipping"
@@ -131,9 +132,13 @@ class _WebhookHandlerMixin:
         if filename in self.processed_endstats_files:
             return False
 
+        if not endstats_poll_due(self, filename):
+            return False
+
         check_query = endstats_filename_gate_query()
         result = await self.db_adapter.fetch_one(check_query, (filename,))
         if result:
+            clear_endstats_poll(self, filename)
             self.processed_endstats_files.add(filename)
             return False
 

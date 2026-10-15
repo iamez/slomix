@@ -26,6 +26,8 @@ from shared.endstats_retry import (
     alias_endstats_marker,
     bound_endstats_publish_failures,
     claim_endstats_marker,
+    clear_endstats_poll,
+    defer_endstats_poll,
     endstats_filename_gate_query,
     endstats_retry_enabled,
     release_endstats_marker,
@@ -1277,6 +1279,7 @@ class _EndstatsPipelineMixin:
                 logger.error(f"❌ Failed to parse endstats: {filename}")
                 return
 
+            poll_filename = filename
             # Select richest endstats when split files exist
             endstats_data, local_path, filename = self._select_richest_endstats(
                 endstats_data, local_path, filename, parse_endstats_file, logger
@@ -1313,6 +1316,7 @@ class _EndstatsPipelineMixin:
                 # No identity is not a processed file. Keep it discoverable by
                 # polling after delayed stats import, including beyond the retry
                 # budget. Bound the counter and emit the budget warning once.
+                defer_endstats_poll(self, poll_filename, filename)
                 previous = self.endstats_retry_counts.get(filename, 0)
                 attempt = min(previous + 1, self.endstats_retry_max_attempts + 1)
                 self.endstats_retry_counts[filename] = attempt
@@ -1335,6 +1339,7 @@ class _EndstatsPipelineMixin:
                 release_endstats_marker(self, marker_claim, legacy_filename=filename)
                 return
 
+            clear_endstats_poll(self, poll_filename, filename)
             self._log_endstats_transition(
                 logger,
                 source,

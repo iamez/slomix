@@ -39,6 +39,7 @@ from discord.ext import tasks
 from bot.automation import SSHHandler
 from bot.core.dead_hours import DEAD_HOURS_END, is_dead_hour
 from bot.logging_config import get_logger
+from shared.endstats_retry import endstats_poll_pending
 
 logger = get_logger("bot.core")
 
@@ -266,7 +267,8 @@ class _MonitorTasksMixin:
                         logger.info(f"✅ Downloaded in {download_time:.2f}s: {local_path}")
 
                         # Track download time for grace period logic
-                        self.last_file_download_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
+                        if not (is_endstats and endstats_poll_pending(self, filename)):
+                            self.last_file_download_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                         # Wait 3 seconds for file to fully write
                         logger.debug("⏳ Waiting 3s for file to fully write...")

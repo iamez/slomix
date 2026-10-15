@@ -1,6 +1,7 @@
-"""Narrow opt-in retry gate for an explicitly failed endstats publication."""
+"""Opt-in publication retry ownership and always-on pending polling backoff."""
 
 import os
+import time
 from dataclasses import dataclass, field
 
 
@@ -86,3 +87,44 @@ def endstats_filename_gate_query() -> str:
     if endstats_retry_enabled():
         query += " AND (success IS DISTINCT FROM FALSE OR error_message IS DISTINCT FROM 'publish_failed')"
     return query
+
+
+def endstats_poll_pending(bot, filename: str) -> bool:
+    """Pending identity is not new activity, even when its cooldown expires."""
+    return filename in getattr(bot, "_endstats_poll_backoff", {})
+
+
+def endstats_poll_due(bot, filename: str) -> bool:
+    states = getattr(bot, "_endstats_poll_backoff", {})
+    now = time.monotonic()
+    # Remote files can disappear without another per-file callback. Drop stale
+    # entries after seven days without an attempt, rather than retaining them
+    # for the process lifetime. A reappearing file then gets a fresh attempt.
+    for stale in [name for name, (_, due) in states.items() if now - due > 7 * 86400]:
+        states.pop(stale, None)
+    state = states.get(filename)
+    return state is None or now >= state[1]
+
+
+def defer_endstats_poll(bot, *filenames: str) -> None:
+    """Keep initial normal polls, then 10m, 20m, 40m, 1h; no DB marker.
+
+    Restart permits another attempt. Existing startup lookback still controls
+    eligibility; these timers neither extend it nor schedule background work.
+    """
+    states = getattr(bot, "_endstats_poll_backoff", None)
+    if states is None:
+        states = {}
+        bot._endstats_poll_backoff = states  # noqa: SLF001 -- process-local polling state
+    budget = max(0, int(getattr(bot, "endstats_retry_max_attempts", 5)))
+    attempt = min(budget + 4, max((states.get(f, (0, 0))[0] for f in filenames), default=0) + 1)
+    delay = 0 if attempt <= budget else min(3600, 600 * 2 ** (attempt - budget - 1))
+    deadline = time.monotonic() + delay
+    for filename in filenames:
+        states[filename] = (attempt, deadline)
+
+
+def clear_endstats_poll(bot, *filenames: str) -> None:
+    states = getattr(bot, "_endstats_poll_backoff", {})
+    for filename in filenames:
+        states.pop(filename, None)
