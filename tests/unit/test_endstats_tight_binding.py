@@ -128,23 +128,13 @@ async def test_invalid_full_timestamp_never_queries_or_falls_back(date, time):
     ('2026-10-13', '000001', '2026-10-12', '23:59:59', 20),
     ('2026-10-12', '235959', '2026-10-13', '00:00:01', 20),
     ('2026-10-13', '090501', '2026-10-13', '90501', 20),
-    ('2026-10-13', '123405', '2026-10-13', '12345', 20),
+    ('2026-10-13', '012345', '2026-10-13', '12345', 20),
     ('2026-10-13', '123405', '2026-10-13', ' 12:34:05 ', 20),
     ('2026-10-13', '000000', '2026-10-13', '24:00:00', None),
     ('2026-10-13', '000000', '2026-10-13', '00:00:60', None),
     ('2026-10-13', '000000', '2026-10-13', 'bogus', None),
 ])
-async def test_stored_time_formats_match_canonical_importer(target_date, target_time, stored_date, stored_time, expected):
-    from datetime import datetime
-
-    from postgresql_database_manager import PostgreSQLDatabaseManager
-
-    parsed = PostgreSQLDatabaseManager._parse_round_datetime(stored_date, stored_time)
-    if expected:
-        target = datetime.strptime(f'{target_date} {target_time}', '%Y-%m-%d %H%M%S')  # noqa: DTZ007 -- fixture local-naive timestamp
-        assert abs((parsed - target).total_seconds()) <= 30
-    else:
-        assert parsed is None
+async def test_stored_time_formats_match_capture_clock(target_date, target_time, stored_date, stored_time, expected):
     bot = M()
     bot.db_adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[(20, stored_date, stored_time)]))
     result, _ = await bot._resolve_endstats_round_id(target_date, target_time, 'fixture', 1, 'unused', {})
@@ -159,4 +149,38 @@ async def test_mixed_stored_formats_do_not_resolve_ambiguity():
     ]))
     assert await bot._resolve_endstats_round_id('2026-10-13', '090501', 'fixture', 1, 'unused', {}) == (
         None, 'ambiguous_narrow_time_match',
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('stored,target', [
+    ('4918', '004918'), (4918, '004918'), ('12345', '012345'),
+    ('1', '000001'), (1, '000001'), ('12', '000012'), ('123', '000123'),
+    ('0', '000000'), (0, '000000'),
+])
+async def test_numeric_capture_time_restores_leading_zeros(stored, target):
+    bot = M()
+    bot.db_adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[(20, '2026-10-13', stored)]))
+    result = await bot._resolve_endstats_round_id('2026-10-13', target, 'fixture', 1, 'unused', {})
+    assert result == (20, 'narrow_time_match')
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('stored', ['60', '1260', '240000', '1234567', '-1', '1.0',
+                                    '1:23:45', '00:1:02', '', ' ', '+1', '１２３', '١٢٣', True, 1.0, None])
+async def test_invalid_stored_capture_clock_remains_pending(stored):
+    bot = M()
+    bot.db_adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[(20, '2026-10-13', stored)]))
+    assert await bot._resolve_endstats_round_id('2026-10-13', '000001', 'fixture', 1, 'unused', {}) == (
+        None, 'waiting_narrow_time_match',
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('stored,wrong_target', [('12345', '123405'), ('4918', '040918')])
+async def test_short_capture_clock_never_uses_variable_width_strptime(stored, wrong_target):
+    bot = M()
+    bot.db_adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[(20, '2026-10-13', stored)]))
+    assert await bot._resolve_endstats_round_id('2026-10-13', wrong_target, 'fixture', 1, 'unused', {}) == (
+        None, 'waiting_narrow_time_match',
     )

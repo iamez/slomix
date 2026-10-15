@@ -445,23 +445,26 @@ class _EndstatsPipelineMixin:
         if not (round_date and round_time and map_name and round_number):
             return None, "missing_endstats_identity"
         def timestamp(date, time, *, stored=False):
-            # Filename inputs are fixed-width. Stored rows retain the canonical
-            # importer's HHMMSS / HH:MM:SS strptime semantics, including shorter
-            # numeric forms; do not invent a different zero-padding convention.
-            if not isinstance(date, str) or not isinstance(time, str):
-                raise ValueError('Missing filename timestamp')
-            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date):
+            # Capture timestamps lose leading zeros when stored numerically:
+            # 4918 names 004918, not strptime's variable-width 04:09:18.
+            # Match capture_candidates/stopwatch_pairing, not permissive parsing.
+            if not isinstance(date, str) or not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', date):
                 raise ValueError('Invalid filename date')
-            if not stored and not re.fullmatch(r'\d{6}', time):
-                raise ValueError('Invalid filename timestamp')
-            raw_time = time.strip() if stored else time
-            formats = ('%H%M%S', '%H:%M:%S') if stored else ('%H%M%S',)
-            for fmt in formats:
-                try:
-                    return datetime.strptime(f'{date} {raw_time}', f'%Y-%m-%d {fmt}')  # noqa: DTZ007 -- local-naive filename/DB convention
-                except ValueError:
-                    continue
-            raise ValueError('Invalid stored timestamp')
+            if stored:
+                if type(time) not in (str, int):
+                    raise ValueError('Invalid stored timestamp')
+                raw_time = str(time).strip()
+                if re.fullmatch(r'[0-9]{1,6}', raw_time):
+                    raw_time = raw_time.zfill(6)
+                elif re.fullmatch(r'[0-9]{2}:[0-9]{2}:[0-9]{2}', raw_time):
+                    raw_time = raw_time.replace(':', '')
+                else:
+                    raise ValueError('Invalid stored timestamp')
+            else:
+                if not isinstance(time, str) or not re.fullmatch(r'[0-9]{6}', time):
+                    raise ValueError('Invalid filename timestamp')
+                raw_time = time
+            return datetime.strptime(f'{date} {raw_time}', '%Y-%m-%d %H%M%S')  # noqa: DTZ007 -- local-naive capture timestamp
 
         try:
             target = timestamp(round_date, round_time)
