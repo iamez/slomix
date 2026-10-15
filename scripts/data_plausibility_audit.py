@@ -1,43 +1,39 @@
 #!/usr/bin/env python3
 """data_plausibility_audit.py — Data Trust pillar B: permanent implausibility audit.
 
-Hunts for the IMPOSSIBLE, not the merely excellent. Every rule is a physics/
-game bound a healthy row cannot break (e.g. more bullets fired than the
-weapon's fire rate allows in the time played), an internal-consistency check
-between two fields that should agree (e.g. dpm vs damage_given/minutes), or a
-hard schema invariant (e.g. headshot_kills <= kills). Rules are generous on
-purpose: this is not a "how good was this round" tool, it is a "could this
-row have physically happened" tool.
+Checks generous game/physics bounds, internal consistency and schema
+invariants, and also nominates unusual patterns for source-file review.
+A nomination is not proof of corruption: a legitimate round can trigger it.
+The rule's finding_kind distinguishes invariant checks from nominations.
 
-This exists because the all-time accuracy record (2026-08-16, see
-docs/research/) stood on a row with bullets_fired=5,523 in a 269s round — 20x
-any real fire rate. 7,311 of 9,698 pre-2026 "supastats backfill" rows carry
-bullets beyond any fire rate; 2026 live-captured rows carry zero such rows.
-That backfill/live split is the entire diagnostic value of this tool: a
-violation in backfill data is old, already-known-lossy import noise; the
-SAME violation in live data is an active capture bug happening right now.
-There is no `data_source` column (yet), so provenance is inferred from
-`round_date < 2026-01-01` (the backfill/live cutover date), same as the
-accuracy-record fix.
+This audit originated from impossible historical accuracy records. Its
+backfill/live classification is a DATE PROXY, not proof of import provenance
+or when a defect occurred: round_date < 2026-01-01 is backfill; later rows are
+live. An unchanged historical live finding can recur in every daily report.
+Source evidence is required before deciding whether data needs repair.
 
 Read-only. Never writes to the database.
 
 Usage:
     python scripts/data_plausibility_audit.py                # markdown, stdout + file
     python scripts/data_plausibility_audit.py --json          # machine-readable, stdout only
-    python scripts/data_plausibility_audit.py --top 5         # more offending rows per rule
+    python scripts/data_plausibility_audit.py --top 5         # more matching rows per rule
     python scripts/data_plausibility_audit.py --output PATH   # override report file path
 
 DB connection comes from POSTGRES_* env vars (same names as the bot/.env),
 opened READ-ONLY (`SET TRANSACTION READ ONLY`), same convention as
 scripts/data_trust_check.py.
 
-Exit code = number of per-row rules with at least one LIVE violation, plus
-the number of trend rules carrying a distribution shift nobody has explained
-(0 = clean). This is deliberately a shell-guard-friendly number, not a total
-violation count: one rule firing 500 times is still "one broken sensor", not
-500, and a metric that moved in three consecutive months is one thing to look
-at, not three.
+Exit code = number of unacknowledged per-row rules with a LIVE finding
+(including nominations), plus trend rules with unexplained distribution shifts.
+Zero means no unacknowledged findings, not proof that every row is correct.
+Counts are rules, not rows: one rule firing 500 times contributes one.
+
+JSON retains rules_with_live_violations as an integer, now counting invariant
+rules only; rules_with_live_nominations counts candidate rules. Consumers that
+need the former combined count should use rules_with_live_findings. These
+summary counts include acknowledged findings; exit-code suppression is separate.
+
 """
 from __future__ import annotations
 
@@ -1353,7 +1349,11 @@ def render_json(results: list[RuleResult], generated_at: str,
         "generated_at": generated_at,
         "provenance_cutoff": PROVENANCE_CUTOFF,
         "rules_checked": len(results),
-        "rules_with_live_violations": sum(1 for r in results if r.live > 0),
+        # Keep the existing key/type, correcting its misleading classification.
+        # The additive findings key preserves the previous aggregate value.
+        "rules_with_live_violations": sum(1 for r in results if r.live > 0 and r.rule.finding_kind == "invariant"),
+        "rules_with_live_nominations": sum(1 for r in results if r.live > 0 and r.rule.finding_kind == "nomination"),
+        "rules_with_live_findings": sum(1 for r in results if r.live > 0),
         "rules": [r.to_dict() for r in results],
         "trend_rules_checked": len(trends),
         "trend_rules_with_unexplained_shifts": unexplained_shift_count(trends),
@@ -1373,7 +1373,7 @@ def main(argv: list[str] | None = None) -> int:
             raise argparse.ArgumentTypeError("--top must be >= 0")
         return n
 
-    parser.add_argument("--top", type=_non_negative, default=3, help="Top offending rows to show per rule (default: 3)")
+    parser.add_argument("--top", type=_non_negative, default=3, help="Top matching rows to show per rule (default: 3)")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON to stdout instead of markdown")
     parser.add_argument(
         "--output",

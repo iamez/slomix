@@ -663,3 +663,41 @@ def test_markdown_keeps_nominations_out_of_confirmed_violations(with_invariant):
         assert RULES[0].name in violations
         assert nomination.name not in violations
         assert '**2** live violations' in violations
+
+
+@pytest.mark.parametrize('invariants,nominations,acknowledged', [(0, 1, False), (1, 0, False), (1, 1, False), (0, 0, False), (1, 1, True)])
+def test_json_summary_classifies_findings_without_changing_alert_counts(invariants, nominations, acknowledged):
+    import json
+    from dataclasses import replace
+
+    from scripts.data_plausibility_audit import RuleResult, render_json, unacknowledged_live_count
+
+    rows = []
+    for kind, count in [('invariant', invariants), ('nomination', nominations)]:
+        rule = next(r for r in RULES if r.finding_kind == kind)
+        if acknowledged:
+            rule = replace(rule, acknowledged='fixture tracked reason')
+        rows.append(RuleResult(rule, total=10, backfill=10-count, live=count, top_rows=[]))
+    payload = json.loads(render_json(rows, 'fixture'))
+    assert payload['rules_with_live_violations'] == invariants
+    assert payload['rules_with_live_nominations'] == nominations
+    assert payload['rules_with_live_findings'] == invariants + nominations
+    assert payload['rules'] == [row.to_dict() for row in rows]
+    assert unacknowledged_live_count(rows) == (0 if acknowledged else invariants + nominations)
+
+
+def test_cli_help_describes_nomination_and_date_proxy_without_database(monkeypatch, capsys):
+    from scripts import data_plausibility_audit as audit
+
+    def forbidden():
+        pytest.fail('Help must not open a database')
+    monkeypatch.setattr(audit, 'get_connection', forbidden)
+    with pytest.raises(SystemExit) as exit_info:
+        audit.main(['--help'])
+    assert exit_info.value.code == 0
+    help_text = capsys.readouterr().out
+    assert 'A nomination is not proof of corruption' in help_text
+    assert 'DATE PROXY' in help_text and 'unchanged historical live finding' in help_text
+    assert 'rules_with_live_findings' in help_text
+    assert 'active capture bug happening right now' not in help_text
+    assert 'Every rule is a physics' not in help_text
