@@ -444,13 +444,24 @@ class _EndstatsPipelineMixin:
         """
         if not (round_date and round_time and map_name and round_number):
             return None, "missing_endstats_identity"
-        def timestamp(date, time):
-            # Match the local-naive timestamp convention of stats filenames.
+        def timestamp(date, time, *, stored=False):
+            # Filename inputs are fixed-width. Stored rows retain the canonical
+            # importer's HHMMSS / HH:MM:SS strptime semantics, including shorter
+            # numeric forms; do not invent a different zero-padding convention.
             if not isinstance(date, str) or not isinstance(time, str):
                 raise ValueError('Missing filename timestamp')
-            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date) or not re.fullmatch(r'\d{6}', time):
+            if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', date):
+                raise ValueError('Invalid filename date')
+            if not stored and not re.fullmatch(r'\d{6}', time):
                 raise ValueError('Invalid filename timestamp')
-            return datetime.strptime(f'{date} {time}', '%Y-%m-%d %H%M%S')  # noqa: DTZ007 -- filename timestamps are local-naive
+            raw_time = time.strip() if stored else time
+            formats = ('%H%M%S', '%H:%M:%S') if stored else ('%H%M%S',)
+            for fmt in formats:
+                try:
+                    return datetime.strptime(f'{date} {raw_time}', f'%Y-%m-%d {fmt}')  # noqa: DTZ007 -- local-naive filename/DB convention
+                except ValueError:
+                    continue
+            raise ValueError('Invalid stored timestamp')
 
         try:
             target = timestamp(round_date, round_time)
@@ -468,7 +479,7 @@ class _EndstatsPipelineMixin:
         candidates = set()
         for row in rows:
             try:
-                candidate = timestamp(row[1], row[2])
+                candidate = timestamp(row[1], row[2], stored=True)
             except ValueError:
                 continue
             if abs((candidate - target).total_seconds()) <= 30:

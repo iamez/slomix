@@ -79,6 +79,7 @@ async def test_webhook_retry_keeps_missing_tight_round_pending():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('target_date,target_time,rows,expected,dates', [
+    ('2026-10-13', '000001', [(20, '2026-10-12', '23:59:59'), (21, '2026-10-13', '000002')], None, ('2026-10-12', '2026-10-13')),
     ('2026-10-13', '000001', [(20, '2026-10-12', '235959')], 20, ('2026-10-12', '2026-10-13')),
     ('2026-10-12', '235959', [(20, '2026-10-13', '000001')], 20, ('2026-10-12', '2026-10-13')),
     ('2026-10-13', '000010', [(20, '2026-10-12', '235950')], 20, ('2026-10-12', '2026-10-13')),
@@ -120,3 +121,42 @@ async def test_invalid_full_timestamp_never_queries_or_falls_back(date, time):
     result = await bot._resolve_endstats_round_id(date, time, 'fixture', 1, 'unused', {})
     assert result == (None, 'invalid_endstats_time')
     bot.db_adapter.fetch_all.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('target_date,target_time,stored_date,stored_time,expected', [
+    ('2026-10-13', '000001', '2026-10-12', '23:59:59', 20),
+    ('2026-10-12', '235959', '2026-10-13', '00:00:01', 20),
+    ('2026-10-13', '090501', '2026-10-13', '90501', 20),
+    ('2026-10-13', '123405', '2026-10-13', '12345', 20),
+    ('2026-10-13', '123405', '2026-10-13', ' 12:34:05 ', 20),
+    ('2026-10-13', '000000', '2026-10-13', '24:00:00', None),
+    ('2026-10-13', '000000', '2026-10-13', '00:00:60', None),
+    ('2026-10-13', '000000', '2026-10-13', 'bogus', None),
+])
+async def test_stored_time_formats_match_canonical_importer(target_date, target_time, stored_date, stored_time, expected):
+    from datetime import datetime
+
+    from postgresql_database_manager import PostgreSQLDatabaseManager
+
+    parsed = PostgreSQLDatabaseManager._parse_round_datetime(stored_date, stored_time)
+    if expected:
+        target = datetime.strptime(f'{target_date} {target_time}', '%Y-%m-%d %H%M%S')  # noqa: DTZ007 -- fixture local-naive timestamp
+        assert abs((parsed - target).total_seconds()) <= 30
+    else:
+        assert parsed is None
+    bot = M()
+    bot.db_adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[(20, stored_date, stored_time)]))
+    result, _ = await bot._resolve_endstats_round_id(target_date, target_time, 'fixture', 1, 'unused', {})
+    assert result == expected
+
+
+@pytest.mark.asyncio
+async def test_mixed_stored_formats_do_not_resolve_ambiguity():
+    bot = M()
+    bot.db_adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[
+        (20, '2026-10-13', '90501'), (21, '2026-10-13', '09:05:02'),
+    ]))
+    assert await bot._resolve_endstats_round_id('2026-10-13', '090501', 'fixture', 1, 'unused', {}) == (
+        None, 'ambiguous_narrow_time_match',
+    )
