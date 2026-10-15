@@ -436,42 +436,30 @@ class _EndstatsPipelineMixin:
         stats_filename: str,
         round_meta: dict,
     ) -> tuple:
+        """Bind only one round within the existing 30-second filename window.
+
+        Missing or ambiguous candidates remain pending. A broad fuzzy match
+        can bind a previous play while the actual stats import is still pending.
+        The shared metadata linker remains unchanged for its other callers.
         """
-        Resolve round_id for an endstats file.
-
-        Uses narrow time window (30s) to match endstats to the correct round,
-        handling replayed maps (same map played multiple times in a session).
-        Falls back to fuzzy round_linker if narrow match fails.
-
-        Returns (round_id, resolve_method).
-        """
-        # Narrow time match: endstats timestamp is within ~2s of stats timestamp,
-        # but we use 30s window for safety. This prevents matching against a
-        # different play of the same map (which would be 5+ minutes apart).
-        if round_date and round_time and map_name and round_number:
-            target_secs = self._hhmmss_to_seconds(round_time)
-            if target_secs is not None:
-                rows = await self.db_adapter.fetch_all(
-                    "SELECT id, round_time FROM rounds "
-                    "WHERE round_date = ? AND map_name = ? AND round_number = ?",
-                    (round_date, map_name, round_number),
-                )
-                if rows:
-                    best_id = None
-                    best_diff = 31  # 30-second max window
-                    for row in rows:
-                        row_secs = self._hhmmss_to_seconds(row[1])
-                        if row_secs is not None:
-                            diff = abs(row_secs - target_secs)
-                            if diff < best_diff:
-                                best_diff = diff
-                                best_id = row[0]
-                    if best_id is not None:
-                        return best_id, "narrow_time_match"
-
-        # Fallback: fuzzy round_linker (45min window, for edge cases)
-        round_id = await self._resolve_round_id_for_metadata(stats_filename, round_meta)
-        return round_id, "round_linker"
+        if not (round_date and round_time and map_name and round_number):
+            return None, "missing_endstats_identity"
+        target_secs = self._hhmmss_to_seconds(round_time)
+        if target_secs is None:
+            return None, "invalid_endstats_time"
+        rows = await self.db_adapter.fetch_all(
+            "SELECT id, round_time FROM rounds "
+            "WHERE round_date = ? AND map_name = ? AND round_number = ?",
+            (round_date, map_name, round_number),
+        )
+        candidates = set()
+        for row in rows:
+            row_secs = self._hhmmss_to_seconds(row[1])
+            if row_secs is not None and abs(row_secs - target_secs) <= 30:
+                candidates.add(row[0])
+        if len(candidates) == 1:
+            return candidates.pop(), "narrow_time_match"
+        return None, "ambiguous_narrow_time_match" if candidates else "waiting_narrow_time_match"
 
     async def _is_endstats_round_already_processed(
         self,
@@ -1292,26 +1280,18 @@ class _EndstatsPipelineMixin:
             )
 
             if not round_id:
-                # Track retry attempts to prevent infinite loop
-                attempt = self.endstats_retry_counts.get(filename, 0) + 1
+                # No identity is not a processed file. Keep it discoverable by
+                # polling after delayed stats import, including beyond the retry
+                # budget. Bound the counter and emit the budget warning once.
+                previous = self.endstats_retry_counts.get(filename, 0)
+                attempt = min(previous + 1, self.endstats_retry_max_attempts + 1)
                 self.endstats_retry_counts[filename] = attempt
-
-                if attempt > self.endstats_retry_max_attempts:
+                if previous == self.endstats_retry_max_attempts:
                     logger.error(
-                        f"❌ Endstats polling retry limit reached ({self.endstats_retry_max_attempts}) "
-                        f"for {filename} — marking as failed"
+                        "Endstats binding still pending after %s polls: %s; "
+                        "keeping file eligible for later stats import",
+                        self.endstats_retry_max_attempts, filename,
                     )
-                    try:
-                        await self.db_adapter.execute(
-                            "INSERT INTO processed_endstats_files (filename, success, error_message) "
-                            "VALUES ($1, FALSE, $2) ON CONFLICT (filename) DO NOTHING",
-                            (filename, f"round_id_unresolved_after_{self.endstats_retry_max_attempts}_attempts"),
-                        )
-                    except Exception as mark_err:
-                        logger.debug(f"Failed to mark endstats as failed: {mark_err}")
-                    self.endstats_retry_counts.pop(filename, None)
-                    # Keep in processed set so it won't be retried
-                    return
 
                 self._log_endstats_transition(
                     logger,
