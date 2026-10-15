@@ -255,7 +255,7 @@ class _MonitorTasksMixin:
                     # Download file
                     download_start = time.time()
                     local_path = await SSHHandler.download_file(
-                        ssh_config, filename, "local_stats"
+                        ssh_config, filename, self.config.stats_directory
                     )
                     download_time = time.time() - download_start
 
