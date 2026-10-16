@@ -11,6 +11,27 @@ import pytest
 from scripts import prepare_runtime_game_service as module
 
 
+def test_corrupt_archive_failure_is_redacted(monkeypatch, tmp_path, capsys):
+    import zipfile
+
+    archive = tmp_path / 'private.pk3'
+    archive.write_bytes(b'not a zip archive')
+
+    def invalid_archive(**kwargs):
+        with zipfile.ZipFile(archive):
+            pytest.fail('Corrupt archive admitted')
+
+    monkeypatch.setattr(module, 'prepare', invalid_archive)
+    monkeypatch.setattr(sys, 'argv', ['prepare', '--source', str(tmp_path), '--interpreter', sys.executable,
+                                    '--workspace', str(tmp_path), '--destination', str(tmp_path),
+                                    '--commit', 'a' * 40])
+    assert module.main() == 1
+    output = capsys.readouterr()
+    assert output.out == ''
+    assert json.loads(output.err) == dict(status='refused', error_type='BadZipFile',
+                                          activation_ready=False, evidence_retained=True)
+
+
 @pytest.mark.parametrize('value', ['/tmp/a%b', '/tmp/a$b', '/tmp/a b', '/tmp/a\nb', '/tmp/../a'])
 def test_expansion_paths_rejected(value):
     with pytest.raises(ValueError, match='ASCII'):
@@ -66,6 +87,7 @@ def test_offline_unit_parser_and_exclusive_output(
                      f" --import-lock-directory {args['import_lock_directory']}")
     if defer_team_assignment:
         expected += ' --defer-team-assignment'
+    expected += f" --evidence-log {args['destination'] / 'service.log'}"
     assert expected in text.splitlines()
     assert ('--bot-fixture' in text) == bots
     if bots:

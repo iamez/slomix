@@ -81,6 +81,8 @@ async def test_digest_embed_content_and_kis_fallback(mock_data_cls, mock_scoring
     assert embed.url == f"https://dev.example{prefix}/session-detail/date/2026-06-11"
     links = " ".join(str(field.value) for field in embed.fields)
     assert f"https://dev.example{prefix}/leaderboards" in links
+    story = "/session-detail/date/2026-06-11/story" if mode == "app" else "/story"
+    assert f"[Smart stats](https://dev.example{prefix}{story})" in links
     assert "www.slomix.fyi" not in links
     assert "[Cast your vote](https://dev.example/#/session-detail/" in links
 

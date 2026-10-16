@@ -15,6 +15,7 @@ import secrets
 import stat
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -67,7 +68,8 @@ def render(*, source, interpreter, workspace, destination, unit, commit,
     argv = supervisor_argv(source, interpreter, workspace, unit, commit,
         bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256,
         proof_socket=proof_socket, proof_database_name=proof_database_name,
-        import_lock_directory=import_lock_directory, defer_team_assignment=defer_team_assignment)
+        import_lock_directory=import_lock_directory, defer_team_assignment=defer_team_assignment,
+        evidence_log=destination / 'service.log')
     return f'''[Unit]
 Description=Slomix isolated ET capture rehearsal (owner activation only)
 
@@ -172,7 +174,8 @@ def main():
     try:
         print(json.dumps(prepare(**vars(parser.parse_args())), sort_keys=True))
         return 0
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile,
+            subprocess.SubprocessError) as exc:
         print(json.dumps({'status': 'refused', 'error_type': type(exc).__name__,
                           'activation_ready': False, 'evidence_retained': True}), file=sys.stderr)
         return 1
