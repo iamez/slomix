@@ -2,6 +2,7 @@
 # ruff: noqa: SLF001 -- directly exercise rendering/enrichment without posting to Discord
 from __future__ import annotations
 
+import secrets
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -21,7 +22,7 @@ def _config(**over):
     cfg.website_api_base = "http://127.0.0.1:9"  # unreachable on purpose
     cfg.website_public_base = "https://www.slomix.fyi"
     cfg.website_ui_mode = "legacy"
-    cfg.internal_api_secret = "test-internal-secret"  # noqa: S105 - test-only shared secret
+    cfg.internal_api_secret = secrets.token_urlsafe()
     for k, v in over.items():
         setattr(cfg, k, v)
     return cfg
