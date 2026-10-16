@@ -54,6 +54,7 @@ def test_offline_unit_parser_and_exclusive_output(
     for line in ('Restart=no', 'RuntimeMaxSec=60min', 'KillMode=control-group',
                  'TimeoutStopSec=30s', 'LimitFSIZE=64M', 'MemoryMax=768M', 'TasksMax=64'):
         assert line in text.splitlines()
+    assert 'UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT' in text.splitlines()
     assert '[Install]' not in text and 'ExecStop=' not in text
     assert ' -I ' in text
     assert ('--bot-fixture' in text) == bots

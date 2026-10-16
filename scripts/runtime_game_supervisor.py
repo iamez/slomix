@@ -6,6 +6,8 @@ The run command launches ET ONLY from the validated dedicated unit's main PID.
 Systemd owns cleanup of the whole cgroup on main exit/error/timeout. A capture
 receipt is diagnostic, not a recoverable import capability or shutdown proof.
 No bots or round rotation are provisioned here; those remain activation gates.
+The global 60-minute unit lifetime can interrupt per-phase readiness/completion
+waits earlier. An interrupted or incomplete capture is never a successful proof.
 """
 # ruff: noqa: E402 -- the isolated CLI guard must precede script-directory imports
 
@@ -33,7 +35,7 @@ POLICY = {'Type': 'exec', 'KillMode': 'control-group', 'Restart': 'no',
           'Delegate': 'no', 'PrivateNetwork': 'no', 'NetworkNamespacePath': '',
           'MemoryMax': '805306368', 'TasksMax': '64', 'LimitFSIZE': '67108864',
           'LimitCORE': '0', 'NoNewPrivileges': 'yes', 'UMask': '0077'}
-CLEARED_ENVIRONMENT = ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH')
+CLEARED_ENVIRONMENT = ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT')
 PROPERTIES = (*POLICY, 'UnsetEnvironment', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
               'InvocationID', 'Result')
 
@@ -126,7 +128,7 @@ def capture_process(record, pid, stdin_fd):
                                         pin=pin, epoch=epoch)
         with map_release(pin, stdin_fd) as release:
             result = serve_match(driver, Path(record['socket_path']), on_ready=release,
-                                 bootstrap_wait=120, completion_wait=1500)
+                                 initial_readiness_wait=1800, bootstrap_wait=1800, completion_wait=1500)
         result.verify()
         return result
 
@@ -237,7 +239,7 @@ def main(argv=None):
                   else verify_stopped(args.unit, args.port, args.invocation_id))
         print(json.dumps(result, sort_keys=True), flush=True)
         return 0 if result.get('import', {}).get('status', 'completed') == 'completed' else 1
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, ImportError, subprocess.SubprocessError) as exc:
         print(json.dumps({'status': 'refused_or_failed', 'error_type': type(exc).__name__,
                           'shutdown_verified': False, 'evidence_retained': True}),
               file=sys.stderr, flush=True)

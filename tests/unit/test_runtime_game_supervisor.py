@@ -242,7 +242,8 @@ def test_isolated_supervisor_loads_no_project_dependency_before_admission(tmp_pa
 
 @pytest.mark.parametrize('unset,allowed', [('', False), ('PYTHONPATH', False),
     ('PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH EXTRA', False),
-    ('LD_LIBRARY_PATH LD_PRELOAD PYTHONHOME PYTHONPATH', True)])
+    ('LD_LIBRARY_PATH LD_PRELOAD PYTHONHOME PYTHONPATH', False),
+    ('LD_AUDIT LD_LIBRARY_PATH LD_PRELOAD PYTHONHOME PYTHONPATH', True)])
 def test_unit_requires_the_complete_import_environment_scrub(monkeypatch, unset, allowed):
     values = stopped() | {'UnsetEnvironment': unset}
     monkeypatch.setattr(module.subprocess, 'run', lambda *args, **kwargs:
@@ -280,3 +281,111 @@ def test_required_resource_properties_cannot_be_omitted(monkeypatch, name):
                         SimpleNamespace(stdout='\n'.join(f'{k}={v}' for k, v in values.items())))
     with pytest.raises(ValueError, match='policy disagrees'):
         module.unit_properties(UNIT)
+
+
+@pytest.mark.parametrize('failure', [ImportError, ModuleNotFoundError])
+def test_deferred_import_failure_is_redacted_before_launch(monkeypatch, tmp_path, capsys, failure):
+    import builtins
+    import json
+    original_import = builtins.__import__
+
+    monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
+    monkeypatch.setattr(module, 'verify_source', lambda *args: None)
+    monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kwargs: pytest.fail('Launch reached'))
+
+    def importing(name, *args, **kwargs):
+        if name == 'scripts.runtime_game_startup':
+            raise failure('private dependency path /private/never-disclose')
+        return original_import(name, *args, **kwargs)
+    monkeypatch.setattr(builtins, '__import__', importing)
+    assert module.main(['run', '--directory', str(tmp_path), '--unit', UNIT, '--commit', 'b' * 40]) == 1
+    output = capsys.readouterr()
+    assert output.out == ''
+    assert json.loads(output.err) == dict(status='refused_or_failed', error_type=failure.__name__,
+                                          shutdown_verified=False, evidence_retained=True)
+
+
+@pytest.mark.parametrize('failure', [KeyboardInterrupt, SystemExit, __import__('asyncio').CancelledError])
+def test_cli_does_not_hide_interruption(monkeypatch, tmp_path, failure):
+    def interrupt(*args, **kwargs):
+        raise failure()
+    monkeypatch.setattr(module, 'run', interrupt)
+    with pytest.raises(failure):
+        module.main(['run', '--directory', str(tmp_path), '--unit', UNIT, '--commit', 'b' * 40])
+
+
+def test_isolated_cli_redacts_a_deferred_missing_dependency(tmp_path):
+    import json
+    code = """
+import builtins, importlib.util, sys
+spec = importlib.util.spec_from_file_location('supervisor_fixture', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+module.require_containment = lambda unit: {'InvocationID': 'a' * 32}
+module.verify_source = lambda *args: None
+original_import = builtins.__import__
+def importing(name, *args, **kwargs):
+    if name == 'scripts.runtime_game_startup':
+        raise ModuleNotFoundError('sensitive dependency and path /never/disclose')
+    return original_import(name, *args, **kwargs)
+builtins.__import__ = importing
+raise SystemExit(module.main(['run', '--directory', sys.argv[2], '--unit',
+                             'slomix-et-proof-1234abcd.service', '--commit', 'b' * 40]))
+"""
+    result = subprocess.run([sys.executable, '-I', '-B', '-c', code, module.__file__, str(tmp_path)],
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 1 and result.stdout == ''
+    assert json.loads(result.stderr) == dict(status='refused_or_failed', error_type='ModuleNotFoundError',
+                                             shutdown_verified=False, evidence_retained=True)
+
+
+def test_capture_allows_both_rounds_readiness_before_round_completion(monkeypatch, tmp_path):
+    from contextlib import nullcontext
+    from unittest.mock import Mock
+
+    from shared import (
+        runtime_game_console,
+        runtime_identity_allocation,
+        runtime_match_controller,
+        runtime_match_listener,
+        runtime_process_authority,
+        runtime_process_pin,
+    )
+
+    pin = object()
+    driver = object()
+    result = Mock()
+    listener = Mock(return_value=result)
+    monkeypatch.setattr(runtime_process_pin, 'pin_process', lambda *args, **kwargs: nullcontext(pin))
+    monkeypatch.setattr(runtime_process_authority, 'reserve_process_epoch', lambda *args, **kwargs: 'epoch')
+    monkeypatch.setattr(runtime_identity_allocation, 'allocate_round_pair', lambda *args:
+                        SimpleNamespace(first=SimpleNamespace(match_id='match')))
+    monkeypatch.setattr(runtime_match_controller, 'RuntimeMatchController', lambda **kwargs: driver)
+    monkeypatch.setattr(runtime_game_console, 'map_release', lambda *args: nullcontext('release'))
+    monkeypatch.setattr(runtime_match_listener, 'serve_match', listener)
+    record = dict(roots={name: str(tmp_path / name) for name in
+                         ('authority', 'host_authority', 'producer_spool', 'capture_root')},
+                  uid=os.getuid(), executable=str(Path(sys.executable).resolve()),
+                  executable_sha256='a' * 64, source_id='fixture', map_name='supply',
+                  socket_path=str(tmp_path / 'socket'))
+    assert module.capture_process(record, 123, 0) is result
+    listener.assert_called_once_with(driver, tmp_path / 'socket', on_ready='release',
+                                     initial_readiness_wait=1800, bootstrap_wait=1800, completion_wait=1500)
+    result.verify.assert_called_once()
+
+
+@pytest.mark.parametrize('failure', [TimeoutError, __import__('asyncio').CancelledError])
+def test_capture_interruption_closes_supervisor_input_without_claiming_shutdown(monkeypatch, tmp_path, failure):
+    from unittest.mock import Mock
+    pipe = Mock()
+    monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
+    monkeypatch.setattr(module, 'verify_source', lambda *args: None)
+    monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kwargs: dict(argv=[], cwd='/', env={}, workspace={}))
+    monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kwargs: SimpleNamespace(pid=123, stdin=pipe))
+    monkeypatch.setattr(module.os, 'set_blocking', lambda *args: None)
+    def interrupted(*args):
+        raise failure()
+    monkeypatch.setattr(module, 'capture_process', interrupted)
+    with pytest.raises(failure):
+        module.run(tmp_path, UNIT, 'b' * 40)
+    pipe.close.assert_called_once()

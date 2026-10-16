@@ -1,3 +1,28 @@
+## 2026-10-16 — Game startup redaction, loader audit and metrics outputs
+
+Three new #1095 review findings corrected: both rendered unit and effective
+containment gate require LD_AUDIT removal; missing deferred dependencies now
+produce structured redacted ImportError JSON before launch, including an actual
+isolated CLI child proof; cancellation/SystemExit remain unmasked. MetricsLogger
+from_config routes reports and default SQLite metrics DB to BOT_LOG_DIR/metrics,
+retains explicit separate metrics DB paths and the existing PostgreSQL protection
+against using the legacy application DB as metrics. UltimateBot uses this factory.
+
+Supervisor explicitly passes initial_readiness_wait1800 and bootstrap_wait1800
+from the new #1094 listener, plus completion_wait1500. Global RuntimeMaxSec60min
+remains the stricter overall resource cap; an early/incomplete capture is failure.
+New supervisor code must not run with the older listener API.
+
+143 selected tests passed with the new parent listener temporarily checked in
+place; source was then restored with cmp pending the normal dependency merge.
+Without that new dependency142 passed and the new caller test was deselected.
+Five mutations actually failed (audit2, import3, metrics4, render6, readiness1),
+each restored with cmp. Metrics proof writes real SQLite rows and JSON exports;
+SSH/game/Discord are synthetic or absent. Ruff and configured Bandit pass; two
+legacy test SLF001 findings are unchanged. Exact-head combined CI is next.
+No live ET, services, installation, application writes or production changes.
+All prior plan and owner-specific merge/activation gates remain in force.
+
 ## 2026-10-16 — Preserve proximity replay fences and warning recovery
 
 Review of #1093 found that the previous explicit-reset change deleted proximity
