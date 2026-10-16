@@ -95,7 +95,7 @@ def wait_bound(path, future):
 
 
 @contextmanager
-def native_pair(tmp_path, path, *, console=False, readiness_delay=0, bootstrap_wait=5):
+def native_pair(tmp_path, path, *, console=False, readiness_delay=0, bootstrap_wait=5, completion_wait=5):
     all_roots = roots(tmp_path)
     executable = Path(sys.executable).resolve()
     peer_code = PEER.replace("== 'go'", "== 'map supply'") if console else PEER
@@ -126,8 +126,9 @@ def native_pair(tmp_path, path, *, console=False, readiness_delay=0, bootstrap_w
                         peer.stdin.flush()
 
                 with ThreadPoolExecutor(max_workers=1) as pool:
-                    future = pool.submit(serve_match, driver, path,
-                                         initial_readiness_wait=5, bootstrap_wait=bootstrap_wait, completion_wait=5, on_ready=ready)
+                    completion_options = {} if completion_wait is None else {'completion_wait': completion_wait}
+                    future = pool.submit(serve_match, driver, path, initial_readiness_wait=5,
+                                         bootstrap_wait=bootstrap_wait, on_ready=ready, **completion_options)
                     captured = future.result(timeout=15)
                 assert ready_states == ['awaiting_bootstrap']
                 assert peer.stdout.readline().strip() == 'CLOSED BOTH'
@@ -169,11 +170,15 @@ def test_console_release_after_listen_drives_native_match(tmp_path, listener_pat
 
 @pytest.mark.parametrize('change', ['none', 'replace-root', 'replace-socket', 'mode'])
 def test_listener_timeout_or_path_change_fences_controller(tmp_path, listener_path, child, approved, change):
+    from threading import Event
+
     with pin_process(child.pid, **approved) as pin:
         driver = controller(roots(tmp_path), pin)
+        ready = Event()
         with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(serve_match, driver, listener_path, initial_readiness_wait=.25)
-            wait_bound(listener_path, future)
+            future = pool.submit(serve_match, driver, listener_path, initial_readiness_wait=.25,
+                                 on_ready=ready.set)
+            assert ready.wait(timeout=5), 'Readiness must follow dispatch reservation'
             if change == 'replace-root':
                 parent = listener_path.parent
                 parent.rename(parent.with_name(parent.name + '-held'))
@@ -365,3 +370,35 @@ def test_readiness_deadlines_are_bounded_before_consuming_controller(
         with pytest.raises(ValueError, match='timeout'):
             serve_match(driver, listener_path, **{name: value})
         assert driver.state == 'ready' and not listener_path.exists()
+
+
+def test_default_completion_covers_paused_half_longer_than_thirty_minutes(
+    tmp_path, listener_path, monkeypatch,
+):
+    # Native pinned peer, real files and credentials; only elapsed wait time is
+    # virtual. Advance31 minutes after the R1 completion accept deadline starts.
+    accept, poll, monotonic = module._accept, module.select.select, module.time.monotonic  # noqa: SLF001 -- clock/accept boundary
+    calls = 0
+
+    def accept_with_pause(server, verify, driver, wait):
+        nonlocal calls
+        calls += 1
+        if calls != 2:
+            return accept(server, verify, driver, wait)
+        elapsed = 0
+        def paused_poll(*args):
+            nonlocal elapsed
+            elapsed = 31 * 60
+            return poll(*args)
+        with monkeypatch.context() as patch:
+            patch.setattr(module.time, 'monotonic', lambda: monotonic() + elapsed)
+            patch.setattr(module.select, 'select', paused_poll)
+            result = accept(server, verify, driver, wait)
+        assert elapsed == 1860
+        return result
+
+    monkeypatch.setattr(module, '_accept', accept_with_pause)
+    with native_pair(tmp_path, listener_path, completion_wait=None) as (captured, _, driver):
+        assert driver.state == 'complete' and calls == 4
+        captured.verify()
+    print('COMPLETION BUDGET: native peer and files; virtual31-minute pause accepted within global60-minute budget')
