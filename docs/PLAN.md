@@ -1,3 +1,35 @@
+## 2026-10-16 — Preserve proximity replay fences and warning recovery
+
+Review of #1093 found that the previous explicit-reset change deleted proximity
+receipts while retaining additive proximity aggregates. Corrected before merge
+or deployment: retain those receipts, hashes, aggregate-applied/admission flags
+and all aggregates; release only linked_round_id during explicit canonical reset.
+The native fixture compares retained rows through rollback and successful reset.
+
+Bound replay restores WARN markers from the immutable validation_passed=false
+journal value after a missing/failed marker write, retains original warning text
+where available and leaves complete markers unchanged on subsequent replay.
+Legacy date repair locks its selected rounds and refuses runtime mappings or
+strict proximity links before any DELETE. Bound date repair remains a separate
+explicit source-admission/reconciliation task, not silently downgraded legacy
+reimport. The legacy test mocks reimport and proves only deletion/admission.
+
+Centralized the usable team-identity index predicate: the legacy schema setup
+must accept migration036's standalone unique index just like the team worker.
+No constraint promotion or duplicate-name DDL is needed on that valid shape.
+
+133 selected tests passed locally; 20 native PostgreSQL cases skipped because
+the private cluster is offline. Disabling warning preservation produced six
+observed failures; restoration compared byte-identical and all 12 replay cases
+passed. Root-manager Ruff remains its existing 12 diagnostics, with no added
+code/message; other changed Python paths pass. PG14/PG17 acceptance is pending
+on this new head. Earlier c71a13c1 CI passed9218/9222 tests, but does not prove
+these newer changes. No application data, services or production were changed.
+
+Next: exact-head CI, review replies and normal dependency refresh1094–1096.
+All original runtime, handover, D5, proximity/gametime and UI plans remain open
+where previously recorded. Per-number owner permission still gates each merge.
+
 ## 2026-10-16 — Forward-only map alphabet and explicit rebuild dependencies
 
 Two later #1093 review findings: restrictive round-mapping FKs blocked explicit

@@ -93,7 +93,8 @@ async def test_mapping_records_actual_warning_or_success(validation):
 
 @pytest.mark.parametrize('deferred', [False, True])
 @pytest.mark.parametrize('marked', [None, False, True])
-async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, deferred, marked):
+@pytest.mark.parametrize('validation', [True, False])
+async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, deferred, marked, validation):
     from contextlib import asynccontextmanager
     from pathlib import Path
     from unittest.mock import Mock
@@ -107,7 +108,8 @@ async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, def
     binding = first_binding()
     conn = Mock()
     conn.transaction = borrow
-    conn.fetchrow = AsyncMock(return_value=None if marked is None else dict(success=marked, file_hash='b' * 64))
+    conn.fetchrow = AsyncMock(return_value=None if marked is None else dict(success=marked, file_hash='b' * 64, error_message=None))
+    conn.fetchval = AsyncMock(return_value=validation)
     manager = object.__new__(database.PostgreSQLDatabaseManager)
     manager.defer_team_assignment = deferred
     manager.event_stream_enabled = True
@@ -125,7 +127,10 @@ async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, def
         auto_assign.assert_not_awaited()
     else:
         auto_assign.assert_awaited_once_with(3, '2026-09-25')
-    assert manager.mark_file_processed.await_count == int(marked is not True)
+    assert manager.mark_file_processed.await_count == int(marked is not True or validation is False)
+    if manager.mark_file_processed.await_count:
+        warning = manager.mark_file_processed.await_args.kwargs['error_msg']
+        assert (isinstance(warning, str) and warning.startswith('WARN:')) is (not validation)
 
 
 @pytest.mark.parametrize('name', ['map.v2', 'map+beta', 'SW_goldrush_te', 'plain-map'])

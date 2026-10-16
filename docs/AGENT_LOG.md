@@ -1037,3 +1037,15 @@ SQL checks must accept the same alphabet. Preserve 099 even before its PR merges
 when retained installations/candidates already reference its checksum; append104
 and update the effective schema/release contract. Never edit live ledger hashes
 to make a rewritten migration appear valid.
+
+## 2026-10-16 — Additive aggregates require durable replay receipts
+
+A canonical rebuild must preserve proximity receipts whenever it preserves the
+additive teamplay/crossfire/heatmap aggregates. Clearing only the receipt permits
+double application on replay. Release explicit round links, retain admission and
+hash flags, and compare complete receipt/aggregate rows after rollback and reset.
+Bound import marker recovery must also preserve the journal validation warning;
+missing original warning text requires an explicit warning, never false success.
+Legacy date repair must refuse bound sources before deletes until reconciliation
+has separately admitted the original sources. Legacy schema setup and runtime
+workers must share the same usable unique-index admission predicate.
