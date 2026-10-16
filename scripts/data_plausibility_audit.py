@@ -1,43 +1,39 @@
 #!/usr/bin/env python3
 """data_plausibility_audit.py — Data Trust pillar B: permanent implausibility audit.
 
-Hunts for the IMPOSSIBLE, not the merely excellent. Every rule is a physics/
-game bound a healthy row cannot break (e.g. more bullets fired than the
-weapon's fire rate allows in the time played), an internal-consistency check
-between two fields that should agree (e.g. dpm vs damage_given/minutes), or a
-hard schema invariant (e.g. headshot_kills <= kills). Rules are generous on
-purpose: this is not a "how good was this round" tool, it is a "could this
-row have physically happened" tool.
+Checks generous game/physics bounds, internal consistency and schema
+invariants, and also nominates unusual patterns for source-file review.
+A nomination is not proof of corruption: a legitimate round can trigger it.
+The rule's finding_kind distinguishes invariant checks from nominations.
 
-This exists because the all-time accuracy record (2026-08-16, see
-docs/research/) stood on a row with bullets_fired=5,523 in a 269s round — 20x
-any real fire rate. 7,311 of 9,698 pre-2026 "supastats backfill" rows carry
-bullets beyond any fire rate; 2026 live-captured rows carry zero such rows.
-That backfill/live split is the entire diagnostic value of this tool: a
-violation in backfill data is old, already-known-lossy import noise; the
-SAME violation in live data is an active capture bug happening right now.
-There is no `data_source` column (yet), so provenance is inferred from
-`round_date < 2026-01-01` (the backfill/live cutover date), same as the
-accuracy-record fix.
+This audit originated from impossible historical accuracy records. Its
+backfill/live classification is a DATE PROXY, not proof of import provenance
+or when a defect occurred: round_date < 2026-01-01 is backfill; later rows are
+live. An unchanged historical live finding can recur in every daily report.
+Source evidence is required before deciding whether data needs repair.
 
 Read-only. Never writes to the database.
 
 Usage:
     python scripts/data_plausibility_audit.py                # markdown, stdout + file
     python scripts/data_plausibility_audit.py --json          # machine-readable, stdout only
-    python scripts/data_plausibility_audit.py --top 5         # more offending rows per rule
+    python scripts/data_plausibility_audit.py --top 5         # more matching rows per rule
     python scripts/data_plausibility_audit.py --output PATH   # override report file path
 
 DB connection comes from POSTGRES_* env vars (same names as the bot/.env),
 opened READ-ONLY (`SET TRANSACTION READ ONLY`), same convention as
 scripts/data_trust_check.py.
 
-Exit code = number of per-row rules with at least one LIVE violation, plus
-the number of trend rules carrying a distribution shift nobody has explained
-(0 = clean). This is deliberately a shell-guard-friendly number, not a total
-violation count: one rule firing 500 times is still "one broken sensor", not
-500, and a metric that moved in three consecutive months is one thing to look
-at, not three.
+Exit code = number of unacknowledged per-row rules with a LIVE finding
+(including nominations), plus trend rules with unexplained distribution shifts.
+Zero means no unacknowledged findings, not proof that every row is correct.
+Counts are rules, not rows: one rule firing 500 times contributes one.
+
+JSON retains rules_with_live_violations as an integer, now counting invariant
+rules only; rules_with_live_nominations counts candidate rules. Consumers that
+need the former combined count should use rules_with_live_findings. These
+summary counts include acknowledged findings; exit-code suppression is separate.
+
 """
 from __future__ import annotations
 
@@ -192,6 +188,8 @@ class Rule:
     # predicate instead, which hides the backlog entirely rather than parking
     # it in a column. Arming is the better half of that idea.)
     armed_from: str = ""
+    # Classification changes wording only; nominations still count and alert.
+    finding_kind: str = "invariant"
 
 
 # Base gates. Applied to every rule on that table, in addition to the rule's
@@ -645,6 +643,7 @@ RULES: list[Rule] = [
     ),
     Rule(
         name="rounds_r2_whole_lobby_outscored_r1",
+        finding_kind="nomination",
         table="rounds",
         tier="T1",
         severity="medium",
@@ -664,8 +663,8 @@ RULES: list[Rule] = [
             "  AND (p2.kills < p1.kills OR p2.damage_given < p1.damage_given))"
         ),
         note=(
-            "Every shared player (4+) beat their own R1 on BOTH kills and "
-            "damage in R2 — the signature of a raw cumulative R2 row that "
+            "Shared-player comparisons (4+ joined rows) have at least as many kills and "
+            "damage in R2 as R1 — the signature of a raw cumulative R2 row that "
             "slipped past pairing. A nomination, not a verdict: "
             "scripts/repair_inverted_r2_cumulative_rounds.py makes the final "
             "call against the original stats file (a genuine whole-lobby R2 "
@@ -1056,6 +1055,8 @@ def validate_rules(rules: list[Rule]) -> None:
     if dupes:
         raise ValueError(f"Duplicate rule names: {sorted(dupes)}")
     for r in rules:
+        if r.finding_kind not in {"invariant", "nomination"}:
+            raise ValueError(f"{r.name}: invalid finding_kind {r.finding_kind!r}")
         if r.tier not in VALID_TIERS:
             raise ValueError(f"{r.name}: invalid tier {r.tier!r}")
         if r.severity not in VALID_SEVERITIES:
@@ -1185,6 +1186,7 @@ class RuleResult:
             "table": self.rule.table,
             "tier": self.rule.tier,
             "severity": self.rule.severity,
+            "finding_kind": self.rule.finding_kind,
             "note": self.rule.note,
             "total": self.total,
             "backfill": self.backfill,
@@ -1274,7 +1276,7 @@ def render_markdown(results: list[RuleResult], generated_at: str,
         )
     lines.append("")
 
-    lines.append("## Rules (by violation count)")
+    lines.append("## Rules (by finding count)")
     lines.append("")
     lines.append("| Rule | Table | Severity | Total | Backfill | Pre-arming | Live | Note |")
     lines.append("|---|---|---|---:|---:|---:|---:|---|")
@@ -1293,15 +1295,17 @@ def render_markdown(results: list[RuleResult], generated_at: str,
         lines.append("")
         lines.append(r.rule.note)
         lines.append("")
+        finding_label = "candidates" if r.rule.finding_kind == "nomination" else "violations"
         if r.rule.armed_from:
             lines.append(
-                f"- Total violations: **{r.total}** (backfill: {r.backfill}, "
+                f"- Total {finding_label}: **{r.total}** (backfill: {r.backfill}, "
                 f"before this rule was armed on {r.rule.armed_from}: {r.pre_arming}, "
                 f"live: {r.live})")
         else:
-            lines.append(f"- Total violations: **{r.total}** (backfill: {r.backfill}, live: {r.live})")
+            lines.append(f"- Total {finding_label}: **{r.total}** (backfill: {r.backfill}, live: {r.live})")
         if r.top_rows:
-            lines.append("- Top offending rows:")
+            lines.append("- Top candidate rows:" if r.rule.finding_kind == "nomination"
+                         else "- Top offending rows:")
             for row in r.top_rows:
                 pairs = ", ".join(f"{k}={v}" for k, v in row.items())
                 lines.append(f"  - {pairs}")
@@ -1311,19 +1315,28 @@ def render_markdown(results: list[RuleResult], generated_at: str,
         lines.extend(render_trend_markdown(trends))
 
     live_rules = [r for r in results if r.live > 0]
-    lines.append("## LIVE violations (capture bugs — headline section)")
+    lines.append("## LIVE findings")
     lines.append("")
+    lines.append(
+        "LIVE denotes the rule's date scope, not new findings today. "
+        "The same finding can recur in daily reports."
+    )
     if not live_rules:
-        lines.append("None. Every violation found traces to pre-2026 backfill rows only.")
-    else:
-        lines.append(
-            "Every rule below fired on rows captured by the CURRENT live pipeline "
-            f"(round_date >= {PROVENANCE_CUTOFF}), not old backfill noise. These are active bugs, not history."
-        )
-        lines.append("")
+        lines.append("No findings in the live scope.")
+    for kind, heading, label in (
+        ("invariant", "Invariant violations", "violations"),
+        ("nomination", "Candidates for review", "candidates"),
+    ):
+        group = [r for r in live_rules if r.rule.finding_kind == kind]
+        if not group:
+            continue
+        lines.extend(["", f"### {heading}", ""])
+        if kind == "nomination":
+            lines.append("Candidates require source verification; they are not confirmed capture bugs.")
+            lines.append("")
         lines.extend(
-            f"- `{r.rule.name}` ({r.rule.severity}): **{r.live}** live violations — {r.rule.note}"
-            for r in sorted(live_rules, key=lambda r: r.live, reverse=True)
+            f"- `{r.rule.name}` ({r.rule.severity}): **{r.live}** live {label} — {r.rule.note}"
+            for r in sorted(group, key=lambda r: r.live, reverse=True)
         )
     lines.append("")
     return "\n".join(lines)
@@ -1336,7 +1349,11 @@ def render_json(results: list[RuleResult], generated_at: str,
         "generated_at": generated_at,
         "provenance_cutoff": PROVENANCE_CUTOFF,
         "rules_checked": len(results),
-        "rules_with_live_violations": sum(1 for r in results if r.live > 0),
+        # Keep the existing key/type, correcting its misleading classification.
+        # The additive findings key preserves the previous aggregate value.
+        "rules_with_live_violations": sum(1 for r in results if r.live > 0 and r.rule.finding_kind == "invariant"),
+        "rules_with_live_nominations": sum(1 for r in results if r.live > 0 and r.rule.finding_kind == "nomination"),
+        "rules_with_live_findings": sum(1 for r in results if r.live > 0),
         "rules": [r.to_dict() for r in results],
         "trend_rules_checked": len(trends),
         "trend_rules_with_unexplained_shifts": unexplained_shift_count(trends),
@@ -1356,7 +1373,7 @@ def main(argv: list[str] | None = None) -> int:
             raise argparse.ArgumentTypeError("--top must be >= 0")
         return n
 
-    parser.add_argument("--top", type=_non_negative, default=3, help="Top offending rows to show per rule (default: 3)")
+    parser.add_argument("--top", type=_non_negative, default=3, help="Top matching rows to show per rule (default: 3)")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON to stdout instead of markdown")
     parser.add_argument(
         "--output",
