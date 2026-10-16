@@ -1276,3 +1276,27 @@ reproduced. Continue CI/review closure on1094–1096, publish the state cohort f
 review and preserve original source admission, exclusive handover, D5,
 proximity/gametime/storage/API/live/Spiderweb/UI roadmap. No services or DB writes,
 no migration, live state copy, game activation or production operation occurred.
+
+## 2026-10-16 — Availability test controls the market transition explicitly
+
+#1095 bd6782ad React CI failed1 test/983passed: missing the bet-placed15 message
+at AvailabilityPage.test.tsx354. The original failure did not reproduce locally;
+no production bug is claimed. The test changed global fetch behavior between
+two submissions of one form while the first submission/refetch was still
+settling. Split amount validation and market reseeding into separate tests.
+The new stateful fetch simulation explicitly holds the invalidation GET, checks
+POST{choice:team_a,amount:15}, disabled/busy UI and unchanged input/no early toast,
+then releases the response and checks confirmation15, reseed60 and enabled UI.
+No timeout was increased and no production code changed.
+
+Node22.23.2 typecheck passes and18 page tests pass through sequential repeats.
+Disabling the existing setDirty(false) guard caused a genuine Expected60/Received15
+failure; source restored withcmp. All jsdom/tsc processes ended; no browser or
+server was started. The first diagnostic accidentally used Node20 before Node22
+was selected; that result is not used as project toolchain acceptance.
+
+Refresh1096 and the new external-state cohort with this test correction; require
+fresh exact-head CI. #1093 remains13 checks successful/zero threads/behindmain0,
+but its merge was rejected by automatic approval review for missing explicit
+permission for that PR. No merge occurred. Continue authorized development,
+retain the full original plan and request specific merge permission separately.
