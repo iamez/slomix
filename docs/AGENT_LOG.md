@@ -1239,6 +1239,44 @@ unchanged. All five native timeout/path variants pass locally; the earlier full
 branches normally and check new exact-head CI; do not hide the prior failure.
 Original plan, owner-specific approvals and frozen production remain unchanged.
 
+## 2026-10-16 — External state preparation advances without merge activation
+
+Continuation request was interpreted as permission for the previously proposed
+#1093 merge, but automatic approval review rejected it: no unambiguous owner
+approval specifically for #1093. The cycle script was not executed. Do not retry
+through a wrapper or alternative merge command; request explicit permission.
+#1093 remains green atc40537ba; each later PR still needs its own approval.
+
+Unblocked development continued with the next saved candidate cohort: three
+existing tools and their tests, extracted onto a new feature branch after1096.
+Source preflight and its tests already exist upstream and are not copied again.
+State preparation supports a dry-run inventory and copy-only seed into a new
+external shared directory. Delta planning classifies three-way differences and
+never replaces files. Named system/user unit inventory explicitly leaves writer
+absence, schema authority, handover and activation unmeasured/not ready.
+
+Found and fixed a boundary gap before publication: the seed/report gate accepted
+a new destination under a Git-free marked immutable payload. It now rejects
+ancestors carrying .slomix-release.json as well as .git, including dangling
+boundary markers. Writer report output applies the same dangling-marker rule.
+A synthetic before-probe admitted such a path without writing; the restored
+new gate refuses it before data copying. Source/state data were never real apps.
+
+100 tests pass; configured Ruff/Bandit pass. Removing immutable-release checks
+causes4 observed failures/2passes; removing dangling-marker checks causes2failures.
+Each file restored withcmp, then100 tests pass. Actual CLI proof copies7 synthetic
+files, compares Python and sha256sum hashes, preserves source trees, classifies
+3 independently changed paths and proves delta writes neither data tree. All
+reports are private and activation_ready remains false. Actual named-unit CLI
+read bot/web metadata only; active observations do not certify writer absence.
+
+The existing #1095 React CI also failed one availability form test (983passed).
+Its isolated follow-up is under review: do not claim an application bug until
+reproduced. Continue CI/review closure on1094–1096, publish the state cohort for
+review and preserve original source admission, exclusive handover, D5,
+proximity/gametime/storage/API/live/Spiderweb/UI roadmap. No services or DB writes,
+no migration, live state copy, game activation or production operation occurred.
+
 ## 2026-10-16 — Availability test controls the market transition explicitly
 
 #1095 bd6782ad React CI failed1 test/983passed: missing the bet-placed15 message
@@ -1262,6 +1300,33 @@ fresh exact-head CI. #1093 remains13 checks successful/zero threads/behindmain0,
 but its merge was rejected by automatic approval review for missing explicit
 permission for that PR. No merge occurred. Continue authorized development,
 retain the full original plan and request specific merge permission separately.
+
+## 2026-10-16 — SQLite rollback journals stay outside data seeds
+
+The existing state-source filter excluded SQLite databases, WAL and SHM but
+missed rollback-journal filenames. Added-journal to that same refusal boundary:
+auxiliary database state requires its separate consistent-backup contract, not
+a normal data-file seed. A synthetic metrics.db-journal input now refuses before
+copy; removing the new suffix produces one observed failure. Restored withcmp;
+101 state seed/delta/writer-inventory tests pass. This does not make the tool a
+generic secret scanner or a consistent snapshot of active writers.
+
+## 2026-10-16 — Independent state review fixes malformed CLI input
+
+PR #1097 is published, depending on1096; owner approval is still needed before
+any merge. Independent read-only review found no new critical immutable/report
+boundary, delta-content or false-quiescence issue. It reproduced a real CLI bug:
+JSON[] reached sources.values() and raised AttributeError with a traceback.
+The CLI now requires an object for both the input and selected source mapping
+before placement checks. Invalid structures return structured refused JSON,
+empty stderr and no state/report output. No raw input path is echoed.
+
+113 selected state tests pass. Removing the new checks produced6 failures/6passes;
+original restored withcmp. The actual previously failing child CLI now returns
+refused with no traceback or created files. This extends the earlier101 tests
+and retains the7-file CLI copy/hash proof and nonmutating delta proof. It does
+not certify quiescence, arbitrary-source confidentiality or activation. Live
+state, services, game, databases and production remain untouched.
 
 ## 2026-10-16 — Six further game-delivery review findings addressed
 
