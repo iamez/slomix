@@ -184,8 +184,9 @@ class ServerControl(commands.Cog):
         self.admin_channel_id = bot.admin_channel_id if hasattr(bot, 'admin_channel_id') else None
 
         # Local audit logging
-        self.audit_log_path = 'logs/server_control_access.log'
-        os.makedirs('logs', exist_ok=True)
+        log_dir = os.getenv('BOT_LOG_DIR') or 'logs'
+        self.audit_log_path = os.path.join(log_dir, 'server_control_access.log')
+        os.makedirs(log_dir, exist_ok=True)
 
         logger.info("✅ ServerControl initialized")
         logger.info(f"   SSH: {self.ssh_user}@{self.ssh_host}:{self.ssh_port}")

@@ -38,7 +38,7 @@ class MetricsLogger:
     - Bot uptime and availability
     """
 
-    def __init__(self, db_path: str, log_dir: str = "logs/metrics"):
+    def __init__(self, db_path: str, log_dir: str | None = None):
         """
         Initialize metrics logger.
 
@@ -46,6 +46,8 @@ class MetricsLogger:
             db_path: Path to metrics SQLite database
             log_dir: Directory for metrics logs
         """
+        if log_dir is None:
+            log_dir = os.path.join(os.getenv("BOT_LOG_DIR") or "logs", "metrics")
         self.db_path = db_path
         self.log_dir = log_dir
         os.makedirs(log_dir, exist_ok=True)

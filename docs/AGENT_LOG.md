@@ -1003,3 +1003,11 @@ preparation to reject /tmp outputs as designed. Use a newly owned private
 weaken the outside-Git guard. AST imports alone also miss existing-module
 configuration integration and fixture exports; include their matching changes
 and run collection before claiming the extraction is complete.
+
+## 2026-10-16 — Prepared units and their manifest are separate integrity surfaces
+
+A valid startup-contract JSON does not prove its sibling service files are
+unchanged. Compare actual unit bytes against the freshly rebuilt contract,
+then recheck both hashes and contract after observation. Mutating this byte
+guard was observed failing for both roles. Keep all preparation proof distinct
+from installed-unit, dependency, schema, active-process and activation evidence.

@@ -1,3 +1,40 @@
+## 2026-10-16 — Immutable application payload and external mutable state
+
+Next cohesive branch feat/runtime-app-delivery-20261016 is based on PR #1095
+(a4095604), itself dependent on #1094 then #1093. None has number-specific merge
+permission. #1095 contains 32 changed paths independently measured by Git diff,
+tree objects and GitHub; CodeQL/security/JS/Lua/React/hygiene passed, full Python
+matrix was still running when this checkpoint was written.
+
+Application slice connects Git-free payload preparation/manifest build identity,
+offline DEV startup contract/unit verification, exact-process health checks and
+external configuration loaded before import-time constants. Bot metrics/audit,
+maintenance/shadow files and downloaded-stats lookup honor external state paths;
+comparison PNGs use memory and close attachments/figures on send failure.
+Retention can be explicitly disabled during handover. Retro gallery listing
+and byte serving share one external PNG-only root; missing explicit storage is
+unavailable, not silently empty. Independent gametime decoder work stays in the
+full development source, not accidentally copied with the bot entrypoint.
+
+107 selected tests passed (21.97s). Service-byte guard mutation failed both bot
+and web cases; restored copy cmp matched, then 40 related tests passed. Fixture
+credentials are generated. Ruff/Bandit medium-high gate pass; two narrowly
+annotated 0.0.0.0 literals only render/compare the existing DEV bind, never open
+sockets. A real CLI packaged 18 synthetic payload files, excluding .git/.env;
+Python SHA256 and sha256sum agree on every file. A separate CLI verified all
+three prepared contract/unit files, again with independent hashes. These are
+synthetic offline packaging proofs and ASGI fixture responses, not a new active
+release, real virtualenv inventory, installed units, live health or native DB
+acceptance. No service/game/migration/deployment operation occurred.
+
+Evidence: /tmp/slomix-app-*.log; retained /var/tmp/slx-app-* proof directories.
+Next: publish/review and resolve exact-head CI; then source admission/exclusive
+writer handover, complete schema/application consolidation and D5 observation.
+Keep pending proximity/gametime migrations, storage relocation reconciliation,
+API/live/Spiderweb/UI and every original roadmap item. Original 0261b076 plan
+bytes remain intact in the preserved full development checkout. Preparation
+never authorizes activation; production remains untouched.
+
 ## 2026-10-16 — Immutable game delivery and supervised proof import
 
 Next cohesive branch: feat/runtime-game-delivery-20261016, based on PR #1094

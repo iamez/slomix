@@ -18,6 +18,10 @@ from discord.ext import commands
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from shared.runtime_environment import load_environment
+
+load_environment()  # Before modules with import-time SSH/log/config constants.
+
 # Import extracted core classes
 from bot.automation import FileTracker, SSHHandler
 from bot.config import load_config
@@ -54,13 +58,7 @@ except ImportError:
     WS_CLIENT_AVAILABLE = False
     StatsWebSocketClient = None
 
-# Load environment variables if available
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:  # nosec B110
-    pass  # python-dotenv is optional
+# Environment has already been loaded before service imports.
 
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
@@ -764,7 +762,9 @@ class UltimateETLegacyBot(
 
             if db_type in ("postgresql", "postgres"):
                 sqlite_path = getattr(self.config, "sqlite_db_path", "") or ""
-                default_metrics_path = os.path.join("logs", "metrics", "metrics.db")
+                default_metrics_path = os.path.join(
+                    os.getenv("BOT_LOG_DIR") or "logs", "metrics", "metrics.db"
+                )
                 sqlite_abs = os.path.abspath(sqlite_path) if sqlite_path else ""
                 metrics_abs = os.path.abspath(metrics_db_path) if metrics_db_path else ""
                 metrics_basename = os.path.basename(metrics_abs) if metrics_abs else ""
