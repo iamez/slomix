@@ -61,7 +61,7 @@ def test_drift_refuses_before_destination_created(source_map, tmp_path, damage):
     assert not (tmp_path / 'shared').exists()
 
 
-@pytest.mark.parametrize('damage', ['link', 'fifo', 'db', 'sqlite_magic', 'env'])
+@pytest.mark.parametrize('damage', ['link', 'fifo', 'db', 'sqlite_magic', 'sqlite_journal', 'env'])
 def test_unsafe_source_refused(source_map, tmp_path, damage):
     origin = Path(source_map['stats'])
     if damage == 'link':
@@ -70,6 +70,8 @@ def test_unsafe_source_refused(source_map, tmp_path, damage):
         os.mkfifo(origin / 'pipe')
     elif damage == 'db':
         (origin / 'metrics.db').write_bytes(b'database')
+    elif damage == 'sqlite_journal':
+        (origin / 'metrics.db-journal').write_bytes(b'synthetic rollback journal')
     elif damage == 'sqlite_magic':
         (origin / 'disguised.txt').write_bytes(b'SQLite format 3\x00more')
     else:

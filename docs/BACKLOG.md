@@ -1,3 +1,13 @@
+## 2026-10-16 — SQLite rollback journals stay outside data seeds
+
+The existing state-source filter excluded SQLite databases, WAL and SHM but
+missed rollback-journal filenames. Added-journal to that same refusal boundary:
+auxiliary database state requires its separate consistent-backup contract, not
+a normal data-file seed. A synthetic metrics.db-journal input now refuses before
+copy; removing the new suffix produces one observed failure. Restored withcmp;
+101 state seed/delta/writer-inventory tests pass. This does not make the tool a
+generic secret scanner or a consistent snapshot of active writers.
+
 ## 2026-10-16 — External state preparation advances without merge activation
 
 Continuation request was interpreted as permission for the previously proposed

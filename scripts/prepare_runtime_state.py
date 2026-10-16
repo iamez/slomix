@@ -71,7 +71,7 @@ def inventory(root: Path | None) -> dict:
             if stat.S_ISDIR(info.st_mode):
                 directories.append(relative)
             elif stat.S_ISREG(info.st_mode):
-                if (name.startswith('.env') or name.lower().endswith(('.db', '.sqlite', '.sqlite3', '-wal', '-shm'))
+                if (name.startswith('.env') or name.lower().endswith(('.db', '.sqlite', '.sqlite3', '-wal', '-shm', '-journal'))
                         or '.git' in path.relative_to(root).parts):
                     raise ValueError('Configuration, Git or database file found in data source')
                 files[relative] = fingerprint(path)
