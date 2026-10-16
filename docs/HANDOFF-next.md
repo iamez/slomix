@@ -41,6 +41,30 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-16 — Persistent Lua VM supports both stopwatch halves
+
+Four #1094 findings corrected before activation. Each fresh InitGame invalidates
+old leases, receiver, ticket and consumed write attempt; only a newly validated
+binding clears the write fence. Each active bootstrap receives a fresh one-shot
+completion sender, so a persistent map_restart Lua VM can write R2 after R1.
+Real active-start ET counter values are1 for R1 and0 for R2; both observation and
+writer validation now encode2-counter. Tests no longer conceal this by inventing
+half-1 counter values. An unchanged sender/lease still cannot replay a write.
+
+Listener has separate bounded initial_readiness_wait1800 and between-half
+bootstrap_wait1800 (each max3600), distinct from completion and IPC exchange.
+Timeout preserves writer claims and terminally fences reuse. The game supervisor
+must pass the new argument from this parent; its existing global60-minute unit
+lifetime remains a stricter overall cap and may abort incomplete captures.
+
+424 selected regressions passed, then6 final claim/deadline tests passed. Five
+negative controls produced2+2+2+16+1 failures; every source restored with cmp.
+Lua5.1 and5.4 same-VM proof performs warmup/R1/shutdown/warmup/R2 with two actual
+closed files, independent hashes/sizes and two distinct completion messages.
+ET API and channel are synthetic, not a real engine/server or deploy proof.
+Ruff/diff-check pass. New exact-head CI and review replies are next. No services,
+units, application rows, live Lua or production changed. Preserve all prior plan.
+
 ## 2026-10-16 — Preserve proximity replay fences and warning recovery
 
 Review of #1093 found that the previous explicit-reset change deleted proximity
