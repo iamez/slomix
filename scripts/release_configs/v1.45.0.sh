@@ -106,6 +106,7 @@ MIGRATIONS=(
   "095_proximity_normalized_parent_index.sql"
   # Unreleased runtime preparation; no service activation or production deploy.
   "099_runtime_round_mappings.sql"
+  "104_runtime_round_mapping_map_alphabet.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"
