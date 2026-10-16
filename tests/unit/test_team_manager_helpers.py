@@ -89,12 +89,12 @@ def test_session_scope_date_param_uses_like_wildcard():
 # ---------------------------------------------------------------------------
 
 
-def test_conflict_clause_uses_named_constraint_when_session_identity_present():
-    """Newer schema has a `session_teams_identity_unique` UNIQUE constraint.
+def test_conflict_clause_infers_identity_index_when_session_identity_present():
+    """Fresh and migrated schemas may use a UNIQUE constraint or standalone index.
     Pin so an ON CONFLICT regression doesn't silently degrade upserts to
     `WHERE` matching the wrong tuple."""
     out = TeamManager._session_teams_conflict_clause({"session_identity"})
-    assert "session_teams_identity_unique" in out
+    assert "(session_identity, map_name, team_name)" in out
     assert out.startswith("ON CONFLICT")
 
 

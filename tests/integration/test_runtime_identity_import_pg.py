@@ -40,3 +40,51 @@ async def test_declared_wrong_match_cannot_write_then_correct_pair_replays(full_
         assert (item.root / item.generation / item.filename).exists()
     print('DECLARED ID PROOF: wrong match writes no R2/event/marker; correct R2 imports/replays '
           'once, one session, physical timing still unknown; no producer authentication claimed')
+
+
+@pytest.mark.parametrize('deferred', [False, True])
+async def test_bound_replay_reconciles_post_commit_team_step(full_import_db, tmp_path, monkeypatch, deferred):
+    import asyncio
+
+    manager, observer = full_import_db
+    manager.defer_team_assignment = deferred
+    first, _ = completed_identity_pair(tmp_path, balanced=True)
+    original_mark = manager.mark_file_processed
+
+    async def cancelled_marker(*args, **kwargs):
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(manager, 'mark_file_processed', cancelled_marker)
+    with pytest.raises(asyncio.CancelledError):
+        await import_completed_round(manager, first, expected_identity=FIRST)
+    assert await observer.fetchval('SELECT count(*) FROM runtime_round_mappings') == 1
+    assert await observer.fetchval('SELECT count(*) FROM session_teams') == 0
+    assert await observer.fetchval('SELECT count(*) FROM processed_files') == 0
+    monkeypatch.setattr(manager, 'mark_file_processed', original_mark)
+    assert (await import_completed_round(manager, first, expected_identity=FIRST)) == (True, 'Already mapped')
+    teams = await observer.fetch('SELECT * FROM session_teams ORDER BY id')
+    assert len(teams) == await observer.fetchval('SELECT count(*) FROM session_teams') == (0 if deferred else 2)
+    assert await observer.fetchval('SELECT count(*) FROM processed_files WHERE success') == 1
+    assert await observer.fetchval('SELECT count(*) FROM runtime_events') == 1
+    assert (await import_completed_round(manager, first, expected_identity=FIRST))[0] is True
+    assert await observer.fetch('SELECT * FROM session_teams ORDER BY id') == teams
+    print('BOUND REPLAY: canonical commit survives cancellation; default teams reconcile; deferred teams untouched')
+
+
+async def test_bound_warning_pair_persists_and_replays(full_import_db, tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    manager, observer = full_import_db
+    first, second = completed_identity_pair(tmp_path)
+    monkeypatch.setattr(manager, '_validate_round_data', AsyncMock(return_value=(False, 'synthetic warning')))
+    assert (await import_completed_round(manager, first, expected_identity=FIRST))[0] is True
+    assert (await import_completed_round(manager, second, first=first, expected_identity=SECOND))[0] is True
+    events = await observer.fetch('SELECT validation_passed FROM runtime_events ORDER BY id')
+    assert [row['validation_passed'] for row in events] == [False, False]
+    assert await observer.fetchval('SELECT count(*) FROM runtime_round_mappings') == 2
+    assert await observer.fetchval("SELECT count(*) FROM processed_files WHERE success AND error_message LIKE 'WARN:%'") == 2
+    assert (await import_completed_round(manager, first, expected_identity=FIRST))[0] is True
+    assert (await import_completed_round(manager, second, first=first, expected_identity=SECOND))[0] is True
+    assert await observer.fetch('SELECT validation_passed FROM runtime_events ORDER BY id') == events
+    assert await observer.fetchval('SELECT count(*) FROM runtime_round_mappings') == 2
+    print('BOUND WARNINGS: both canonical halves, false validation journal and mappings persist/replay once')

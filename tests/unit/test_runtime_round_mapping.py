@@ -60,3 +60,69 @@ async def test_strict_mapping_delivers_exact_frozen_dependency(tmp_path, line_en
     assert binding.identity == SECOND and binding.first.identity == FIRST
     assert (binding.sha256, binding.generation, binding.size) == (second.sha256, second.generation, second.size)
     assert (binding.first.sha256, binding.first.filename) == (first.sha256, first.filename)
+
+
+@pytest.mark.parametrize('validation', [True, False])
+async def test_mapping_records_actual_warning_or_success(validation):
+    from unittest.mock import Mock
+
+    from bot.runtime_round_mapping import record_round_mapping
+
+    class Row(dict):
+        def __iter__(self):
+            return iter(self.values())
+
+    binding = first_binding()
+    conn = Mock()
+    conn.is_in_transaction.return_value = True
+    parent = dict(map_name='supply', round_number=1, gaming_session_id=7,
+                  match_id=binding.filename[:17], round_date='2026-09-25', round_time='120000')
+    event = Row(source_filename=binding.filename, source_payload_sha256='b' * 64,
+                validation_passed=validation, round_number=1, gaming_session_id=7)
+    conn.fetchrow = AsyncMock(side_effect=[parent, event])
+    conn.execute = AsyncMock()
+    await record_round_mapping(conn, binding, 3, 'b' * 64, validation_passed=validation)
+    conn.execute.assert_awaited_once()
+    assert conn.execute.await_args.args[-2:] == (3, 'b' * 64)
+    conn.fetchrow = AsyncMock(side_effect=[parent, event])
+    conn.execute.reset_mock()
+    with pytest.raises(ValueError, match='journal missing or changed'):
+        await record_round_mapping(conn, binding, 3, 'b' * 64, validation_passed=not validation)
+    conn.execute.assert_not_awaited()
+
+
+@pytest.mark.parametrize('deferred', [False, True])
+@pytest.mark.parametrize('marked', [None, False, True])
+async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, deferred, marked):
+    from contextlib import asynccontextmanager
+    from pathlib import Path
+    from unittest.mock import Mock
+
+    import postgresql_database_manager as database
+
+    @asynccontextmanager
+    async def borrow():
+        yield conn
+
+    binding = first_binding()
+    conn = Mock()
+    conn.transaction = borrow
+    conn.fetchrow = AsyncMock(return_value=None if marked is None else dict(success=marked, file_hash='b' * 64))
+    manager = object.__new__(database.PostgreSQLDatabaseManager)
+    manager.defer_team_assignment = deferred
+    manager.event_stream_enabled = True
+    manager.pool = SimpleNamespace(acquire=borrow)
+    monkeypatch.setattr(manager, '_compute_file_hashes', Mock(return_value=('a' * 64, 'b' * 64)))
+    manager.mark_file_processed = AsyncMock()
+    auto_assign = AsyncMock()
+    monkeypatch.setattr(manager, '_auto_assign_teams_from_r1', auto_assign)
+    monkeypatch.setattr(database, 'inspect_round_mapping', AsyncMock(return_value=3))
+    monkeypatch.setattr(database, 'require_first_mapping', AsyncMock())
+    result = await manager.process_file(Path(binding.filename), runtime_binding=binding,
+                                        input_source=SimpleNamespace(read_bytes=lambda: b'x' * 100))
+    assert result == (True, 'Already mapped')
+    if deferred:
+        auto_assign.assert_not_awaited()
+    else:
+        auto_assign.assert_awaited_once_with(3, '2026-09-25')
+    assert manager.mark_file_processed.await_count == int(marked is not True)
