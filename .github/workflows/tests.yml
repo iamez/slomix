@@ -4,7 +4,7 @@ on:
   push:
     # Stacked runtime PRs target another feature branch, so their PR event
     # does not match main/develop. Test their exact pushed commits as well.
-    branches: [main, develop, 'feat/db-runtime-*']
+    branches: [main, develop, 'feat/db-runtime-*', 'feat/runtime-*']
   pull_request:
     branches: [main, develop]
   # A merge queue tests each PR against the FUTURE state of main, and it does
