@@ -12,7 +12,7 @@ This tool handles:
   ✅ Bulk import from local_stats/ (with duplicate prevention)
   ✅ Incremental updates (safe, only new files)
   ✅ Disaster recovery (rebuild from scratch)
-  ✅ Date range fixes (surgical re-import)
+  ✅ Legacy date range fixes (bound runtime sources require reconciliation)
   ✅ Validation and verification
   ✅ Progress tracking and stats
   ✅ Auto-detection and smart defaults
@@ -48,6 +48,7 @@ from shared.database_logging import log_performance_warning, log_stats_import
 from shared.import_result import RetryableImportFailure
 from shared.round_status_events import mark_round_restart, status_events_enabled
 from shared.runtime_events import emit_round_stats_imported, event_stream_enabled
+from shared.team_identity import has_modern_team_identity
 
 logger = logging.getLogger('bot.database.manager')
 log_database_operation = database_logging.log_database_operation
@@ -276,7 +277,7 @@ class PostgreSQLDatabaseManager:
             if backup_existing:
                 await self._backup_database()
 
-            # Wipe all tables
+            # Reset canonical data; preserve configuration and proximity receipts/aggregates
             logger.info("🧹 Wiping existing data...")
             await self._wipe_all_tables()
 
@@ -1289,16 +1290,7 @@ class PostgreSQLDatabaseManager:
                         """
                     )
 
-                has_identity_unique = await conn.fetchval(
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM pg_constraint
-                        WHERE conrelid = 'session_teams'::regclass
-                          AND conname = 'session_teams_identity_unique'
-                    )
-                    """
-                )
+                has_identity_unique = await has_modern_team_identity(conn)
                 if not has_identity_unique:
                     logger.info("   ➕ Adding session_teams identity uniqueness constraint...")
                     await conn.execute(
@@ -1430,7 +1422,11 @@ class PostgreSQLDatabaseManager:
 
     async def _wipe_all_tables(self):
         """
-        Wipe all game data from tables (keeps schema).
+        Reset canonical game data, retaining schema/config and proximity aggregates.
+
+        Keep proximity import receipts with their aggregates to prevent replay
+        from applying additive statistics twice. Explicit rebuild invalidates
+        only their canonical round link, preserving the admission fence.
 
         Order matters: children before parents to respect FK constraints.
         Config tables (user_permissions, permission_audit_log, team_pool) are
@@ -1454,7 +1450,6 @@ class PostgreSQLDatabaseManager:
             'runtime_cache_generations',
             'runtime_round_mappings',
             'runtime_events',
-            'proximity_processed_files',
             # Children of rounds (FK or CASCADE)
             'weapon_comprehensive_stats',
             'player_comprehensive_stats',
@@ -1503,6 +1498,12 @@ class PostgreSQLDatabaseManager:
                     if table == 'runtime_round_mappings':
                         # R2 references R1 with RESTRICT; release that dependency first.
                         await conn.execute('DELETE FROM runtime_round_mappings WHERE round_number=2')
+                    if table == 'rounds' and await conn.fetchval(
+                            "SELECT EXISTS(SELECT 1 FROM information_schema.columns "
+                            "WHERE table_schema='public' AND table_name='proximity_processed_files' "
+                            "AND column_name='linked_round_id')"):
+                        await conn.execute('UPDATE proximity_processed_files SET linked_round_id=NULL '
+                                           'WHERE linked_round_id IS NOT NULL')
                     await conn.execute(f"DELETE FROM {table}")
                     logger.info(f"   ✅ Wiped {table}")
                 except Exception as e:
@@ -1651,15 +1652,30 @@ class PostgreSQLDatabaseManager:
                         or len(input_source.read_bytes()) != runtime_binding.size
                         or self.event_stream_enabled is not True):
                     raise ValueError('Bound import requires sealed matching input and enabled journal')
+                mapped_validation = None
                 async with self.pool.acquire() as conn, conn.transaction():
                     mapped = await inspect_round_mapping(conn, runtime_binding, payload_hash)
-                    marker = await conn.fetchrow('SELECT success,file_hash FROM processed_files WHERE filename=$1', filename)
+                    marker = await conn.fetchrow('SELECT success,file_hash,error_message FROM processed_files WHERE filename=$1', filename)
                     if marker is not None and (mapped is None or marker['file_hash'] != payload_hash):
                         raise ValueError('Existing marker has no exact runtime mapping')
                     await require_first_mapping(conn, runtime_binding)
+                    if mapped is not None:
+                        mapped_validation = await conn.fetchval(
+                            "SELECT validation_passed FROM runtime_events WHERE round_id=$1 "
+                            "AND event_type='round_stats_imported'", mapped)
+                        if type(mapped_validation) is not bool:
+                            raise ValueError('Mapped validation status unavailable')
                 if mapped is not None:
-                    if marker is None or marker['success'] is not True:
-                        await self.mark_file_processed(filename, success=True, file_hash=payload_hash)
+                    existing_warning = marker.get('error_message') if marker is not None else None
+                    has_warning = isinstance(existing_warning, str) and existing_warning.startswith('WARN:')
+                    replay_warning = None
+                    if mapped_validation is False:
+                        replay_warning = (existing_warning if has_warning else
+                            'WARN: Original mapped import recorded a validation warning; details unavailable')
+                    if (marker is None or marker['success'] is not True
+                            or (mapped_validation is False and not has_warning)):
+                        await self.mark_file_processed(filename, success=True, file_hash=payload_hash,
+                                                       error_msg=replay_warning)
                     # The canonical transaction may have committed before a cancelled
                     # marker/team step. Reconcile the default R1 effect on replay.
                     if runtime_binding.identity.round_number == 1 and not self.defer_team_assignment:
@@ -2850,9 +2866,12 @@ class PostgreSQLDatabaseManager:
 
     async def fix_date_range(self, start_date: str, end_date: str) -> bool:
         """
-        Surgical fix: Re-import specific date range
+        Surgical legacy fix: Re-import an unbound date range
 
-        Deletes data in range, then re-imports those files.
+        Deletes legacy data in range, then re-imports those files. Runtime
+        mappings and strict proximity links require separate trusted source
+        admission; refuse them before any deletion rather than downgrade them
+        to an unbound legacy import.
 
         IMPORTANT: Deletes child records BEFORE parent records to avoid
         foreign key constraint violations.
@@ -2874,7 +2893,7 @@ class PostgreSQLDatabaseManager:
                 # STEP 1: Get affected round IDs
                 logger.info("🔍 Finding rounds in date range...")
                 round_ids = await conn.fetch(
-                    "SELECT id FROM rounds WHERE round_date >= $1 AND round_date <= $2",
+                    "SELECT id FROM rounds WHERE round_date >= $1 AND round_date <= $2 FOR UPDATE",
                     start_date, end_date
                 )
 
@@ -2883,6 +2902,20 @@ class PostgreSQLDatabaseManager:
                     return False
 
                 ids = [r['id'] for r in round_ids]
+                has_mappings = await conn.fetchval(
+                    "SELECT to_regclass('public.runtime_round_mappings') IS NOT NULL")
+                bound = has_mappings and await conn.fetchval(
+                    'SELECT EXISTS(SELECT 1 FROM runtime_round_mappings WHERE canonical_round_id=ANY($1))', ids)
+                has_links = await conn.fetchval(
+                    "SELECT EXISTS(SELECT 1 FROM information_schema.columns "
+                    "WHERE table_schema='public' AND table_name='proximity_processed_files' "
+                    "AND column_name='linked_round_id')")
+                linked = has_links and await conn.fetchval(
+                    'SELECT EXISTS(SELECT 1 FROM proximity_processed_files WHERE linked_round_id=ANY($1))', ids)
+                if bound or linked:
+                    logger.error('Legacy date repair refused: runtime-bound rounds or strict proximity links '
+                                 'require separately admitted sources and explicit reconciliation')
+                    return False
                 logger.info(f"📊 Found {len(ids)} rounds to delete")
 
                 # STEP 2: Delete CHILD records first (order matters!)
@@ -2928,8 +2961,8 @@ class PostgreSQLDatabaseManager:
                 # STEP 3: Now safe to delete PARENT rounds
                 logger.info("🗑️  Deleting parent rounds...")
                 rounds_result = await conn.execute(
-                    "DELETE FROM rounds WHERE round_date >= $1 AND round_date <= $2",
-                    start_date, end_date
+                    "DELETE FROM rounds WHERE id = ANY($1)",
+                    ids
                 )
                 logger.info(f"   ✓ rounds: {rounds_result}")
 
@@ -3074,7 +3107,7 @@ async def main():
         print("  1️⃣   Create fresh database (with backup)")
         print("  2️⃣   Import all files (incremental - safe)")
         print("  3️⃣   Rebuild from scratch (nuclear option)")
-        print("  4️⃣   Fix specific date range (surgical fix)")
+        print("  4️⃣   Fix legacy date range (runtime-bound dates require reconciliation)")
         print("  5️⃣   Validate database")
         print("  6️⃣   Quick test (import 10 files)")
         print()

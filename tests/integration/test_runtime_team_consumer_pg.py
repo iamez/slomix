@@ -189,6 +189,9 @@ async def test_identity_unique_index_matches_upgraded_schema(full_import_db, tmp
         }[index_kind]
         await conn.execute(definition)
         assert await conn.fetchval("SELECT count(*) FROM pg_constraint WHERE conname='session_teams_identity_unique' AND conrelid='session_teams'::regclass") == 0
+    if index_kind == 'standalone':
+        await manager._migrate_schema_if_needed()  # noqa: SLF001 -- real legacy setup must accept migration036
+        assert await conn.fetchval("SELECT count(*) FROM pg_constraint WHERE conname='session_teams_identity_unique' AND conrelid='session_teams'::regclass") == 0
     monkeypatch.setenv('EVENT_STREAM_ENABLED', 'true')
     monkeypatch.setenv('RUNTIME_TEAM_EVENTS_ENABLED', 'true')
     event_id = await conn.fetchval('SELECT id FROM runtime_events WHERE round_number=1')

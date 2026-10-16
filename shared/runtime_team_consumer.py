@@ -6,6 +6,7 @@ from datetime import date
 
 from shared.import_team_assignment import TeamAssignment, assign_round_teams
 from shared.runtime_events import event_stream_enabled
+from shared.team_identity import has_modern_team_identity
 from shared.team_write_guard import team_write_transaction
 
 CONSUMER = 'round-team-assignment-v1'
@@ -43,27 +44,7 @@ async def consume_team_event(conn, *, event_id: int) -> TeamConsumption:
             CONSUMER, event_id,
         ):
             return TeamConsumption('already_processed')
-        modern_identity = await conn.fetchval("""
-            SELECT
-              (SELECT count(*)=2 FROM information_schema.columns
-               WHERE table_schema='public' AND table_name='session_teams'
-                 AND column_name IN ('gaming_session_id','session_identity'))
-              AND EXISTS (
-                SELECT 1 FROM pg_index i
-                JOIN pg_class t ON t.oid=i.indrelid
-                JOIN pg_class ix ON ix.oid=i.indexrelid
-                JOIN pg_namespace n ON n.oid=t.relnamespace
-                WHERE n.nspname='public' AND t.relname='session_teams'
-                  AND ix.relname='session_teams_identity_unique'
-                  AND i.indisunique AND i.indisvalid AND i.indisready AND i.indimmediate
-                  AND i.indpred IS NULL AND i.indexprs IS NULL AND i.indnatts=3
-                  AND ARRAY(SELECT a.attname::text
-                            FROM unnest(i.indkey) WITH ORDINALITY k(attnum,position)
-                            JOIN pg_attribute a ON a.attrelid=t.oid AND a.attnum=k.attnum
-                            ORDER BY k.position)
-                      = ARRAY['session_identity','map_name','team_name']::text[]
-              )
-        """)
+        modern_identity = await has_modern_team_identity(conn)
         if modern_identity is not True:
             return TeamConsumption('pending', 'schema_unavailable')
         event = await conn.fetchrow('SELECT * FROM runtime_events WHERE id=$1', event_id)
