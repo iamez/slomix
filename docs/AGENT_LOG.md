@@ -1155,3 +1155,30 @@ caller1 failure; actual ancestor dotenv leak1 failure. Every source restored wit
 cmp. No service, ET, migration, application write or production action. Refresh
 parents normally and run exact-head CI before final review closure. #1093 remains
 fully green and owner-specific merge approval is still pending. All plan retained.
+
+## 2026-10-16 — Completion deadline covers the bounded proof lifetime
+
+New #1094 review arrived during final closure after all four heads were green.
+The completion accept wait does bound elapsed play plus pauses, despite the old
+misleading docstring. Default completion_wait now covers3600s, the whole existing
+60-minute proof-unit lifetime, instead of cutting capture off at30 minutes.
+The supervisor in #1095 also needs3600 rather than its former1500s override.
+The overall unit cap is unchanged; incomplete/over-budget capture remains a
+terminal failure requiring reconciliation. Standalone callers may explicitly
+budget up to7200s per half; this is not unlimited gameplay or activation proof.
+
+Native pinned-peer/real-file test advances a virtual monotonic clock31 minutes
+after completion acceptance starts. Both halves capture under the new default;
+restoring1800s causes an observed TimeoutError. Source restored with cmp and42
+listener tests passed. No actual31-minute process or ET server was run.
+A related test race was exposed: socket creation can precede dispatch reservation,
+so root-replacement tests now wait on actual on_ready before asserting retained
+writer claims. An earlier run had41 pass/1 failure on that false test assumption.
+
+Previous exact heads all passed CI: #1093 c40537ba9261/9265 tests;
+#1094 2ed21c4e10075/10079; #1095 e12e035b10417/10421;
+#1096 dd351e0510565/10569 (Python3.11/PG14, Python3.13/PG17).
+Both new native team-lock cases ran in every branch/platform and passed counts
+were checked independently. New producer/game review fixes require new CI.
+#1093 remains ready with zero open threads and no commits behind main; per-number
+owner approval is still required. No merge, service or production change occurred.
