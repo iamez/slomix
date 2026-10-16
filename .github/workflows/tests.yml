@@ -138,6 +138,27 @@ jobs:
           lua5.1 -e 'assert(type(require("socket.unix").stream) == "function")'
           lua5.4 -e 'assert(type(require("socket.unix").stream) == "function")'
 
+      - name: Secure the native process fixture executable
+        # The hosted toolcache can make interpreter binaries group-writable.
+        # Pinning deliberately refuses that. Secure only this disposable job's
+        # selected interpreter; never relax the production process-pin guard.
+        run: |
+          python - <<'PY'
+          import stat
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          executable = Path(sys.executable).resolve(strict=True)
+          before = executable.stat()
+          if stat.S_IMODE(before.st_mode) & 0o022:
+              subprocess.run(["sudo", "chmod", "go-w", "--", str(executable)], check=True)
+          info = executable.stat()
+          print(f"Native fixture executable: mode={stat.S_IMODE(info.st_mode):04o} bytes={info.st_size}")
+          assert stat.S_ISREG(info.st_mode) and 0 < info.st_size <= 64 * 1024 * 1024
+          assert not info.st_mode & 0o022
+          PY
+
       - name: Run tests
         env:
           POSTGRES_TEST_HOST: 127.0.0.1
