@@ -36,7 +36,8 @@ POLICY = {'Type': 'exec', 'KillMode': 'control-group', 'Restart': 'no',
           'MemoryMax': '805306368', 'TasksMax': '64', 'LimitFSIZE': '67108864',
           'LimitCORE': '0', 'NoNewPrivileges': 'yes', 'UMask': '0077'}
 CLEARED_ENVIRONMENT = ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT')
-PROPERTIES = (*POLICY, 'UnsetEnvironment', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
+AUXILIARY_COMMANDS = ('ExecCondition', 'ExecStartPre', 'ExecStartPost', 'ExecReload', 'ExecStop', 'ExecStopPost')
+PROPERTIES = (*POLICY, *AUXILIARY_COMMANDS, 'ExecStart', 'UnsetEnvironment', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
               'InvocationID', 'Result')
 
 
@@ -61,6 +62,45 @@ def unit_properties(unit):
     if set(values.get('UnsetEnvironment', '').split()) != set(CLEARED_ENVIRONMENT):
         raise ValueError('Dedicated unit inherited import environment is not cleared')
     return values
+
+
+def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture=None,
+                    bot_manifest_sha256=None, proof_socket=None, proof_database_name=None,
+                    import_lock_directory=None, defer_team_assignment=False):
+    """One unambiguous argv shared by offline generation and live admission."""
+    argv = [str(interpreter), '-I', '-B', str(source / 'scripts/runtime_game_supervisor.py'),
+            'run', '--directory', str(directory), '--unit', unit, '--commit', commit]
+    if bot_fixture is not None:
+        argv += ['--bot-fixture', str(bot_fixture), '--bot-manifest-sha256', bot_manifest_sha256]
+    if proof_socket is not None:
+        argv += ['--proof-socket', str(proof_socket), '--proof-database-name', proof_database_name,
+                 '--import-lock-directory', str(import_lock_directory)]
+    if defer_team_assignment:
+        argv += ['--defer-team-assignment']
+    if any(not isinstance(value, str) or re.fullmatch(r'[A-Za-z0-9_./-]+', value) is None
+           for value in argv):
+        raise ValueError('Unambiguous ASCII supervisor arguments required')
+    return argv
+
+
+def validate_launch_commands(properties, expected_argv):
+    """Check effective manager configuration, not historical absence of effects.
+
+    systemctl omits unset execution-array properties even with --all. Any
+    populated auxiliary command is forbidden. Same-UID actors that changed a
+    unit after executing a command remain outside this cooperative proof.
+    """
+    if any(properties.get(name, '') for name in AUXILIARY_COMMANDS):
+        raise ValueError('Auxiliary unit commands are forbidden')
+    # Native systemctl display: exactly one non-ignored command, followed by
+    # manager-owned execution metadata. No shell/wrapper or extra argv allowed.
+    raw = properties.get('ExecStart', '')
+    match = re.fullmatch(r'\{ path=([^ ;]+) ; argv\[\]=([^;]+) ; ignore_errors=no ; '
+                         r'start_time=\[[^\]\n]*\] ; stop_time=\[[^\]\n]*\] ; '
+                         r'pid=[0-9]+ ; code=[^;{}\n]+ ; status=[^;{}\n]+ \}', raw)
+    if (match is None or match[1] != expected_argv[0]
+            or match[2].strip() != ' '.join(expected_argv)):
+        raise ValueError('Effective supervisor ExecStart disagrees')
 
 
 def require_containment(unit):
@@ -128,7 +168,7 @@ def capture_process(record, pid, stdin_fd):
                                         pin=pin, epoch=epoch)
         with map_release(pin, stdin_fd) as release:
             result = serve_match(driver, Path(record['socket_path']), on_ready=release,
-                                 initial_readiness_wait=1800, bootstrap_wait=1800, completion_wait=1500)
+                                 initial_readiness_wait=1800, bootstrap_wait=1800, completion_wait=3600)
         result.verify()
         return result
 
@@ -143,7 +183,13 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
         raise ValueError('Deferred team assignment requires the complete proof import target')
     # No game side effect before all admission checks. Environment flags alone
     # do not prove service membership; ask the manager AND inspect kernel cgroup.
+    expected_argv = supervisor_argv(Path(__file__).resolve().parents[1], sys.executable,
+        directory, unit, expected_commit, bot_fixture=bot_fixture,
+        bot_manifest_sha256=bot_manifest_sha256, proof_socket=proof_socket,
+        proof_database_name=proof_database_name, import_lock_directory=import_lock_directory,
+        defer_team_assignment=defer_team_assignment)
     admitted = require_containment(unit)
+    validate_launch_commands(admitted, expected_argv)
     verify_source(Path(__file__).resolve().parents[1], expected_commit)
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import_options = (proof_socket, proof_database_name, import_lock_directory)
@@ -154,7 +200,9 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
         asyncio.run(preflight_import(socket=proof_socket, database=proof_database_name,
                                     lock_directory=import_lock_directory))
     recipe = startup_recipe(directory, bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256)
-    if require_containment(unit)['InvocationID'] != admitted['InvocationID']:
+    rechecked = require_containment(unit)
+    validate_launch_commands(rechecked, expected_argv)
+    if rechecked['InvocationID'] != admitted['InvocationID']:
         raise ValueError('Service invocation changed during admission')
     print(json.dumps({'status': 'admitted_not_captured', 'unit': unit,
                       'invocation_id': admitted['InvocationID']}), flush=True)

@@ -28,6 +28,7 @@ def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferr
     pipe = Mock()
     child = SimpleNamespace(pid=123, stdin=pipe)
     monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
+    monkeypatch.setattr(module, 'validate_launch_commands', lambda *args: None)
     monkeypatch.setattr(module, 'verify_source', lambda *args: None)
     monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kw: dict(argv=[], cwd='/', env={}, workspace={}))
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kw: child)
@@ -290,6 +291,7 @@ def test_deferred_import_failure_is_redacted_before_launch(monkeypatch, tmp_path
     original_import = builtins.__import__
 
     monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
+    monkeypatch.setattr(module, 'validate_launch_commands', lambda *args: None)
     monkeypatch.setattr(module, 'verify_source', lambda *args: None)
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kwargs: pytest.fail('Launch reached'))
 
@@ -323,6 +325,7 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 module.require_containment = lambda unit: {'InvocationID': 'a' * 32}
 module.verify_source = lambda *args: None
+module.validate_launch_commands = lambda *args: None
 original_import = builtins.__import__
 def importing(name, *args, **kwargs):
     if name == 'scripts.runtime_game_startup':
@@ -370,7 +373,7 @@ def test_capture_allows_both_rounds_readiness_before_round_completion(monkeypatc
                   socket_path=str(tmp_path / 'socket'))
     assert module.capture_process(record, 123, 0) is result
     listener.assert_called_once_with(driver, tmp_path / 'socket', on_ready='release',
-                                     initial_readiness_wait=1800, bootstrap_wait=1800, completion_wait=1500)
+                                     initial_readiness_wait=1800, bootstrap_wait=1800, completion_wait=3600)
     result.verify.assert_called_once()
 
 
@@ -379,6 +382,7 @@ def test_capture_interruption_closes_supervisor_input_without_claiming_shutdown(
     from unittest.mock import Mock
     pipe = Mock()
     monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
+    monkeypatch.setattr(module, 'validate_launch_commands', lambda *args: None)
     monkeypatch.setattr(module, 'verify_source', lambda *args: None)
     monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kwargs: dict(argv=[], cwd='/', env={}, workspace={}))
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kwargs: SimpleNamespace(pid=123, stdin=pipe))
@@ -389,3 +393,30 @@ def test_capture_interruption_closes_supervisor_input_without_claiming_shutdown(
     with pytest.raises(failure):
         module.run(tmp_path, UNIT, 'b' * 40)
     pipe.close.assert_called_once()
+
+
+def effective_start(argv):
+    return ('{ path=' + argv[0] + ' ; argv[]=' + ' '.join(argv)
+            + ' ; ignore_errors=no ; start_time=[n/a] ; stop_time=[n/a] ; pid=0 ; code=(null) ; status=0/0 }')
+
+
+@pytest.mark.parametrize('damage', ['wrapper', 'extra', 'ignored', 'multiple', *module.AUXILIARY_COMMANDS])
+def test_effective_unit_commands_refuse_wrappers_and_auxiliaries(tmp_path, damage, monkeypatch):
+    argv = module.supervisor_argv(Path(module.__file__).resolve().parents[1], sys.executable,
+                                 tmp_path, UNIT, 'b' * 40)
+    props = stopped() | {'ExecStart': effective_start(argv)}
+    module.validate_launch_commands(props, argv)
+    if damage == 'wrapper':
+        props['ExecStart'] = effective_start(['/bin/sh', '-c', *argv])
+    elif damage == 'extra':
+        props['ExecStart'] = effective_start(argv + ['--extra'])
+    elif damage == 'ignored':
+        props['ExecStart'] = props['ExecStart'].replace('ignore_errors=no', 'ignore_errors=yes')
+    elif damage == 'multiple':
+        props['ExecStart'] += ' ' + props['ExecStart']
+    else:
+        props[damage] = effective_start(['/bin/true'])
+    monkeypatch.setattr(module, 'require_containment', lambda unit: props)
+    monkeypatch.setattr(module, 'verify_source', lambda *args: pytest.fail('Source import admission reached'))
+    with pytest.raises(ValueError, match='commands|ExecStart'):
+        module.run(tmp_path, UNIT, 'b' * 40)

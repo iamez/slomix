@@ -1,3 +1,35 @@
+## 2026-10-16 — Effective launch commands, explicit config and voting capability
+
+Three later #1095 review findings fixed. Rendered and admitted units share one
+unambiguous argv builder; resolved ExecStart must match its exact interpreter,
+isolation flags, script and arguments. Wrappers, extra/multiple/ignored commands
+and all populated ExecCondition/StartPre/Post/Reload/Stop/Post are refused, both
+initially and immediately before our Popen. Actual stopped-unit property format
+was checked read-only: systemd can omit empty execution arrays even with--all.
+Current metadata cannot prove an earlier wrapper made no side effects; refusal
+prevents our next ET launch, not retroactive certification of the whole unit.
+
+UltimateBot now calls the same early explicit load_environment as the app slice,
+before imports, and removes plain load_dotenv ancestor search. A real isolated
+child with a missing synthetic key in explicit config and that key in ancestor
+.env remains clean. Reintroducing fallback genuinely loaded the ancestor marker
+and failed the environment assertion; source restored with cmp. The first
+mutation measured only a forbidden-loader-call assertion, so it was rerun with
+the child's cwd corrected to expose the actual leak before claiming that proof.
+
+MVP vote CTA forces the functional legacy route while ordinary session links
+still follow WEBSITE_UI_MODE. SPA voting mutation remains future UI work: its
+current read-only view cannot deliver the advertised action. Both embed modes
+are rendered in tests. Supervisor completion wait now3600 agrees with #1094;
+global60-minute lifetime is unchanged, partial capture is never success.
+
+202 selected tests passed, Ruff/configured Bandit/diff-check clean. Observed
+negative controls: command admission10 failures; vote1 failure/1 pass; completion
+caller1 failure; actual ancestor dotenv leak1 failure. Every source restored with
+cmp. No service, ET, migration, application write or production action. Refresh
+parents normally and run exact-head CI before final review closure. #1093 remains
+fully green and owner-specific merge approval is still pending. All plan retained.
+
 
 ## 2026-10-16 — Bound team contention remains retryable after canonical commit
 

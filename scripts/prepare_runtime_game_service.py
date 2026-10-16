@@ -20,7 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.prepare_runtime_game_bundle import _write_new  # noqa: E402
 from scripts.runtime_game_startup import startup_recipe  # noqa: E402
-from scripts.runtime_game_supervisor import verify_source  # noqa: E402
+from scripts.runtime_game_supervisor import supervisor_argv, verify_source  # noqa: E402
 
 
 def safe_path(path):
@@ -52,8 +52,6 @@ def render(*, source, interpreter, workspace, destination, unit, commit,
         raise ValueError('Invalid unit or commit')
     if (bot_fixture is None) != (bot_manifest_sha256 is None):
         raise ValueError('Bot fixture and manifest pin required together')
-    bot_args = ''
-    import_args = ''
     options = (proof_socket, proof_database_name, import_lock_directory)
     if any(value is not None for value in options):
         if any(value is None for value in options):
@@ -62,21 +60,20 @@ def render(*, source, interpreter, workspace, destination, unit, commit,
         safe_path(import_lock_directory)
         if re.fullmatch(r'slomix_fixture_[0-9a-f]{32}', proof_database_name) is None:
             raise ValueError('Explicit disposable proof database required')
-        import_args = (f' --proof-socket {proof_socket} --proof-database-name {proof_database_name}'
-                       f' --import-lock-directory {import_lock_directory}')
-    if defer_team_assignment:
-        import_args += ' --defer-team-assignment'
     if bot_fixture is not None:
         safe_path(bot_fixture)
         if re.fullmatch(r'[a-f0-9]{64}', bot_manifest_sha256) is None:
             raise ValueError('Invalid bot manifest pin')
-        bot_args = f' --bot-fixture {bot_fixture} --bot-manifest-sha256 {bot_manifest_sha256}'
+    argv = supervisor_argv(source, interpreter, workspace, unit, commit,
+        bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256,
+        proof_socket=proof_socket, proof_database_name=proof_database_name,
+        import_lock_directory=import_lock_directory, defer_team_assignment=defer_team_assignment)
     return f'''[Unit]
 Description=Slomix isolated ET capture rehearsal (owner activation only)
 
 [Service]
 Type=exec
-ExecStart={interpreter} -I -B {source}/scripts/runtime_game_supervisor.py run --directory {workspace} --unit {unit} --commit {commit}{bot_args}{import_args}
+ExecStart={' '.join(argv)}
 WorkingDirectory={source}
 Restart=no
 RemainAfterExit=no

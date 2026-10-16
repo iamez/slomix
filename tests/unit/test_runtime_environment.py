@@ -136,3 +136,60 @@ def test_bot_metrics_paths_use_external_log_root(configuration, monkeypatch, exp
     loaded = BotConfig()
     assert loaded.metrics_log_dir == str(logs / 'metrics')
     assert loaded.metrics_db_path == (custom if explicit else str(logs / 'metrics' / 'metrics.db'))
+
+
+def test_bot_entrypoint_explicit_environment_never_loads_ancestor(tmp_path):
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[2] / 'bot/ultimate_bot.py'
+    parent = tmp_path / 'ancestor'
+    entry = parent / 'release' / 'bot' / 'ultimate_bot.py'
+    entry.parent.mkdir(parents=True)
+    entry.write_bytes(source.read_bytes())
+    (parent / '.env').write_text('RUNTIME_ANCESTOR_SHOULD_NOT_LOAD=unexpected\n')
+    explicit = tmp_path / 'explicit.env'
+    explicit.write_text(f'BOT_LOG_DIR={tmp_path / "external-logs"}\nLOG_LEVEL=ERROR\n')
+    explicit.chmod(0o600)
+    code = r'''
+import importlib.util, json, os, sys
+import dotenv
+calls = []
+original = dotenv.load_dotenv
+def observed(*args, **kwargs):
+    calls.append(bool(args or kwargs))
+    return original(*args, **kwargs)
+dotenv.load_dotenv = observed
+sys.path.insert(0, sys.argv[1])
+spec = importlib.util.spec_from_file_location('entrypoint_fixture', sys.argv[2])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+assert 'RUNTIME_ANCESTOR_SHOULD_NOT_LOAD' not in os.environ
+assert calls == [], calls
+assert module.os.environ['BOT_LOG_DIR'] == sys.argv[3]
+print(json.dumps({'ancestor_loaded': False, 'legacy_loader_calls': len(calls)}))
+'''
+    env = {'PATH': '/usr/bin:/bin', 'HOME': str(tmp_path), 'SLOMIX_ENV_FILE': str(explicit),
+           'BOT_ENVIRONMENT': 'dev', 'SSH_ENABLED': 'false', 'PYTHONDONTWRITEBYTECODE': '1'}
+    result = subprocess.run([sys.executable, '-I', '-B', '-c', code, str(source.parents[1]),
+                             str(entry), str(tmp_path / 'external-logs')], env=env, cwd=entry.parent,
+                            capture_output=True, text=True, timeout=20)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.splitlines()[-1]) == {'ancestor_loaded': False, 'legacy_loader_calls': 0}
+
+
+def test_bot_entrypoint_environment_precedes_application_imports():
+    import ast
+    from pathlib import Path
+    source = Path(__file__).resolve().parents[2] / 'bot/ultimate_bot.py'
+    tree = ast.parse(source.read_text())
+    top = tree.body
+    boundary = next(i for i, node in enumerate(top) if isinstance(node, ast.Expr)
+                    and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name)
+                    and node.value.func.id == 'load_environment')
+    bot_imports = [i for i, node in enumerate(top) if isinstance(node, ast.ImportFrom)
+                   and (node.module or '').startswith('bot.')]
+    assert bot_imports and boundary < min(bot_imports)
+    assert not any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                   and node.func.id == 'load_dotenv' for node in ast.walk(tree))

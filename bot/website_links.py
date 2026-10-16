@@ -9,7 +9,7 @@ def validate_ui_mode(value: str) -> str:
     return value
 
 
-def website_url(config, route: str) -> str:
+def website_url(config, route: str, *, legacy: bool = False) -> str:
     """Build an explicit legacy hash URL or a new SPA deep link.
 
     The base is an origin, not /app or an API URL. Never infer the UI from
@@ -17,6 +17,8 @@ def website_url(config, route: str) -> str:
     Routes are application-owned paths, not arbitrary external destinations.
     """
     mode = validate_ui_mode(getattr(config, "website_ui_mode", "legacy"))
+    if legacy:
+        mode = "legacy"
     base = getattr(config, "website_public_base", "https://www.slomix.fyi")
     parsed = urlsplit(base)
     if (

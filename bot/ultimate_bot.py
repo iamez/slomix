@@ -18,6 +18,10 @@ from discord.ext import commands
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from shared.runtime_environment import load_environment
+
+load_environment()  # Before modules with import-time SSH/log/config constants.
+
 # Import extracted core classes
 from bot.automation import FileTracker, SSHHandler
 from bot.config import load_config
@@ -53,14 +57,6 @@ try:
 except ImportError:
     WS_CLIENT_AVAILABLE = False
     StatsWebSocketClient = None
-
-# Load environment variables if available
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:  # nosec B110
-    pass  # python-dotenv is optional
 
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
