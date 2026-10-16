@@ -248,6 +248,11 @@ function et_InitGame(levelTime, randomSeed, restart)
     runtime_init_lease_claimed = false
     runtime_ipc = nil -- Never carry a receiver into a new qagame lifecycle.
     if runtime_bound_ticket ~= nil then runtime_binding_invalidated = true end
+    -- A fresh observation may obtain a NEW lease; no old ticket/receiver or
+    -- consumed attempt may cross map_restart in a persistent Lua VM.
+    runtime_bound_ticket = nil
+    runtime_stats_attempted = false
+    runtime_ipc_configured = false
     runtime_init_context = nil
     fh_init()
 	et.RegisterModname(modname .. " " .. version)
@@ -267,7 +272,7 @@ function et_InitGame(levelTime, randomSeed, restart)
 
 	max_clients = tonumber(et.trap_Cvar_Get("sv_maxClients"))
 	if gamestate == 0 or gamestate == et.WARMUP or gamestate == et.GS_WARMUP_COUNTDOWN then
-		round = tonumber(et.trap_Cvar_Get("g_currentRound")) --if 1 then round 2
+		round = tonumber(et.trap_Cvar_Get("g_currentRound")) -- Active-start counter: 1 is R1, 0 is R2.
 	end
 
 	local i = 0
@@ -568,9 +573,10 @@ bind_runtime_stats = function(ticket)
 		and (exit_flag == "" or exit_flag == "0" or exit_flag == "1")
 		and exit_flag == runtime_init_context.exit_flag, "runtime stats require active stopwatch context")
 	assert((counter == 0 or counter == 1) and runtime_init_context.counter == counter
-		and frozen.identity.round_number == counter + 1, "runtime stats start half mismatch")
+		and frozen.identity.round_number == 2 - counter, "runtime stats start half mismatch")
 	assert(runtime_init_context.map_name == mapname and frozen.map_name == mapname,
 		"runtime stats ticket map mismatch")
+	runtime_binding_invalidated = false -- Only a newly validated binding clears the old fence.
 	runtime_bound_ticket = frozen
 	return frozen.identity.round_id, frozen.generation -- Local acceptance, not durable host acknowledgement.
 end

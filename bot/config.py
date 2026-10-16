@@ -359,8 +359,9 @@ class BotConfig:
         self.stats_directory: str = self._get_config('STATS_DIRECTORY', 'local_stats')
         self.local_stats_path: str = self._get_config('LOCAL_STATS_PATH', './local_stats')
         self.backup_directory: str = self._get_config('BACKUP_DIRECTORY', 'processed_stats')
+        self.metrics_log_dir: str = os.path.join(os.getenv('BOT_LOG_DIR') or 'logs', 'metrics')
         self.metrics_db_path: str = self._get_config(
-            'METRICS_DB_PATH', os.path.join(os.getenv('BOT_LOG_DIR') or 'logs', 'metrics', 'metrics.db')
+            'METRICS_DB_PATH', os.path.join(self.metrics_log_dir, 'metrics.db')
         )
 
         # ==================== RCON (REMOTE CONSOLE) ====================

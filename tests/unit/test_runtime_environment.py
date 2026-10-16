@@ -117,3 +117,22 @@ def test_migration_and_sentinel_use_same_explicit_file(configuration, monkeypatc
     assert apply_migrations.resolve_env_file(root) == config
     data_plausibility_audit._load_dotenv(root)  # noqa: SLF001 - script boundary
     assert os.environ["RUNTIME_TEST_WIN"] == "file"
+
+
+@pytest.mark.parametrize('explicit', [False, True])
+def test_bot_metrics_paths_use_external_log_root(configuration, monkeypatch, explicit):
+    from bot.config import BotConfig
+    root, config = configuration
+    monkeypatch.chdir(root)
+    monkeypatch.setenv('SLOMIX_ENV_FILE', str(config))
+    monkeypatch.setenv('BOT_ENVIRONMENT', 'dev')
+    monkeypatch.setenv('SSH_ENABLED', 'false')
+    logs = config.parent / 'mutable-logs'
+    monkeypatch.setenv('BOT_LOG_DIR', str(logs))
+    custom = str(config.parent / 'custom-store' / 'custom.db')
+    monkeypatch.delenv('METRICS_DB_PATH', raising=False)
+    if explicit:
+        monkeypatch.setenv('METRICS_DB_PATH', custom)
+    loaded = BotConfig()
+    assert loaded.metrics_log_dir == str(logs / 'metrics')
+    assert loaded.metrics_db_path == (custom if explicit else str(logs / 'metrics' / 'metrics.db'))

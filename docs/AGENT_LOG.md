@@ -1080,3 +1080,64 @@ were observed there. Compare visible approved values, preserve strict pre-start
 inherited-override rejection, and keep application/config digest proof separate.
 External state routing must include exposed SSHMonitor downloads, and compatibility
 wrappers must preserve verification-mode CLI semantics as well as preparation.
+
+## 2026-10-16 — Additive aggregates require durable replay receipts
+
+A canonical rebuild must preserve proximity receipts whenever it preserves the
+additive teamplay/crossfire/heatmap aggregates. Clearing only the receipt permits
+double application on replay. Release explicit round links, retain admission and
+hash flags, and compare complete receipt/aggregate rows after rollback and reset.
+Bound import marker recovery must also preserve the journal validation warning;
+missing original warning text requires an explicit warning, never false success.
+Legacy date repair must refuse bound sources before deletes until reconciliation
+has separately admitted the original sources. Legacy schema setup and runtime
+workers must share the same usable unique-index admission predicate.
+
+## 2026-10-16 — Game startup redaction, loader audit and metrics outputs
+
+Three new #1095 review findings corrected: both rendered unit and effective
+containment gate require LD_AUDIT removal; missing deferred dependencies now
+produce structured redacted ImportError JSON before launch, including an actual
+isolated CLI child proof; cancellation/SystemExit remain unmasked. MetricsLogger
+from_config routes reports and default SQLite metrics DB to BOT_LOG_DIR/metrics,
+retains explicit separate metrics DB paths and the existing PostgreSQL protection
+against using the legacy application DB as metrics. UltimateBot uses this factory.
+
+Supervisor explicitly passes initial_readiness_wait1800 and bootstrap_wait1800
+from the new #1094 listener, plus completion_wait1500. Global RuntimeMaxSec60min
+remains the stricter overall resource cap; an early/incomplete capture is failure.
+New supervisor code must not run with the older listener API.
+
+143 selected tests passed with the new parent listener temporarily checked in
+place; source was then restored with cmp pending the normal dependency merge.
+Without that new dependency142 passed and the new caller test was deselected.
+Five mutations actually failed (audit2, import3, metrics4, render6, readiness1),
+each restored with cmp. Metrics proof writes real SQLite rows and JSON exports;
+SSH/game/Discord are synthetic or absent. Ruff and configured Bandit pass; two
+legacy test SLF001 findings are unchanged. Exact-head combined CI is next.
+No live ET, services, installation, application writes or production changes.
+All prior plan and owner-specific merge/activation gates remain in force.
+
+## 2026-10-16 — Persistent Lua VM supports both stopwatch halves
+
+Four #1094 findings corrected before activation. Each fresh InitGame invalidates
+old leases, receiver, ticket and consumed write attempt; only a newly validated
+binding clears the write fence. Each active bootstrap receives a fresh one-shot
+completion sender, so a persistent map_restart Lua VM can write R2 after R1.
+Real active-start ET counter values are1 for R1 and0 for R2; both observation and
+writer validation now encode2-counter. Tests no longer conceal this by inventing
+half-1 counter values. An unchanged sender/lease still cannot replay a write.
+
+Listener has separate bounded initial_readiness_wait1800 and between-half
+bootstrap_wait1800 (each max3600), distinct from completion and IPC exchange.
+Timeout preserves writer claims and terminally fences reuse. The game supervisor
+must pass the new argument from this parent; its existing global60-minute unit
+lifetime remains a stricter overall cap and may abort incomplete captures.
+
+424 selected regressions passed, then6 final claim/deadline tests passed. Five
+negative controls produced2+2+2+16+1 failures; every source restored with cmp.
+Lua5.1 and5.4 same-VM proof performs warmup/R1/shutdown/warmup/R2 with two actual
+closed files, independent hashes/sizes and two distinct completion messages.
+ET API and channel are synthetic, not a real engine/server or deploy proof.
+Ruff/diff-check pass. New exact-head CI and review replies are next. No services,
+units, application rows, live Lua or production changed. Preserve all prior plan.

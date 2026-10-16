@@ -76,6 +76,87 @@ real dependency/DB startup proof or deployment. Existing legacy-test Ruff findin
 remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
 and additional review closure remain pending. Preserve original plan and queues.
 
+## 2026-10-16 — Persistent Lua VM supports both stopwatch halves
+
+Four #1094 findings corrected before activation. Each fresh InitGame invalidates
+old leases, receiver, ticket and consumed write attempt; only a newly validated
+binding clears the write fence. Each active bootstrap receives a fresh one-shot
+completion sender, so a persistent map_restart Lua VM can write R2 after R1.
+Real active-start ET counter values are1 for R1 and0 for R2; both observation and
+writer validation now encode2-counter. Tests no longer conceal this by inventing
+half-1 counter values. An unchanged sender/lease still cannot replay a write.
+
+Listener has separate bounded initial_readiness_wait1800 and between-half
+bootstrap_wait1800 (each max3600), distinct from completion and IPC exchange.
+Timeout preserves writer claims and terminally fences reuse. The game supervisor
+must pass the new argument from this parent; its existing global60-minute unit
+lifetime remains a stricter overall cap and may abort incomplete captures.
+
+424 selected regressions passed, then6 final claim/deadline tests passed. Five
+negative controls produced2+2+2+16+1 failures; every source restored with cmp.
+Lua5.1 and5.4 same-VM proof performs warmup/R1/shutdown/warmup/R2 with two actual
+closed files, independent hashes/sizes and two distinct completion messages.
+ET API and channel are synthetic, not a real engine/server or deploy proof.
+Ruff/diff-check pass. New exact-head CI and review replies are next. No services,
+units, application rows, live Lua or production changed. Preserve all prior plan.
+
+## 2026-10-16 — Game startup redaction, loader audit and metrics outputs
+
+Three new #1095 review findings corrected: both rendered unit and effective
+containment gate require LD_AUDIT removal; missing deferred dependencies now
+produce structured redacted ImportError JSON before launch, including an actual
+isolated CLI child proof; cancellation/SystemExit remain unmasked. MetricsLogger
+from_config routes reports and default SQLite metrics DB to BOT_LOG_DIR/metrics,
+retains explicit separate metrics DB paths and the existing PostgreSQL protection
+against using the legacy application DB as metrics. UltimateBot uses this factory.
+
+Supervisor explicitly passes initial_readiness_wait1800 and bootstrap_wait1800
+from the new #1094 listener, plus completion_wait1500. Global RuntimeMaxSec60min
+remains the stricter overall resource cap; an early/incomplete capture is failure.
+New supervisor code must not run with the older listener API.
+
+143 selected tests passed with the new parent listener temporarily checked in
+place; source was then restored with cmp pending the normal dependency merge.
+Without that new dependency142 passed and the new caller test was deselected.
+Five mutations actually failed (audit2, import3, metrics4, render6, readiness1),
+each restored with cmp. Metrics proof writes real SQLite rows and JSON exports;
+SSH/game/Discord are synthetic or absent. Ruff and configured Bandit pass; two
+legacy test SLF001 findings are unchanged. Exact-head combined CI is next.
+No live ET, services, installation, application writes or production changes.
+All prior plan and owner-specific merge/activation gates remain in force.
+
+## 2026-10-16 — Preserve proximity replay fences and warning recovery
+
+Review of #1093 found that the previous explicit-reset change deleted proximity
+receipts while retaining additive proximity aggregates. Corrected before merge
+or deployment: retain those receipts, hashes, aggregate-applied/admission flags
+and all aggregates; release only linked_round_id during explicit canonical reset.
+The native fixture compares retained rows through rollback and successful reset.
+
+Bound replay restores WARN markers from the immutable validation_passed=false
+journal value after a missing/failed marker write, retains original warning text
+where available and leaves complete markers unchanged on subsequent replay.
+Legacy date repair locks its selected rounds and refuses runtime mappings or
+strict proximity links before any DELETE. Bound date repair remains a separate
+explicit source-admission/reconciliation task, not silently downgraded legacy
+reimport. The legacy test mocks reimport and proves only deletion/admission.
+
+Centralized the usable team-identity index predicate: the legacy schema setup
+must accept migration036's standalone unique index just like the team worker.
+No constraint promotion or duplicate-name DDL is needed on that valid shape.
+
+133 selected tests passed locally; 20 native PostgreSQL cases skipped because
+the private cluster is offline. Disabling warning preservation produced six
+observed failures; restoration compared byte-identical and all 12 replay cases
+passed. Root-manager Ruff remains its existing 12 diagnostics, with no added
+code/message; other changed Python paths pass. PG14/PG17 acceptance is pending
+on this new head. Earlier c71a13c1 CI passed9218/9222 tests, but does not prove
+these newer changes. No application data, services or production were changed.
+
+Next: exact-head CI, review replies and normal dependency refresh1094–1096.
+All original runtime, handover, D5, proximity/gametime and UI plans remain open
+where previously recorded. Per-number owner permission still gates each merge.
+
 ## 2026-10-16 — Package bytes match captured Git blobs, including transient drift
 
 Corrected the provenance measurement: the existing SPA validator already denies
