@@ -2,6 +2,7 @@
 # ruff: noqa: SLF001 -- directly exercise rendering/enrichment without posting to Discord
 from __future__ import annotations
 
+import secrets
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -21,7 +22,7 @@ def _config(**over):
     cfg.website_api_base = "http://127.0.0.1:9"  # unreachable on purpose
     cfg.website_public_base = "https://www.slomix.fyi"
     cfg.website_ui_mode = "legacy"
-    cfg.internal_api_secret = "test-internal-secret"  # noqa: S105 - test-only shared secret
+    cfg.internal_api_secret = secrets.token_urlsafe()
     for k, v in over.items():
         setattr(cfg, k, v)
     return cfg
@@ -214,7 +215,7 @@ async def test_fetch_kis_top_sends_internal_token(monkeypatch):
     assert "vid" in line
     assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
     assert sess.params == {"session_date": "2026-06-11", "limit": 3}
-    assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
+    assert sess.headers == {"X-Internal-Token": svc.config.internal_api_secret}
 
 
 @pytest.mark.asyncio
