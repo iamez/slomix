@@ -168,3 +168,21 @@ def test_state_and_report_cannot_write_into_marked_payload(source_map, tmp_path,
         transfer.write_report(report, {'state': str(tmp_path / 'shared'), 'sources': source_map})
     assert not target.exists() and not report.exists()
     assert (release / name).exists() or (release / name).is_symlink()
+
+
+@pytest.mark.parametrize('command', ['plan', 'seed'])
+@pytest.mark.parametrize('payload', [[], [{}], None, 7, True, {'sources': []}])
+def test_cli_malformed_json_refuses_without_traceback_or_output(tmp_path, capsys, command, payload):
+    if isinstance(payload, dict):
+        payload = dict(payload, state=str(tmp_path / 'shared'))
+    source = tmp_path / 'malformed-private-input.json'
+    source.write_text(json.dumps(payload))
+    report = tmp_path / 'report.json'
+    args = [command, '--input', str(source), '--report', str(report)]
+    if command == 'plan':
+        args += ['--state', str(tmp_path / 'shared')]
+    assert transfer.main(args) == 1
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)['status'] == 'refused'
+    assert not captured.err and str(source) not in captured.out
+    assert not report.exists() and not (tmp_path / 'shared').exists()

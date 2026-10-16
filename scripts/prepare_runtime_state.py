@@ -174,9 +174,13 @@ def main(argv=None):
     try:
         new_outside_git(args.report)
         record = json.loads(args.input.read_text())
+        if not isinstance(record, dict):
+            raise ValueError('State input must be an object')
         # Validate evidence placement before copying any data.
         target = args.state if args.command == 'plan' else Path(record['state'])
         sources = record if args.command == 'plan' else record['sources']
+        if not isinstance(sources, dict):
+            raise ValueError('State sources must be an object')
         if any(args.report.is_relative_to(Path(root)) for root in [str(target), *sources.values()] if root is not None):
             raise ValueError('Report overlaps data')
         result = plan(record, args.state) if args.command == 'plan' else seed(record)

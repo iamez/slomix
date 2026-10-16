@@ -1310,3 +1310,20 @@ a normal data-file seed. A synthetic metrics.db-journal input now refuses before
 copy; removing the new suffix produces one observed failure. Restored withcmp;
 101 state seed/delta/writer-inventory tests pass. This does not make the tool a
 generic secret scanner or a consistent snapshot of active writers.
+
+## 2026-10-16 — Independent state review fixes malformed CLI input
+
+PR #1097 is published, depending on1096; owner approval is still needed before
+any merge. Independent read-only review found no new critical immutable/report
+boundary, delta-content or false-quiescence issue. It reproduced a real CLI bug:
+JSON[] reached sources.values() and raised AttributeError with a traceback.
+The CLI now requires an object for both the input and selected source mapping
+before placement checks. Invalid structures return structured refused JSON,
+empty stderr and no state/report output. No raw input path is echoed.
+
+113 selected state tests pass. Removing the new checks produced6 failures/6passes;
+original restored withcmp. The actual previously failing child CLI now returns
+refused with no traceback or created files. This extends the earlier101 tests
+and retains the7-file CLI copy/hash proof and nonmutating delta proof. It does
+not certify quiescence, arbitrary-source confidentiality or activation. Live
+state, services, game, databases and production remain untouched.
