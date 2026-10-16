@@ -1098,3 +1098,28 @@ closed files, independent hashes/sizes and two distinct completion messages.
 ET API and channel are synthetic, not a real engine/server or deploy proof.
 Ruff/diff-check pass. New exact-head CI and review replies are next. No services,
 units, application rows, live Lua or production changed. Preserve all prior plan.
+
+## 2026-10-16 — Bound team contention remains retryable after canonical commit
+
+New #1093 review found the legacy auto-team bool/error wrapper swallowed global
+TeamWriteBusy after a bound R1 canonical commit and again during replay, so the
+batch reported success without a roster. Bound callers now opt into exception
+propagation; the existing post-commit importer boundary returns RetryableImportFailure.
+Canonical rows/mappings/events and successful warning-aware markers survive for
+reconciliation. Legacy callers keep their existing bool behavior. Cancellation
+still propagates; team identity conflicts also remain visible, never false success.
+
+126 selected tests passed;15 native cases skipped locally. Disabling strict
+propagation caused14 observed failures; source restored with cmp and126 passed.
+Two new native cases hold a real global advisory lock across fresh R1/replay,
+compare complete canonical/marker rows, require a retryable outcome and no teams,
+then release it, reconcile two teams and admit R2. The optional real batch envelope
+uses a fixture-manager attempt transport, not a new pool/connection-path proof.
+PG14/PG17 CI on this new head is required. Prior92a3ab64 CI was fully green:
+9229/9233 passed with179/175 skips; independent passed-node counts match. That
+proves receipt/warning/date/index changes, not this new lock propagation patch.
+
+Ruff adds no diagnostics (root12 unchanged). No service restart/deploy, migration,
+application data write or production change. Refresh dependent1094–1096 normally,
+answer the final review and retain per-PR owner merge permission. Original plan,
+state handover, D5 and remaining proximity/gametime/API/live/Spiderweb/UI retained.
