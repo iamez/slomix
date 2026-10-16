@@ -22,6 +22,15 @@ from shared.runtime_worker import run_bounded_capture_task
 NAME = '2026-09-20-120000-oasis-round-1.txt'
 PAYLOAD = b'abc'
 DIGEST = hashlib.sha256(PAYLOAD).hexdigest()
+INPUT_KIND = 'stats'
+
+
+@pytest.fixture(params=['stats', 'proximity'], autouse=True)
+def input_protocol(request, monkeypatch):
+    """Exercise real spawned-worker/retry proofs for both explicit protocols."""
+    monkeypatch.setattr(__name__ + '.INPUT_KIND', request.param)
+    if request.param == 'proximity':
+        monkeypatch.setattr(__name__ + '.NAME', NAME.replace('.txt', '_engagements.txt'))
 
 
 def _offline_child(task, marker, mode):
@@ -70,11 +79,11 @@ def _offline_child(task, marker, mode):
 
     class SFTP:
         def lstat(self, path):
-            assert path == '/snapshots/' + NAME
+            assert path == task.remote_path
             return attributes(named=True)
 
         def open(self, path, mode):
-            assert path == '/snapshots/' + NAME and mode == 'rb'
+            assert path == task.remote_path and mode == 'rb'
             return Source()
 
     @contextmanager
@@ -95,7 +104,7 @@ def _task(tmp_path, **kwargs):
     return SSHCaptureTask(
         RuntimeSSHConfig('offline.invalid', 22, 'fixture', tmp_path / 'key', tmp_path / 'hosts'),
         kwargs.pop('remote_path', '/snapshots/' + NAME), tmp_path,
-        len(PAYLOAD), DIGEST, **kwargs,
+        len(PAYLOAD), DIGEST, input_kind=kwargs.pop('input_kind', INPUT_KIND), **kwargs,
     )
 
 
@@ -222,3 +231,29 @@ def test_existing_content_never_spawns(tmp_path, monkeypatch, payload, state):
     result = capture_ssh_once(_task(tmp_path), timeout_seconds=2)
     assert result.content == state and result.worker is None
     assert final.read_bytes() == payload
+
+
+@pytest.mark.parametrize('kind', ['unknown', '', None, True])
+def test_unknown_protocol_rejected_before_connection(tmp_path, kind):
+    """A typo must never fall through to the proximity protocol."""
+    with patch('shared.runtime_ssh_capture.open_runtime_sftp') as connect:
+        with pytest.raises(ValueError, match='input kind'):
+            _task(tmp_path, input_kind=kind,
+                  remote_path='/snapshots/2026-10-05-120000-map-round-1_engagements.txt')
+        connect.assert_not_called()
+
+
+def test_cross_protocol_filename_rejected_at_construction(tmp_path):
+    wrong_kind = 'stats' if INPUT_KIND == 'proximity' else 'proximity'
+    with patch('shared.runtime_ssh_capture.open_runtime_sftp') as connect:
+        with pytest.raises(ValueError, match='filename'):
+            _task(tmp_path, input_kind=wrong_kind)
+        connect.assert_not_called()
+
+
+def test_default_task_remains_stats_only(tmp_path):
+    config = _task(tmp_path).ssh
+    name = '/snapshots/2026-10-05-120000-map-round-1.txt'
+    assert SSHCaptureTask(config, name, tmp_path, 3, DIGEST).input_kind == 'stats'
+    with pytest.raises(ValueError, match='stats filename'):
+        SSHCaptureTask(config, name.replace('.txt', '_engagements.txt'), tmp_path, 3, DIGEST)

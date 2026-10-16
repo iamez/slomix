@@ -8,12 +8,26 @@ import subprocess
 
 import pytest
 
-from shared.runtime_completion_manifest import publish_completion_manifest
-from shared.runtime_spool import publish_stats_file
+from shared.runtime_completion_manifest import (
+    publish_completion_manifest,
+    publish_proximity_completion_manifest,
+)
+from shared.runtime_spool import publish_proximity_file, publish_stats_file
 
 NAME = '2026-09-20-120000-oasis-round-1.txt'
 HASH = hashlib.sha256(b'abc').hexdigest()
 RECEIPT = {'version': 1, 'filename': NAME, 'bytes': 3, 'state': 'writer_closed'}
+
+
+@pytest.fixture(autouse=True, params=['stats', 'proximity'])
+def protocol(request, monkeypatch):
+    """Run the entire publication fault corpus through both public protocols."""
+    if request.param == 'proximity':
+        name = NAME.replace('.txt', '_engagements.txt')
+        monkeypatch.setitem(globals(), 'NAME', name)
+        monkeypatch.setitem(globals(), 'RECEIPT', {**RECEIPT, 'filename': name})
+        monkeypatch.setitem(globals(), 'publish_stats_file', publish_proximity_file)
+        monkeypatch.setitem(globals(), 'publish_completion_manifest', publish_proximity_completion_manifest)
 
 
 @pytest.fixture
@@ -105,7 +119,7 @@ def test_wrong_digest_never_published(spool):
 def test_producer_filename_lengths_have_manifests(tmp_path, length):
     """Every producer-supported boundary fits a real Linux manifest entry."""
     tmp_path.chmod(0o700)
-    prefix, suffix = '2026-09-20-120000-', '-round-1.txt'
+    prefix, suffix = '2026-09-20-120000-', NAME[NAME.index('-round-'):]
     filename = prefix + 'a' * (length - len(prefix) - len(suffix)) + suffix
     assert len(filename.encode('ascii')) == length
     publish_stats_file(tmp_path, filename, [b'abc'], expected_size=3, expected_sha256=HASH)
@@ -119,7 +133,7 @@ def test_producer_filename_lengths_have_manifests(tmp_path, length):
 
 def test_name_beyond_producer_limit_rejected(spool):
     """Do not extend producer identity limits merely because Linux permits it."""
-    prefix, suffix = '2026-09-20-120000-', '-round-1.txt'
+    prefix, suffix = '2026-09-20-120000-', NAME[NAME.index('-round-'):]
     filename = prefix + 'a' * (241 - len(prefix) - len(suffix)) + suffix
     with pytest.raises(ValueError, match='bounded string'):
         publish_completion_manifest(spool, {**RECEIPT, 'filename': filename}, expected_sha256=HASH)

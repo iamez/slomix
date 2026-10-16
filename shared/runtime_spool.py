@@ -21,10 +21,18 @@ def validate_stats_filename(filename: str) -> None:
         raise ValueError('Invalid stats filename')
 
 
+def validate_proximity_filename(filename: str) -> None:
+    """Keep engagement admission distinct from canonical round stats."""
+    if not _PROXIMITY_NAME.fullmatch(filename) or '..' in filename:
+        raise ValueError('Invalid proximity filename')
+
+
 def _validate_metadata(filename, expected_size, max_bytes, expected_sha256, *, name_pattern=_NAME):
     """Apply identical metadata bounds to publication and reconciliation."""
     if name_pattern is _NAME:
         validate_stats_filename(filename)
+    elif name_pattern is _PROXIMITY_NAME:
+        validate_proximity_filename(filename)
     elif not name_pattern.fullmatch(filename) or '..' in filename:
         raise ValueError('Invalid input filename')
     if expected_sha256 is not None and (
@@ -143,6 +151,33 @@ def inspect_published_stats_file(
     if expected_sha256 is None:
         raise ValueError('Inspection requires an expected SHA-256')
     _validate_metadata(filename, expected_size, max_bytes, expected_sha256)
+    return _inspect_published_file(directory, filename, expected_size, expected_sha256)
+
+
+def inspect_published_proximity_file(
+    directory: Path, filename: str, *, expected_size: int, expected_sha256: str,
+    max_bytes: int = 8 * 1024 * 1024,
+) -> Literal['missing', 'match', 'conflict']:
+    """Observe proximity content without treating it as an import or fsync ack.
+
+    Shares inspect_published_stats_file's descriptor/name race checks and bounded
+    local read contract. Requires an absolute private directory, trusted sealed
+    metadata and a proximity filename; it does not broaden stats admission.
+    Unavailable/unsafe/changed entries raise, not missing. No writes, chmod,
+    source consumption or retry policy; even a match after a failed fsync is
+    only a content observation, never proof of durability or database commit.
+    """
+    if not isinstance(directory, Path) or not directory.is_absolute():
+        raise ValueError('Proximity spool must be an absolute Path')
+    if expected_sha256 is None:
+        raise ValueError('Inspection requires an expected SHA-256')
+    _validate_metadata(filename, expected_size, max_bytes, expected_sha256,
+                       name_pattern=_PROXIMITY_NAME)
+    return _inspect_published_file(directory, filename, expected_size, expected_sha256)
+
+
+def _inspect_published_file(directory, filename, expected_size, expected_sha256):
+    """Shared read-only inspection after wrapper-specific metadata admission."""
     directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         info = os.fstat(directory_fd)

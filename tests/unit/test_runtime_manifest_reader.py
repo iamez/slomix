@@ -7,13 +7,25 @@ import stat
 
 import pytest
 
-from shared.runtime_completion_manifest import publish_completion_manifest
-from shared.runtime_manifest_reader import inspect_completion_manifest
-from shared.runtime_spool import publish_stats_file
+from shared.runtime_completion_manifest import publish_completion_manifest, publish_proximity_completion_manifest
+from shared.runtime_manifest_reader import inspect_completion_manifest, inspect_proximity_completion_manifest
+from shared.runtime_spool import publish_proximity_file, publish_stats_file
 
 NAME = '2026-09-20-120000-oasis-round-1.txt'
 HASH = hashlib.sha256(b'abc').hexdigest()
 RECEIPT = {'version': 1, 'filename': NAME, 'bytes': 3, 'state': 'writer_closed'}
+
+
+@pytest.fixture(autouse=True, params=['stats', 'proximity'])
+def protocol(request, monkeypatch):
+    """Unsafe entries, drift and recovery must obey the same protocol guards."""
+    if request.param == 'proximity':
+        name = NAME.replace('.txt', '_engagements.txt')
+        monkeypatch.setitem(globals(), 'NAME', name)
+        monkeypatch.setitem(globals(), 'RECEIPT', {**RECEIPT, 'filename': name})
+        monkeypatch.setitem(globals(), 'publish_stats_file', publish_proximity_file)
+        monkeypatch.setitem(globals(), 'publish_completion_manifest', publish_proximity_completion_manifest)
+        monkeypatch.setitem(globals(), 'inspect_completion_manifest', inspect_proximity_completion_manifest)
 
 
 @pytest.fixture
@@ -67,14 +79,15 @@ def test_content_conflict_is_not_match(ready):
 
 @pytest.mark.parametrize('payload', [
     b'{', b'[]', b'{}', b'\xff', b' ' * 4097,
-    json.dumps({**RECEIPT, 'sha256': HASH, 'version': True}).encode(),
-    json.dumps({**RECEIPT, 'sha256': HASH, 'bytes': True}).encode(),
-    json.dumps({**RECEIPT, 'sha256': None}).encode(),
-    json.dumps({**RECEIPT, 'sha256': HASH, 'filename': 'other.txt'}).encode(),
-    (json.dumps({**RECEIPT, 'sha256': HASH})[:-1] + ',"version":1}').encode(),
+    {'version': True}, {'bytes': True}, {'sha256': None}, {'filename': 'other.txt'},
+    'duplicate_version',
 ])
 def test_malformed_receipts_raise_not_absent(ready, payload):
     """Reject truncated, oversized, non-ASCII, ambiguous and mismatched schemas."""
+    if isinstance(payload, dict):
+        payload = json.dumps({**RECEIPT, 'sha256': HASH, **payload}).encode()
+    elif payload == 'duplicate_version':
+        payload = (json.dumps({**RECEIPT, 'sha256': HASH})[:-1] + ',"version":1}').encode()
     (ready / (NAME + '.complete.json')).write_bytes(payload)
     with pytest.raises(ValueError):
         inspect_completion_manifest(ready, NAME)

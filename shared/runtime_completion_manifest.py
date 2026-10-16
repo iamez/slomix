@@ -7,11 +7,20 @@ import uuid
 from pathlib import Path
 from typing import Literal
 
-from shared.runtime_manifest_reader import inspect_completion_manifest
-from shared.runtime_spool import _validate_metadata, inspect_published_stats_file
+from shared.runtime_manifest_reader import (
+    inspect_completion_manifest,
+    inspect_proximity_completion_manifest,
+)
+from shared.runtime_spool import (
+    _NAME,
+    _PROXIMITY_NAME,
+    _validate_metadata,
+    inspect_published_proximity_file,
+    inspect_published_stats_file,
+)
 
 
-def _receipt_fields(directory, completion, expected_sha256):
+def _receipt_fields(directory, completion, expected_sha256, name_pattern):
     """Validate the same caller contract before either publication or retry."""
     if not isinstance(directory, Path) or not directory.is_absolute():
         raise ValueError('Manifest spool must be an absolute Path')
@@ -26,7 +35,8 @@ def _receipt_fields(directory, completion, expected_sha256):
         raise ValueError('Manifest filename must be a bounded string')
     if expected_sha256 is None:
         raise ValueError('Completion requires SHA-256')
-    _validate_metadata(filename, size, 8 * 1024 * 1024, expected_sha256)
+    _validate_metadata(filename, size, 8 * 1024 * 1024, expected_sha256,
+                       name_pattern=name_pattern)
     return filename, size
 
 
@@ -46,8 +56,29 @@ def publish_completion_manifest(
     An error after link can leave a complete manifest: reconcile, never overwrite.
     Existing manifests, including identical ones, raise FileExistsError.
     """
-    filename, size = _receipt_fields(directory, completion, expected_sha256)
-    content = inspect_published_stats_file(
+    return _publish_completion_manifest(
+        directory, completion, expected_sha256, _NAME, inspect_published_stats_file,
+    )
+
+
+def publish_proximity_completion_manifest(
+    directory: Path, completion: dict, *, expected_sha256: str,
+) -> Path:
+    """Bind a trusted engagement writer-close receipt to captured bytes.
+
+    Same schema, fsync ordering, no-clobber and trust requirements as the stats
+    publisher, but engagement filenames only. No remote producer integration,
+    source sealing/authentication, scheduler, database writes or source ack.
+    """
+    return _publish_completion_manifest(
+        directory, completion, expected_sha256, _PROXIMITY_NAME, inspect_published_proximity_file,
+    )
+
+
+def _publish_completion_manifest(directory, completion, expected_sha256, name_pattern, inspect_file):
+    """Shared publication mechanics; public wrappers keep protocols separate."""
+    filename, size = _receipt_fields(directory, completion, expected_sha256, name_pattern)
+    content = inspect_file(
         directory, filename, expected_size=size, expected_sha256=expected_sha256,
     )
     if content != 'match':
@@ -96,16 +127,43 @@ def record_completion_once(
     immutable receipt/spool. New publication verifies payload twice (at most16MiB
     reads), existing receipt once; local filesystem waits are not time-bounded.
     """
-    filename, size = _receipt_fields(directory, completion, expected_sha256)
-    observed = inspect_completion_manifest(directory, filename)
+    return _record_completion_once(
+        directory, completion, expected_sha256, _NAME, inspect_completion_manifest,
+        inspect_published_stats_file, publish_completion_manifest,
+    )
+
+
+def record_proximity_completion_once(
+    directory: Path, completion: dict, *, expected_sha256: str,
+) -> Literal['published', 'content_present', 'missing_content', 'content_conflict', 'receipt_conflict']:
+    """Reconcile one engagement receipt without overwriting or upgrading an ack.
+
+    Caller owns source trust, stable private spool and scheduling. Identical to
+    stats retry semantics: content_present is observation, not proof of fsync or
+    database import. Conflicts remain retained; malformed input and I/O errors
+    propagate. No loop, deletion, source acknowledgement or automatic adoption.
+    """
+    return _record_completion_once(
+        directory, completion, expected_sha256, _PROXIMITY_NAME,
+        inspect_proximity_completion_manifest, inspect_published_proximity_file,
+        publish_proximity_completion_manifest,
+    )
+
+
+def _record_completion_once(
+    directory, completion, expected_sha256, name_pattern, inspect_manifest, inspect_file, publish,
+):
+    """One protocol-consistent observation/publication attempt."""
+    filename, size = _receipt_fields(directory, completion, expected_sha256, name_pattern)
+    observed = inspect_manifest(directory, filename)
     if observed.status != 'missing_manifest':
         if observed.size != size or observed.sha256 != expected_sha256:
             return 'receipt_conflict'
         return 'content_present' if observed.status == 'match' else observed.status
-    content = inspect_published_stats_file(
+    content = inspect_file(
         directory, filename, expected_size=size, expected_sha256=expected_sha256,
     )
     if content != 'match':
         return 'missing_content' if content == 'missing' else 'content_conflict'
-    publish_completion_manifest(directory, completion, expected_sha256=expected_sha256)
+    publish(directory, completion, expected_sha256=expected_sha256)
     return 'published'

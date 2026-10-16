@@ -239,3 +239,35 @@ def test_hook_allows_the_safe_idioms(repo: Path, name: str) -> None:
     assert result.returncode == 0, (
         f"{name}: the hook refused a safe idiom\n{result.stderr}"
     )
+
+
+@pytest.mark.parametrize('count,allowed,warning', [
+    (75, True, False), (76, True, True), (225, True, True), (226, False, False),
+])
+def test_owner_review_size_boundaries(repo, count, allowed, warning):
+    names = [f'item-{index}.py' for index in range(count)]
+    for name in names:
+        (repo / name).write_text('value = 1\n')
+    _git(repo, 'add', *names)
+    _git(repo, 'commit', '-qm', 'size boundary fixture')
+    head = _git(repo, 'rev-parse', 'HEAD')
+    result = subprocess.run(
+        ['bash', str(HOOK), 'origin', 'https://example.invalid/repo.git'],
+        input=f'refs/heads/fixture {head} refs/heads/fixture {ZERO}\n',
+        capture_output=True, text=True, cwd=repo,
+    )
+    assert (result.returncode == 0) is allowed
+    assert ('exceeds the normal review target 75' in result.stderr) is warning
+    if not allowed:
+        assert '226 files (limit 225)' in result.stderr
+
+
+def test_large_allowed_batch_still_checks_credentials(repo):
+    names = [f'item-{index}.py' for index in range(76)]
+    for name in names:
+        (repo / name).write_text('value = 1\n')
+    _git(repo, 'add', *names)
+    _git(repo, 'commit', '-qm', 'large cohesive fixture')
+    result = run_hook(repo, 'unsafe.py', REFUSED['keyword_literal'])
+    assert result.returncode != 0
+    assert 'exceeds the normal review target 75' in result.stderr

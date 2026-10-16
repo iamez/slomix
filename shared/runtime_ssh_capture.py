@@ -3,8 +3,10 @@
 import stat
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Literal
 
-from shared.runtime_capture import capture_stats_stream
+from shared.runtime_capture import capture_proximity_stream, capture_stats_stream
+from shared.runtime_spool import validate_proximity_filename, validate_stats_filename
 from shared.runtime_ssh import RuntimeSSHConfig, open_runtime_sftp
 
 
@@ -52,6 +54,8 @@ class SSHCaptureTask:
     Path/handle metadata must agree before and after reading, but SFTP metadata
     is not inode identity or a writer lock: same-size/same-mtime replacement and
     parent symlinks remain outside this guard. Trusted snapshot/digest required.
+    input_kind is explicit: existing callers remain stats-only; proximity needs
+    its own kind and engagement filename. No inference from an arbitrary path.
     """
 
     ssh: RuntimeSSHConfig
@@ -62,6 +66,7 @@ class SSHCaptureTask:
     max_bytes: int = 8 * 1024 * 1024
     read_timeout: float = 5.0
     stream_timeout: float = 30.0
+    input_kind: Literal['stats', 'proximity'] = 'stats'
 
     def __post_init__(self):
         """Reject ambiguous paths before connecting to a remote host."""
@@ -71,6 +76,10 @@ class SSHCaptureTask:
             raise ValueError('Remote snapshot path must be absolute and canonical')
         if not isinstance(self.directory, Path) or not self.directory.is_absolute():
             raise ValueError('Spool directory must be an absolute Path')
+        if type(self.input_kind) is not str or self.input_kind not in ('stats', 'proximity'):
+            raise ValueError('Capture input kind must be stats or proximity')
+        validate = validate_stats_filename if self.input_kind == 'stats' else validate_proximity_filename
+        validate(PurePosixPath(self.remote_path).name)
 
     def __call__(self) -> None:
         """Close remote file before SFTP/SSH; propagate all capture/close failures."""
@@ -85,7 +94,8 @@ class SSHCaptureTask:
                         raise RuntimeError('Remote snapshot changed during capture')
 
                 verify()
-                capture_stats_stream(
+                capture = capture_stats_stream if self.input_kind == 'stats' else capture_proximity_stream
+                capture(
                     _CheckedReader(source, verify), self.directory, PurePosixPath(self.remote_path).name,
                     expected_size=self.expected_size, expected_sha256=self.expected_sha256,
                     max_bytes=self.max_bytes, total_timeout=self.stream_timeout,

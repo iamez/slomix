@@ -8,16 +8,25 @@ from unittest.mock import Mock
 import pytest
 
 from shared import runtime_capture
-from shared.runtime_capture import capture_stats_stream
+from shared.runtime_capture import capture_proximity_stream, capture_stats_stream
 
 NAME = '2026-09-20-120000-map-round-1.txt'
 DIGEST = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+CAPTURE = capture_stats_stream
+
+
+@pytest.fixture(params=['stats', 'proximity'], autouse=True)
+def capture_protocol(request, monkeypatch):
+    """Exercise every transport/deadline guard through both public wrappers."""
+    if request.param == 'proximity':
+        monkeypatch.setattr(__name__ + '.NAME', NAME.replace('.txt', '_engagements.txt'))
+        monkeypatch.setattr(__name__ + '.CAPTURE', capture_proximity_stream)
 
 
 def capture(source, directory, **kwargs):
     """Exercise the same immutable abc snapshot in each transport scenario."""
-    return capture_stats_stream(source, directory, NAME, expected_size=3,
-                                expected_sha256=DIGEST, **kwargs)
+    return CAPTURE(source, directory, NAME, expected_size=3,
+                   expected_sha256=DIGEST, **kwargs)
 
 
 def test_real_socket_capture(tmp_path):
@@ -89,7 +98,7 @@ def test_slow_spool_setup_does_not_consume_read_budget(tmp_path, monkeypatch):
 def test_capture_requires_source_digest(tmp_path):
     """Capture cannot silently downgrade to size-only publication."""
     with pytest.raises(ValueError, match='requires an expected SHA-256'):
-        capture_stats_stream(None, tmp_path, NAME, expected_size=3, expected_sha256=None)
+        CAPTURE(None, tmp_path, NAME, expected_size=3, expected_sha256=None)
     assert list(tmp_path.iterdir()) == []
 
 
