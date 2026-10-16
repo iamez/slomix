@@ -1047,4 +1047,3 @@ closed files, independent hashes/sizes and two distinct completion messages.
 ET API and channel are synthetic, not a real engine/server or deploy proof.
 Ruff/diff-check pass. New exact-head CI and review replies are next. No services,
 units, application rows, live Lua or production changed. Preserve all prior plan.
-
