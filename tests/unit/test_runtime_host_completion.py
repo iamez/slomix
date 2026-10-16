@@ -339,3 +339,20 @@ def test_native_writer_close_to_durable_host_receipt_and_manifest(
         f"COMPLETION {lua} {fault}: whole writer close -> native credentialed socket -> fsynced host receipt "
         "-> runtime host capture/sealed bytes -> completion manifest; ET APIs synthetic"
     )
+
+
+@pytest.mark.parametrize('lua', ['lua5.1', 'lua5.4'])
+def test_same_vm_two_halves_use_fresh_binding_and_completion_sender(tmp_path, lua):
+    result = subprocess.run([
+        lua, str(ROOT / 'tests/lua/runtime_same_vm_halves_harness.lua'), str(ROOT), str(tmp_path),
+    ], capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert '2 distinct one-shot completions' in result.stdout
+    files = sorted(tmp_path.glob('round-*.txt'))
+    assert len(files) == 2
+    for half, path in enumerate(files, 1):
+        raw = path.read_bytes()
+        assert stats_header_identity(raw.splitlines(keepends=True)[0].decode()).round_number == half
+        assert len(raw) == path.stat().st_size > 0
+        assert hashlib.sha256(raw).hexdigest() == subprocess.check_output(['sha256sum', str(path)], text=True).split()[0]
+    print(result.stdout.strip())

@@ -17,12 +17,19 @@ function M.configure(options)
     local now = et.trap_Milliseconds
     assert(type(now)=="function", "engine monotonic clock required")
     -- Construction preloads dependencies outside callbacks and does not connect.
-    -- One sender per stats VM: writer-close delivery is one-shot, not a queue.
-    local sender = require("runtime_host_completion").sender(path, now, completion_timeout)
+    -- Resolve dependencies now; instantiate a one-shot sender for each active
+    -- InitGame lease. map_restart can retain this module across both halves.
+    local completion = require("runtime_host_completion")
+    -- Validate before callbacks, including timeout/path and optional dependency.
+    local sender = completion.sender(path, now, completion_timeout)
     ConfigureRuntimeStatsHostHooks({source_id=source, socket_path=path,
-        timeout_ms=bootstrap_timeout, completed=sender.completed})
-    -- Capture the functions, not mutable caller options or globals, for observation.
-    return {bootstrap_status=RuntimeStatsHostStatus, completion_status=sender.status}
+        timeout_ms=bootstrap_timeout, completed_factory=function()
+            sender = completion.sender(path, now, completion_timeout)
+            return sender.completed
+        end})
+    -- Each frozen ticket retains its own sender, never a later half's attempt.
+    return {bootstrap_status=RuntimeStatsHostStatus,
+        completion_status=function() return sender.status() end}
 end
 
 return M

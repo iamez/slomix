@@ -14,7 +14,7 @@ local configured_host = arg[15] == "configured-host"
 local legacy_scenario = scenario == "legacy" or scenario:sub(1,12) == "legacy-late-"
 local bound = scenario:sub(1, 6) == "bound-"
 local fault = bound and scenario:sub(7) or scenario
-local state, counter, map, exit_flag, gametype = "0", half - 1, "supply", "", "3"
+local state, counter, map, exit_flag, gametype = "0", 2 - half, "supply", "", "3"
 if scenario == "bound-stale-intermission" then exit_flag = "1" end
 local opens = 0
 local success = scenario == "ok" or scenario == "legacy" or scenario == "bound-frame"
@@ -399,7 +399,7 @@ if bound then
             local configured, reason = pcall(configure,authority,ticket.completed)
             assert(not configured, "invalid or stale InitGame lease configured")
             assert(tostring(reason):find(expected_error,1,true), tostring(reason))
-            authority.peer_slot=1; map="supply"; counter=half-1; state="0"; gametype="3"; exit_flag=""
+            authority.peer_slot=1; map="supply"; counter=2-half; state="0"; gametype="3"; exit_flag=""
             local retried, retry_error = pcall(configure,authority,ticket.completed)
             assert(not retried and tostring(retry_error):find("already consumed",1,true), "lease retry allowed")
             assert(not pcall(SaveStats) and not opened and not emitted)

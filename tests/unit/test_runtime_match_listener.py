@@ -95,10 +95,13 @@ def wait_bound(path, future):
 
 
 @contextmanager
-def native_pair(tmp_path, path, *, console=False):
+def native_pair(tmp_path, path, *, console=False, readiness_delay=0, bootstrap_wait=5):
     all_roots = roots(tmp_path)
     executable = Path(sys.executable).resolve()
     peer_code = PEER.replace("== 'go'", "== 'map supply'") if console else PEER
+    if readiness_delay:
+        peer_code = peer_code.replace('for half in (1, 2):',
+            f'import time; time.sleep({readiness_delay})\n    for half in (1, 2):')
     with subprocess.Popen([str(executable), '-c', peer_code, str(path), str(all_roots[1])],
                           stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                           text=True, umask=0o077) as peer:
@@ -124,7 +127,7 @@ def native_pair(tmp_path, path, *, console=False):
 
                 with ThreadPoolExecutor(max_workers=1) as pool:
                     future = pool.submit(serve_match, driver, path,
-                                         bootstrap_wait=5, completion_wait=5, on_ready=ready)
+                                         initial_readiness_wait=5, bootstrap_wait=bootstrap_wait, completion_wait=5, on_ready=ready)
                     captured = future.result(timeout=15)
                 assert ready_states == ['awaiting_bootstrap']
                 assert peer.stdout.readline().strip() == 'CLOSED BOTH'
@@ -169,7 +172,7 @@ def test_listener_timeout_or_path_change_fences_controller(tmp_path, listener_pa
     with pin_process(child.pid, **approved) as pin:
         driver = controller(roots(tmp_path), pin)
         with ThreadPoolExecutor(max_workers=1) as pool:
-            future = pool.submit(serve_match, driver, listener_path, bootstrap_wait=.25)
+            future = pool.submit(serve_match, driver, listener_path, initial_readiness_wait=.25)
             wait_bound(listener_path, future)
             if change == 'replace-root':
                 parent = listener_path.parent
@@ -183,6 +186,8 @@ def test_listener_timeout_or_path_change_fences_controller(tmp_path, listener_pa
             with pytest.raises((TimeoutError, ValueError)):
                 future.result(timeout=5)
         assert driver.state == 'failed'
+        # A deadline/root failure never erases source ownership for retry.
+        assert list(tmp_path.rglob('.writer-claimed'))
         with pytest.raises(ValueError, match='Both successful captures'):
             driver.captured_match()
         with pytest.raises(ValueError, match='out of order'):
@@ -339,4 +344,24 @@ def test_invalid_ready_observer_does_not_consume_controller(tmp_path, listener_p
         driver = controller(roots(tmp_path), pin)
         with pytest.raises(ValueError, match='readiness observer'):
             serve_match(driver, listener_path, on_ready='not callable')
+        assert driver.state == 'ready' and not listener_path.exists()
+
+
+def test_initial_readiness_allows_warmup_longer_than_between_half_budget(tmp_path, listener_path):
+    # A real pinned peer waits 300ms before its first InitGame handshake. The
+    # independent 100ms inter-half budget must not terminate initial readiness.
+    with native_pair(tmp_path, listener_path, readiness_delay=.3, bootstrap_wait=.1) as (captured, _, driver):
+        assert driver.state == 'complete'
+        assert captured.first.reference.generation != captured.second.reference.generation
+
+
+@pytest.mark.parametrize('name', ['initial_readiness_wait', 'bootstrap_wait'])
+@pytest.mark.parametrize('value', [0, -1, True, float('nan'), float('inf'), 3601, '5'])
+def test_readiness_deadlines_are_bounded_before_consuming_controller(
+    tmp_path, listener_path, child, approved, name, value,
+):
+    with pin_process(child.pid, **approved) as pin:
+        driver = controller(roots(tmp_path), pin)
+        with pytest.raises(ValueError, match='timeout'):
+            serve_match(driver, listener_path, **{name: value})
         assert driver.state == 'ready' and not listener_path.exists()

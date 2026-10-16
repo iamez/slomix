@@ -101,14 +101,17 @@ def _accept(server, verify, controller, wait):
 
 
 def serve_match(controller: RuntimeMatchController, socket_path: Path, *,
-                bootstrap_wait=30.0, completion_wait=1800.0, exchange_timeout=5.0,
+                initial_readiness_wait=1800.0, bootstrap_wait=1800.0,
+                completion_wait=1800.0, exchange_timeout=5.0,
                 on_ready=None):
     """Exclusively own one ready controller until two captures or terminal failure.
 
     At most four admitted connections: bootstrap/close, bootstrap/close. The
     existing channel authenticates both peer PID/UID and each received message.
     Wrong peers/protocols fail closed, never consume an unbounded retry loop.
-    Accept waits and IPC exchanges have separate deadlines; completion_wait is
+    initial_readiness_wait covers map load/player warmup before R1. bootstrap_wait
+    covers the separate between-half warmup before R2. Both remain bounded and
+    distinct from short IPC exchange_timeout. completion_wait is
     NOT a limit on actual ET round length and exceeding it requires explicit
     reconciliation. Filesystem syscall latency is not bounded by these timers.
 
@@ -123,6 +126,7 @@ def serve_match(controller: RuntimeMatchController, socket_path: Path, *,
     The callback must return promptly, must not operate on the controller, and
     is not covered by IPC deadlines. Failure fences the controller normally.
     """
+    _timeout(initial_readiness_wait, 3600)
     _timeout(bootstrap_wait, 3600)
     _timeout(completion_wait, 7200)
     _timeout(exchange_timeout, 10)
@@ -138,7 +142,8 @@ def serve_match(controller: RuntimeMatchController, socket_path: Path, *,
                     controller.check_waiting()
                     verify()
                     on_ready()
-                connection = _accept(server, verify, controller, bootstrap_wait)
+                wait = initial_readiness_wait if half == 1 else bootstrap_wait
+                connection = _accept(server, verify, controller, wait)
                 controller.bootstrap(connection, timeout=exchange_timeout)
                 connection = _accept(server, verify, controller, completion_wait)
                 controller.complete(connection, timeout=exchange_timeout)

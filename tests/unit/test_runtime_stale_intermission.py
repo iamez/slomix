@@ -15,8 +15,8 @@ def test_retained_intermission_allows_fresh_half_but_not_counter_flip(tmp_path, 
     assert result.size > 0
     script = '''
 package.path = arg[1] .. '/vps_scripts/?.lua;' .. package.path
-local state, counter, flag = '0', '1', '1'
-local context = {init_time=699500, map_name='supply', counter=1,
+local state, counter, flag = '0', '0', '1'
+local context = {init_time=699500, map_name='supply', counter=0,
                  gamestate=0, exit_flag='1'}
 local api = {CS_INTERMISSION=1, CS_SERVERINFO=2}
 api.trap_GetConfigstring = function(k) return k==1 and flag or 'server' end
@@ -29,7 +29,7 @@ local wire, consume = lease.capture(api, function() return context end, function
 assert(wire=='slomix_init_v1|699500|supply|2')
 assert(consume({}, function() end)=='bound')
 local _, reject = lease.capture(api, function() return context end, function() error('must not bind') end)
-counter='0' -- G_LogExit flips this even when the retained flag is already 1.
+counter='1' -- G_LogExit flips this even when the retained flag is already 1.
 local ok, why = pcall(reject, {}, function() end)
 assert(not ok and tostring(why):find('live context disagrees',1,true))
 print('RETAINED FLAG admitted; new queued exit refused')

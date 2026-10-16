@@ -23,7 +23,8 @@ local function snapshot(api, context)
         and tonumber(api.trap_Cvar_Get("g_currentRound")) == counter
         and api.Info_ValueForKey(api.trap_GetConfigstring(api.CS_SERVERINFO), "mapname") == map,
         "live context disagrees with InitGame observation")
-    return "slomix_init_v1|" .. string.format("%.0f",time) .. "|" .. map .. "|" .. (counter + 1)
+    -- ET stopwatch active-start values are 1 for R1 and 0 for R2.
+    return "slomix_init_v1|" .. string.format("%.0f",time) .. "|" .. map .. "|" .. (2 - counter)
 end
 
 function M.capture(api, current, configure)
