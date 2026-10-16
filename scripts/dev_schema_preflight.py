@@ -3,15 +3,24 @@
 
 This is not a deployment, migration, service-environment verification, or a
 complete readiness certificate. No .env discovery or process-env fallback.
+Release CLI requires Python -I before third-party imports. This cannot undo
+interpreter/site/loader startup effects; the launcher must clear unsafe loader
+environment before starting Python and use a trusted interpreter environment.
 """
 from __future__ import annotations
+
+# ruff: noqa: E402 -- isolated CLI admission precedes third-party imports
+import sys
+
+if __name__ == "__main__" and "--release-mode" in sys.argv and not sys.flags.isolated:
+    sys.stdout.write('{"clean": false, "error": "Release preflight requires isolated Python (-I)"}\n')
+    raise SystemExit(1)
 
 import argparse
 import asyncio
 import hashlib
 import json
 import os
-import sys
 from pathlib import Path
 
 import asyncpg
@@ -133,7 +142,7 @@ async def inspect_database(options, checksums):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("--env-file", required=True, type=Path)
     parser.add_argument("--expected-host", required=True)
     parser.add_argument("--expected-port", required=True, type=int)

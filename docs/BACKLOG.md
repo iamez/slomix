@@ -1,3 +1,42 @@
+## 2026-10-16 — Six further game-delivery review findings addressed
+
+#1095 review exposed six additional boundaries after its earlier green CI.
+Release schema-preflight CLI now requires isolated Python before third-party
+imports and refuses abbreviated arguments. Marked-release migrations verify
+payload integrity and the exact migrations directory before configuration,
+SQL discovery or connection. Release audit refuses its legacy in-payload report
+default and resolved output aliases before configuration or database access.
+The child DEV contract must supply Python -I -B for its schema preflight.
+Interpreter startup and hostile same-UID actors remain outside this boundary.
+
+BadZipFile is redacted at startup, supervisor and unit-preparation CLI boundaries;
+interruption still propagates. Prepared units pin --evidence-log. Admission and
+its immediate prelaunch recheck require append/inherit manager modes and actual
+stdout/stderr descriptors sharing the private owned canonical log inode with
+O_APPEND. This proves the current descriptors, not durable storage or historical
+absence of tampering. Smart-stats embeds now link app mode to the selected date's
+story tab; legacy /story remains unchanged.
+
+Public game-branch local verification:201 tests passed, including the actual
+rehashed corrupt PK3 child CLI and six native descriptor cases. The operator
+agent separately recorded135 passing tests including27 new boundary cases;
+primary combined operator/startup/DEV-contract tests passed93 cases. These sets
+overlap and must not be summed as unique tests. Observed mutations: wrong story
+1failed/1passed, missing archive catch1failed, missing output-mode guard2failed,
+missing descriptor guard3failed; restored originals compared withcmp. Agent
+mutations reached the shadow module and forbidden config/DB boundaries before
+restoration. Ruff and configured Bandit passed. An unconfigured Bandit invocation
+reported existing B608 constant-built SQL findings; the project configuration
+excludes B608. No database, game or service was started or modified.
+
+#1097 state-handover remains open at1c1c727a, awaiting dependency refresh and CI.
+#1093 remains the first merge candidate. Automatic approval review rejected the
+merge attempt: generic continuation is not explicit permission for that PR.
+No merge occurred; request unambiguous owner permission for#1093 before retry.
+Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
+all six review threads with evidence. Original runtime, Spiderweb and UI work
+remain preserved; merge approval and owner-run DEV activation are separate gates.
+
 ## 2026-10-16 — Availability test controls the market transition explicitly
 
 #1095 bd6782ad React CI failed1 test/983passed: missing the bet-placed15 message

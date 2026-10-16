@@ -316,6 +316,23 @@ def test_cli_does_not_hide_interruption(monkeypatch, tmp_path, failure):
         module.main(['run', '--directory', str(tmp_path), '--unit', UNIT, '--commit', 'b' * 40])
 
 
+def test_corrupt_archive_failure_is_redacted(monkeypatch, tmp_path, capsys):
+    import json
+    import zipfile
+
+    def invalid_archive(*args, **kwargs):
+        with zipfile.ZipFile(tmp_path / 'private.pk3'):
+            pytest.fail('Corrupt archive admitted')
+
+    (tmp_path / 'private.pk3').write_bytes(b'not a zip archive')
+    monkeypatch.setattr(module, 'run', invalid_archive)
+    assert module.main(['run', '--directory', str(tmp_path), '--unit', UNIT, '--commit', 'b' * 40]) == 1
+    output = capsys.readouterr()
+    assert output.out == ''
+    assert json.loads(output.err) == dict(status='refused_or_failed', error_type='BadZipFile',
+                                          shutdown_verified=False, evidence_retained=True)
+
+
 def test_isolated_cli_redacts_a_deferred_missing_dependency(tmp_path):
     import json
     code = """
@@ -403,7 +420,8 @@ def effective_start(argv):
 @pytest.mark.parametrize('damage', ['wrapper', 'extra', 'ignored', 'multiple', *module.AUXILIARY_COMMANDS])
 def test_effective_unit_commands_refuse_wrappers_and_auxiliaries(tmp_path, damage, monkeypatch):
     argv = module.supervisor_argv(Path(module.__file__).resolve().parents[1], sys.executable,
-                                 tmp_path, UNIT, 'b' * 40)
+                                 tmp_path, UNIT, 'b' * 40, evidence_log=tmp_path / 'service.log')
+    monkeypatch.setattr(module, 'validate_evidence_sink', lambda *args: None)
     props = stopped() | {'ExecStart': effective_start(argv)}
     module.validate_launch_commands(props, argv)
     if damage == 'wrapper':
@@ -420,3 +438,36 @@ def test_effective_unit_commands_refuse_wrappers_and_auxiliaries(tmp_path, damag
     monkeypatch.setattr(module, 'verify_source', lambda *args: pytest.fail('Source import admission reached'))
     with pytest.raises(ValueError, match='commands|ExecStart'):
         module.run(tmp_path, UNIT, 'b' * 40)
+
+
+@pytest.mark.parametrize('damage', ['none', 'null', 'stderr', 'wrong-path', 'no-append', 'other-stderr'])
+def test_native_evidence_descriptors_are_pinned(tmp_path, damage):
+    import json
+
+    path = tmp_path / 'service.log'
+    other = tmp_path / 'other.log'
+    path.touch(mode=0o600)
+    other.touch(mode=0o600)
+    code = '''
+import importlib.util, json, pathlib, sys
+spec = importlib.util.spec_from_file_location('supervisor', sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+props = {'StandardOutput': 'append', 'StandardError': 'inherit'}
+if sys.argv[3] == 'null': props['StandardOutput'] = 'null'
+if sys.argv[3] == 'stderr': props['StandardError'] = 'null'
+try:
+    module.validate_evidence_sink(props, pathlib.Path(sys.argv[2]))
+except ValueError:
+    print(json.dumps({'status': 'refused'}))
+else:
+    print(json.dumps({'status': 'admitted'}))
+'''
+    target = other if damage == 'wrong-path' else path
+    with path.open('w' if damage == 'no-append' else 'a') as stdout, other.open('a') as stderr:
+        result = subprocess.run([sys.executable, '-I', '-B', '-c', code, module.__file__,
+                                 str(target), damage], stdout=stdout,
+                                stderr=stderr if damage == 'other-stderr' else subprocess.STDOUT,
+                                timeout=10, check=True)
+    assert result.returncode == 0
+    assert json.loads(path.read_text()) == {'status': 'admitted' if damage == 'none' else 'refused'}

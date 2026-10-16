@@ -177,11 +177,13 @@ class SessionDigestService:
         if challenge:
             embed.add_field(name="🏆 Challenge of the week", value=challenge, inline=False)
 
+        story_route = (f"/session-detail/date/{latest_date}/story"
+                       if getattr(self.config, "website_ui_mode", "legacy") == "app" else "/story")
         embed.add_field(
             name="🔗 Deep dive",
             value=(
                 f"[Full session breakdown]({session_url}) · "
-                f"[Smart stats]({website_url(self.config, '/story')}) · "
+                f"[Smart stats]({website_url(self.config, story_route)}) · "
                 f"[Leaderboards]({website_url(self.config, '/leaderboards')})"
             ),
             inline=False,
