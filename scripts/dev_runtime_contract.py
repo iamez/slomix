@@ -130,7 +130,7 @@ def build_contract(release: Path, state: Path, bot_python: Path, web_python: Pat
         # Preserve the existing DEV bind in offline unit text; no socket is opened.
         argv = ([str(python), "bot/ultimate_bot.py"] if role == "bot" else
                 [str(python), "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"])  # noqa: S104  # nosec B104
-        pre = [str(python), str(release / "scripts/dev_schema_preflight.py"), "--release-mode",
+        pre = [str(python), "-I", "-B", str(release / "scripts/dev_schema_preflight.py"), "--release-mode",
                "--env-file", str(env), "--expected-env-sha256", env_digest,
                "--expected-host", identity[0], "--expected-port", identity[1],
                "--expected-database", identity[2], "--expected-user", identity[3],
