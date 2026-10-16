@@ -120,7 +120,7 @@ async def serve(config, stop, *, worker=None, pool_factory=None, reporter=report
                     pass  # Only our requested cancellation is a clean stop.
                 return
         await task  # Unexpected worker errors must reach the process exit code.
-    except BaseException as error:
+    except (Exception, asyncio.CancelledError, KeyboardInterrupt, SystemExit) as error:
         failure = error
         raise
     finally:
@@ -133,15 +133,15 @@ async def serve(config, stop, *, worker=None, pool_factory=None, reporter=report
                                  return_exceptions=True)
             async with asyncio.timeout(close_seconds):
                 await pool.close()
-        except BaseException as error:
+        except (Exception, asyncio.CancelledError, KeyboardInterrupt, SystemExit) as error:
             cleanup_error = error
             try:
                 pool.terminate()
-            except BaseException as terminate_error:
+            except (Exception, asyncio.CancelledError, KeyboardInterrupt, SystemExit) as terminate_error:
                 cleanup_error.__cause__ = terminate_error
         try:
             reporter(worker.state)
-        except BaseException as report_error:
+        except (Exception, asyncio.CancelledError, KeyboardInterrupt, SystemExit) as report_error:
             if cleanup_error is None:
                 cleanup_error = report_error
             else:

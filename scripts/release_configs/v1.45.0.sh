@@ -104,6 +104,8 @@ MIGRATIONS=(
   # Strict proximity receipt provenance only; does not enable a runtime worker.
   "094_proximity_runtime_parent_gate.sql"
   "095_proximity_normalized_parent_index.sql"
+  # Unreleased runtime preparation; no service activation or production deploy.
+  "099_runtime_round_mappings.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"

@@ -8,7 +8,9 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from bot.runtime_round_mapping import StatsRoundBinding
 from postgresql_database_manager import PostgreSQLDatabaseManager
+from shared.runtime_round_identity import RoundIdentity
 from shared.runtime_sealed_snapshot import sealed_stats_snapshot
 
 NAME = '2026-09-25-120000-supply-round-1.txt'
@@ -75,11 +77,16 @@ async def test_default_path_still_uses_existing_parser(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_explicit_hash_failure_is_retryable_before_database_preflight(boundary):
+@pytest.mark.parametrize('bound', [False, True])
+async def test_explicit_hash_failure_is_retryable_before_database_preflight(boundary, bound):
     """Unlike legacy best-effort hashing, explicit input never proceeds without a hash."""
     manager, path, source = boundary
     source.read_bytes.side_effect = OSError('fixture closed snapshot')
-    result = await manager.process_file(path, input_source=source)
+    binding = StatsRoundBinding(
+        RoundIdentity('fixture', 'a' * 32, 'b' * 32, 1, 'b' * 32),
+        'c' * 32, NAME, len(RAW), hashlib.sha256(RAW).hexdigest(), 'supply',
+    ) if bound else None
+    result = await manager.process_file(path, input_source=source, runtime_binding=binding)
     assert result == (False, 'Explicit input could not be hashed') and result.retryable
     manager.is_file_processed.assert_not_awaited()
     manager.find_processed_by_hash.assert_not_awaited()

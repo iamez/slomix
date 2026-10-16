@@ -64,7 +64,8 @@ def _configuration(args):
             if type(value) not in (int, float) or not math.isfinite(value) or not 0 < value <= upper:
                 raise ValueError('Invalid finite execution budget')
         socket = Path(args.socket)
-        if (socket.parent != Path('/tmp')
+        # This literal is an admission boundary, not a temporary file allocation.
+        if (socket.parent != Path('/tmp')  # nosec B108
                 or re.fullmatch(r'slomix-runtime-pg-[A-Za-z0-9_-]+', socket.name) is None
                 or socket.resolve(strict=True) != socket):
             raise ValueError('Explicit private proof socket required')

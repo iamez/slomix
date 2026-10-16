@@ -13,7 +13,8 @@ from unittest.mock import AsyncMock
 import pytest
 
 from postgresql_database_manager import PostgreSQLDatabaseManager
-from shared.import_team_assignment import TeamAssignment, TeamIdentityConflict, assign_round_teams
+from shared.import_team_assignment import TeamAssignment, assign_round_teams
+from shared.team_identity import TeamIdentityConflict
 from shared.team_write_guard import TeamWriteBusy
 
 

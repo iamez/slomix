@@ -42,6 +42,15 @@ async def test_expected_identity_rejected_before_manager_even_in_default_mode(tm
     manager.process_file.assert_not_awaited()
 
 
+async def test_first_half_mapping_has_no_snapshot_dependency(tmp_path):
+    first, _ = completed_identity_pair(tmp_path)
+    manager = SimpleNamespace(parser=C0RNP0RN3StatsParser(), process_file=AsyncMock(return_value=(True, 'fixture')))
+    assert await import_completed_round(manager, first, expected_identity=FIRST) == (True, 'fixture')
+    binding = manager.process_file.call_args.kwargs['runtime_binding']
+    assert binding.identity == FIRST and binding.first is None
+    assert binding.sha256 == first.sha256
+
+
 @pytest.mark.parametrize('line_ending', [b'\n', b'\r\n'])
 async def test_strict_mapping_delivers_exact_frozen_dependency(tmp_path, line_ending):
     first, second = completed_identity_pair(tmp_path, line_ending=line_ending)

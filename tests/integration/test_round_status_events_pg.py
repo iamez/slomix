@@ -115,6 +115,7 @@ async def test_canonical_import_status_failure_is_retryable(status_db, monkeypat
     """)
     manager = object.__new__(PostgreSQLDatabaseManager)
     manager.event_stream_enabled = True
+    manager.defer_team_assignment = False  # Fixture bypasses the legacy-mode constructor.
     manager.stats = dict.fromkeys([
         "files_processed", "files_skipped", "files_failed", "rounds_created",
         "players_inserted", "weapons_inserted",

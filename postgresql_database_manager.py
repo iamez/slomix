@@ -1615,6 +1615,7 @@ class PostgreSQLDatabaseManager:
             raise ValueError('Deferred team assignment requires explicit input and enabled journal')
         filename = file_path.name
         start_time = time.time()
+        full_hash = None
         payload_hash = None
         transaction_pending = False
 

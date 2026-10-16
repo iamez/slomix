@@ -12,9 +12,6 @@ from shared.team_identity import (
     UNRESOLVED_TEAM_IDENTITY_SQL,
     require_resolved_team_identity,
 )
-from shared.team_identity import (
-    TeamIdentityConflict as TeamIdentityConflict,
-)
 from shared.team_write_guard import team_write_transaction
 
 logger = logging.getLogger('bot.database.manager')

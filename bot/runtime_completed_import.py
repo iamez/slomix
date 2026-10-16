@@ -83,6 +83,7 @@ async def import_completed_round(manager, current: CompletedRoundInput, *,
                 expected_size=item.size, expected_sha256=item.sha256,
             ))
         view = open_input(current)
+        first_view = None if first is None else open_input(first)
         if first is None:
             parsed = parse_sealed_round_one(
                 view.fileno(), filename=current.filename, expected_size=current.size,
@@ -90,7 +91,6 @@ async def import_completed_round(manager, current: CompletedRoundInput, *,
                 require_declared_identity=require_declared_identity,
             )
         else:
-            first_view = open_input(first)
             parsed = parse_sealed_round_pair(
                 RoundSnapshotInput(first.filename, first_view.fileno(), first.size, first.sha256),
                 RoundSnapshotInput(current.filename, view.fileno(), current.size, current.sha256),

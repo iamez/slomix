@@ -141,4 +141,4 @@ class RuntimeTeamWorker:
         try:
             await asyncio.wait_for(stop.wait(), timeout=self.poll_seconds)
         except TimeoutError:
-            pass
+            pass  # The polling interval elapsed; the next sweep may proceed.

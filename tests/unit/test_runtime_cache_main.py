@@ -242,3 +242,28 @@ async def test_cleanup_preserves_primary_failure(config_env, primary, secondary)
     assert worker.cleaned and pool.released
     pool.close.assert_awaited_once()
     assert pool.terminate.call_count == (secondary in ('close', 'both'))
+
+
+@pytest.mark.parametrize('phase', ['close', 'report'])
+async def test_cleanup_cancellation_remains_visible(config_env, phase):
+    pool = fake_pool()
+    worker = Worker('hang')
+    stop = asyncio.Event()
+    if phase == 'close':
+        pool.close.side_effect = asyncio.CancelledError
+
+    def reporter(state):
+        if phase == 'report' and worker.cleaned:
+            raise asyncio.CancelledError
+
+    task = asyncio.create_task(entry.serve(
+        entry.DatabaseConfig.from_environment(), stop, worker=worker,
+        pool_factory=AsyncMock(return_value=pool), reporter=reporter, drain_seconds=0.01,
+    ))
+    await asyncio.wait_for(worker.entered.wait(), 1)
+    stop.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert worker.cleaned and pool.released
+    pool.close.assert_awaited_once()
+    assert pool.terminate.call_count == (phase == 'close')
