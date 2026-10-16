@@ -171,3 +171,36 @@ asyncio.run(main())
         for table in tables:
             assert await conn.fetch(f'SELECT * FROM {table} ORDER BY id') == before[table]
     assert snapshots[0] == snapshots[1] == snapshots[2]
+
+
+@pytest.mark.parametrize('index_kind', ['constraint', 'standalone', 'wrong_columns', 'non_unique', 'partial'])
+async def test_identity_unique_index_matches_upgraded_schema(full_import_db, tmp_path, monkeypatch, index_kind):
+    manager, conn = full_import_db
+    manager.defer_team_assignment = True
+    first, _ = completed_pair(tmp_path, balanced=True)
+    assert (await import_completed_round(manager, first))[0] is True
+    if index_kind != 'constraint':
+        await conn.execute('ALTER TABLE session_teams DROP CONSTRAINT session_teams_identity_unique')
+        definition = {
+            'standalone': 'CREATE UNIQUE INDEX session_teams_identity_unique ON session_teams(session_identity,map_name,team_name)',
+            'wrong_columns': 'CREATE UNIQUE INDEX session_teams_identity_unique ON session_teams(session_start_date,map_name,team_name)',
+            'non_unique': 'CREATE INDEX session_teams_identity_unique ON session_teams(session_identity,map_name,team_name)',
+            'partial': "CREATE UNIQUE INDEX session_teams_identity_unique ON session_teams(session_identity,map_name,team_name) WHERE map_name='ALL'",
+        }[index_kind]
+        await conn.execute(definition)
+        assert await conn.fetchval("SELECT count(*) FROM pg_constraint WHERE conname='session_teams_identity_unique' AND conrelid='session_teams'::regclass") == 0
+    monkeypatch.setenv('EVENT_STREAM_ENABLED', 'true')
+    monkeypatch.setenv('RUNTIME_TEAM_EVENTS_ENABLED', 'true')
+    event_id = await conn.fetchval('SELECT id FROM runtime_events WHERE round_number=1')
+    result = await consume_team_event(conn, event_id=event_id)
+    accepted = index_kind in ('constraint', 'standalone')
+    assert result.status == ('processed' if accepted else 'pending')
+    if not accepted:
+        assert result.reason == 'schema_unavailable'
+    teams = await conn.fetch('SELECT * FROM session_teams')
+    receipts = await conn.fetch('SELECT * FROM runtime_consumer_receipts')
+    assert len(teams) == await conn.fetchval('SELECT count(*) FROM session_teams') == (2 if accepted else 0)
+    assert len(receipts) == await conn.fetchval('SELECT count(*) FROM runtime_consumer_receipts') == int(accepted)
+    if accepted:
+        assert (await consume_team_event(conn, event_id=event_id)).status == 'already_processed'
+    print('TEAM INDEX:', index_kind, result.status)

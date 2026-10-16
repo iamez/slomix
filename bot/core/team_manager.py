@@ -132,7 +132,7 @@ class TeamManager:
         Return ON CONFLICT clause compatible with current session_teams schema.
         """
         if "session_identity" in columns:
-            return "ON CONFLICT ON CONSTRAINT session_teams_identity_unique"
+            return "ON CONFLICT (session_identity, map_name, team_name)"
         return "ON CONFLICT (session_start_date, map_name, team_name)"
 
     @staticmethod

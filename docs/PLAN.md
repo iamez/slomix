@@ -1,3 +1,38 @@
+## 2026-10-16 — Import-consumer review follow-up before parent merge
+
+PR #1093 received three additional Codex findings after its earlier green CI.
+Do not treat the old zero-thread snapshot as current approval. Default bound R1
+replay now repeats the legacy team assignment after canonical commit/marker
+recovery; deferred mode remains untouched. Mapping verifies the actual boolean
+validation value recorded by the importer, preserving save-with-warning on both
+halves and replay rather than converting warnings to rollback.
+
+Migration 036 creates session_teams_identity_unique as a standalone unique index,
+whereas the schema snapshot defines a constraint. Consumer readiness now checks
+the actual valid, ready, immediate, nonpartial unique index and exact three keys;
+team assignment and TeamManager infer that same key tuple for ON CONFLICT.
+No merged migration is edited and no application database is changed.
+
+141 selected tests passed, 11 native tests skipped because the isolated proof
+cluster is offline. Added eight native cases: cancellation after commit with
+default/deferred team policy, warning pair persistence/replay, and five index
+layouts (constraint, standalone, wrong keys, nonunique, partial). CI must prove
+these against PG14/PG17 before claiming native acceptance or merge readiness.
+Three local mutations target mapping warnings, replay team effect and index
+inference; logs/restoration evidence remain local. Ruff selected paths pass;
+the standalone manager has twelve preexisting diagnostics, independently
+compared baseline/current with no new diagnostic codes/messages.
+
+#1095/#1096 continue as dependent delivery PRs (37/30 paths at their prior heads).
+They must receive this parent correction through normal dependency merges and
+repeat exact-head checks. First #1095 full-run documentation failure was fixed;
+its c933793d Python legs passed 10289/10293 tests, distinct from later heads.
+Actual DEV remains bot b46f675c and web da69e923; health/database OK on read-only
+inspection. No service/game/database operation, deployment or PR merge occurred.
+Retain D5, source admission/exclusive writer handover, proximity/gametime/storage,
+API/live/Spiderweb/UI work and all original roadmap items. The full original
+plan remains byte-preserved in the primary development checkout.
+
 ## 2026-10-16 — Immutable game delivery and supervised proof import
 
 Next cohesive branch: feat/runtime-game-delivery-20261016, based on PR #1094
