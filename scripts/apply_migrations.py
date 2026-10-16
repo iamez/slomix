@@ -25,6 +25,11 @@ Environment variables (or .env file):
     DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD are accepted as
     fallbacks — production .env files in this repo historically used
     DB_* names. POSTGRES_* takes precedence when both are present.
+
+    MIGRATION_{CONNECT,COMMAND,STATEMENT,LOCK}_TIMEOUT_SECONDS accept positive
+    integer seconds (at most 3600). Defaults: 10, 600, 300, 5 respectively.
+    LOCK <= STATEMENT < COMMAND is required. These limits affect this runner
+    only; a long migration must be deliberately given a larger finite budget.
 """
 
 import argparse
@@ -45,6 +50,10 @@ except ImportError:
     sys.exit(1)
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_REPO_ROOT))
+
+from shared.release_manifest import verify_release  # noqa: E402
+from shared.runtime_environment import explicit_env_file, load_environment  # noqa: E402
 
 
 def resolve_env_file(repo_root: Path) -> Path:
@@ -55,18 +64,30 @@ def resolve_env_file(repo_root: Path) -> Path:
     PX-DB-001). This script previously loaded ONLY the root .env
     unconditionally, silently diverging from main.py whenever website/.env
     existed with different POSTGRES_* values."""
+    selected = explicit_env_file(repo_root)
+    if selected is not None:
+        return selected
     website_env = repo_root / "website" / ".env"
     return website_env if website_env.exists() else repo_root / ".env"
 
 
-# Load .env if python-dotenv is available.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(resolve_env_file(_REPO_ROOT))
-except ImportError:
-    pass  # python-dotenv is optional
+# Releases require an operator-selected explicit env; verify admin identity
+# separately (process environment still wins over file values).
+def verify_migration_source() -> None:
+    """Marked payloads must remain intact before config, SQL inventory or DB I/O."""
+    marker = _REPO_ROOT / ".slomix-release.json"
+    if marker.exists() or marker.is_symlink():
+        verify_release(_REPO_ROOT)
+        if MIGRATIONS_DIR != _REPO_ROOT / "migrations":
+            raise ValueError("Release migrations must use the verified payload directory")
+
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
+# Preserve legacy import-time configuration for existing repair-tool callers.
+# Marked payloads defer all configuration until their integrity is admitted.
+_release_marker = _REPO_ROOT / ".slomix-release.json"
+if not (_release_marker.exists() or _release_marker.is_symlink()):
+    load_environment(resolve_env_file(_REPO_ROOT))
 
 # Session-level advisory lock key so two runners (or a runner racing a deploy)
 # can never interleave migration writes. Value is the ASCII of 'SLOMIX_M'.
@@ -294,6 +315,8 @@ def get_target_dsn_parts() -> dict[str, str]:
 
 def get_connection_kwargs() -> dict[str, Any]:
     """Resolved connection settings shared by migration-adjacent tools."""
+    verify_migration_source()
+    load_environment(resolve_env_file(_REPO_ROOT))
     target = get_target_dsn_parts()
     return {
         "host": target["host"],
@@ -305,7 +328,38 @@ def get_connection_kwargs() -> dict[str, Any]:
 
 
 async def get_connection() -> asyncpg.Connection:
-    return await asyncpg.connect(**get_connection_kwargs())
+    # Keep get_connection_kwargs DSN-only: synchronous repair tools also use it.
+    # Startup settings bound even the first ledger query/DDL lock wait, rather
+    # than relying on a test wrapper or a SET issued after unbounded setup.
+    return await asyncpg.connect(**get_connection_kwargs(), **get_timeout_kwargs())
+
+
+def get_timeout_kwargs() -> dict[str, Any]:
+    """Finite, validated runner-only budgets; never echo an invalid env value."""
+    budgets = {}
+    for name, default in (("CONNECT", 10), ("COMMAND", 600),
+                          ("STATEMENT", 300), ("LOCK", 5)):
+        key = f"MIGRATION_{name}_TIMEOUT_SECONDS"
+        value = os.environ.get(key, str(default))
+        if not re.fullmatch(r"[0-9]{1,4}", value) or not 1 <= int(value) <= 3600:
+            raise ValueError(f"{key} must be an integer between 1 and 3600 seconds")
+        budgets[name] = int(value)
+    if not budgets["LOCK"] <= budgets["STATEMENT"] < budgets["COMMAND"]:
+        raise ValueError("Migration timeouts require LOCK <= STATEMENT < COMMAND")
+    return {
+        "timeout": budgets["CONNECT"],
+        "command_timeout": budgets["COMMAND"],
+        "server_settings": {
+            "application_name": "slomix-migrations",
+            "lock_timeout": f"{budgets['LOCK']}s",
+            "statement_timeout": f"{budgets['STATEMENT']}s",
+        },
+    }
+
+
+async def close_connection(conn: asyncpg.Connection) -> None:
+    """Connection draining cannot keep an otherwise completed runner alive."""
+    await asyncio.wait_for(conn.close(), timeout=10)
 
 
 async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:
@@ -407,6 +461,7 @@ async def get_checksum_mismatches(conn: asyncpg.Connection) -> list[str]:
 
 def discover_migrations() -> list[tuple[str, Path]]:
     """Return sorted list of (filename, path) for all .sql migration files."""
+    verify_migration_source()
     files = sorted(
         [f.name for f in MIGRATIONS_DIR.glob("*.sql")],
         key=_sort_key,
@@ -489,7 +544,7 @@ async def cmd_status(json_out: bool = False):
                   "manually via psql, reconcile with --mark.")
         print()
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
@@ -516,7 +571,7 @@ async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
         state = await collect_state(conn)
         state["db_fingerprint"] = await get_db_fingerprint(conn)
     finally:
-        await conn.close()
+        await close_connection(conn)
 
     clean = (
         not state["pending"]
@@ -586,7 +641,7 @@ async def cmd_baseline():
         else:
             print(f"\n  Recorded {count} migration(s) as baseline.\n")
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def _record_failure(conn, version, filename, checksum, elapsed_ms):
@@ -770,7 +825,7 @@ async def cmd_apply(only: list[str] | None = None):
 
         print(f"\n  All {len(pending)} migration(s) applied successfully.\n")
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def cmd_mark(filenames: list[str]):
@@ -867,7 +922,7 @@ async def cmd_mark(filenames: list[str]):
             f"Skipped: {skipped}, Raced: {raced}\n"
         )
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 # ── Main ──────────────────────────────────────────────────────────────
@@ -899,6 +954,13 @@ def main():
     if args.tolerate_missing and not args.validate:
         parser.error("--tolerate-missing requires --validate")
 
+    try:
+        verify_migration_source()
+    except (OSError, ValueError):
+        print(json.dumps({"status": "refused", "reason": "Release migration source verification failed"}),
+              file=sys.stderr)
+        return 1
+
     if args.status:
         asyncio.run(cmd_status(json_out=args.json))
     elif args.validate:
@@ -916,4 +978,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

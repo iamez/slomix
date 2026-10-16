@@ -78,6 +78,28 @@ class MetricsLogger:
             f"📊 Metrics Logger initialized: log_dir={self.log_dir}, db={self.metrics_db_path}"
         )
 
+    @classmethod
+    def from_config(cls, config):
+        """Keep report files under BOT_LOG_DIR; explicit metrics DB paths win.
+
+        PostgreSQL mode refuses the legacy application SQLite database as a
+        metrics target, while preserving separately configured metrics stores.
+        """
+        log_dir = getattr(config, "metrics_log_dir", None) or os.path.join(
+            os.getenv("BOT_LOG_DIR") or "logs", "metrics"
+        )
+        db_path = getattr(config, "metrics_db_path", "")
+        db_type = str(getattr(config, "database_type", "postgresql")).strip().lower()
+        if db_type in ("postgresql", "postgres"):
+            sqlite_path = getattr(config, "sqlite_db_path", "") or ""
+            database_abs = os.path.abspath(db_path) if db_path else ""
+            if (not db_path
+                    or (sqlite_path and database_abs == os.path.abspath(sqlite_path))
+                    or os.path.basename(database_abs) == "etlegacy.db"):
+                db_path = os.path.join(log_dir, "metrics.db")
+                logger.info("Using dedicated metrics SQLite store for PostgreSQL mode")
+        return cls(db_path=db_path, log_dir=log_dir)
+
     async def initialize_metrics_db(self):
         """Create metrics database tables"""
         try:

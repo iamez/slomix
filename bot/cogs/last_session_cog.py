@@ -31,6 +31,7 @@ from bot.services.session_timing_shadow_service import SessionTimingShadowServic
 from bot.services.session_view_handlers import SessionViewHandlers
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
 from bot.stats import StatsCalculator
+from bot.website_links import website_url
 
 logger = logging.getLogger("bot.cogs.last_session")
 
@@ -175,12 +176,12 @@ class LastSessionCog(commands.Cog):
                         offense_img,
                         filename=f"session_{latest_date}_offense.png"
                     )
-                    web_base = getattr(self.bot.config, "website_public_base", "https://www.slomix.fyi")
+                    session_url = website_url(self.bot.config, f"/session-detail/date/{latest_date}")
                     embed1 = discord.Embed(
                         title=f"COMBAT STATS (OFFENSE)  -  {latest_date}",
                         description=(
                             f"Kills/Deaths, Damage, K/D, DPM - Top players across {total_maps} maps\n"
-                            f"📱 Full breakdown: {web_base}/#/session-detail/date/{latest_date}"
+                            f"📱 Full breakdown: {session_url}"
                         ),
                         color=0x5865F2,
                         timestamp=datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale

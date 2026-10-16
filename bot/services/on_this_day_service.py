@@ -11,6 +11,7 @@ import datetime as _dt
 import discord
 
 from bot.logging_config import get_logger
+from bot.website_links import website_url
 
 logger = get_logger("bot.services.on_this_day")
 
@@ -142,7 +143,7 @@ class OnThisDayService:
                 value=f"**{frag['name']}** — {frag['kills']} kills ({frag['date'].isoformat()})",
                 inline=False,
             )
-        web = getattr(self.config, "website_public_base", "https://www.slomix.fyi")
+        records_url = website_url(self.config, "/record-book")
         embed.set_footer(text="Slomix — the community's memory 🏟️")
-        embed.add_field(name="​", value=f"[Record Book]({web}/#/record-book)", inline=False)
+        embed.add_field(name="​", value=f"[Record Book]({records_url})", inline=False)
         return embed

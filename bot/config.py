@@ -10,13 +10,10 @@ import os
 from typing import Any
 
 from bot.core.round_contract import DEFAULT_EXCLUDED_MAPS
+from bot.website_links import validate_ui_mode
+from shared.runtime_environment import explicit_env_file, external_config_path, load_environment
 
-# Load .env file if it exists
-try:
-    from dotenv import load_dotenv
-    load_dotenv()  # Load .env file into environment variables
-except ImportError:  # nosec B110
-    pass  # python-dotenv not installed, skip
+load_environment()
 
 logger = logging.getLogger('BotConfig')
 
@@ -56,11 +53,22 @@ class BotConfig:
         Args:
             config_file: Optional path to JSON config file
         """
-        self.config_file = config_file or "bot_config.json"
+        external_mode = explicit_env_file() is not None
+        # Release settings come from the explicit env, not an accidental cwd JSON.
+        self.config_file = config_file or (None if external_mode else "bot_config.json")
         self._config_data = {}
 
         # Load config file if exists
-        if os.path.exists(self.config_file):
+        if external_mode and config_file:
+            self.config_file = str(external_config_path(config_file))
+            try:
+                with open(self.config_file, encoding="utf-8") as stream:
+                    self._config_data = json.load(stream)
+                if not isinstance(self._config_data, dict):
+                    raise ValueError
+            except (OSError, ValueError):
+                raise ValueError("Invalid explicit bot JSON configuration") from None
+        elif self.config_file and os.path.exists(self.config_file):
             self._load_config_file()
 
         # ==================== ENVIRONMENT IDENTITY ====================
@@ -269,6 +277,7 @@ class BotConfig:
         self.internal_api_secret: str = self._get_config('INTERNAL_API_SECRET', '')
         # Public base for deep links in Discord embeds.
         self.website_public_base: str = self._get_config('WEBSITE_PUBLIC_BASE', 'https://www.slomix.fyi').rstrip('/')
+        self.website_ui_mode: str = validate_ui_mode(self._get_config('WEBSITE_UI_MODE', 'legacy'))
         # Skip digest for stub sessions (false session-end trigger guard).
         self.session_digest_min_rounds: int = int(self._get_config('SESSION_DIGEST_MIN_ROUNDS', '4'))
 
@@ -350,7 +359,10 @@ class BotConfig:
         self.stats_directory: str = self._get_config('STATS_DIRECTORY', 'local_stats')
         self.local_stats_path: str = self._get_config('LOCAL_STATS_PATH', './local_stats')
         self.backup_directory: str = self._get_config('BACKUP_DIRECTORY', 'processed_stats')
-        self.metrics_db_path: str = self._get_config('METRICS_DB_PATH', 'logs/metrics/metrics.db')
+        self.metrics_log_dir: str = os.path.join(os.getenv('BOT_LOG_DIR') or 'logs', 'metrics')
+        self.metrics_db_path: str = self._get_config(
+            'METRICS_DB_PATH', os.path.join(self.metrics_log_dir, 'metrics.db')
+        )
 
         # ==================== RCON (REMOTE CONSOLE) ====================
         self.rcon_enabled: bool = self._get_config('RCON_ENABLED', 'false').lower() == 'true'

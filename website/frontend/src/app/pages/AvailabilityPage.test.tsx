@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -309,7 +309,7 @@ describe('AvailabilityPage', () => {
     expect(spy.mock.calls.some((c) => String(c[0]).includes('/bets/wallet'))).toBe(false);
   });
 
-  it('open market: a non-integer stake is refused before any POST, and a new market reseeds the stake', { timeout: 20000 }, async () => {
+  it('open market: a non-integer stake is refused before any POST, and exponent notation stays whole', { timeout: 20000 }, async () => {
     const spy = stub({
       ...LINKED_BASE,
       '/api/bets/market/current': { body: openMarket },
@@ -329,30 +329,47 @@ describe('AvailabilityPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'bet on Axis side' }));
     await waitFor(() => expect(screen.getByText(/bet placed — 100 on Axis side/)).toBeInTheDocument());
     expect(bodyOf(spy, 'POST', '/api/bets/market/7/bet')).toEqual({ choice: 'team_a', amount: 100 });
+  });
 
-    // The server swaps in a different market underneath the placed bet: the
-    // invalidation refetch brings market 8 with my_bet 60, and — the edit
-    // having been submitted (dirty cleared) — the stake reseeds from it.
-    const other = { ...openMarket, market: { ...openMarket.market, id: 8, my_bet: { ...openMarket.market.my_bet, amount: 60 } } };
+  it('open market: an accepted bet waits for refetch before reseeding a different market', async () => {
+    const spy = stub({
+      ...LINKED_BASE,
+      '/api/bets/market/current': { body: openMarket },
+      'POST /api/bets/market/7/bet': { body: placed },
+      '/api/availability/promotions/preview': { body: preview },
+    });
+    // Model the server transition in one handler, rather than replacing fetch
+    // between two successive submissions while the first form is settling.
+    const baseFetch = spy.getMockImplementation()!;
+    const other = { ...openMarket, market: { ...openMarket.market, id: 8,
+      my_bet: { ...openMarket.market.my_bet, amount: 60 } } };
+    let submitted = false;
+    let refetchStarted = false;
+    let finishRefetch!: (response: Response) => void;
+    const refetchedMarket = new Promise<Response>((resolve) => { finishRefetch = resolve; });
     spy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
       const path = String(input).split('?')[0];
-      const body = init?.method === 'POST' ? placed
-        : path === '/api/bets/market/current' ? other
-        : path === '/api/bets/wallet' ? wallet
-        : path === '/api/availability/settings' ? settings
-        : path === '/api/availability/subscriptions' ? subs
-        : path === '/api/availability/promotions/campaign' ? campaign
-        : path === '/api/availability/promotion-preferences' ? prefs
-        : path === '/api/availability/promotions/preview' ? preview
-        : path === '/api/availability/access' ? linkedAccess
-        : path === '/api/availability' ? authedWeek
-        : path === '/api/planning/today' ? planning : {};
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+      if (path === '/api/bets/market/7/bet' && init?.method === 'POST') submitted = true;
+      if (path === '/api/bets/market/current' && submitted) {
+        refetchStarted = true;
+        return refetchedMarket;
+      }
+      return baseFetch(input, init);
     });
-    fireEvent.change(stakeInput, { target: { value: '15' } });
+    renderPage();
+    fireEvent.change(await screen.findByLabelText('stake'), { target: { value: '15' } });
     fireEvent.click(screen.getByRole('button', { name: 'bet on Axis side' }));
-    await waitFor(() => expect(screen.getByText(/bet placed — 15 on Axis side/)).toBeInTheDocument());
+    await waitFor(() => expect(refetchStarted).toBe(true));
+    expect(bodyOf(spy, 'POST', '/api/bets/market/7/bet')).toEqual({ choice: 'team_a', amount: 15 });
+    expect(screen.getByRole('button', { name: 'bet on Axis side' })).toBeDisabled();
+    expect((screen.getByLabelText('stake') as HTMLInputElement).value).toBe('15');
+    expect(screen.queryByText(/bet placed/)).not.toBeInTheDocument();
+    await act(async () => {
+      finishRefetch({ ok: true, status: 200, json: () => Promise.resolve(other) } as Response);
+    });
+    await screen.findByText(/bet placed — 15 on Axis side/);
     await waitFor(() => expect((screen.getByLabelText('stake') as HTMLInputElement).value).toBe('60'));
+    expect(screen.getByRole('button', { name: 'bet on Axis side' })).toBeEnabled();
   });
 
   it('linked: a background refetch does not clobber unsaved toggles, and save sends dry_run-free settings', async () => {

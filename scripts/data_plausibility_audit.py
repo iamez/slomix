@@ -13,6 +13,8 @@ live. An unchanged historical live finding can recur in every daily report.
 Source evidence is required before deciding whether data needs repair.
 
 Read-only. Never writes to the database.
+Marked releases require stdout --json or an explicit external --output; even
+an output ignored by --json must stay outside the immutable release.
 
 Usage:
     python scripts/data_plausibility_audit.py                # markdown, stdout + file
@@ -52,6 +54,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from shared.round_time import MMSS_SQL_REGEX, round_duration_sql  # noqa: E402 (needs the sys.path bootstrap above)
+from shared.runtime_environment import explicit_env_file, load_environment  # noqa: E402
 
 # The date the backfill import (supastats history) hands off to live capture.
 # Every historical row before this date came through the lossy backfill path;
@@ -90,6 +93,9 @@ def _load_dotenv(root: Path) -> None:
 
     Only sets vars not already in the environment (real env wins).
     """
+    if explicit_env_file(root) is not None:
+        load_environment(root=root)
+        return
     env_path = root / ".env"
     if not env_path.exists():
         return
@@ -1365,6 +1371,20 @@ def render_json(results: list[RuleResult], generated_at: str,
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
 
+def validate_report_destination(output: Path | None, *, json_stdout: bool) -> None:
+    """Marked releases never write reports into immutable payload state."""
+    marker = _REPO_ROOT / ".slomix-release.json"
+    if not (marker.exists() or marker.is_symlink()):
+        return
+    if output is None:
+        if not json_stdout:
+            raise ValueError("Release audit requires --json or an explicit external --output")
+        return
+    if (not output.is_absolute() or output.is_relative_to(_REPO_ROOT)
+            or output.resolve().is_relative_to(_REPO_ROOT.resolve())):
+        raise ValueError("Release audit output must be an absolute path outside the payload")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     def _non_negative(value: str) -> int:
@@ -1382,6 +1402,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Markdown report file path (default: docs/research/DATA_PLAUSIBILITY_T1_<date>.md). Ignored with --json.",
     )
     args = parser.parse_args(argv)
+    try:
+        validate_report_destination(args.output, json_stdout=args.json)
+    except (OSError, RuntimeError, ValueError):
+        print(json.dumps({"status": "refused", "reason": "Release audit requires stdout JSON or external report output"}),
+              file=sys.stderr)
+        return 1
 
     validate_rules(RULES)
     validate_trend_rules(TREND_RULES)
