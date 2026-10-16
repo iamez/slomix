@@ -163,7 +163,7 @@ class SessionDigestService:
         if gsid is not None:
             embed.add_field(
                 name="🗳️ MVP vote open",
-                value=f"Who carried tonight? [Cast your vote]({website_url(self.config, f'/session-detail/{gsid}')})",
+                value=f"Who carried tonight? [Cast your vote]({website_url(self.config, f'/session-detail/{gsid}', legacy=True)})",
                 inline=False,
             )
 

@@ -57,6 +57,16 @@ def test_offline_unit_parser_and_exclusive_output(
     assert 'UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT' in text.splitlines()
     assert '[Install]' not in text and 'ExecStop=' not in text
     assert ' -I ' in text
+    expected = (f"ExecStart={args['interpreter']} -I -B {source}/scripts/runtime_game_supervisor.py"
+                f" run --directory {workspace} --unit {record['unit']} --commit {'a' * 40}")
+    if bots:
+        expected += f" --bot-fixture {tmp_path / 'bots'} --bot-manifest-sha256 {'b' * 64}"
+    if import_requested:
+        expected += (f" --proof-socket {args['proof_socket']} --proof-database-name {args['proof_database_name']}"
+                     f" --import-lock-directory {args['import_lock_directory']}")
+    if defer_team_assignment:
+        expected += ' --defer-team-assignment'
+    assert expected in text.splitlines()
     assert ('--bot-fixture' in text) == bots
     if bots:
         assert '--bot-manifest-sha256 ' + 'b' * 64 in text

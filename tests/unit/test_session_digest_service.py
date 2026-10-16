@@ -82,6 +82,7 @@ async def test_digest_embed_content_and_kis_fallback(mock_data_cls, mock_scoring
     links = " ".join(str(field.value) for field in embed.fields)
     assert f"https://dev.example{prefix}/leaderboards" in links
     assert "www.slomix.fyi" not in links
+    assert "[Cast your vote](https://dev.example/#/session-detail/" in links
 
 
 @pytest.mark.asyncio

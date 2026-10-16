@@ -102,7 +102,7 @@ def _accept(server, verify, controller, wait):
 
 def serve_match(controller: RuntimeMatchController, socket_path: Path, *,
                 initial_readiness_wait=1800.0, bootstrap_wait=1800.0,
-                completion_wait=1800.0, exchange_timeout=5.0,
+                completion_wait=3600.0, exchange_timeout=5.0,
                 on_ready=None):
     """Exclusively own one ready controller until two captures or terminal failure.
 
@@ -111,9 +111,13 @@ def serve_match(controller: RuntimeMatchController, socket_path: Path, *,
     Wrong peers/protocols fail closed, never consume an unbounded retry loop.
     initial_readiness_wait covers map load/player warmup before R1. bootstrap_wait
     covers the separate between-half warmup before R2. Both remain bounded and
-    distinct from short IPC exchange_timeout. completion_wait is
-    NOT a limit on actual ET round length and exceeding it requires explicit
-    reconciliation. Filesystem syscall latency is not bounded by these timers.
+    distinct from short IPC exchange_timeout. completion_wait bounds the whole
+    playing half INCLUDING pauses, so its default covers the full 60-minute
+    proof-unit lifetime rather than imposing an earlier 30-minute cutoff.
+    The caller's global unit limit may abort an incomplete match sooner. Longer
+    standalone captures require an explicit budget (at most two hours per half).
+    Timeout is a terminal capture failure requiring reconciliation, not success.
+    Filesystem syscall latency is not bounded by these timers.
 
     Close the listener before returning the verified import handoff. No source
     ACK, file deletion, import or success reconstruction from persisted claims.

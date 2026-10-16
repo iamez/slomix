@@ -34,6 +34,65 @@ remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
 and additional review closure remain pending. Preserve original plan and queues.
 
 
+## 2026-10-16 — Completion deadline covers the bounded proof lifetime
+
+New #1094 review arrived during final closure after all four heads were green.
+The completion accept wait does bound elapsed play plus pauses, despite the old
+misleading docstring. Default completion_wait now covers3600s, the whole existing
+60-minute proof-unit lifetime, instead of cutting capture off at30 minutes.
+The supervisor in #1095 also needs3600 rather than its former1500s override.
+The overall unit cap is unchanged; incomplete/over-budget capture remains a
+terminal failure requiring reconciliation. Standalone callers may explicitly
+budget up to7200s per half; this is not unlimited gameplay or activation proof.
+
+Native pinned-peer/real-file test advances a virtual monotonic clock31 minutes
+after completion acceptance starts. Both halves capture under the new default;
+restoring1800s causes an observed TimeoutError. Source restored with cmp and42
+listener tests passed. No actual31-minute process or ET server was run.
+A related test race was exposed: socket creation can precede dispatch reservation,
+so root-replacement tests now wait on actual on_ready before asserting retained
+writer claims. An earlier run had41 pass/1 failure on that false test assumption.
+
+Previous exact heads all passed CI: #1093 c40537ba9261/9265 tests;
+#1094 2ed21c4e10075/10079; #1095 e12e035b10417/10421;
+#1096 dd351e0510565/10569 (Python3.11/PG14, Python3.13/PG17).
+Both new native team-lock cases ran in every branch/platform and passed counts
+were checked independently. New producer/game review fixes require new CI.
+#1093 remains ready with zero open threads and no commits behind main; per-number
+owner approval is still required. No merge, service or production change occurred.
+
+## 2026-10-16 — Effective launch commands, explicit config and voting capability
+
+Three later #1095 review findings fixed. Rendered and admitted units share one
+unambiguous argv builder; resolved ExecStart must match its exact interpreter,
+isolation flags, script and arguments. Wrappers, extra/multiple/ignored commands
+and all populated ExecCondition/StartPre/Post/Reload/Stop/Post are refused, both
+initially and immediately before our Popen. Actual stopped-unit property format
+was checked read-only: systemd can omit empty execution arrays even with--all.
+Current metadata cannot prove an earlier wrapper made no side effects; refusal
+prevents our next ET launch, not retroactive certification of the whole unit.
+
+UltimateBot now calls the same early explicit load_environment as the app slice,
+before imports, and removes plain load_dotenv ancestor search. A real isolated
+child with a missing synthetic key in explicit config and that key in ancestor
+.env remains clean. Reintroducing fallback genuinely loaded the ancestor marker
+and failed the environment assertion; source restored with cmp. The first
+mutation measured only a forbidden-loader-call assertion, so it was rerun with
+the child's cwd corrected to expose the actual leak before claiming that proof.
+
+MVP vote CTA forces the functional legacy route while ordinary session links
+still follow WEBSITE_UI_MODE. SPA voting mutation remains future UI work: its
+current read-only view cannot deliver the advertised action. Both embed modes
+are rendered in tests. Supervisor completion wait now3600 agrees with #1094;
+global60-minute lifetime is unchanged, partial capture is never success.
+
+202 selected tests passed, Ruff/configured Bandit/diff-check clean. Observed
+negative controls: command admission10 failures; vote1 failure/1 pass; completion
+caller1 failure; actual ancestor dotenv leak1 failure. Every source restored with
+cmp. No service, ET, migration, application write or production action. Refresh
+parents normally and run exact-head CI before final review closure. #1093 remains
+fully green and owner-specific merge approval is still pending. All plan retained.
+
 ## 2026-10-16 — Bound team contention remains retryable after canonical commit
 
 New #1093 review found the legacy auto-team bool/error wrapper swallowed global
