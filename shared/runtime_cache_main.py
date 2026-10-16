@@ -81,25 +81,33 @@ def report(state):
 
 
 async def serve(config, stop, *, worker=None, pool_factory=None, reporter=report,
-                health_seconds=5, drain_seconds=11, close_seconds=5):
+                health_seconds=5, drain_seconds=11, close_seconds=5,
+                resource_factory=None, task_prefix='runtime-cache'):
     """Own exactly one worker and pool; return only after both are cleaned up.
 
     Pool starts empty so initial DB outages follow the worker's bounded retry
     path. Schema/permission errors remain unavailable, never healthy idle.
     Caller cancellation cancels active work; a stop event first allows draining.
+    Optional resource_factory(pool) returns the worker's per-batch acquisition
+    callable; it must not create separately owned pools/tasks. Initialization
+    failures still close this owned pool. Default cache acquisition is unchanged.
     """
     worker = worker or RuntimeCacheWorker()
     pool_factory = pool_factory or asyncpg.create_pool
     pool = await pool_factory(**config.pool_options())
     task = None
     stopping = None
+    failure = None
     try:
-        task = asyncio.create_task(worker.run(pool.acquire, stop), name="runtime-cache-consumer")
-        stopping = asyncio.create_task(stop.wait(), name="runtime-cache-stop")
+        acquire = pool.acquire if resource_factory is None else resource_factory(pool)
+        task = asyncio.create_task(worker.run(acquire, stop), name=f'{task_prefix}-consumer')
+        stopping = asyncio.create_task(stop.wait(), name=f'{task_prefix}-stop')
         reporter(replace(worker.state, status="starting"))
         while not task.done() and not stop.is_set():
             await asyncio.wait((task, stopping), timeout=health_seconds,
                                return_when=asyncio.FIRST_COMPLETED)
+            if task.done():
+                await task  # Observe worker failure before any status reporter can fail.
             reporter(worker.state)
         if stop.is_set() and not task.done():
             reporter(replace(worker.state, status="shutting_down"))
@@ -112,20 +120,39 @@ async def serve(config, stop, *, worker=None, pool_factory=None, reporter=report
                     pass  # Only our requested cancellation is a clean stop.
                 return
         await task  # Unexpected worker errors must reach the process exit code.
+    except BaseException as error:
+        failure = error
+        raise
     finally:
         for owned in (task, stopping):
             if owned is not None and not owned.done():
                 owned.cancel()
-        await asyncio.gather(*(owned for owned in (task, stopping) if owned is not None),
-                             return_exceptions=True)
+        cleanup_error = None
         try:
+            await asyncio.gather(*(owned for owned in (task, stopping) if owned is not None),
+                                 return_exceptions=True)
             async with asyncio.timeout(close_seconds):
                 await pool.close()
-        except BaseException:
-            pool.terminate()
-            raise
-        finally:
+        except BaseException as error:
+            cleanup_error = error
+            try:
+                pool.terminate()
+            except BaseException as terminate_error:
+                cleanup_error.__cause__ = terminate_error
+        try:
             reporter(worker.state)
+        except BaseException as report_error:
+            if cleanup_error is None:
+                cleanup_error = report_error
+            else:
+                cleanup_error.add_note(f'Final status reporting failed: {type(report_error).__name__}')
+        if cleanup_error is not None:
+            # Cleanup/status failures must not replace worker failure or caller
+            # cancellation. Without a primary failure cleanup still fails closed.
+            if failure is not None:
+                raise failure from cleanup_error
+            raise cleanup_error
+
 
 
 async def run():

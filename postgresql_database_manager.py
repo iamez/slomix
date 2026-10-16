@@ -35,12 +35,16 @@ from pathlib import Path
 import asyncpg
 
 from bot.community_stats_parser import C0RNP0RN3StatsParser
+from bot.runtime_import_validation import validate_import_totals
+from bot.runtime_round_mapping import (
+    StatsRoundBinding,
+    inspect_round_mapping,
+    record_round_mapping,
+    require_first_mapping,
+)
 from bot.stats import StatsCalculator
 from shared import database_logging
-from shared.database_logging import (
-    log_performance_warning,
-    log_stats_import,
-)
+from shared.database_logging import log_performance_warning, log_stats_import
 from shared.import_result import RetryableImportFailure
 from shared.round_status_events import mark_round_restart, status_events_enabled
 from shared.runtime_events import emit_round_stats_imported, event_stream_enabled
@@ -63,14 +67,23 @@ class PostgreSQLDatabaseManager:
     Handles all database operations from creation to disaster recovery.
     """
 
-    def __init__(self, stats_dir: str = "local_stats", *, config=None, allow_legacy_r1_fallback: bool = True):
+    def __init__(self, stats_dir: str = "local_stats", *, config=None, allow_legacy_r1_fallback: bool = True,
+                 defer_team_assignment: bool = False):
         """Accept caller-owned configuration, or preserve legacy loading by default.
 
         The object uses the existing database_type/postgres_* / excluded_maps
         attribute contract. Explicit configuration bypasses legacy dotenv and
         logging setup; default construction performs that setup lazily.
         Construction does not connect, migrate, validate Discord credentials or create a pool.
+        defer_team_assignment opts this caller-owned sealed-input lane into event
+        consumer ownership. The input adapter is a trusted caller contract,
+        not independent authentication of sealed bytes. Requires durable journaling;
+        default legacy assignment stays unchanged. No existing roster adoption,
+        worker startup or exclusion of other writers follows from this option.
         """
+        if type(defer_team_assignment) is not bool:
+            raise ValueError("Explicit boolean team ownership policy required")
+        self.defer_team_assignment = defer_team_assignment
         self.config = load_config() if config is None else config
         self.event_stream_enabled = event_stream_enabled()
 
@@ -108,7 +121,7 @@ class PostgreSQLDatabaseManager:
         Checks:
         1. headshot_kills <= kills
         2. time_dead <= time_played
-        3. team_kills <= kills
+        3. Independent team_kills are preserved (not bounded by enemy kills)
         4. accuracy in range 0-100
         5. DPM is reasonable (< 1000)
 
@@ -122,6 +135,14 @@ class PostgreSQLDatabaseManager:
         issues = []
         obj_stats = player.get('objective_stats', {})
 
+        # Normalize base counters before using them as bounds. Otherwise a
+        # negative kill count would manufacture negative headshot-kill values.
+        for field in ['kills', 'deaths', 'damage_given', 'damage_received']:
+            val = player.get(field, 0)
+            if val < 0:
+                issues.append(f"{field} ({val}) is negative")
+                player[field] = 0
+
         kills = player.get('kills', 0)
         time_seconds = player.get('time_played_seconds', 0)
         time_minutes = time_seconds / 60.0 if time_seconds > 0 else 0.0
@@ -132,11 +153,9 @@ class PostgreSQLDatabaseManager:
             issues.append(f"headshot_kills ({headshot_kills}) > kills ({kills})")
             obj_stats['headshot_kills'] = kills
 
-        # 2. Team kills cannot exceed total kills
-        team_kills = obj_stats.get('team_kills', 0)
-        if team_kills > kills:
-            issues.append(f"team_kills ({team_kills}) > kills ({kills})")
-            obj_stats['team_kills'] = min(team_kills, kills)
+        # ET:Legacy G_addStats counts team kills separately, returning before
+        # enemy/weapon kills in non-DEBUG_STATS builds. c0rn serializes that
+        # counter independently in TAB[6]; no team_kills <= kills invariant.
 
         # 3. Time dead cannot exceed time played
         time_dead_minutes = float(obj_stats.get('time_dead_minutes', 0) or 0)
@@ -160,13 +179,6 @@ class PostgreSQLDatabaseManager:
         if dpm > 1000:
             issues.append(f"dpm ({dpm:.1f}) suspiciously high")
             # Don't fix, just log - might be legitimate in short rounds
-
-        # 6. Negative values check
-        for field in ['kills', 'deaths', 'damage_given', 'damage_received']:
-            val = player.get(field, 0)
-            if val < 0:
-                issues.append(f"{field} ({val}) is negative")
-                player[field] = 0
 
         # Log issues if any found
         if issues:
@@ -1578,10 +1590,15 @@ class PostgreSQLDatabaseManager:
             return date, time
         return None, None
 
-    async def process_file(self, file_path: Path) -> tuple[bool, str]:
+    async def process_file(self, file_path: Path, *, input_source=None, runtime_binding=None) -> tuple[bool, str]:
         """
-        Process a single stats file with COMPREHENSIVE VALIDATION
-
+        Process a stats file; optional caller-owned input_source supplies
+        read_bytes() and parse(parser), held stable throughout this await.
+        Explicit runtime_binding requests forward-only atomic mapping (099 and
+        enabled journal). Caller authenticates the sealed input/expected identity
+        and holds exclusive writer ownership. Legacy imports remain unchanged;
+        do not overlap them with bound imports or infer full-row integrity from
+        a mapping after privileged/manual data edits.
         Pipeline:
         1. Parse file
         2. Extract expected data counts
@@ -1592,27 +1609,47 @@ class PostgreSQLDatabaseManager:
         Returns:
             (success: bool, message: str)
         """
+        # Explicit sealed-input lane only; fail before hashing, markers or DB IO.
+        # This transfers future effects, never adopts existing rosters/receipts.
+        if self.defer_team_assignment and (input_source is None or self.event_stream_enabled is not True):
+            raise ValueError('Deferred team assignment requires explicit input and enabled journal')
         filename = file_path.name
         start_time = time.time()
         payload_hash = None
         transaction_pending = False
 
         try:
-            # Compute hash early so renamed duplicates are detectable.
             try:
-                _, payload_hash = self._compute_file_hashes(file_path)
+                full_hash, payload_hash = self._compute_file_hashes(file_path if input_source is None else input_source)
             except Exception as hash_exc:
                 logger.warning(f"⚠️ Could not hash file {filename}: {hash_exc}")
-
-            # Check if already processed
+                if input_source is not None:
+                    return RetryableImportFailure('Explicit input could not be hashed')
             transaction_pending = True  # DB preflight failures are retryable too.
-            if await self.is_file_processed(filename):
+            if runtime_binding is not None:
+                if (not isinstance(runtime_binding, StatsRoundBinding) or input_source is None
+                        or runtime_binding.filename != filename or runtime_binding.sha256 != full_hash
+                        or len(input_source.read_bytes()) != runtime_binding.size
+                        or self.event_stream_enabled is not True):
+                    raise ValueError('Bound import requires sealed matching input and enabled journal')
+                async with self.pool.acquire() as conn, conn.transaction():
+                    mapped = await inspect_round_mapping(conn, runtime_binding, payload_hash)
+                    marker = await conn.fetchrow('SELECT success,file_hash FROM processed_files WHERE filename=$1', filename)
+                    if marker is not None and (mapped is None or marker['file_hash'] != payload_hash):
+                        raise ValueError('Existing marker has no exact runtime mapping')
+                    await require_first_mapping(conn, runtime_binding)
+                if mapped is not None:
+                    if marker is None or marker['success'] is not True:
+                        await self.mark_file_processed(filename, success=True, file_hash=payload_hash)
+                    return True, 'Already mapped'
+            if runtime_binding is None and await self.is_file_processed(filename):
                 self.stats['files_skipped'] += 1
                 logger.debug(f"⏭️  Skipped (already processed): {filename}")
                 return True, "Already processed"
 
             # Skip renamed mirror files that have identical payload content.
-            duplicate_source = await self.find_processed_by_hash(payload_hash, filename=filename)
+            duplicate_source = (await self.find_processed_by_hash(payload_hash, filename=filename)
+                                if runtime_binding is None else None)
             if duplicate_source and duplicate_source != filename:
                 self.stats['files_skipped'] += 1
                 await self.mark_file_processed(
@@ -1626,10 +1663,10 @@ class PostgreSQLDatabaseManager:
                 )
                 return True, f"Duplicate payload of {duplicate_source}"
 
-            # STEP 1: Parse file
             transaction_pending = False
             logger.debug(f"📖 Parsing file: {filename}")
-            parsed_data = self.parser.parse_stats_file(str(file_path))
+            parsed_data = (self.parser.parse_stats_file(str(file_path)) if input_source is None
+                           else input_source.parse(self.parser))
 
             if not parsed_data or parsed_data.get('error'):
                 error = parsed_data.get('error', 'Unknown error') if parsed_data else 'No data'
@@ -1672,7 +1709,8 @@ class PostgreSQLDatabaseManager:
                 async with conn.transaction():
                     # Create round (round_number determined in _create_round_postgresql from filename)
                     logger.debug(f"💾 Creating round for {filename}")
-                    round_id = await self._create_round_postgresql(conn, parsed_data, file_date, round_time, filename)
+                    create_options = {'allow_existing': False} if runtime_binding is not None else {}
+                    round_id = await self._create_round_postgresql(conn, parsed_data, file_date, round_time, filename, **create_options)
 
                     if not round_id:
                         raise Exception("Failed to create round")
@@ -1693,8 +1731,11 @@ class PostgreSQLDatabaseManager:
 
                         # Create match summary round (round_number = 0)
                         match_summary_id = await self._create_round_postgresql(
-                            conn, match_summary, file_date, round_time, filename, is_match_summary=True
+                            conn, match_summary, file_date, round_time, filename, is_match_summary=True, **create_options
                         )
+
+                        if runtime_binding is not None and not match_summary_id:
+                            raise ValueError('Bound import cannot adopt an existing match summary')
 
                         if match_summary_id:
                             # Insert match summary player stats
@@ -1717,13 +1758,20 @@ class PostgreSQLDatabaseManager:
                         logger.warning(f"⚠️  Data mismatch in {filename}: {validation_msg}")
 
                     # Same transaction: journal/NOTIFY failures roll back the import.
-                    await emit_round_stats_imported(
+                    event_id = await emit_round_stats_imported(
                         conn, enabled=self.event_stream_enabled, round_id=round_id,
                         source_filename=filename, source_payload_sha256=payload_hash,
                         validation_passed=validation_passed,
                     )
+                    if (self.defer_team_assignment and
+                            (type(event_id) is not int or event_id <= 0)):
+                        raise ValueError('Deferred team assignment requires a durable import event')
+                    if runtime_binding is not None:
+                        await record_round_mapping(conn, runtime_binding, round_id, payload_hash)
 
-            transaction_pending = False
+            # Bound marker failures remain retryable after COMMIT; exact mapping
+            # replay repairs the marker without touching stats or emitting again.
+            transaction_pending = runtime_binding is not None
             # Count/log success only after COMMIT (NOTIFY can fail at commit).
             self.stats['files_processed'] += 1
             self.stats['rounds_created'] += 1
@@ -1760,7 +1808,7 @@ class PostgreSQLDatabaseManager:
 
             # 🆕 AUTO-TEAM ASSIGNMENT: If this is Round 1, auto-assign teams from header data
             round_num = parsed_data.get('round_num', parsed_data.get('round_number', 0))
-            if round_num == 1:
+            if round_num == 1 and not self.defer_team_assignment:
                 logger.debug(f"🎯 Round 1 detected (round_number={round_num}), attempting auto-team assignment for {file_date}")
                 await self._auto_assign_teams_from_r1(round_id, file_date)
 
@@ -1821,298 +1869,13 @@ class PostgreSQLDatabaseManager:
             return False, error_msg
 
     async def _auto_assign_teams_from_r1(self, round_id: int, session_date: str) -> bool:
-        """
-        Auto-assign teams to session using Round 1 header data.
+        """Preserve the legacy bool/error contract around connection-owned assignment."""
+        from shared.import_team_assignment import TeamAssignment, assign_round_teams
 
-        Algorithm:
-        1. Get defender_team from Round 1 (which side defended in R1)
-        2. Query all players and their team assignments (axis=1, allies=2)
-        3. Players on defender side = Team A (defenders)
-        4. Players on opposite side = Team B (attackers)
-        5. Store in session_teams table with auto-generated names
-
-        Args:
-            round_id: The Round 1 round_id
-            session_date: Session date (YYYY-MM-DD)
-
-        Returns:
-            True if teams were assigned, False if skipped/failed
-        """
         try:
             async with self.pool.acquire() as conn:
-                # Get defender_team and verify this is Round 1
-                round_info = await conn.fetchrow(
-                    """
-                    SELECT defender_team, winner_team, round_number, gaming_session_id
-                    FROM rounds
-                    WHERE id = $1
-                    """,
-                    round_id
-                )
-
-                if not round_info:
-                    logger.debug(f"Round {round_id} not found for auto-team assignment")
-                    return False
-
-                # Only process Round 1
-                if round_info['round_number'] != 1:
-                    logger.debug(f"Round {round_id} is R{round_info['round_number']}, skipping auto-team")
-                    return False
-
-                defender_team = round_info['defender_team']
-                gaming_session_id = round_info['gaming_session_id']
-
-                has_session_teams_gaming_session_id = await conn.fetchval(
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM information_schema.columns
-                        WHERE table_schema = 'public'
-                          AND table_name = 'session_teams'
-                          AND column_name = 'gaming_session_id'
-                    )
-                    """
-                )
-                has_session_teams_identity = await conn.fetchval(
-                    """
-                    SELECT EXISTS (
-                        SELECT 1
-                        FROM information_schema.columns
-                        WHERE table_schema = 'public'
-                          AND table_name = 'session_teams'
-                          AND column_name = 'session_identity'
-                    )
-                    """
-                )
-
-                # If defender_team is 0 (not set), skip
-                if defender_team == 0:
-                    logger.debug(f"Round {round_id} has no defender_team, skipping auto-team")
-                    return False
-
-                # Check if teams already assigned for this session
-                if has_session_teams_gaming_session_id and gaming_session_id is not None:
-                    existing = await conn.fetchval(
-                        """
-                        SELECT COUNT(*) FROM session_teams
-                        WHERE gaming_session_id = $1
-                          AND map_name = 'ALL'
-                        """,
-                        gaming_session_id
-                    )
-                else:
-                    existing = await conn.fetchval(
-                        """
-                        SELECT COUNT(*) FROM session_teams
-                        WHERE session_start_date LIKE ($1 || '%')
-                          AND map_name = 'ALL'
-                        """,
-                        session_date
-                    )
-
-                if existing > 0:
-                    logger.debug(
-                        f"Session already has teams assigned "
-                        f"(date={session_date}, gaming_session_id={gaming_session_id})"
-                    )
-                    return False
-
-                # Query all players from R1 and their team (axis=1, allies=2)
-                players = await conn.fetch(
-                    """
-                    SELECT player_guid, player_name, team
-                    FROM player_comprehensive_stats
-                    WHERE round_id = $1
-                    ORDER BY team, player_name
-                    """,
-                    round_id
-                )
-
-                if not players:
-                    logger.debug(f"No players found for round {round_id}")
-                    return False
-
-                # Split into two teams based on defender_team
-                team_a_players = []  # Defenders in R1
-                team_b_players = []  # Attackers in R1
-
-                for player in players:
-                    if player['team'] == defender_team:
-                        team_a_players.append(player)
-                    elif player['team'] in (1, 2) and player['team'] != defender_team:
-                        team_b_players.append(player)
-                    else:
-                        # Skip spectators (team=0) or other invalid teams (team=3, etc.)
-                        logger.debug(f"Skipping non-team player {player['player_name']} (team={player['team']})")
-
-                # Need at least one player per team
-                if not team_a_players or not team_b_players:
-                    logger.warning(
-                        f"Unbalanced teams in R1 (round_id={round_id}): "
-                        f"{len(team_a_players)} defenders vs {len(team_b_players)} attackers"
-                    )
-                    return False
-
-                # Extract GUIDs and names
-                team_a_guids = [p['player_guid'] for p in team_a_players]
-                team_a_names = [p['player_name'] for p in team_a_players]
-                team_b_guids = [p['player_guid'] for p in team_b_players]
-                team_b_names = [p['player_name'] for p in team_b_players]
-
-                # Insert into session_teams
-                async with conn.transaction():
-                    # Insert Team A (defenders)
-                    # JSONB columns require JSON strings, not Python lists
-                    import json
-                    if has_session_teams_gaming_session_id:
-                        if has_session_teams_identity:
-                            await conn.execute(
-                                """
-                                INSERT INTO session_teams
-                                (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
-                                VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4, $5)
-                                ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
-                                    player_guids = EXCLUDED.player_guids,
-                                    player_names = EXCLUDED.player_names,
-                                    created_at = EXCLUDED.created_at,
-                                    gaming_session_id = EXCLUDED.gaming_session_id
-                                """,
-                                session_date,
-                                json.dumps(team_a_guids),
-                                json.dumps(team_a_names),
-                                datetime.now(),
-                                gaming_session_id,
-                            )
-
-                            # Insert Team B (attackers)
-                            await conn.execute(
-                                """
-                                INSERT INTO session_teams
-                                (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
-                                VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4, $5)
-                                ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
-                                    player_guids = EXCLUDED.player_guids,
-                                    player_names = EXCLUDED.player_names,
-                                    created_at = EXCLUDED.created_at,
-                                    gaming_session_id = EXCLUDED.gaming_session_id
-                                """,
-                                session_date,
-                                json.dumps(team_b_guids),
-                                json.dumps(team_b_names),
-                                datetime.now(),
-                                gaming_session_id,
-                            )
-                        else:
-                            await conn.execute(
-                                """
-                                INSERT INTO session_teams
-                                (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
-                                VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4, $5)
-                                ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
-                                    player_guids = EXCLUDED.player_guids,
-                                    player_names = EXCLUDED.player_names,
-                                    created_at = EXCLUDED.created_at,
-                                    gaming_session_id = EXCLUDED.gaming_session_id
-                                """,
-                                session_date,
-                                json.dumps(team_a_guids),
-                                json.dumps(team_a_names),
-                                datetime.now(),
-                                gaming_session_id,
-                            )
-
-                            # Insert Team B (attackers)
-                            await conn.execute(
-                                """
-                                INSERT INTO session_teams
-                                (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
-                                VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4, $5)
-                                ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
-                                    player_guids = EXCLUDED.player_guids,
-                                    player_names = EXCLUDED.player_names,
-                                    created_at = EXCLUDED.created_at,
-                                    gaming_session_id = EXCLUDED.gaming_session_id
-                                """,
-                                session_date,
-                                json.dumps(team_b_guids),
-                                json.dumps(team_b_names),
-                                datetime.now(),
-                                gaming_session_id,
-                            )
-                    else:
-                        if has_session_teams_identity:
-                            await conn.execute(
-                                """
-                                INSERT INTO session_teams
-                                (session_start_date, map_name, team_name, player_guids, player_names, created_at)
-                                VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4)
-                                ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
-                                    player_guids = EXCLUDED.player_guids,
-                                    player_names = EXCLUDED.player_names,
-                                    created_at = EXCLUDED.created_at
-                                """,
-                                session_date,
-                                json.dumps(team_a_guids),
-                                json.dumps(team_a_names),
-                                datetime.now(),
-                            )
-
-                            # Insert Team B (attackers)
-                            await conn.execute(
-                                """
-                                INSERT INTO session_teams
-                                (session_start_date, map_name, team_name, player_guids, player_names, created_at)
-                                VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4)
-                                ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
-                                    player_guids = EXCLUDED.player_guids,
-                                    player_names = EXCLUDED.player_names,
-                                    created_at = EXCLUDED.created_at
-                                """,
-                                session_date,
-                                json.dumps(team_b_guids),
-                                json.dumps(team_b_names),
-                                datetime.now(),
-                            )
-                        else:
-                            await conn.execute(
-                                """
-                                INSERT INTO session_teams
-                                (session_start_date, map_name, team_name, player_guids, player_names, created_at)
-                                VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4)
-                                ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
-                                    player_guids = EXCLUDED.player_guids,
-                                    player_names = EXCLUDED.player_names,
-                                    created_at = EXCLUDED.created_at
-                                """,
-                                session_date,
-                                json.dumps(team_a_guids),
-                                json.dumps(team_a_names),
-                                datetime.now(),
-                            )
-
-                            # Insert Team B (attackers)
-                            await conn.execute(
-                                """
-                                INSERT INTO session_teams
-                                (session_start_date, map_name, team_name, player_guids, player_names, created_at)
-                                VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4)
-                                ON CONFLICT (session_start_date, map_name, team_name) DO UPDATE SET
-                                    player_guids = EXCLUDED.player_guids,
-                                    player_names = EXCLUDED.player_names,
-                                    created_at = EXCLUDED.created_at
-                                """,
-                                session_date,
-                                json.dumps(team_b_guids),
-                                json.dumps(team_b_names),
-                                datetime.now(),
-                            )
-
-                logger.info(
-                    f"✅ Auto-assigned teams for session {session_date}: "
-                    f"Team A ({len(team_a_guids)} defenders) vs Team B ({len(team_b_guids)} attackers)"
-                )
-                return True
-
+                result = await assign_round_teams(conn, round_id=round_id, session_date=session_date)
+            return result is TeamAssignment.ASSIGNED
         except Exception as e:
             logger.error(f"Failed to auto-assign teams for round {round_id}: {e}", exc_info=True)
             return False
@@ -2121,16 +1884,13 @@ class PostgreSQLDatabaseManager:
                                    expected_players: int, expected_weapons: int,
                                    expected_kills: int, expected_deaths: int,
                                    filename: str) -> tuple[bool, str]:
-        """
-        SIMPLIFIED DATA VALIDATION
-
-        Checks for data integrity issues (negative values).
-        PostgreSQL ACID guarantees handle count/sum verification.
-
-        Returns:
-            (validation_passed: bool, message: str)
-        """
+        """Check persisted totals and negative values; retain save-with-warning policy."""
         try:
+            complete, message = await validate_import_totals(
+                conn, round_id, expected_players, expected_weapons, expected_kills, expected_deaths,
+            )
+            if not complete:
+                return False, message
             # Check for negative values (data integrity)
             negative_checks = await conn.fetch(
                 """
@@ -2219,7 +1979,7 @@ class PostgreSQLDatabaseManager:
             logger.warning(f"Error calculating gaming_session_id: {e}. Using NULL.")
             return None
 
-    async def _create_round_postgresql(self, conn, parsed_data: dict, file_date: str, round_time: str, filename: str, is_match_summary: bool = False) -> int | None:
+    async def _create_round_postgresql(self, conn, parsed_data: dict, file_date: str, round_time: str, filename: str, is_match_summary: bool = False, *, allow_existing: bool = True) -> int | None:
         """
         Create round entry in PostgreSQL
 
@@ -2340,13 +2100,17 @@ class PostgreSQLDatabaseManager:
                     -- Re-import must never REVIVE a round a human or a later
                     -- gate invalidated: AND keeps FALSE sticky.
                     is_valid = rounds.is_valid AND EXCLUDED.is_valid
+                WHERE $22
                 RETURNING id
                 """,
                 file_date, round_time, match_id, map_name, round_number,
                 time_limit, actual_time, winner, defender, round_outcome, gaming_session_id, round_status, datetime.now(),
                 validity['is_bot_round'], validity['bot_player_count'], validity['human_player_count'], validity['is_valid'],
-                score_confidence, round_stopwatch_state, time_to_beat_seconds, next_timelimit_minutes
+                score_confidence, round_stopwatch_state, time_to_beat_seconds, next_timelimit_minutes, allow_existing
             )
+
+            if round_id is None:
+                return None
 
             # 🆕 RESTART DETECTION: Check for earlier rounds that should be marked as cancelled/substitution
             if not is_match_summary and gaming_session_id and round_number in (1, 2):
