@@ -1019,3 +1019,11 @@ checkpoint at byte zero hides the authority/safety routing even if it remains
 later in the file. Insert newest checkpoints after the complete preamble and
 run test_execution_ledger_history_contract. Both original CI legs detected
 this placement mistake; the correction preserves all original lines.
+
+## 2026-10-16 — Verify systemd empty-property claims on the actual manager
+
+Explicitly request --all for the supervisor property contract, but distinguish
+portability from a reproduced incident: this host returns explicitly selected
+empty properties both with and without --all. The real reader accepted the
+stopped proof unit's empty namespace/cgroup. Regression guards the command
+flag; no service restart is needed for this read-only evidence.

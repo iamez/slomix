@@ -183,3 +183,13 @@ def test_supervisor_cli_forwards_policy(monkeypatch, tmp_path, deferred):
         args.append('--defer-team-assignment')
     assert module.main(args) == 0
     assert run.call_args.kwargs['defer_team_assignment'] is deferred
+
+
+def test_property_probe_explicitly_requests_empty_systemd_properties(monkeypatch):
+    def show(command, **kwargs):
+        assert '--all' in command
+        return SimpleNamespace(stdout='\n'.join(f'{k}={v}' for k, v in stopped().items()))
+    monkeypatch.setattr(module.subprocess, 'run', show)
+    values = module.unit_properties(UNIT)
+    assert values['NetworkNamespacePath'] == ''
+    assert values['ControlGroup'] == ''

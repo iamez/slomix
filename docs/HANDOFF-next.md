@@ -117,6 +117,18 @@ packaging, not actual ET ABI, game startup, containment or database import.
 An engine-hash guard mutation failed its regression; restored cmp matched and
 regression passed. Ruff/Bandit gate pass; /tmp literal annotation is narrowly
 limited to a namespace comparison, not allocation.
+Review corrections: three Codex findings addressed. All existing Discord
+session/digest/history link producers now use website_url with the explicit UI
+mode (matching integration fixtures retained). Supervisor explicitly requests
+--all systemd properties. On this host, an explicit --property already returned
+empty values with and without --all, so "always refuses here" was not reproduced;
+the flag makes the contract explicit and its regression checks the argv.
+The corrected reader successfully inspected the existing stopped proof unit,
+including empty NetworkNamespacePath and ControlGroup, without lifecycle action.
+Service preparation catches malformed-workspace KeyError/TypeError and returns
+redacted JSON; real CLI regressions retain input and create no output. 116 related
+tests passed. Negative controls and restored evidence are retained locally.
+
 Evidence remains local in /tmp/slomix-delivery-*.log and retained /var/tmp proof.
 
 Next: publish/review this dependent slice, resolve exact-head CI findings, then

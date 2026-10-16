@@ -169,3 +169,36 @@ def test_render_default_does_not_read_ambient_team_flags(monkeypatch):
     )
     assert '--proof-socket' in text
     assert '--defer-team-assignment' not in text
+
+
+@pytest.mark.parametrize('record', [{}, {'bundle': None}])
+def test_cli_redacts_malformed_workspace_contract(tmp_path, record):
+    from tests.unit.test_spa_artifact_preflight import git
+
+    source = tmp_path / 'source'
+    source.mkdir()
+    git(source, 'init', '-b', 'fixture')
+    git(source, 'config', 'user.name', 'Fixture')
+    git(source, 'config', 'user.email', 'fixture@example.invalid')
+    git(source, 'config', 'core.hooksPath', str(tmp_path / 'absent-hooks'))
+    (source / 'fixture.txt').write_text('committed fixture\n')
+    git(source, 'add', '--', 'fixture.txt')
+    git(source, 'commit', '-m', 'fixture')
+    workspace = tmp_path / 'private-workspace-sentinel'
+    workspace.mkdir(mode=0o700)
+    marker = workspace / 'workspace.json'
+    marker.write_text(json.dumps(record))
+    marker.chmod(0o600)
+    result = subprocess.run([
+        sys.executable, str(Path(module.__file__)), '--source', str(source),
+        '--interpreter', sys.executable, '--workspace', str(workspace),
+        '--destination', str(tmp_path / 'prepared'), '--commit', git(source, 'rev-parse', 'HEAD'),
+    ], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 1
+    report = json.loads(result.stderr)
+    assert report['status'] == 'refused'
+    assert report['error_type'] in {'KeyError', 'TypeError'}
+    assert report['evidence_retained'] is True
+    assert 'Traceback' not in result.stderr and str(workspace) not in result.stderr
+    assert not result.stdout and not (tmp_path / 'prepared').exists()
+    assert json.loads(marker.read_text()) == record

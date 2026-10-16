@@ -1,4 +1,5 @@
 """Unit tests for SessionDigestService (S1.1)."""
+# ruff: noqa: SLF001 -- directly exercise rendering/enrichment without posting to Discord
 from __future__ import annotations
 
 import sys
@@ -19,6 +20,7 @@ def _config(**over):
     cfg.production_channel_id = 222
     cfg.website_api_base = "http://127.0.0.1:9"  # unreachable on purpose
     cfg.website_public_base = "https://www.slomix.fyi"
+    cfg.website_ui_mode = "legacy"
     cfg.internal_api_secret = "test-internal-secret"  # noqa: S105 - test-only shared secret
     for k, v in over.items():
         setattr(cfg, k, v)
@@ -59,11 +61,12 @@ def _wire_services(mock_data_cls, mock_scoring_cls, *, rounds=8):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mode,prefix", [("legacy", "/#"), ("app", "/app")])
 @patch("bot.services.session_digest_service.StopwatchScoringService")
 @patch("bot.services.session_digest_service.SessionDataService")
-async def test_digest_embed_content_and_kis_fallback(mock_data_cls, mock_scoring_cls):
+async def test_digest_embed_content_and_kis_fallback(mock_data_cls, mock_scoring_cls, mode, prefix):
     _wire_services(mock_data_cls, mock_scoring_cls)
-    svc, _ = _service()
+    svc, _ = _service(_config(website_public_base="https://dev.example", website_ui_mode=mode))
 
     embed = await svc._build_embed()
 
@@ -74,7 +77,10 @@ async def test_digest_embed_content_and_kis_fallback(mock_data_cls, mock_scoring
     assert "🗺️ Maps" in names and "⭐ MVPs" in names and "🔗 Deep dive" in names
     # KIS API unreachable -> no KIS field, but embed still built
     assert "💥 Highest impact (KIS)" not in names
-    assert embed.url.endswith("/#/session-detail/date/2026-06-11")
+    assert embed.url == f"https://dev.example{prefix}/session-detail/date/2026-06-11"
+    links = " ".join(str(field.value) for field in embed.fields)
+    assert f"https://dev.example{prefix}/leaderboards" in links
+    assert "www.slomix.fyi" not in links
 
 
 @pytest.mark.asyncio
@@ -118,7 +124,7 @@ async def test_build_failure_never_raises(mock_data_cls, mock_scoring_cls):
 async def test_fetch_open_market_formats_line():
     svc, _ = _service()
     svc.db_adapter.fetch_one = AsyncMock(return_value=(1, "Reds", "Blues"))
-    line = await svc._fetch_open_market("https://www.slomix.fyi")
+    line = await svc._fetch_open_market()
     assert "Reds" in line and "Blues" in line and "place your bet" in line
 
 
@@ -126,14 +132,14 @@ async def test_fetch_open_market_formats_line():
 async def test_fetch_open_market_none_when_no_market():
     svc, _ = _service()
     svc.db_adapter.fetch_one = AsyncMock(return_value=None)
-    assert await svc._fetch_open_market("https://x") is None
+    assert await svc._fetch_open_market() is None
 
 
 @pytest.mark.asyncio
 async def test_fetch_open_market_swallows_db_error():
     svc, _ = _service()
     svc.db_adapter.fetch_one = AsyncMock(side_effect=RuntimeError("boom"))
-    assert await svc._fetch_open_market("https://x") is None
+    assert await svc._fetch_open_market() is None
 
 
 @pytest.mark.asyncio

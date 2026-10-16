@@ -174,7 +174,7 @@ def main():
     try:
         print(json.dumps(prepare(**vars(parser.parse_args())), sort_keys=True))
         return 0
-    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
         print(json.dumps({'status': 'refused', 'error_type': type(exc).__name__,
                           'activation_ready': False, 'evidence_retained': True}), file=sys.stderr)
         return 1
