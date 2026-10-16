@@ -1027,3 +1027,12 @@ portability from a reproduced incident: this host returns explicitly selected
 empty properties both with and without --all. The real reader accepted the
 stopped proof unit's empty namespace/cgroup. Regression guards the command
 flag; no service restart is needed for this read-only evidence.
+
+## 2026-10-16 — Migration-created indexes and snapshot constraints differ
+
+Migration 036 creates the session-team uniqueness object with CREATE UNIQUE
+INDEX; the schema snapshot adds a UNIQUE constraint. Source inspection proves
+these distinct installation paths. Check the actual index keys/validity and
+use ON CONFLICT column inference for this shared tuple. A pg_constraint-only
+probe or ON CONSTRAINT target cannot represent the migration-created object.
+Native upgraded-schema acceptance must remain separate from unit SQL stubs.
