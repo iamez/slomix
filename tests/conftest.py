@@ -8,7 +8,6 @@ import os
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -32,8 +31,8 @@ os.environ.setdefault("BOT_LOG_DIR", str(_TEST_LOG_DIR))
 os.environ.setdefault("WEB_LOG_DIR", str(_TEST_LOG_DIR))
 
 # Import bot modules
-from bot.config import BotConfig
-from bot.core.database_adapter import DatabaseAdapter, PostgreSQLAdapter
+from bot.core.database_adapter import PostgreSQLAdapter
+from tests.disposable_database import isolated_database
 
 # ============================================
 # EVENT LOOP CONFIGURATION
@@ -57,24 +56,11 @@ def event_loop(event_loop_policy):
 # DATABASE FIXTURES
 # ============================================
 
-@pytest.fixture(scope="session")
-def test_db_config() -> dict[str, Any]:
-    """
-    Test database configuration
-
-    Uses environment variables if available, falls back to test defaults
-    For CI/CD, set POSTGRES_TEST_* environment variables
-    """
-    return {
-        "db_type": "postgresql",
-        "host": os.getenv("POSTGRES_TEST_HOST", "localhost"),
-        "port": int(os.getenv("POSTGRES_TEST_PORT", "5432")),
-        "database": os.getenv("POSTGRES_TEST_DATABASE", "etlegacy_test"),
-        "user": os.getenv("POSTGRES_TEST_USER", "etlegacy_user"),
-        "password": os.getenv("POSTGRES_TEST_PASSWORD", "etlegacy_test_password"),
-        "min_pool_size": 2,
-        "max_pool_size": 5
-    }
+@pytest.fixture
+async def test_db_config():
+    """An explicitly isolated, newly created database for this test only."""
+    async with isolated_database() as config:
+        yield config
 
 
 @pytest.fixture
@@ -82,8 +68,8 @@ async def db_adapter(test_db_config):
     """
     Provide a database adapter for testing
 
-    Creates a fresh adapter for each test and ensures cleanup
-    Automatically rolls back transactions after test
+    Real transactions run inside a newly created per-test database. Close all
+    pool connections before test_db_config removes that owned database.
     """
     adapter = PostgreSQLAdapter(
         host=test_db_config["host"],
@@ -96,113 +82,79 @@ async def db_adapter(test_db_config):
     )
 
     try:
-        await adapter.connect()
+        await asyncio.wait_for(adapter.connect(), timeout=5)
         # Ensure minimal schema exists for integration tests
-        await _ensure_test_schema(adapter)
+        await asyncio.wait_for(_ensure_test_schema(adapter), timeout=10)
         yield adapter
     finally:
-        await adapter.close()
+        await asyncio.wait_for(adapter.close(), timeout=5)
 
 
 async def _ensure_test_schema(adapter):
     """Create minimal tables if they don't exist (CI has empty test DB)."""
-    try:
-        await adapter.execute("""
-            CREATE TABLE IF NOT EXISTS rounds (
-                id SERIAL PRIMARY KEY,
-                match_id TEXT,
-                round_number INTEGER DEFAULT 0,
-                round_date TEXT,
-                round_time TEXT,
-                map_name TEXT,
-                time_limit TEXT DEFAULT '0',
-                actual_time TEXT,
-                defender_team INTEGER DEFAULT 0,
-                winner_team INTEGER DEFAULT 0,
-                is_tied BOOLEAN DEFAULT FALSE,
-                round_outcome TEXT,
-                gaming_session_id INTEGER,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                round_status TEXT
-            )
-        """)
-        await adapter.execute("""
-            CREATE TABLE IF NOT EXISTS player_comprehensive_stats (
-                id SERIAL PRIMARY KEY,
-                round_id INTEGER REFERENCES rounds(id) ON DELETE CASCADE,
-                round_date TEXT,
-                map_name TEXT,
-                round_number INTEGER DEFAULT 0,
-                player_guid TEXT,
-                player_name TEXT,
-                clean_name TEXT,
-                team INTEGER DEFAULT 0,
-                kills INTEGER DEFAULT 0,
-                deaths INTEGER DEFAULT 0,
-                damage_given INTEGER DEFAULT 0,
-                UNIQUE(round_id, player_guid)
-            )
-        """)
-        await adapter.execute("""
-            CREATE TABLE IF NOT EXISTS weapon_comprehensive_stats (
-                id SERIAL PRIMARY KEY,
-                round_id INTEGER REFERENCES rounds(id) ON DELETE CASCADE,
-                round_date TEXT,
-                map_name TEXT,
-                round_number INTEGER DEFAULT 0,
-                player_guid TEXT,
-                weapon_name TEXT,
-                kills INTEGER DEFAULT 0,
-                deaths INTEGER DEFAULT 0,
-                hits INTEGER DEFAULT 0,
-                shots INTEGER DEFAULT 0,
-                headshots INTEGER DEFAULT 0,
-                accuracy REAL DEFAULT 0
-            )
-        """)
-        await adapter.execute("CREATE TABLE IF NOT EXISTS processed_files (id SERIAL PRIMARY KEY, filename TEXT UNIQUE, sha256_hash TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
-        await adapter.execute("CREATE TABLE IF NOT EXISTS session_teams (id SERIAL PRIMARY KEY, gaming_session_id INTEGER, team_name TEXT, player_guid TEXT)")
-        await adapter.execute("CREATE TABLE IF NOT EXISTS player_aliases (id SERIAL PRIMARY KEY, player_guid TEXT, player_name TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
-        await adapter.execute("CREATE TABLE IF NOT EXISTS player_links (id SERIAL PRIMARY KEY, discord_id TEXT, player_guid TEXT)")
-    except Exception:
-        pass  # Tables may already exist or schema may differ slightly
+    await adapter.execute("""
+        CREATE TABLE IF NOT EXISTS rounds (
+            id SERIAL PRIMARY KEY,
+            match_id TEXT,
+            round_number INTEGER DEFAULT 0,
+            round_date TEXT,
+            round_time TEXT,
+            map_name TEXT,
+            time_limit TEXT DEFAULT '0',
+            actual_time TEXT,
+            defender_team INTEGER DEFAULT 0,
+            winner_team INTEGER DEFAULT 0,
+            is_tied BOOLEAN DEFAULT FALSE,
+            round_outcome TEXT,
+            gaming_session_id INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            round_status TEXT
+        )
+    """)
+    await adapter.execute("""
+        CREATE TABLE IF NOT EXISTS player_comprehensive_stats (
+            id SERIAL PRIMARY KEY,
+            round_id INTEGER REFERENCES rounds(id) ON DELETE CASCADE,
+            round_date TEXT,
+            map_name TEXT,
+            round_number INTEGER DEFAULT 0,
+            player_guid TEXT,
+            player_name TEXT,
+            clean_name TEXT,
+            team INTEGER DEFAULT 0,
+            kills INTEGER DEFAULT 0,
+            deaths INTEGER DEFAULT 0,
+            damage_given INTEGER DEFAULT 0,
+            UNIQUE(round_id, player_guid)
+        )
+    """)
+    await adapter.execute("""
+        CREATE TABLE IF NOT EXISTS weapon_comprehensive_stats (
+            id SERIAL PRIMARY KEY,
+            round_id INTEGER REFERENCES rounds(id) ON DELETE CASCADE,
+            round_date TEXT,
+            map_name TEXT,
+            round_number INTEGER DEFAULT 0,
+            player_guid TEXT,
+            weapon_name TEXT,
+            kills INTEGER DEFAULT 0,
+            deaths INTEGER DEFAULT 0,
+            hits INTEGER DEFAULT 0,
+            shots INTEGER DEFAULT 0,
+            headshots INTEGER DEFAULT 0,
+            accuracy REAL DEFAULT 0
+        )
+    """)
+    await adapter.execute("CREATE TABLE IF NOT EXISTS processed_files (id SERIAL PRIMARY KEY, filename TEXT UNIQUE, sha256_hash TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+    await adapter.execute("CREATE TABLE IF NOT EXISTS session_teams (id SERIAL PRIMARY KEY, gaming_session_id INTEGER, team_name TEXT, player_guid TEXT)")
+    await adapter.execute("CREATE TABLE IF NOT EXISTS player_aliases (id SERIAL PRIMARY KEY, player_guid TEXT, player_name TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+    await adapter.execute("CREATE TABLE IF NOT EXISTS player_links (id SERIAL PRIMARY KEY, discord_id TEXT, player_guid TEXT)")
 
 
 @pytest.fixture
 async def clean_test_db(db_adapter):
-    """
-    Provide a clean test database for each test
-
-    Truncates all tables before and after test
-    Use this fixture when you need isolated database state
-    """
-    # Truncate tables before test
-    await _truncate_test_tables(db_adapter)
-
+    """Compatibility alias: db_adapter already owns a fresh per-test database."""
     yield db_adapter
-
-    # Truncate tables after test
-    await _truncate_test_tables(db_adapter)
-
-
-async def _truncate_test_tables(adapter: DatabaseAdapter):
-    """Helper to truncate all test tables"""
-    tables = [
-        "weapon_comprehensive_stats",
-        "player_comprehensive_stats",
-        "rounds",
-        "processed_files",
-        "session_teams",
-        "player_aliases",
-        "player_links"
-    ]
-
-    try:
-        for table in tables:
-            await adapter.execute(f"TRUNCATE TABLE {table} CASCADE")
-    except Exception:
-        # Ignore errors if tables don't exist (for initial setup)
-        pass
 
 
 # ============================================
@@ -373,6 +325,10 @@ def mock_config(monkeypatch):
 
     Overrides BotConfig class to return test values
     """
+    # Import only when requested: BotConfig loads .env at import time, which
+    # must not happen merely because pytest discovers an unrelated test.
+    from bot.config import BotConfig
+
     # Override environment variables for testing
     test_env = {
         "BOT_ENVIRONMENT": "dev",
@@ -454,8 +410,12 @@ def pytest_collection_modifyitems(config, items):
     - tests/e2e/* → e2e marker
     - tests with db_adapter fixture → requires_db marker
     """
-    # Check if test database is available (cached result)
-    db_available = _check_test_database_available()
+    # Discovery must not connect to any database. Absence of explicit test
+    # configuration is an opt-out; once configured, connection/setup errors
+    # must fail in the fixture instead of turning the suite green via skips.
+    db_requested = (any(key.startswith("POSTGRES_TEST_") for key in os.environ)
+                    or "RUNTIME_EVENTS_TEST_SOCKET" in os.environ
+                    or "RUNTIME_EVENTS_TEST_CI" in os.environ)
 
     for item in items:
         # Add markers based on test location
@@ -465,47 +425,12 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(pytest.mark.e2e)
 
         # Add requires_db marker if test uses db fixtures
-        if "db_adapter" in item.fixturenames or "clean_test_db" in item.fixturenames:
+        if {"db_adapter", "clean_test_db", "test_db_config"}.intersection(item.fixturenames):
             item.add_marker(pytest.mark.requires_db)
 
-        # Skip requires_db tests if database is unavailable
-        if item.get_closest_marker("requires_db") and not db_available:
+        # The fixture separately validates the target before its first connection.
+        if item.get_closest_marker("requires_db") and not db_requested:
             item.add_marker(pytest.mark.skip(
-                reason="Test database unavailable (etlegacy_test). "
-                       "Set POSTGRES_TEST_* environment variables to configure."
+                reason="Shared database tests not requested: no POSTGRES_TEST_* "
+                       "configuration. Use an independently isolated test target."
             ))
-
-
-def _check_test_database_available() -> bool:
-    """
-    Check if the test database is available.
-
-    This runs once at collection time to avoid repeated connection attempts.
-    Returns True if we can connect, False otherwise.
-    """
-    import asyncio
-
-    async def _try_connect():
-        try:
-            adapter = PostgreSQLAdapter(
-                host=os.getenv("POSTGRES_TEST_HOST", "localhost"),
-                port=int(os.getenv("POSTGRES_TEST_PORT", "5432")),
-                database=os.getenv("POSTGRES_TEST_DATABASE", "etlegacy_test"),
-                user=os.getenv("POSTGRES_TEST_USER", "etlegacy_user"),
-                password=os.getenv("POSTGRES_TEST_PASSWORD", "etlegacy_test_password"),
-                min_pool_size=1,
-                max_pool_size=2
-            )
-            await adapter.connect()
-            await adapter.close()
-            return True
-        except Exception:
-            return False
-
-    try:
-        loop = asyncio.new_event_loop()
-        result = loop.run_until_complete(_try_connect())
-        loop.close()
-        return result
-    except Exception:
-        return False

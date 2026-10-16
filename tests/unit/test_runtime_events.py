@@ -97,6 +97,7 @@ async def test_canonical_import_transaction(monkeypatch, failure):
 
     manager = object.__new__(module.PostgreSQLDatabaseManager)
     manager.event_stream_enabled = True
+    manager.defer_team_assignment = False  # Explicit legacy mode; fixture bypasses __init__.
     manager.stats = dict.fromkeys([
         "files_processed", "files_skipped", "files_failed", "rounds_created",
         "players_inserted", "weapons_inserted",

@@ -71,9 +71,17 @@ class RuntimeCacheWorker:
                             try:
                                 result = await consume_http_cache_events(conn, batch_size=self.batch_size)
                             except asyncpg.InterfaceError:
-                                # Only a closed native connection is retryable;
-                                # other interface errors indicate misuse.
-                                if conn.is_closed():
+                                # A closed pooled connection detaches its proxy;
+                                # is_closed() itself then raises InterfaceError.
+                                # Other interface errors on usable connections
+                                # remain fatal rather than being retried forever.
+                                try:
+                                    closed = conn.is_closed()
+                                except asyncpg.InterfaceError:
+                                    if not isinstance(conn, asyncpg.pool.PoolConnectionProxy):
+                                        raise
+                                    closed = True
+                                if closed:
                                     raise ConnectionError("Runtime cache connection closed") from None
                                 raise
                 except (asyncpg.PostgresError, OSError, TimeoutError) as error:

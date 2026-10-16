@@ -20,6 +20,7 @@ from bot.core.round_contract import (
     score_confidence_state,
 )
 from bot.logging_config import get_logger
+from shared.team_write_guard import team_write_transaction
 
 logger = get_logger("bot.core")
 
@@ -478,72 +479,80 @@ class _StatsImportMixin:
             session_date: Session date (YYYY-MM-DD)
             gaming_session_id: The gaming session ID
         """
+        if not hasattr(self, 'team_manager') or self.team_manager is None:
+            logger.debug("TeamManager not initialized, skipping team tracking")
+            return
         try:
-            if not hasattr(self, 'team_manager') or self.team_manager is None:
-                logger.debug("TeamManager not initialized, skipping team tracking")
-                return
+            # Keep existence checks, detection and publication on one connection.
+            async with self.team_manager.db.transaction() as conn, team_write_transaction(conn):
+                await self._handle_team_tracking_guarded(
+                    round_id, round_num, session_date, gaming_session_id
+                )
+        except Exception as e:
+            logger.warning(f"⚠️ Team tracking failed (non-fatal): {e}")
 
-            # Check if teams exist for this session
-            existing_teams = await self.team_manager.get_session_teams(
-                session_date,
-                auto_detect=False,
-                gaming_session_id=gaming_session_id,
-            )
+    async def _handle_team_tracking_guarded(
+        self, round_id: int, round_num: int, session_date: str, gaming_session_id: int,
+    ):
+        """Run only inside the caller's shared team writer transaction."""
+        # Check if teams exist for this session
+        existing_teams = await self.team_manager.get_session_teams(
+            session_date,
+            auto_detect=False,
+            gaming_session_id=gaming_session_id,
+        )
 
-            if not existing_teams:
-                # No teams yet - this is likely the first round of a new session
-                if round_num == 1:
-                    logger.info("🎯 R1 of new session - creating initial teams...")
-                    await self.team_manager.create_initial_teams_from_round(
-                        round_id=round_id,
-                        session_date=session_date,
-                        gaming_session_id=gaming_session_id
-                    )
-                else:
-                    # R2 came before R1 in import order - detect teams from all data
-                    logger.info("🎯 R2 without R1 teams - running full detection...")
-                    teams = await self.team_manager.detect_session_teams(
-                        session_date,
-                        gaming_session_id=gaming_session_id,
-                    )
-                    if teams:
-                        await self.team_manager.store_session_teams(
-                            session_date,
-                            teams,
-                            auto_assign_names=True,
-                            gaming_session_id=gaming_session_id,
-                        )
-            else:
-                # Teams exist - check for new players (subs/late joiners)
-                new_players = await self.team_manager.update_teams_from_round(
+        if not existing_teams:
+            # No teams yet - this is likely the first round of a new session
+            if round_num == 1:
+                logger.info("🎯 R1 of new session - creating initial teams...")
+                await self.team_manager.create_initial_teams_from_round(
                     round_id=round_id,
                     session_date=session_date,
                     gaming_session_id=gaming_session_id
                 )
+            else:
+                # R2 came before R1 in import order - detect teams from all data
+                logger.info("🎯 R2 without R1 teams - running full detection...")
+                teams = await self.team_manager.detect_session_teams(
+                    session_date,
+                    gaming_session_id=gaming_session_id,
+                )
+                if teams:
+                    await self.team_manager.store_session_teams(
+                        session_date,
+                        teams,
+                        auto_assign_names=True,
+                        gaming_session_id=gaming_session_id,
+                    )
+        else:
+            # Teams exist - check for new players (subs/late joiners)
+            new_players = await self.team_manager.update_teams_from_round(
+                round_id=round_id,
+                session_date=session_date,
+                gaming_session_id=gaming_session_id
+            )
 
-                if new_players.get('added'):
-                    for team_name, players in new_players['added'].items():
-                        logger.info(f"🆕 New players added to {team_name}: {', '.join(players)}")
+            if new_players.get('added'):
+                for team_name, players in new_players['added'].items():
+                    logger.info(f"🆕 New players added to {team_name}: {', '.join(players)}")
 
-                # If teams still have default names, assign random pool names.
-                # Guard so sessions that cannot be auto-named do not retry on every round.
-                team_names = list(existing_teams.keys())
-                if set(team_names) == {'Team A', 'Team B'}:
-                    session_key = (session_date, gaming_session_id)
-                    if not hasattr(self, '_auto_name_attempted_sessions'):
-                        self._auto_name_attempted_sessions = set()
+            # If teams still have default names, assign random pool names.
+            # Guard so sessions that cannot be auto-named do not retry on every round.
+            team_names = list(existing_teams.keys())
+            if set(team_names) == {'Team A', 'Team B'}:
+                session_key = (session_date, gaming_session_id)
+                if not hasattr(self, '_auto_name_attempted_sessions'):
+                    self._auto_name_attempted_sessions = set()
 
-                    if session_key not in self._auto_name_attempted_sessions:
-                        self._auto_name_attempted_sessions.add(session_key)
-                        try:
-                            await self.team_manager.assign_random_team_names(
-                                session_date, force=True, gaming_session_id=gaming_session_id
-                            )
-                        except Exception as e:
-                            logger.warning(f"⚠️ Random team name assignment failed: {e}")
-
-        except Exception as e:
-            logger.warning(f"⚠️ Team tracking failed (non-fatal): {e}")
+                if session_key not in self._auto_name_attempted_sessions:
+                    self._auto_name_attempted_sessions.add(session_key)
+                    try:
+                        await self.team_manager.assign_random_team_names(
+                            session_date, force=True, gaming_session_id=gaming_session_id
+                        )
+                    except Exception as e:
+                        logger.warning(f"⚠️ Random team name assignment failed: {e}")
 
     async def _calculate_gaming_session_id(self, round_date: str, round_time: str) -> int:
         """
