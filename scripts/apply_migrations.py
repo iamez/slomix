@@ -25,6 +25,11 @@ Environment variables (or .env file):
     DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD are accepted as
     fallbacks — production .env files in this repo historically used
     DB_* names. POSTGRES_* takes precedence when both are present.
+
+    MIGRATION_{CONNECT,COMMAND,STATEMENT,LOCK}_TIMEOUT_SECONDS accept positive
+    integer seconds (at most 3600). Defaults: 10, 600, 300, 5 respectively.
+    LOCK <= STATEMENT < COMMAND is required. These limits affect this runner
+    only; a long migration must be deliberately given a larger finite budget.
 """
 
 import argparse
@@ -45,6 +50,9 @@ except ImportError:
     sys.exit(1)
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_REPO_ROOT))
+
+from shared.runtime_environment import explicit_env_file, load_environment  # noqa: E402
 
 
 def resolve_env_file(repo_root: Path) -> Path:
@@ -55,16 +63,16 @@ def resolve_env_file(repo_root: Path) -> Path:
     PX-DB-001). This script previously loaded ONLY the root .env
     unconditionally, silently diverging from main.py whenever website/.env
     existed with different POSTGRES_* values."""
+    selected = explicit_env_file(repo_root)
+    if selected is not None:
+        return selected
     website_env = repo_root / "website" / ".env"
     return website_env if website_env.exists() else repo_root / ".env"
 
 
-# Load .env if python-dotenv is available.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(resolve_env_file(_REPO_ROOT))
-except ImportError:
-    pass  # python-dotenv is optional
+# Releases require an operator-selected explicit env; verify admin identity
+# separately (process environment still wins over file values).
+load_environment(resolve_env_file(_REPO_ROOT))
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
 
@@ -305,7 +313,38 @@ def get_connection_kwargs() -> dict[str, Any]:
 
 
 async def get_connection() -> asyncpg.Connection:
-    return await asyncpg.connect(**get_connection_kwargs())
+    # Keep get_connection_kwargs DSN-only: synchronous repair tools also use it.
+    # Startup settings bound even the first ledger query/DDL lock wait, rather
+    # than relying on a test wrapper or a SET issued after unbounded setup.
+    return await asyncpg.connect(**get_connection_kwargs(), **get_timeout_kwargs())
+
+
+def get_timeout_kwargs() -> dict[str, Any]:
+    """Finite, validated runner-only budgets; never echo an invalid env value."""
+    budgets = {}
+    for name, default in (("CONNECT", 10), ("COMMAND", 600),
+                          ("STATEMENT", 300), ("LOCK", 5)):
+        key = f"MIGRATION_{name}_TIMEOUT_SECONDS"
+        value = os.environ.get(key, str(default))
+        if not re.fullmatch(r"[0-9]{1,4}", value) or not 1 <= int(value) <= 3600:
+            raise ValueError(f"{key} must be an integer between 1 and 3600 seconds")
+        budgets[name] = int(value)
+    if not budgets["LOCK"] <= budgets["STATEMENT"] < budgets["COMMAND"]:
+        raise ValueError("Migration timeouts require LOCK <= STATEMENT < COMMAND")
+    return {
+        "timeout": budgets["CONNECT"],
+        "command_timeout": budgets["COMMAND"],
+        "server_settings": {
+            "application_name": "slomix-migrations",
+            "lock_timeout": f"{budgets['LOCK']}s",
+            "statement_timeout": f"{budgets['STATEMENT']}s",
+        },
+    }
+
+
+async def close_connection(conn: asyncpg.Connection) -> None:
+    """Connection draining cannot keep an otherwise completed runner alive."""
+    await asyncio.wait_for(conn.close(), timeout=10)
 
 
 async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:
@@ -489,7 +528,7 @@ async def cmd_status(json_out: bool = False):
                   "manually via psql, reconcile with --mark.")
         print()
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
@@ -516,7 +555,7 @@ async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
         state = await collect_state(conn)
         state["db_fingerprint"] = await get_db_fingerprint(conn)
     finally:
-        await conn.close()
+        await close_connection(conn)
 
     clean = (
         not state["pending"]
@@ -586,7 +625,7 @@ async def cmd_baseline():
         else:
             print(f"\n  Recorded {count} migration(s) as baseline.\n")
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def _record_failure(conn, version, filename, checksum, elapsed_ms):
@@ -770,7 +809,7 @@ async def cmd_apply(only: list[str] | None = None):
 
         print(f"\n  All {len(pending)} migration(s) applied successfully.\n")
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def cmd_mark(filenames: list[str]):
@@ -867,7 +906,7 @@ async def cmd_mark(filenames: list[str]):
             f"Skipped: {skipped}, Raced: {raced}\n"
         )
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 # ── Main ──────────────────────────────────────────────────────────────

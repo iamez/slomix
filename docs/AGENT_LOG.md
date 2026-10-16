@@ -994,3 +994,12 @@ Tests must inspect those conditions and buffer work, not only index presence.
 Retain ambiguity detection and NULL-session parents; never make this UNIQUE or
 partial on session readiness. TEMP local-buffer timing is not cold production
 latency. Preserve migration/bootstrap/release parity; apply only via owner deploy.
+
+## 2026-10-16 — Outside-Git proof outputs must have outside-Git ancestors
+
+An existing /tmp/.git causes private bundle/workspace/service and bot-fixture
+preparation to reject /tmp outputs as designed. Use a newly owned private
+/var/tmp proof directory when that marker exists; do not remove the marker or
+weaken the outside-Git guard. AST imports alone also miss existing-module
+configuration integration and fixture exports; include their matching changes
+and run collection before claiming the extraction is complete.

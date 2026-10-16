@@ -52,6 +52,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from shared.round_time import MMSS_SQL_REGEX, round_duration_sql  # noqa: E402 (needs the sys.path bootstrap above)
+from shared.runtime_environment import explicit_env_file, load_environment  # noqa: E402
 
 # The date the backfill import (supastats history) hands off to live capture.
 # Every historical row before this date came through the lossy backfill path;
@@ -90,6 +91,9 @@ def _load_dotenv(root: Path) -> None:
 
     Only sets vars not already in the environment (real env wins).
     """
+    if explicit_env_file(root) is not None:
+        load_environment(root=root)
+        return
     env_path = root / ".env"
     if not env_path.exists():
         return

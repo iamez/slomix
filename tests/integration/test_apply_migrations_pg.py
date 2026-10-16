@@ -2,7 +2,7 @@
 
 The FakeConn unit tests cannot prove transactional semantics — PostgreSQL's
 aborted-transaction state and rollback behavior are exactly what the old
-runner got wrong. These tests use the CI postgres service (POSTGRES_TEST_*)
+runner got wrong. These tests use an explicitly allowed private/CI cluster
 and prove:
 
 - migration SQL + ledger success row commit atomically;
@@ -11,88 +11,76 @@ and prove:
 - checksum drift on an applied file refuses further applies;
 - --validate reports drift with a non-zero exit.
 
-Each test uses uniquely-prefixed table/ledger names and cleans up after
-itself, so sharing the CI database with other tests is safe.
+Every test owns a new database including its migration ledger. No existing
+application or shared CI ledger is modified. Missing opt-in skips; a requested
+but invalid/unavailable target fails. Collection never loads application .env.
 """
+import hashlib
+import importlib.util
 import os
-import sys
 import uuid
 from pathlib import Path
 
+import asyncpg
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-asyncpg = pytest.importorskip("asyncpg")
-
-from scripts.apply_migrations import cmd_apply, cmd_validate  # noqa: E402
-
-TEST_DB = {
-    "host": os.getenv("POSTGRES_TEST_HOST", "localhost"),
-    "port": int(os.getenv("POSTGRES_TEST_PORT", "5432")),
-    "database": os.getenv("POSTGRES_TEST_DATABASE", "etlegacy_test"),
-    "user": os.getenv("POSTGRES_TEST_USER", "etlegacy_user"),
-    "password": os.getenv("POSTGRES_TEST_PASSWORD", "etlegacy_test_password"),
-}
-
-
-async def _connect_or_skip():
-    try:
-        return await asyncpg.connect(timeout=5, **TEST_DB)
-    except (TimeoutError, OSError, asyncpg.PostgresError) as e:
-        pytest.skip(f"test PostgreSQL unavailable: {e}")
+from tests.disposable_database import isolated_database
 
 
 @pytest.fixture
-def runner_env(monkeypatch, tmp_path):
-    """Point the runner at the test DB and an isolated migrations dir."""
-    monkeypatch.setenv("POSTGRES_HOST", TEST_DB["host"])
-    monkeypatch.setenv("POSTGRES_PORT", str(TEST_DB["port"]))
-    monkeypatch.setenv("POSTGRES_DATABASE", TEST_DB["database"])
-    monkeypatch.setenv("POSTGRES_USER", TEST_DB["user"])
-    monkeypatch.setenv("POSTGRES_PASSWORD", TEST_DB["password"])
+async def migration_target():
+    """Permission is explicit; all requested infrastructure errors propagate."""
+    if not os.getenv("RUNTIME_EVENTS_TEST_SOCKET") and not os.getenv("RUNTIME_EVENTS_TEST_CI"):
+        pytest.skip("Disposable PostgreSQL not explicitly configured")
+    async with isolated_database() as config:
+        yield {key: config[key] for key in ("host", "port", "database", "user", "password")}
+
+
+@pytest.fixture
+def migration_runner(monkeypatch):
+    """Load a separate real runner instance with dotenv discovery disabled."""
+    import dotenv
+
+    monkeypatch.setattr(dotenv, "load_dotenv", lambda *args, **kwargs: False)
+    path = Path(__file__).resolve().parents[2] / "scripts/apply_migrations.py"
+    spec = importlib.util.spec_from_file_location("isolated_migration_runner", path)
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+    return runner
+
+
+@pytest.fixture
+def runner_env(monkeypatch, tmp_path, migration_target, migration_runner):
+    """Real runner settings resolve only to this fixture's owned database."""
+    for key, value in migration_target.items():
+        monkeypatch.setenv("POSTGRES_" + key.upper(), str(value))
     mig_dir = tmp_path / "migrations"
     mig_dir.mkdir()
-    monkeypatch.setattr("scripts.apply_migrations.MIGRATIONS_DIR", mig_dir)
+    monkeypatch.setattr(migration_runner, "MIGRATIONS_DIR", mig_dir)
+
+    async def connect_owned():
+        resolved = migration_runner.get_connection_kwargs()
+        if resolved != migration_target:
+            raise AssertionError("Migration runner escaped its owned test database")
+        return await asyncpg.connect(**resolved, timeout=5, command_timeout=5, ssl=False)
+
+    # Only connection setup is bounded/restricted; execute real runner SQL,
+    # transaction control, ledger writes and checksum/exit behavior unchanged.
+    monkeypatch.setattr(migration_runner, "get_connection", connect_owned)
     return mig_dir
 
 
 @pytest.fixture
-async def pg(runner_env):
-    """Direct verification connection + per-test unique namespace + cleanup."""
-    conn = await _connect_or_skip()
+async def pg(runner_env, migration_target):
+    """Independent reader; close before the owning fixture drops its database."""
+    conn = await asyncpg.connect(**migration_target, timeout=5, command_timeout=5, ssl=False)
     ns = f"migit_{uuid.uuid4().hex[:8]}"
-    yield conn, ns
-    await conn.execute(f"DROP TABLE IF EXISTS {ns}_ok, {ns}_partial")
-    await conn.execute(
-        "DELETE FROM schema_migrations WHERE filename LIKE $1", f"%{ns}%"
-    )
-    await conn.close()
-
-
-async def _seed_ledger(conn, ns):
-    """Non-empty ledger bypasses the populated-DB auto-baseline guard.
-
-    The seed row must correspond to a real file under MIGRATIONS_DIR, or the
-    runner's missing-file drift check refuses to apply (it treats a ledger row
-    with no on-disk file as drift).
-    """
-    import scripts.apply_migrations as _apply
-    (_apply.MIGRATIONS_DIR / f"000_{ns}_seed.sql").write_text("SELECT 1;")
-    await conn.execute("""
-        CREATE TABLE IF NOT EXISTS schema_migrations (
-            id SERIAL PRIMARY KEY, version TEXT NOT NULL UNIQUE,
-            filename TEXT NOT NULL UNIQUE, checksum TEXT,
-            applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            applied_by TEXT DEFAULT 'manual', execution_ms INTEGER,
-            success BOOLEAN NOT NULL DEFAULT TRUE
-        )
-    """)
-    await conn.execute(
-        "INSERT INTO schema_migrations (version, filename, applied_by) "
-        "VALUES ($1, $2, 'test-seed') ON CONFLICT (filename) DO NOTHING",
-        f"000_{ns}_seed", f"000_{ns}_seed.sql",
-    )
+    try:
+        assert await conn.fetchval("SELECT current_database()") == migration_target["database"]
+        assert await conn.fetchval("SELECT to_regclass('public.schema_migrations')") is None
+        yield conn, ns
+    finally:
+        await conn.close(timeout=5)
 
 
 async def _ledger_row(conn, filename):
@@ -110,28 +98,26 @@ async def _table_exists(conn, name):
 
 
 @pytest.mark.asyncio
-async def test_success_is_atomic_with_ledger(pg, runner_env):
+async def test_success_is_atomic_with_ledger(pg, runner_env, migration_runner):
     conn, ns = pg
-    await _seed_ledger(conn, ns)
     (runner_env / f"001_{ns}_ok.sql").write_text(
         f"BEGIN;\nCREATE TABLE {ns}_ok (x INTEGER);\nCOMMIT;\n"
     )
 
-    await cmd_apply()
+    await migration_runner.cmd_apply()
 
     assert await _table_exists(conn, f"{ns}_ok")
     row = await _ledger_row(conn, f"001_{ns}_ok.sql")
     assert row is not None and row["success"] is True
-    assert row["checksum"], "success row must record the file checksum"
+    assert row["checksum"] == hashlib.sha256((runner_env / f"001_{ns}_ok.sql").read_bytes()).hexdigest()
 
 
 @pytest.mark.asyncio
-async def test_failure_rolls_back_ddl_and_exits_nonzero(pg, runner_env, capsys):
+async def test_failure_rolls_back_ddl_and_exits_nonzero(pg, runner_env, migration_runner):
     """The failing file first creates a table, then errors. The old runner
     left PostgreSQL in aborted-transaction state and exited 0; the new one
     must roll the table back, record success=FALSE, and exit 1."""
     conn, ns = pg
-    await _seed_ledger(conn, ns)
     (runner_env / f"001_{ns}_fail.sql").write_text(
         f"BEGIN;\n"
         f"CREATE TABLE {ns}_partial (x INTEGER);\n"
@@ -140,7 +126,7 @@ async def test_failure_rolls_back_ddl_and_exits_nonzero(pg, runner_env, capsys):
     )
 
     with pytest.raises(SystemExit) as exc:
-        await cmd_apply()
+        await migration_runner.cmd_apply()
     assert exc.value.code == 1
 
     assert not await _table_exists(conn, f"{ns}_partial"), (
@@ -153,19 +139,47 @@ async def test_failure_rolls_back_ddl_and_exits_nonzero(pg, runner_env, capsys):
 
 
 @pytest.mark.asyncio
-async def test_checksum_drift_refuses_apply_and_fails_validate(pg, runner_env, capsys):
+async def test_ledger_failure_also_rolls_back_migration_ddl(pg, runner_env, migration_runner, capsys):
+    """An error in the success ledger write must undo the preceding DDL too."""
     conn, ns = pg
-    await _seed_ledger(conn, ns)
+    await migration_runner.ensure_tracking_table(conn)
+    await conn.execute("""
+        CREATE FUNCTION reject_success() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+            IF NEW.success THEN
+                RAISE EXCEPTION 'synthetic success ledger rejection';
+            END IF;
+            RETURN NEW;
+        END;
+        $$;
+        CREATE TRIGGER reject_success BEFORE INSERT OR UPDATE ON schema_migrations
+        FOR EACH ROW EXECUTE FUNCTION reject_success();
+    """)
+    filename = f"001_{ns}_ledger_failure.sql"
+    (runner_env / filename).write_text(f"CREATE TABLE {ns}_partial (x INTEGER);")
+    with pytest.raises(SystemExit) as exc:
+        await migration_runner.cmd_apply()
+    assert exc.value.code == 1
+    assert "synthetic success ledger rejection" in capsys.readouterr().out
+    assert not await _table_exists(conn, f"{ns}_partial")
+    row = await _ledger_row(conn, filename)
+    assert row is not None and row["success"] is False
+    assert row["checksum"] == hashlib.sha256((runner_env / filename).read_bytes()).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_checksum_drift_refuses_apply_and_fails_validate(pg, runner_env, migration_runner, capsys):
+    conn, ns = pg
     ok_file = runner_env / f"001_{ns}_ok.sql"
     ok_file.write_text(f"BEGIN;\nCREATE TABLE {ns}_ok (x INTEGER);\nCOMMIT;\n")
-    await cmd_apply()
+    await migration_runner.cmd_apply()
 
     # Tamper with the applied file → both apply and validate must fail.
     ok_file.write_text("SELECT 'tampered';")
     (runner_env / f"002_{ns}_new.sql").write_text("SELECT 1;")
 
     with pytest.raises(SystemExit) as exc:
-        await cmd_apply()
+        await migration_runner.cmd_apply()
     assert exc.value.code == 1
     assert "checksum mismatch" in capsys.readouterr().out
     assert await _ledger_row(conn, f"002_{ns}_new.sql") is None, (
@@ -173,5 +187,5 @@ async def test_checksum_drift_refuses_apply_and_fails_validate(pg, runner_env, c
     )
 
     with pytest.raises(SystemExit) as exc:
-        await cmd_validate()
+        await migration_runner.cmd_validate()
     assert exc.value.code == 1

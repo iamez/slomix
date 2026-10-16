@@ -1,3 +1,37 @@
+## 2026-10-16 — Immutable game delivery and supervised proof import
+
+Next cohesive branch: feat/runtime-game-delivery-20261016, based on PR #1094
+b83fbfc8. PR #1093 and #1094 remain unmerged; no number-specific permission.
+Consolidated committed-source Lua/native bundle, closed private workspace,
+optional pinned Supply bot fixture, startup recipe, offline user-unit renderer,
+contained supervisor and explicit disposable-PG import adapter. Configuration
+loader consumers (bot, migration runner, audit) and bounded migration connection
+budgets travel together, including native/isolated fixture dependencies.
+No unit installed/started, game launched, migration run or application deployed.
+
+Initial extraction: 50 failed, 31 errors, 165 passed, 1 skipped. An existing
+empty /tmp/.git makes outside-Git guards correctly reject all /tmp descendants;
+use /var/tmp for offline output proof, never remove the guard or the directory.
+Two configuration integrations and one migration fixture were missing from the
+import-only inventory; included them, keeping the tests and assertions intact.
+A subsequent collection failed on missing migration_runner fixture; preserved
+and corrected by including its isolated fixture source.
+Final selected suite: 386 passed, 73 skipped (DB/explicit real-engine prerequisites),
+32.93s. Native PostgreSQL acceptance is still unmeasured locally.
+Actual prepare + separate CLI verify retained an 18-file synthetic-ELF bundle;
+Python SHA256 and sha256sum independently agree for every file. This verifies
+packaging, not actual ET ABI, game startup, containment or database import.
+An engine-hash guard mutation failed its regression; restored cmp matched and
+regression passed. Ruff/Bandit gate pass; /tmp literal annotation is narrowly
+limited to a namespace comparison, not allocation.
+Evidence remains local in /tmp/slomix-delivery-*.log and retained /var/tmp proof.
+
+Next: publish/review this dependent slice, resolve exact-head CI findings, then
+continue immutable application delivery, source admission/exclusive writer
+handover and observation. Retain pending proximity/gametime migrations, API,
+live mode, Spiderweb geometry/UI and all original roadmap items. Original plan
+bytes from 0261b076 remain intact. No activation follows from preparation.
+
 ## 2026-10-13 — Live delivery incorporates merged Spiderweb
 
 #1087 merged at a73aaf9e5673663f1a5539eb0bc30ae9bd2f8558; its tree is
