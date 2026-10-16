@@ -1,10 +1,23 @@
 """Owner-run, systemd-contained capture rehearsal. No install/start/stop command.
 
+CLI requires Python isolated mode (-I); project imports wait for source admission.
+
 The run command launches ET ONLY from the validated dedicated unit's main PID.
 Systemd owns cleanup of the whole cgroup on main exit/error/timeout. A capture
 receipt is diagnostic, not a recoverable import capability or shutdown proof.
 No bots or round rotation are provisioned here; those remain activation gates.
 """
+# ruff: noqa: E402 -- the isolated CLI guard must precede script-directory imports
+
+import sys
+
+if __name__ == '__main__':
+    if not sys.flags.isolated:
+        sys.stderr.write('{"status": "refused_or_failed", "error_type": "ValueError", '
+                         '"reason": "isolated_python_required", '
+                         '"shutdown_verified": false, "evidence_retained": true}\n')
+        raise SystemExit(1)
+    sys.dont_write_bytecode = True
 
 import argparse
 import asyncio
@@ -12,23 +25,16 @@ import json
 import os
 import re
 import subprocess
-import sys
 from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from scripts.runtime_game_startup import startup_recipe  # noqa: E402
-from shared.runtime_game_console import map_release  # noqa: E402
-from shared.runtime_identity_allocation import allocate_round_pair  # noqa: E402
-from shared.runtime_match_controller import RuntimeMatchController  # noqa: E402
-from shared.runtime_match_listener import serve_match  # noqa: E402
-from shared.runtime_process_authority import reserve_process_epoch  # noqa: E402
-from shared.runtime_process_pin import pin_process  # noqa: E402
 
 POLICY = {'Type': 'exec', 'KillMode': 'control-group', 'Restart': 'no',
           'RemainAfterExit': 'no', 'RuntimeMaxUSec': '1h', 'TimeoutStopUSec': '30s',
           'SendSIGKILL': 'yes', 'KillSignal': '15', 'FinalKillSignal': '9',
-          'Delegate': 'no', 'PrivateNetwork': 'no', 'NetworkNamespacePath': ''}
-PROPERTIES = (*POLICY, 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
+          'Delegate': 'no', 'PrivateNetwork': 'no', 'NetworkNamespacePath': '',
+          'MemoryMax': '805306368', 'TasksMax': '64', 'LimitFSIZE': '67108864',
+          'LimitCORE': '0', 'NoNewPrivileges': 'yes', 'UMask': '0077'}
+CLEARED_ENVIRONMENT = ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH')
+PROPERTIES = (*POLICY, 'UnsetEnvironment', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
               'InvocationID', 'Result')
 
 
@@ -50,6 +56,8 @@ def unit_properties(unit):
         values[key] = value
     if values.get('Id') != unit or any(values.get(k) != v for k, v in POLICY.items()):
         raise ValueError('Dedicated unit cleanup/lifetime policy disagrees')
+    if set(values.get('UnsetEnvironment', '').split()) != set(CLEARED_ENVIRONMENT):
+        raise ValueError('Dedicated unit inherited import environment is not cleared')
     return values
 
 
@@ -76,13 +84,37 @@ def verify_source(source, expected_commit):
                           env=env, capture_output=True, text=True, check=True, timeout=5)
     if head.stdout.strip() != expected_commit:
         raise ValueError('Supervisor source commit moved')
-    # Include staged and unstaged edits; ignored/untracked inputs are not source.
+    entries = subprocess.run(['/usr/bin/git', '-C', str(source), 'ls-files', '-v', '-z'],
+                             env=env, capture_output=True, check=True, timeout=5).stdout
+    if any(entry[:1].islower() or entry.startswith(b'S ') for entry in entries.split(b'\0') if entry):
+        raise ValueError('Source has hidden index flags')
+    # No excluded-standard flag: ignored Python modules/bytecode can shadow
+    # imports too. Use a dedicated source checkout without generated state.
+    unknown = subprocess.run(['/usr/bin/git', '-C', str(source), 'ls-files', '--others', '-z'],
+                             env=env, capture_output=True, check=True, timeout=5).stdout
+    if unknown:
+        raise ValueError('Source inventory must be closed, including ignored files')
+    # Include staged and unstaged edits before admitting any project imports.
     subprocess.run(['/usr/bin/git', '-C', str(source), 'diff', '--quiet', 'HEAD', '--'],
                    env=env, capture_output=True, check=True, timeout=5)
 
 
+def startup_recipe(*args, **kwargs):
+    """Lazy boundary: the service run verifies source before importing this."""
+    from scripts.runtime_game_startup import startup_recipe as recipe
+
+    return recipe(*args, **kwargs)
+
+
 def capture_process(record, pid, stdin_fd):
     """Live handoff only. Caller already owns process lifecycle and log sink."""
+    from shared.runtime_game_console import map_release
+    from shared.runtime_identity_allocation import allocate_round_pair
+    from shared.runtime_match_controller import RuntimeMatchController
+    from shared.runtime_match_listener import serve_match
+    from shared.runtime_process_authority import reserve_process_epoch
+    from shared.runtime_process_pin import pin_process
+
     roots = {k: Path(v) for k, v in record['roots'].items()}
     with pin_process(pid, expected_uid=record['uid'],
                      expected_executable=Path(record['executable']),
@@ -111,6 +143,7 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
     # do not prove service membership; ask the manager AND inspect kernel cgroup.
     admitted = require_containment(unit)
     verify_source(Path(__file__).resolve().parents[1], expected_commit)
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     import_options = (proof_socket, proof_database_name, import_lock_directory)
     if any(value is not None for value in import_options):
         if any(value is None for value in import_options):

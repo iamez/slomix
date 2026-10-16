@@ -76,7 +76,7 @@ Description=Slomix isolated ET capture rehearsal (owner activation only)
 
 [Service]
 Type=exec
-ExecStart={interpreter} -I {source}/scripts/runtime_game_supervisor.py run --directory {workspace} --unit {unit} --commit {commit}{bot_args}{import_args}
+ExecStart={interpreter} -I -B {source}/scripts/runtime_game_supervisor.py run --directory {workspace} --unit {unit} --commit {commit}{bot_args}{import_args}
 WorkingDirectory={source}
 Restart=no
 RemainAfterExit=no
@@ -89,6 +89,7 @@ SendSIGKILL=yes
 Delegate=no
 PrivateNetwork=no
 NoNewPrivileges=yes
+UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH
 UMask=0077
 MemoryMax=768M
 TasksMax=64

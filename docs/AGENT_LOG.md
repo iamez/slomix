@@ -1051,3 +1051,12 @@ SPA provenance and Git ls-files flags do not prove that tracked Python bytes
 match HEAD. Check tracked/index drift and exact HEAD before copy and before
 writing the release manifest, preserving partial outputs unstamped on failure.
 Staged, unstaged and mid-copy fixtures exercise these separate boundaries.
+
+## 2026-10-16 — Source admission must precede project imports
+
+A tracked-clean Git tree can still contain untracked or ignored import shadows.
+The supervisor CLI starts in -I mode, delays project imports until a closed
+source/index inventory and exact commit pass, and disables bytecode writes. Use
+a dedicated clean checkout and external environment/state; generated inputs
+cannot be treated as source. Protocol fixtures do not prove installed-unit or
+physical-engine admission.

@@ -34,6 +34,39 @@ preparation, not a new active release or complete dependency/schema acceptance.
 Original primary plan bytes, pending source admission/exclusive handover, D5,
 proximity/gametime/storage/API/live/Spiderweb/UI work all remain preserved.
 
+## 2026-10-16 — Closed supervisor bootstrap and enforced resource contract
+
+PR #1093 968712a8 is fully green: 9210/9214 passed on Python3.11/PG14 and
+Python3.13/PG17, 179/175 skipped, eleven subtests each. Independent passed-node
+counts match both summaries; all eight new native cases actually passed in both
+logs. Three import review threads answered/resolved. No PR merge was performed.
+
+#1095 supervisor now refuses a non-isolated CLI before importing anything beyond
+builtin sys, reporting isolated_python_required. In -I mode all project imports
+wait until exact HEAD, clean tracked/index state, no hidden index flags and a
+closed untracked/ignored inventory are verified. Use a dedicated clean source
+checkout with external interpreter/state; generated/ignored inputs are refused.
+-I -B and runtime bytecode disabling preserve that closed tree. Native library
+callers still own their source/lifecycle admission. No hostile same-UID/venv or
+physical-engine authentication claim is added.
+
+The effective systemd policy now checks MemoryMax, TasksMax, LimitFSIZE,
+LimitCORE, NoNewPrivileges and UMask as well as lifetime/cgroup policy. Prepared
+user units clear PYTHONPATH/PYTHONHOME/LD_PRELOAD/LD_LIBRARY_PATH; the reader
+requires that complete scrub independently of ordering. Existing proof units
+remain stopped and are not silently adopted as the new policy.
+
+Final game/service suite: 86 passed. Untracked root/nested/ignored/bytecode
+shadows, hidden Git flags, missing resource properties and early module-load
+sentinels are covered. Removing unknown-file admission and MemoryMax was seen
+failing five cases; restored source cmp matched and ten guards passed. Raw
+systemd property formats were observed read-only on this host. This is source,
+protocol/offline configuration proof, not a newly running contained ET service.
+Ruff and script Bandit medium/high gate passed. Current CI/review must still
+measure this newer head. Evidence stays in /tmp/slomix-game-review* and review2*.
+Next: refresh #1096 dependency, finish application delivery review and exact-head
+checks; retain D5 and every original activation/roadmap gate.
+
 ## 2026-10-16 — Import-consumer review follow-up before parent merge
 
 PR #1093 received three additional Codex findings after its earlier green CI.
