@@ -1099,3 +1099,16 @@ Both new native team-lock cases ran in every branch/platform and passed counts
 were checked independently. New producer/game review fixes require new CI.
 #1093 remains ready with zero open threads and no commits behind main; per-number
 owner approval is still required. No merge, service or production change occurred.
+
+## 2026-10-16 — Accept native path-absence refusal in the replacement fixture
+
+Latest #1094 Python3.11 CI failed the root-replacement test with FileNotFoundError
+for the deliberately renamed listener directory; Python3.13 passed10080 tests.
+The guard correctly failed closed. Its test wrongly required only ValueError or
+TimeoutError during the rename/recreate gap. The fixture now accepts only the
+expected missing listener/root path, retains terminal failure and source-claim
+assertions, and adds one deterministic remove-root variant. Production code is
+unchanged. All five native timeout/path variants pass locally; the earlier full
+42-case listener suite passed before adding that new variant. Refresh child
+branches normally and check new exact-head CI; do not hide the prior failure.
+Original plan, owner-specific approvals and frozen production remain unchanged.

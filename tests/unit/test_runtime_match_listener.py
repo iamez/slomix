@@ -168,7 +168,7 @@ def test_console_release_after_listen_drives_native_match(tmp_path, listener_pat
           'one release, four authenticated connections, two captures; NOT an ET game')
 
 
-@pytest.mark.parametrize('change', ['none', 'replace-root', 'replace-socket', 'mode'])
+@pytest.mark.parametrize('change', ['none', 'replace-root', 'remove-root', 'replace-socket', 'mode'])
 def test_listener_timeout_or_path_change_fences_controller(tmp_path, listener_path, child, approved, change):
     from threading import Event
 
@@ -179,17 +179,22 @@ def test_listener_timeout_or_path_change_fences_controller(tmp_path, listener_pa
             future = pool.submit(serve_match, driver, listener_path, initial_readiness_wait=.25,
                                  on_ready=ready.set)
             assert ready.wait(timeout=5), 'Readiness must follow dispatch reservation'
-            if change == 'replace-root':
+            if change in {'replace-root', 'remove-root'}:
                 parent = listener_path.parent
                 parent.rename(parent.with_name(parent.name + '-held'))
-                parent.mkdir(mode=0o700)
+                if change == 'replace-root':
+                    parent.mkdir(mode=0o700)
             elif change == 'replace-socket':
                 listener_path.rename(listener_path.with_name('held'))
                 listener_path.write_text('replacement retained')
             elif change == 'mode':
                 listener_path.chmod(0o666)
-            with pytest.raises((TimeoutError, ValueError)):
+            with pytest.raises((TimeoutError, ValueError, FileNotFoundError)) as refusal:
                 future.result(timeout=5)
+            if isinstance(refusal.value, FileNotFoundError):
+                # Rename/recreate deliberately has an observable absence window.
+                assert change in {'replace-root', 'remove-root', 'replace-socket'}
+                assert refusal.value.filename in {str(listener_path.parent), str(listener_path), listener_path.name}
         assert driver.state == 'failed'
         # A deadline/root failure never erases source ownership for retry.
         assert list(tmp_path.rglob('.writer-claimed'))
