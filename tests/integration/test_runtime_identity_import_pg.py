@@ -252,3 +252,72 @@ async def test_legacy_date_repair_admission_is_explicit(full_import_db, tmp_path
         assert await conn.fetch('SELECT * FROM rounds ORDER BY id') == before
         assert 'Legacy date repair refused' in caplog.text
     print('DATE REPAIR:', kind, result, 'legacy reimport mocked; bound/linked paths read-only')
+
+
+@pytest.mark.parametrize('batch', [False, True])
+async def test_bound_team_lock_contention_is_retryable_after_commit_and_replay(
+    full_import_db, tmp_path, monkeypatch, batch,
+):
+    """Real advisory contention + canonical writes; optional real batch envelope.
+
+    The batch's attempt transport borrows this fixture manager rather than
+    opening another pool. No native connection/configuration path is implied.
+    """
+    from bot import runtime_import_batch as batch_module
+    from shared.import_result import RetryableImportFailure
+    from shared.team_write_guard import team_write_transaction
+
+    manager, observer = full_import_db
+    first, second = completed_identity_pair(tmp_path, balanced=True)
+    attempts = []
+
+    async def attempt(_database, current, *, first=None, expected_identity=None, **_policy):
+        attempts.append(current.filename)
+        return await import_completed_round(manager, current, first=first, expected_identity=expected_identity)
+
+    monkeypatch.setattr(batch_module, 'run_import_once', attempt)
+    jobs = (batch_module.ImportJob(first, expected_identity=FIRST),
+            batch_module.ImportJob(second, first=first, expected_identity=SECOND))
+
+    async def invoke():
+        if batch:
+            outcomes = await batch_module.run_import_batch(None, jobs, journal_enabled=True)
+            assert len(outcomes) == 1  # R2 must not follow an incomplete R1 effect.
+            return outcomes[0]
+        return await import_completed_round(manager, first, expected_identity=FIRST)
+
+    async with team_write_transaction(observer):
+        initial = await invoke()
+        assert isinstance(initial, RetryableImportFailure) and initial[0] is False
+        assert 'Team writer is busy' in initial[1]
+        rounds = await observer.fetch('SELECT * FROM rounds ORDER BY id')
+        mappings = await observer.fetch('SELECT * FROM runtime_round_mappings ORDER BY canonical_round_id')
+        events = await observer.fetch('SELECT * FROM runtime_events ORDER BY id')
+        marker = await observer.fetchrow('SELECT * FROM processed_files WHERE filename=$1', first.filename)
+        assert len(rounds) == len(mappings) == len(events) == 1
+        assert marker['success'] is True
+        assert await observer.fetchval('SELECT count(*) FROM session_teams') == 0
+        replay = await invoke()
+        assert isinstance(replay, RetryableImportFailure) and replay[0] is False
+        assert await observer.fetch('SELECT * FROM rounds ORDER BY id') == rounds
+        assert await observer.fetch('SELECT * FROM runtime_round_mappings ORDER BY canonical_round_id') == mappings
+        assert await observer.fetch('SELECT * FROM runtime_events ORDER BY id') == events
+        assert await observer.fetchrow('SELECT * FROM processed_files WHERE filename=$1', first.filename) == marker
+        assert await observer.fetchval('SELECT count(*) FROM session_teams') == 0
+        if batch:
+            assert attempts == [first.filename, first.filename]
+    assert await import_completed_round(manager, first, expected_identity=FIRST) == (True, 'Already mapped')
+    assert await observer.fetch('SELECT * FROM rounds ORDER BY id') == rounds
+    assert await observer.fetch('SELECT * FROM runtime_events ORDER BY id') == events
+    assert await observer.fetchrow('SELECT * FROM processed_files WHERE filename=$1', first.filename) == marker
+    assert await observer.fetchval('SELECT count(*) FROM session_teams') == 2
+    teams = await observer.fetch('SELECT * FROM session_teams ORDER BY id')
+    if batch:
+        results = await batch_module.run_import_batch(None, jobs, journal_enabled=True)
+        assert len(results) == 2 and all(result[0] is True for result in results)
+    else:
+        assert (await import_completed_round(manager, second, first=first, expected_identity=SECOND))[0] is True
+    assert await observer.fetchval('SELECT count(*) FROM runtime_round_mappings') == 2
+    assert await observer.fetch('SELECT * FROM session_teams ORDER BY id') == teams
+    print('BOUND TEAM CONTENTION: real held global lock -> canonical R1 commit + retryable result; '
+          'replay preserves rows/marker, unlocked replay reconciles teams, then R2 proceeds')

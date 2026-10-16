@@ -1679,7 +1679,8 @@ class PostgreSQLDatabaseManager:
                     # The canonical transaction may have committed before a cancelled
                     # marker/team step. Reconcile the default R1 effect on replay.
                     if runtime_binding.identity.round_number == 1 and not self.defer_team_assignment:
-                        await self._auto_assign_teams_from_r1(mapped, runtime_binding.filename[:10])
+                        await self._auto_assign_teams_from_r1(
+                            mapped, runtime_binding.filename[:10], propagate_errors=True)
                     return True, 'Already mapped'
             if runtime_binding is None and await self.is_file_processed(filename):
                 self.stats['files_skipped'] += 1
@@ -1851,7 +1852,10 @@ class PostgreSQLDatabaseManager:
             round_num = parsed_data.get('round_num', parsed_data.get('round_number', 0))
             if round_num == 1 and not self.defer_team_assignment:
                 logger.debug(f"🎯 Round 1 detected (round_number={round_num}), attempting auto-team assignment for {file_date}")
-                await self._auto_assign_teams_from_r1(round_id, file_date)
+                if runtime_binding is None:
+                    await self._auto_assign_teams_from_r1(round_id, file_date)
+                else:
+                    await self._auto_assign_teams_from_r1(round_id, file_date, propagate_errors=True)
 
             # 🔗 CORRELATION: notify correlation service AFTER transaction commit
             # Must be outside the transaction so the round is visible to other connections.
@@ -1909,8 +1913,15 @@ class PostgreSQLDatabaseManager:
             )
             return False, error_msg
 
-    async def _auto_assign_teams_from_r1(self, round_id: int, session_date: str) -> bool:
-        """Preserve the legacy bool/error contract around connection-owned assignment."""
+    async def _auto_assign_teams_from_r1(self, round_id: int, session_date: str, *,
+                                         propagate_errors: bool = False) -> bool:
+        """Legacy callers retain bool/no-op behavior; bound callers retain errors.
+
+        Bound canonical commits remain valid when this post-commit step fails.
+        Their caller returns retryable failure and reconciles teams on replay;
+        lock contention and identity conflicts must never become success.
+        Cancellation propagates in both modes.
+        """
         from shared.import_team_assignment import TeamAssignment, assign_round_teams
 
         try:
@@ -1919,6 +1930,8 @@ class PostgreSQLDatabaseManager:
             return result is TeamAssignment.ASSIGNED
         except Exception as e:
             logger.error(f"Failed to auto-assign teams for round {round_id}: {e}", exc_info=True)
+            if propagate_errors:
+                raise
             return False
 
     async def _validate_round_data(self, conn, round_id: int,
