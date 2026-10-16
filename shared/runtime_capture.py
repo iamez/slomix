@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 from typing import Protocol
 
-from shared.runtime_spool import publish_stats_file
+from shared.runtime_spool import publish_proximity_file, publish_stats_file
 
 
 class TimedReader(Protocol):
@@ -36,6 +36,42 @@ def capture_stats_stream(
     connection setup, filesystem fsync/link or cleanup. EOF is required, so a
     source left open after sending expected bytes times out without publication.
     """
+    return _capture_stream(
+        source, directory, filename, publish_stats_file,
+        expected_size=expected_size, expected_sha256=expected_sha256,
+        max_bytes=max_bytes, total_timeout=total_timeout,
+        read_timeout=read_timeout, chunk_size=chunk_size,
+    )
+
+
+def capture_proximity_stream(
+    source: TimedReader, directory: Path, filename: str, *, expected_size: int,
+    expected_sha256: str, max_bytes: int = 8 * 1024 * 1024,
+    total_timeout: float = 30.0, read_timeout: float = 5.0,
+    chunk_size: int = 64 * 1024,
+) -> Path:
+    """Capture a sealed engagement snapshot into an absolute private spool.
+
+    Shares capture_stats_stream's cooperative deadline, EOF and caller-owned
+    lifecycle contract, but admits only proximity filenames. No SSH connection,
+    remote sealing, retry loop, database import or source acknowledgement occurs.
+    The raw byte cap is not a bound on expanded parser memory. A post-link error
+    may leave complete content; inspect it without overwriting or claiming an
+    import/durability acknowledgement.
+    """
+    return _capture_stream(
+        source, directory, filename, publish_proximity_file,
+        expected_size=expected_size, expected_sha256=expected_sha256,
+        max_bytes=max_bytes, total_timeout=total_timeout,
+        read_timeout=read_timeout, chunk_size=chunk_size,
+    )
+
+
+def _capture_stream(
+    source, directory, filename, publisher, *, expected_size, expected_sha256,
+    max_bytes, total_timeout, read_timeout, chunk_size,
+):
+    """One bounded reader implementation behind separate admission wrappers."""
     for value in (total_timeout, read_timeout):
         if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
             raise ValueError('Capture timeouts must be positive finite numbers')
@@ -60,5 +96,5 @@ def capture_stats_stream(
                 return
             yield chunk
 
-    return publish_stats_file(directory, filename, chunks(), expected_size=expected_size,
-                              expected_sha256=expected_sha256, max_bytes=max_bytes)
+    return publisher(directory, filename, chunks(), expected_size=expected_size,
+                     expected_sha256=expected_sha256, max_bytes=max_bytes)

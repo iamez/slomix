@@ -6,12 +6,23 @@ import stat
 
 import pytest
 
-from shared.runtime_completion_manifest import record_completion_once
-from shared.runtime_spool import publish_stats_file
+from shared.runtime_completion_manifest import record_completion_once, record_proximity_completion_once
+from shared.runtime_spool import publish_proximity_file, publish_stats_file
 
 NAME = '2026-09-20-120000-oasis-round-1.txt'
 HASH = hashlib.sha256(b'abc').hexdigest()
 RECEIPT = {'version': 1, 'filename': NAME, 'bytes': 3, 'state': 'writer_closed'}
+
+
+@pytest.fixture(autouse=True, params=['stats', 'proximity'])
+def protocol(request, monkeypatch):
+    """Exercise every retry/failure case with stats and engagement identities."""
+    if request.param == 'proximity':
+        name = NAME.replace('.txt', '_engagements.txt')
+        monkeypatch.setitem(globals(), 'NAME', name)
+        monkeypatch.setitem(globals(), 'RECEIPT', {**RECEIPT, 'filename': name})
+        monkeypatch.setitem(globals(), 'publish_stats_file', publish_proximity_file)
+        monkeypatch.setitem(globals(), 'record_completion_once', record_proximity_completion_once)
 
 
 @pytest.fixture
@@ -30,6 +41,7 @@ def test_repeated_record_does_not_write(spool, monkeypatch):
     def forbidden(*args, **kwargs):
         raise AssertionError('Retry must not publish existing receipt')
     monkeypatch.setattr('shared.runtime_completion_manifest.publish_completion_manifest', forbidden)
+    monkeypatch.setattr('shared.runtime_completion_manifest.publish_proximity_completion_manifest', forbidden)
     assert record_completion_once(spool, RECEIPT, expected_sha256=HASH) == 'content_present'
     assert {p.name: (p.stat().st_ino, p.read_bytes()) for p in spool.iterdir()} == before
 
@@ -88,7 +100,7 @@ def test_invalid_caller_not_hidden_by_valid_receipt(spool):
 def test_retry_preserves_long_read_only_publications(tmp_path, length):
     """Producer filename bounds and restrictive umask compose through retry."""
     tmp_path.chmod(0o700)
-    prefix, suffix = '2026-09-20-120000-', '-round-1.txt'
+    prefix, suffix = '2026-09-20-120000-', NAME[NAME.index('-round-'):]
     name = prefix + 'a' * (length - len(prefix) - len(suffix)) + suffix
     receipt = {**RECEIPT, 'filename': name}
     previous = os.umask(0o277)

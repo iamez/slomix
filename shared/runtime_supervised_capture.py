@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import Literal
 
-from shared.runtime_spool import inspect_published_stats_file
+from shared.runtime_spool import inspect_published_proximity_file, inspect_published_stats_file
 from shared.runtime_ssh_capture import SSHCaptureTask
 from shared.runtime_worker import WorkerResult, run_bounded_capture_task
 
@@ -31,9 +31,14 @@ def capture_ssh_once(
     Local inspection is byte-bounded but NOT within the child timeout. Run on a
     dedicated synchronous supervisor, not an event loop; underlying filesystem
     waits can block. Inspection, spawn and parent interruption errors propagate.
+    The task's explicit input kind selects the same admission protocol before
+    and after the worker; a proximity path never silently broadens stats intake.
     """
+    inspect_file = (inspect_published_stats_file if task.input_kind == 'stats'
+                    else inspect_published_proximity_file)
+
     def inspect():
-        return inspect_published_stats_file(
+        return inspect_file(
             task.directory, PurePosixPath(task.remote_path).name,
             expected_size=task.expected_size, expected_sha256=task.expected_sha256,
             max_bytes=task.max_bytes,

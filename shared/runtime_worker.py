@@ -1,4 +1,4 @@
-"""Deadline supervision for a single disposable, capture-only child process."""
+"""Deadline supervision for one disposable child owning all its resources."""
 
 import math
 import multiprocessing
@@ -93,10 +93,10 @@ def _defer_sigint():
                     raise
 
 
-def run_bounded_capture_task(
+def run_bounded_owned_task(
     task: Callable[[], None], *, timeout_seconds: float, shutdown_grace: float = 1.0,
 ) -> WorkerResult:
-    """Spawn a trusted picklable capture task and reap before returning a result.
+    """Spawn a trusted picklable resource-owning task and reap before returning.
 
     Synchronous supervisor, not an event-loop API or a service manager. Task must
     own its resources: no inherited DB pools, shared queues/locks or descendant
@@ -119,7 +119,9 @@ def run_bounded_capture_task(
     be recovered; non-callable SIG_DFL/SIG_IGN policies remain unchanged. The
     caller must not replace SIGINT policy during supervision.
     Forced termination skips child finally blocks: retain sources and reconcile
-    .part/final files.
+    .part/final files. A DB task must create connections inside the spawned child;
+    process outcome NEVER attests commit/rollback. A commit may precede timeout.
+    Parent must reobserve authoritative receipts before replay/acknowledgement.
     Launch from an import-safe main guarded by if __name__ == '__main__'.
     """
     for value, maximum in ((timeout_seconds, 300), (shutdown_grace, 5)):
@@ -150,3 +152,10 @@ def run_bounded_capture_task(
                 raise cleanup_error
         status = 'timed_out' if timed_out else ('completed' if exit_code == 0 else 'failed')
         return WorkerResult(status, pid, exit_code)
+
+
+def run_bounded_capture_task(
+    task: Callable[[], None], *, timeout_seconds: float, shutdown_grace: float = 1.0,
+) -> WorkerResult:
+    """Compatibility entrypoint for existing capture-only callers; same supervisor."""
+    return run_bounded_owned_task(task, timeout_seconds=timeout_seconds, shutdown_grace=shutdown_grace)

@@ -7,7 +7,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from shared.runtime_spool import _validate_metadata, inspect_published_stats_file
+from shared.runtime_spool import (
+    _NAME,
+    _PROXIMITY_NAME,
+    _validate_metadata,
+    inspect_published_proximity_file,
+    inspect_published_stats_file,
+)
 
 
 @dataclass(frozen=True)
@@ -41,12 +47,56 @@ def inspect_completion_manifest(directory: Path, filename: str) -> ManifestInspe
     stat comparisons detect observed drift, not future changes or source trust.
     Neither a match nor recovery after sync failure authorizes source deletion.
     """
+    return _inspect_completion_manifest(directory, filename, _NAME, inspect_published_stats_file)
+
+
+def inspect_proximity_completion_manifest(directory: Path, filename: str) -> ManifestInspection:
+    """Observe an engagement receipt under the same private, bounded contract.
+
+    Explicit proximity admission does not widen the stats reader. The version 1
+    schema is unchanged; the exact filename binds the input protocol. A matching
+    receipt is not producer authentication, recovered durability or an import ack.
+    """
+    return _inspect_completion_manifest(
+        directory, filename, _PROXIMITY_NAME, inspect_published_proximity_file,
+    )
+
+
+def _inspect_completion_manifest(directory, filename, name_pattern, inspect_file):
+    """Shared descriptor-based reader behind protocol-specific public admission."""
     if not isinstance(directory, Path) or not directory.is_absolute():
         raise ValueError('Manifest spool must be an absolute Path')
     if not isinstance(filename, str) or len(filename) > 240:
         raise ValueError('Manifest filename must be a bounded string')
-    _validate_metadata(filename, 1, 8 * 1024 * 1024, None)
+    _validate_metadata(filename, 1, 8 * 1024 * 1024, None, name_pattern=name_pattern)
     name = filename + '.complete.json'
+    payload = _read_private_manifest_bytes(directory, name)
+    if payload is None:
+        return ManifestInspection('missing_manifest', filename)
+    data = _decode_manifest(payload)
+    if (type(data) is not dict
+            or set(data) != {'version', 'filename', 'bytes', 'state', 'sha256'}
+            or type(data['version']) is not int or data['version'] != 1
+            or data['filename'] != filename or data['state'] != 'writer_closed'):
+        raise ValueError('Invalid completion manifest schema or identity')
+    if data['sha256'] is None:
+        raise ValueError('Manifest requires SHA-256')
+    _validate_metadata(filename, data['bytes'], 8 * 1024 * 1024, data['sha256'],
+                       name_pattern=name_pattern)
+    content = inspect_file(
+        directory, filename, expected_size=data['bytes'], expected_sha256=data['sha256'],
+    )
+    status = {'missing': 'missing_content', 'conflict': 'content_conflict', 'match': 'match'}[content]
+    return ManifestInspection(status, filename, data['bytes'], data['sha256'])
+
+
+def _read_private_manifest_bytes(directory: Path, name: str) -> bytes | None:
+    """Shared 4096-byte private regular-file read; only an absent entry is None."""
+    if not isinstance(directory, Path) or not directory.is_absolute():
+        raise ValueError('Manifest spool must be an absolute Path')
+    if (not isinstance(name, str) or not 0 < len(name) <= 255
+            or name in ('.', '..') or '/' in name or '\x00' in name):
+        raise ValueError('Invalid manifest entry name')
     directory_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
         owner = os.fstat(directory_fd)
@@ -55,7 +105,7 @@ def inspect_completion_manifest(directory: Path, filename: str) -> ManifestInspe
         try:
             fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
         except FileNotFoundError:
-            return ManifestInspection('missing_manifest', filename)
+            return None
         try:
             before = os.fstat(fd)
             if (not stat.S_ISREG(before.st_mode) or before.st_uid != os.getuid()
@@ -80,20 +130,12 @@ def inspect_completion_manifest(directory: Path, filename: str) -> ManifestInspe
             os.close(fd)
     finally:
         os.close(directory_fd)
+    return bytes(payload)
+
+
+def _decode_manifest(payload: bytes):
+    """Shared strict JSON decoder; schema and identity remain caller-specific."""
     try:
-        data = json.loads(payload.decode('ascii'), object_pairs_hook=_unique_object)
+        return json.loads(payload.decode('ascii'), object_pairs_hook=_unique_object)
     except (UnicodeError, json.JSONDecodeError, RecursionError) as exc:
         raise ValueError('Malformed completion manifest') from exc
-    if (type(data) is not dict
-            or set(data) != {'version', 'filename', 'bytes', 'state', 'sha256'}
-            or type(data['version']) is not int or data['version'] != 1
-            or data['filename'] != filename or data['state'] != 'writer_closed'):
-        raise ValueError('Invalid completion manifest schema or identity')
-    if data['sha256'] is None:
-        raise ValueError('Manifest requires SHA-256')
-    _validate_metadata(filename, data['bytes'], 8 * 1024 * 1024, data['sha256'])
-    content = inspect_published_stats_file(
-        directory, filename, expected_size=data['bytes'], expected_sha256=data['sha256'],
-    )
-    status = {'missing': 'missing_content', 'conflict': 'content_conflict', 'match': 'match'}[content]
-    return ManifestInspection(status, filename, data['bytes'], data['sha256'])

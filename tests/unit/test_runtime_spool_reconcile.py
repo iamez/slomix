@@ -4,20 +4,36 @@ import os
 
 import pytest
 
-from shared.runtime_spool import inspect_published_stats_file, publish_stats_file
+from shared.runtime_spool import (
+    inspect_published_proximity_file,
+    inspect_published_stats_file,
+    publish_proximity_file,
+    publish_stats_file,
+)
 
 NAME = '2026-09-20-120000-map-round-1.txt'
 DIGEST = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'
+INSPECT = inspect_published_stats_file
+PUBLISH = publish_stats_file
+
+
+@pytest.fixture(params=['stats', 'proximity'], autouse=True)
+def spool_protocol(request, monkeypatch):
+    """Run every filesystem safety/race case through both public protocols."""
+    if request.param == 'proximity':
+        monkeypatch.setattr(__name__ + '.NAME', NAME.replace('.txt', '_engagements.txt'))
+        monkeypatch.setattr(__name__ + '.INSPECT', inspect_published_proximity_file)
+        monkeypatch.setattr(__name__ + '.PUBLISH', publish_proximity_file)
 
 
 def inspect(directory):
     """Verify the same immutable snapshot in every scenario."""
-    return inspect_published_stats_file(directory, NAME, expected_size=3, expected_sha256=DIGEST)
+    return INSPECT(directory, NAME, expected_size=3, expected_sha256=DIGEST)
 
 
 def publish(directory):
     """Produce a real durable spool entry, not a mocked file descriptor."""
-    return publish_stats_file(directory, NAME, [b'abc'], expected_size=3, expected_sha256=DIGEST)
+    return PUBLISH(directory, NAME, [b'abc'], expected_size=3, expected_sha256=DIGEST)
 
 
 def test_missing_then_matching(tmp_path):
@@ -142,7 +158,7 @@ def test_post_link_failure_can_be_inspected(tmp_path, monkeypatch):
 def test_inspection_requires_digest(tmp_path):
     """Never certify a retry using size alone."""
     with pytest.raises(ValueError, match='requires an expected SHA-256'):
-        inspect_published_stats_file(tmp_path, NAME, expected_size=3, expected_sha256=None)
+        INSPECT(tmp_path, NAME, expected_size=3, expected_sha256=None)
 
 
 def test_wrong_sized_inode_replaced_after_open_is_not_conflict(tmp_path, monkeypatch):

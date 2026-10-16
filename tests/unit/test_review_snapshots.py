@@ -726,13 +726,13 @@ def test_remote_conflict_never_updates_existing_remote_ref(repo):
     assert not (repo.parent / "hook-calls").exists()
 
 
-def test_genuine_hook_refuses_unsplit_26_file_push(repo):
-    commit(repo, {f"file-{n:02}.py": f"value = {n}\n" for n in range(26)})
+def test_genuine_hook_refuses_unsplit_226_file_push(repo):
+    commit(repo, {f"file-{n:02}.py": f"value = {n}\n" for n in range(226)})
     git(repo, "update-ref", "refs/remotes/origin/main", "v1.39.0")
     result = subprocess.run(["git", "push", "origin", "HEAD:refs/heads/too-wide"],
                             cwd=repo, text=True, capture_output=True)
     assert result.returncode != 0
-    assert "26 files (limit 25)" in result.stderr
+    assert "226 files (limit 225)" in result.stderr
     assert "too-wide" not in git(repo, "ls-remote", "origin")
 
 

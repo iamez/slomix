@@ -27,7 +27,9 @@ set -uo pipefail
 # (the frozen API snapshot, which MUST stay tracked: tests and CI compare
 # against it) had crossed 500 kB simply by describing more endpoints.
 MAX_BYTES=1048576         # same 1 MB threshold as CI and .pre-commit-config
-MAX_FILES=25              # a push touching more than this is probably a sweep
+# Owner, 2026-10-16: normal review target 3x25; hard ceiling 9x25.
+REVIEW_FILES=75
+MAX_FILES=225             # hard ceiling; content/credential guards still apply
 ZERO=0000000000000000000000000000000000000000
 # NOTE: no `csv`. .gitignore documents that this repo DELIBERATELY tracks
 # research CSV artefacts (docs/research/FULL_PROJECT_AUDIT_COVERAGE_2026-07-14.csv),
@@ -152,6 +154,9 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         note "First 10:"
         printf '    %s\n' "${files[@]:0:10}" >&2
         problems=$((problems + 1))
+    elif [ "${#files[@]}" -gt "$REVIEW_FILES" ]; then
+        note "pre-push: ${#files[@]} files exceeds the normal review target $REVIEW_FILES (hard limit $MAX_FILES)."
+        note "Keep this an intentionally assembled, dependency-cohesive change."
     fi
 
     for f in "${files[@]}"; do
