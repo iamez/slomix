@@ -94,7 +94,8 @@ async def test_mapping_records_actual_warning_or_success(validation):
 @pytest.mark.parametrize('deferred', [False, True])
 @pytest.mark.parametrize('marked', [None, False, True])
 @pytest.mark.parametrize('validation', [True, False])
-async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, deferred, marked, validation):
+@pytest.mark.parametrize('team_error', [None, 'busy', 'conflict'])
+async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, deferred, marked, validation, team_error):
     from contextlib import asynccontextmanager
     from pathlib import Path
     from unittest.mock import Mock
@@ -116,17 +117,31 @@ async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, def
     manager.pool = SimpleNamespace(acquire=borrow)
     monkeypatch.setattr(manager, '_compute_file_hashes', Mock(return_value=('a' * 64, 'b' * 64)))
     manager.mark_file_processed = AsyncMock()
-    auto_assign = AsyncMock()
+    from shared.import_result import RetryableImportFailure
+    from shared.team_identity import TeamIdentityConflict
+    from shared.team_write_guard import TeamWriteBusy
+
+    error = {'busy': TeamWriteBusy('busy'), 'conflict': TeamIdentityConflict('conflict')}.get(team_error)
+    from shared import import_team_assignment
+
+    monkeypatch.setattr(import_team_assignment, 'assign_round_teams',
+                        AsyncMock(side_effect=error, return_value=import_team_assignment.TeamAssignment.ASSIGNED))
+    auto_assign = AsyncMock(wraps=manager._auto_assign_teams_from_r1)  # noqa: SLF001
+    manager.stats = {'files_failed': 0}
     monkeypatch.setattr(manager, '_auto_assign_teams_from_r1', auto_assign)
     monkeypatch.setattr(database, 'inspect_round_mapping', AsyncMock(return_value=3))
     monkeypatch.setattr(database, 'require_first_mapping', AsyncMock())
     result = await manager.process_file(Path(binding.filename), runtime_binding=binding,
                                         input_source=SimpleNamespace(read_bytes=lambda: b'x' * 100))
-    assert result == (True, 'Already mapped')
+    if team_error is not None and not deferred:
+        assert isinstance(result, RetryableImportFailure)
+        assert result == (False, str(error))
+    else:
+        assert result == (True, 'Already mapped')
     if deferred:
         auto_assign.assert_not_awaited()
     else:
-        auto_assign.assert_awaited_once_with(3, '2026-09-25')
+        auto_assign.assert_awaited_once_with(3, '2026-09-25', propagate_errors=True)
     assert manager.mark_file_processed.await_count == int(marked is not True or validation is False)
     if manager.mark_file_processed.await_count:
         warning = manager.mark_file_processed.await_args.kwargs['error_msg']
@@ -137,3 +152,31 @@ async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, def
 def test_binding_accepts_transport_map_alphabet(name):
     binding = replace(first_binding(), map_name=name, filename=f'2026-09-25-120000-{name}-round-1.txt')
     assert binding.map_name == name
+
+
+@pytest.mark.parametrize('strict', [False, True])
+@pytest.mark.parametrize('kind', ['busy', 'conflict', 'cancelled'])
+async def test_team_assignment_error_contract_preserves_strict_errors(monkeypatch, strict, kind):
+    import asyncio
+    from contextlib import asynccontextmanager
+
+    import postgresql_database_manager as database
+    from shared import import_team_assignment
+    from shared.team_identity import TeamIdentityConflict
+    from shared.team_write_guard import TeamWriteBusy
+
+    @asynccontextmanager
+    async def borrow():
+        yield object()
+
+    error = {'busy': TeamWriteBusy('held'), 'conflict': TeamIdentityConflict('unresolved'),
+             'cancelled': asyncio.CancelledError()}[kind]
+    monkeypatch.setattr(import_team_assignment, 'assign_round_teams', AsyncMock(side_effect=error))
+    manager = object.__new__(database.PostgreSQLDatabaseManager)
+    manager.pool = SimpleNamespace(acquire=borrow)
+    if strict or kind == 'cancelled':
+        with pytest.raises(type(error)) as caught:
+            await manager._auto_assign_teams_from_r1(3, '2026-09-25', propagate_errors=strict)  # noqa: SLF001
+        assert caught.value is error
+    else:
+        assert await manager._auto_assign_teams_from_r1(3, '2026-09-25') is False  # noqa: SLF001
