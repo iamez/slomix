@@ -23,10 +23,13 @@ if __name__ == '__main__':
 
 import argparse
 import asyncio
+import fcntl
 import json
 import os
 import re
+import stat
 import subprocess
+import zipfile
 from pathlib import Path
 
 POLICY = {'Type': 'exec', 'KillMode': 'control-group', 'Restart': 'no',
@@ -37,7 +40,7 @@ POLICY = {'Type': 'exec', 'KillMode': 'control-group', 'Restart': 'no',
           'LimitCORE': '0', 'NoNewPrivileges': 'yes', 'UMask': '0077'}
 CLEARED_ENVIRONMENT = ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT')
 AUXILIARY_COMMANDS = ('ExecCondition', 'ExecStartPre', 'ExecStartPost', 'ExecReload', 'ExecStop', 'ExecStopPost')
-PROPERTIES = (*POLICY, *AUXILIARY_COMMANDS, 'ExecStart', 'UnsetEnvironment', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
+PROPERTIES = (*POLICY, *AUXILIARY_COMMANDS, 'ExecStart', 'StandardOutput', 'StandardError', 'UnsetEnvironment', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
               'InvocationID', 'Result')
 
 
@@ -66,7 +69,7 @@ def unit_properties(unit):
 
 def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture=None,
                     bot_manifest_sha256=None, proof_socket=None, proof_database_name=None,
-                    import_lock_directory=None, defer_team_assignment=False):
+                    import_lock_directory=None, defer_team_assignment=False, evidence_log=None):
     """One unambiguous argv shared by offline generation and live admission."""
     argv = [str(interpreter), '-I', '-B', str(source / 'scripts/runtime_game_supervisor.py'),
             'run', '--directory', str(directory), '--unit', unit, '--commit', commit]
@@ -77,6 +80,8 @@ def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture
                  '--import-lock-directory', str(import_lock_directory)]
     if defer_team_assignment:
         argv += ['--defer-team-assignment']
+    if evidence_log is not None:
+        argv += ['--evidence-log', str(evidence_log)]
     if any(not isinstance(value, str) or re.fullmatch(r'[A-Za-z0-9_./-]+', value) is None
            for value in argv):
         raise ValueError('Unambiguous ASCII supervisor arguments required')
@@ -101,6 +106,26 @@ def validate_launch_commands(properties, expected_argv):
     if (match is None or match[1] != expected_argv[0]
             or match[2].strip() != ' '.join(expected_argv)):
         raise ValueError('Effective supervisor ExecStart disagrees')
+    if '--evidence-log' not in expected_argv:
+        raise ValueError('Explicit retained evidence log required')
+    validate_evidence_sink(properties, Path(expected_argv[expected_argv.index('--evidence-log') + 1]))
+
+
+def validate_evidence_sink(properties, path):
+    """Verify the actual open descriptors as well as the manager's output modes."""
+    if properties.get('StandardOutput') != 'append' or properties.get('StandardError') != 'inherit':
+        raise ValueError('Effective retained evidence output policy disagrees')
+    if not path.is_absolute() or path.resolve(strict=True) != path:
+        raise ValueError('Canonical retained evidence path required')
+    target = path.stat()
+    if (not stat.S_ISREG(target.st_mode) or target.st_uid != os.getuid()
+            or target.st_mode & 0o077):
+        raise ValueError('Private owned regular evidence log required')
+    for fd in (1, 2):
+        actual = os.fstat(fd)
+        if ((actual.st_dev, actual.st_ino) != (target.st_dev, target.st_ino)
+                or not fcntl.fcntl(fd, fcntl.F_GETFL) & os.O_APPEND):
+            raise ValueError('Actual evidence descriptors disagree')
 
 
 def require_containment(unit):
@@ -175,7 +200,7 @@ def capture_process(record, pid, stdin_fd):
 
 def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha256=None,
         proof_socket=None, proof_database_name=None, import_lock_directory=None,
-        defer_team_assignment=False):
+        defer_team_assignment=False, evidence_log=None):
     if type(defer_team_assignment) is not bool:
         raise ValueError('Explicit boolean team ownership policy required')
     if defer_team_assignment and any(value is None for value in
@@ -187,7 +212,7 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
         directory, unit, expected_commit, bot_fixture=bot_fixture,
         bot_manifest_sha256=bot_manifest_sha256, proof_socket=proof_socket,
         proof_database_name=proof_database_name, import_lock_directory=import_lock_directory,
-        defer_team_assignment=defer_team_assignment)
+        defer_team_assignment=defer_team_assignment, evidence_log=evidence_log)
     admitted = require_containment(unit)
     validate_launch_commands(admitted, expected_argv)
     verify_source(Path(__file__).resolve().parents[1], expected_commit)
@@ -266,6 +291,7 @@ def main(argv=None):
     launch.add_argument('--directory', type=Path, required=True)
     launch.add_argument('--unit', required=True)
     launch.add_argument('--commit', required=True)
+    launch.add_argument('--evidence-log', type=Path)
     launch.add_argument('--bot-fixture', type=Path)
     launch.add_argument('--bot-manifest-sha256')
     launch.add_argument('--proof-socket', type=Path)
@@ -283,11 +309,12 @@ def main(argv=None):
                       bot_manifest_sha256=args.bot_manifest_sha256,
                       proof_socket=args.proof_socket, proof_database_name=args.proof_database_name,
                       import_lock_directory=args.import_lock_directory,
-                      defer_team_assignment=args.defer_team_assignment) if args.action == 'run'
+                      defer_team_assignment=args.defer_team_assignment, evidence_log=args.evidence_log) if args.action == 'run'
                   else verify_stopped(args.unit, args.port, args.invocation_id))
         print(json.dumps(result, sort_keys=True), flush=True)
         return 0 if result.get('import', {}).get('status', 'completed') == 'completed' else 1
-    except (OSError, ValueError, KeyError, TypeError, ImportError, subprocess.SubprocessError) as exc:
+    except (OSError, ValueError, KeyError, TypeError, ImportError, zipfile.BadZipFile,
+            subprocess.SubprocessError) as exc:
         print(json.dumps({'status': 'refused_or_failed', 'error_type': type(exc).__name__,
                           'shutdown_verified': False, 'evidence_retained': True}),
               file=sys.stderr, flush=True)

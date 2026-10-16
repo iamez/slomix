@@ -52,6 +52,7 @@ except ImportError:
 _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
+from shared.release_manifest import verify_release  # noqa: E402
 from shared.runtime_environment import explicit_env_file, load_environment  # noqa: E402
 
 
@@ -72,9 +73,21 @@ def resolve_env_file(repo_root: Path) -> Path:
 
 # Releases require an operator-selected explicit env; verify admin identity
 # separately (process environment still wins over file values).
-load_environment(resolve_env_file(_REPO_ROOT))
+def verify_migration_source() -> None:
+    """Marked payloads must remain intact before config, SQL inventory or DB I/O."""
+    marker = _REPO_ROOT / ".slomix-release.json"
+    if marker.exists() or marker.is_symlink():
+        verify_release(_REPO_ROOT)
+        if MIGRATIONS_DIR != _REPO_ROOT / "migrations":
+            raise ValueError("Release migrations must use the verified payload directory")
+
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
+# Preserve legacy import-time configuration for existing repair-tool callers.
+# Marked payloads defer all configuration until their integrity is admitted.
+_release_marker = _REPO_ROOT / ".slomix-release.json"
+if not (_release_marker.exists() or _release_marker.is_symlink()):
+    load_environment(resolve_env_file(_REPO_ROOT))
 
 # Session-level advisory lock key so two runners (or a runner racing a deploy)
 # can never interleave migration writes. Value is the ASCII of 'SLOMIX_M'.
@@ -302,6 +315,8 @@ def get_target_dsn_parts() -> dict[str, str]:
 
 def get_connection_kwargs() -> dict[str, Any]:
     """Resolved connection settings shared by migration-adjacent tools."""
+    verify_migration_source()
+    load_environment(resolve_env_file(_REPO_ROOT))
     target = get_target_dsn_parts()
     return {
         "host": target["host"],
@@ -446,6 +461,7 @@ async def get_checksum_mismatches(conn: asyncpg.Connection) -> list[str]:
 
 def discover_migrations() -> list[tuple[str, Path]]:
     """Return sorted list of (filename, path) for all .sql migration files."""
+    verify_migration_source()
     files = sorted(
         [f.name for f in MIGRATIONS_DIR.glob("*.sql")],
         key=_sort_key,
@@ -938,6 +954,13 @@ def main():
     if args.tolerate_missing and not args.validate:
         parser.error("--tolerate-missing requires --validate")
 
+    try:
+        verify_migration_source()
+    except (OSError, ValueError):
+        print(json.dumps({"status": "refused", "reason": "Release migration source verification failed"}),
+              file=sys.stderr)
+        return 1
+
     if args.status:
         asyncio.run(cmd_status(json_out=args.json))
     elif args.validate:
@@ -955,4 +978,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

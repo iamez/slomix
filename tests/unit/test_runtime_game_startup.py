@@ -16,6 +16,28 @@ from tests.unit.test_runtime_game_workspace import placement  # noqa: F401
 from tests.unit.test_runtime_process_pin import approved, child  # noqa: F401
 
 
+def test_cli_redacts_rehashed_corrupt_pk3(placement):  # noqa: F811
+    import hashlib
+    from pathlib import Path
+
+    from scripts import prepare_runtime_game_workspace as workspace
+
+    prepare(**placement)
+    asset = placement['assets']['etmain/pak0.pk3']
+    path = Path(asset['path'])
+    path.write_bytes(b'corrupt approved archive')
+    marker = placement['destination'] / workspace.MARKER
+    record = json.loads(marker.read_text())
+    record['assets']['etmain/pak0.pk3']['sha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+    marker.write_bytes(workspace._json(record))  # noqa: SLF001 -- preserve canonical manifest serialization
+    script = Path(__file__).resolve().parents[2] / 'scripts/runtime_game_startup.py'
+    result = subprocess.run([sys.executable, '-I', '-B', str(script), '--directory',
+                             str(placement['destination'])], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 1
+    assert result.stdout == ''
+    assert json.loads(result.stderr) == dict(status='refused', error_type='BadZipFile', activation_ready=False)
+
+
 def test_verified_recipe_is_mapless_and_local(placement, monkeypatch):  # noqa: F811
     prepare(**placement)
     monkeypatch.setenv('LD_PRELOAD', '/must/not/inherit.so')

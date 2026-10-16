@@ -153,7 +153,8 @@ def test_release_prestart_cli_refuses_before_database(inputs, monkeypatch, capsy
     monkeypatch.setattr(schema.os, "environ", dict(spec["environment"]))
     inspect = AsyncMock(return_value={"clean": True})
     monkeypatch.setattr(schema, "inspect_database", inspect)
-    args = list(spec["pre_argv"][2:])
+    assert spec["pre_argv"][1:3] == ["-I", "-B"]
+    args = list(spec["pre_argv"][4:])
     if damage == "digest":
         with inputs["bot_env"].open("a") as stream:
             stream.write("OTHER=value\n")
