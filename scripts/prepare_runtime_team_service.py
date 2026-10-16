@@ -24,7 +24,9 @@ def prepare(release, python, environment, destination, expected_commit):
 
 def main():
     # Append the fixed component so this compatibility command cannot select cache.
-    return consumer_main([*sys.argv[1:], '--component', 'team'])
+    args = sys.argv[1:]
+    verifying = any(arg == '--verify-contract' or arg.startswith('--verify-contract=') for arg in args)
+    return consumer_main(args if verifying else [*args, '--component', 'team'])
 
 
 if __name__ == '__main__':

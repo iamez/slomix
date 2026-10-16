@@ -78,6 +78,6 @@ def read_external_environment(path: Path, *, root: Path = ROOT, expected_digest:
 def refuse_config_overrides(values: dict, environment: dict) -> None:
     """Pre-start guard: a file proof cannot certify shadowed process settings."""
     if any(key in values or key.startswith(("POSTGRES_", "DB_", "PG", "DATABASE_"))
-           or key in {"PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_LIBRARY_PATH"}
+           or key in {"PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT"}
            for key in environment):
         raise ValueError("Inherited environment overrides explicit application configuration")

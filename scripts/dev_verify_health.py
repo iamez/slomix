@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.dev_runtime_contract import load_contract  # noqa: E402
 from shared.release_manifest import file_hash  # noqa: E402
-from shared.runtime_environment import read_external_environment, refuse_config_overrides  # noqa: E402
+from shared.runtime_environment import read_external_environment  # noqa: E402
 
 
 def command_matches(value, expected):
@@ -117,7 +117,15 @@ def check(run, target, previous, contract=None):
             if any(process_env.get(key) != value for key, value in specification['environment'].items()):
                 raise ValueError(f'{name}: running bootstrap environment differs from contract')
             env_path = Path(specification['environment']['SLOMIX_ENV_FILE'])
-            refuse_config_overrides(read_external_environment(env_path, root=run), process_env)
+            approved = read_external_environment(env_path, root=run,
+                                                 expected_digest=specification['env_sha256'])
+            # /proc usually exposes exec-time values; some launchers also export
+            # approved dotenv keys before exec. Both shapes must match when visible.
+            for key, value in process_env.items():
+                if (key in {'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT'}
+                        or (key in approved and value != approved[key])
+                        or (key not in approved and key.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_')))):
+                    raise ValueError(f'{name}: running configuration differs from approved environment')
     health = read_json('/health')
     if health.get('status') != 'ok' or health.get('database') != 'ok':
         raise ValueError('HTTP/database readiness is not healthy')

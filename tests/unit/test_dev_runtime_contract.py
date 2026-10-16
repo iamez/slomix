@@ -1,5 +1,6 @@
 """Offline unit preparation and drift guards; never starts services or databases."""
 import json
+import os
 import secrets
 import shlex
 from pathlib import Path
@@ -16,7 +17,9 @@ _FIXTURE_PASSWORD = secrets.token_urlsafe()
 
 
 @pytest.fixture
-def inputs(tmp_path):
+def inputs(tmp_path, monkeypatch):
+    # CI runs as runner; permission checks still use real effective access.
+    monkeypatch.setattr(contract, "service_uid", os.geteuid)
     home = tmp_path / "runtime"
     release = home / "releases" / ("a" * 40)
     state = home / "shared"
@@ -101,7 +104,7 @@ def test_unsafe_configuration_is_refused_without_echo(inputs, line):
     assert _FIXTURE_PASSWORD not in str(error.value)
 
 
-@pytest.mark.parametrize("key", ["POSTGRES_PASSWORD", "PGSERVICE", "DATABASE_URL", "PYTHONPATH", "SSH_ENABLED"])
+@pytest.mark.parametrize("key", ["POSTGRES_PASSWORD", "PGSERVICE", "DATABASE_URL", "PYTHONPATH", "LD_AUDIT", "SSH_ENABLED"])
 def test_prestart_rejects_inherited_overrides(key):
     with pytest.raises(ValueError, match="Inherited environment") as error:
         refuse_config_overrides({"SSH_ENABLED": "false"}, {key: "secret-no-echo"})
@@ -202,7 +205,7 @@ def test_resolved_unit_matches_exact_contract(inputs, monkeypatch, damage):
         assert health.units(inputs["release"], record)["etlegacy-bot"]["pid"] == 101
 
 
-@pytest.mark.parametrize("damage", [None, "exe", "argv", "bootstrap", "inherited", "revision"])
+@pytest.mark.parametrize("damage", [None, "loaded", "exe", "argv", "bootstrap", "inherited", "extra_db", "loader", "revision"])
 def test_release_readiness_checks_actual_process(inputs, monkeypatch, damage):
     record = contract.build_contract(**inputs)
     state = {name: {"pid": pid, "active": "active", "cwd": spec["cwd"]}
@@ -220,6 +223,12 @@ def test_release_readiness_checks_actual_process(inputs, monkeypatch, damage):
             argv = ["wrong"] if damage == "argv" else spec["argv"]
             return ("\0".join(argv) + "\0").encode()
         env = dict(spec["environment"])
+        if damage == "loaded":
+            env.update(read_external_environment(Path(spec["environment"]["SLOMIX_ENV_FILE"]), root=inputs["release"]))
+        if damage == "extra_db":
+            env["PGSERVICE"] = "unexpected"
+        if damage == "loader":
+            env["LD_AUDIT"] = "/unsafe"
         if damage == "bootstrap":
             env["SLOMIX_ENV_FILE"] = "/wrong"
         if damage == "inherited":
@@ -231,7 +240,7 @@ def test_release_readiness_checks_actual_process(inputs, monkeypatch, damage):
         {"revision": "a" * 40, "started_at": "2026-01-01T00:00:00+00:00"}))
     previous = {"_captured_at": 0, "etlegacy-bot": {"pid": 1}, "etlegacy-web": {"pid": 2}}
     target = "b" * 40 if damage == "revision" else "a" * 40
-    if damage:
+    if damage not in (None, "loaded"):
         with pytest.raises(ValueError) as error:
             health.check(inputs["release"], target, previous, record)
         assert "secret-no-echo" not in str(error.value)
@@ -306,3 +315,27 @@ def test_venv_link_support_does_not_allow_parent_or_config_aliases(inputs, alias
         config.symlink_to(held)
     with pytest.raises(ValueError, match='canonical'):
         contract.build_contract(**inputs)
+
+
+@pytest.mark.parametrize("kind", ["directory", "ancestor", "metrics", "user"])
+def test_state_permissions_are_checked_as_service_account(inputs, monkeypatch, kind):
+    path = inputs["state"] / "data/stats"
+    mode = None
+    if kind == "metrics":
+        path = inputs["state"] / "logs/bot/metrics/metrics.db"
+        path.write_text("synthetic state")
+    elif kind == "ancestor":
+        path = inputs["state"] / "data"
+    elif kind == "user":
+        monkeypatch.setattr(contract, "service_uid", lambda: os.geteuid() + 1)
+    if kind != "user":
+        mode = path.stat().st_mode
+        path.chmod(0o600 if kind == "ancestor" else 0o500 if kind == "directory" else 0o400)
+    try:
+        with pytest.raises((ValueError, PermissionError)):
+            contract.build_contract(**inputs)
+    finally:
+        if mode is not None:
+            path.chmod(mode)
+    if kind != "user":
+        assert contract.build_contract(**inputs)["revision"] == "a" * 40

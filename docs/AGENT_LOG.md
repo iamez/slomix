@@ -1069,3 +1069,14 @@ SQL checks must accept the same alphabet. Preserve 099 even before its PR merges
 when retained installations/candidates already reference its checksum; append104
 and update the effective schema/release contract. Never edit live ledger hashes
 to make a rewritten migration appear valid.
+
+## 2026-10-16 — ReadWritePaths and proc environment are separate evidence
+
+Systemd writable scopes do not confer filesystem permissions. Prepare this DEV
+contract as its service user and require actual effective directory access and
+write access to existing state files. A fresh child proved setdefault-loaded env
+keys are absent from /proc/environ on this host; do not claim dynamic settings
+were observed there. Compare visible approved values, preserve strict pre-start
+inherited-override rejection, and keep application/config digest proof separate.
+External state routing must include exposed SSHMonitor downloads, and compatibility
+wrappers must preserve verification-mode CLI semantics as well as preparation.

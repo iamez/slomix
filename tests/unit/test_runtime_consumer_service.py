@@ -170,7 +170,7 @@ def test_consumer_units_scrub_import_environment(inputs, component):
     delivery.prepare(release, interpreter, environment, destination, release.name, component=component)
     unit = (destination / f'slomix-runtime-{component}.service').read_text()
     unset = next(line.split('=', 1)[1] for line in unit.splitlines() if line.startswith('UnsetEnvironment='))
-    assert set(unset.split()) == {'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH'}
+    assert set(unset.split()) == {'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT'}
 
 
 def test_consumer_preserves_standard_symlink_venv(inputs):
@@ -187,3 +187,19 @@ def test_consumer_preserves_standard_symlink_venv(inputs):
     record = delivery.prepare(release, interpreter, environment, destination, release.name, component='cache')
     assert record['interpreter'] == str(interpreter)
     assert delivery.verify_prepared(destination / 'contract.json')['prepared_files_match'] is True
+
+
+@pytest.mark.parametrize("equals", [False, True])
+def test_team_compatibility_cli_can_verify_prepared_contract(inputs, monkeypatch, capsys, equals):
+    import sys
+
+    from scripts import prepare_runtime_team_service as team
+
+    release, python, environment = inputs
+    destination = release.parent / "team-verify"
+    team.prepare(release, python, environment, destination, release.name)
+    path = str(destination / "contract.json")
+    args = ["--verify-contract=" + path] if equals else ["--verify-contract", path]
+    monkeypatch.setattr(sys, "argv", ["prepare_runtime_team_service.py", *args])
+    assert team.main() == 0
+    assert json.loads(capsys.readouterr().out)["component"] == "team"

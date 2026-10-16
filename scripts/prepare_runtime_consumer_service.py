@@ -75,7 +75,7 @@ EnvironmentFile={environment}
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONNOUSERSITE=1
 Environment=PYTHONUNBUFFERED=1
-UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH
+UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
 ExecStart={python} -m {spec['module']}
 Restart=on-failure
 RestartSec=5

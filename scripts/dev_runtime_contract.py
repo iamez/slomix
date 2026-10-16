@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pwd
 import re
 import sys
 from pathlib import Path
@@ -31,6 +32,28 @@ def canonical(path: Path, *, interpreter=False) -> Path:
                 else path.resolve(strict=True) != path)):
         raise ValueError("Expected existing canonical path without systemd metacharacters")
     return path
+
+
+def service_uid() -> int:
+    """Preparation must inspect access as the actual DEV service account."""
+    try:
+        return pwd.getpwnam("samba").pw_uid
+    except KeyError:
+        raise ValueError("DEV service account is unavailable") from None
+
+
+def require_state_access(path: Path, *, directory=True) -> None:
+    """ReadWritePaths does not grant Unix permissions; inspect effective access."""
+    if os.geteuid() != service_uid():
+        raise ValueError("Prepare the DEV contract as its service account")
+    if directory and not path.is_dir():
+        raise ValueError("State path must be a directory")
+    for parent in path.parents:
+        if not os.access(parent, os.X_OK, effective_ids=True):
+            raise ValueError("Service account cannot traverse state ancestors")
+    mode = os.R_OK | os.W_OK | (os.X_OK if directory else 0)
+    if not os.access(path, mode, effective_ids=True):
+        raise ValueError("Service account cannot read/write external state")
 
 
 def state_paths(state: Path, role: str) -> dict[str, Path]:
@@ -78,7 +101,7 @@ def build_contract(release: Path, state: Path, bot_python: Path, web_python: Pat
         env_digest = file_hash(env)
         values = read_external_environment(env, root=release, expected_digest=env_digest)
         reserved = {*BOOTSTRAP, "PATH", "SLOMIX_ENV_FILE", "SLOMIX_ENV_SHA256", "PYTHONPATH", "PYTHONHOME",
-                    "LD_PRELOAD", "LD_LIBRARY_PATH"}
+                    "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT"}
         if reserved & values.keys() or any(key.startswith("PYTHON") for key in values):
             raise ValueError("Bootstrap variables belong in the unit, not dotenv")
         if values.get("BOT_ENVIRONMENT") != "dev" or values.get("DATABASE_TYPE") != "postgresql":
@@ -94,10 +117,12 @@ def build_contract(release: Path, state: Path, bot_python: Path, web_python: Pat
         for name, path in state_paths(state, role).items():
             if values.get(name) != str(path):
                 raise ValueError(f"Expected dedicated external path for {name}")
-            canonical(path.parent if name == "METRICS_DB_PATH" else path)
+            selected = canonical(path.parent if name == "METRICS_DB_PATH" else path)
+            require_state_access(selected)
             if name == "METRICS_DB_PATH" and (path.exists() or path.is_symlink()):
                 if not canonical(path).is_file():
                     raise ValueError("Metrics database must be a regular state file")
+                require_state_access(path, directory=False)
         # The config files never enter writable scopes. Shared data is explicitly
         # mutable; archived backups and old installations must stay outside it.
         writable = [str(state / "data"), str(state / "logs" / role), str(state / "cache" / role)]

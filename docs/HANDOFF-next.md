@@ -41,6 +41,41 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-16 — DEV readiness access, monitor paths and CI follow-up
+
+PR #1096 CI at4f96e678 failed on two checks on both Python versions: the
+retro-viz OpenAPI description was stale (only that description differed), and
+an old maintenance test expected cwd/logs despite the shared test environment's
+BOT_LOG_DIR. Regenerated the PR snapshot (full source was already current);
+parameterized directory creation for unset/empty/external log paths.
+
+New review findings fixed: compatibility team CLI verifies contracts without
+injecting a conflicting preparation component; SSHMonitor downloads now use
+config.stats_directory (real local write with fake SSH/SCP, no remote transfer).
+DEV contracts require effective read/write/traverse permissions as the samba
+service account, including existing metrics DB files, not just ReadWritePaths.
+Preparation as another account is refused. CI fixtures substitute only service
+UID identity, retain actual chmod/access checks and restore directory modes.
+Consumer units also remove LD_AUDIT; explicit app config refuses loader overrides.
+
+Readiness accepts visible approved dotenv keys only with matching values and
+rejects mismatches, extra DB settings and loader injection. Correction to the
+review premise: an actual child load_environment/setdefault experiment loaded
+its synthetic key, while /proc/environ did NOT show that added key. Linux normally
+exposes exec-time environment there. This admits both exec-time shapes; it does
+not prove dynamic app configuration through proc. ExecStartPre still rejects
+inherited overrides, and the exact approved file digest remains checked.
+
+178 related tests passed; post-mutation narrower suite147 passed. Nine failures
+were observed across access(3), loaded-key(1), wrapper(2), SSH output(1) and audit
+environment(2) negative controls, each restored with cmp. Ancestor traversal was
+already refused by canonical resolution and is not credited as a new mutation.
+Actual offline CLI prepared three synthetic files; systemd-analyze verify passed
+both DEV units. Fake payload/interpreters only; no installation, service start,
+real dependency/DB startup proof or deployment. Existing legacy-test Ruff findings
+remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
+and additional review closure remain pending. Preserve original plan and queues.
+
 ## 2026-10-16 — Package bytes match captured Git blobs, including transient drift
 
 Corrected the provenance measurement: the existing SPA validator already denies
