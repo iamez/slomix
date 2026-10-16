@@ -41,6 +41,36 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-16 — Package bytes match captured Git blobs, including transient drift
+
+Corrected the provenance measurement: the existing SPA validator already denies
+an ordinary tracked-dirty tree. Two earlier mutation failures only changed the
+expected error boundary; they did not demonstrate unsafe payload acceptance.
+The relevant earlier checkpoint and lesson are corrected, retaining the history.
+Explicit package state checks still make that contract local and cover the final
+manifest boundary.
+
+A stronger race fixture copies temporarily modified runtime bytes, restores the
+source before clean snapshots, then briefly repeats the edit during real source
+hashing and restores again. With Git-blob comparison deliberately disabled, the
+old per-file comparison accepts a self-consistent manifest stamped with clean
+HEAD while its runtime payload differs from that committed blob. This unsafe
+synthetic artifact was independently verified and retained privately. Both
+transient-source and executable-mode mutations were seen failing; restored
+source cmp matched and both regressions passed.
+
+The builder now captures regular blob/mode identities from the exact Git tree,
+compares copied bytes via git hash-object --no-filters against those objects,
+and takes executable bits from committed mode, not mutable checkout metadata.
+This also preserves binaries on core.filemode=false filesystems. Fourteen
+package tests passed. This is point-in-time provenance under trusted stable
+output ownership, not a signature or hostile same-UID protection.
+Evidence: /tmp/slomix-package-blob-*, /tmp/slomix-package-race-negative-proof.log
+and /tmp/slomix-package-provenance-final.log; synthetic retained /var/tmp outputs.
+No active package, installed unit, application data or service was changed.
+Next: exact-head CI/review, then original source admission/D5 and owner gates.
+Original PLAN bytes and all pending runtime/UI work remain preserved.
+
 ## 2026-10-16 — Forward-only map alphabet and explicit rebuild dependencies
 
 Two later #1093 review findings: restrictive round-mapping FKs blocked explicit
@@ -99,9 +129,11 @@ systemd-analyze --user parses and separate verification CLIs pass. No unit is
 installed or started and configuration/handover remain unmeasured.
 
 103 selected tests passed, then 45 venv/contract tests including two added alias
-cases (overlapping, do not sum). All twelve targeted provenance/limit/venv/sync/
-consumer mutations were observed failing; restored sources cmp matched and all
-twelve regressions passed. Game guards independently had five detected failures
+cases (overlapping, do not sum). Twelve targeted mutations produced failures;
+two dirty-source cases failed on expected-message assertions while the existing
+SPA identity validator still rejected them. Those two are boundary duplication,
+not proof of unsafe payload acceptance. The other ten guards were seen failing;
+all twelve restored cases passed. Game guards independently had five detected failures
 and ten restored passes. Ruff and script Bandit gates pass. Evidence remains
 local in /tmp/slomix-app-review2*, /tmp/slomix-review2* and retained /var/tmp proofs.
 

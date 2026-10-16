@@ -67,6 +67,16 @@ def prepare(source: Path, destination: Path) -> dict:
     selected = sorted(name for name in paths if included(name))
     if not set(selected) >= EXPLICIT:
         raise ValueError('Required runtime files are missing from source')
+    committed = {}
+    for entry in git(source, 'ls-tree', '-r', '-z', target).split(b'\0'):
+        if entry:
+            metadata, name = entry.split(b'\t', 1)
+            committed[os.fsdecode(name)] = metadata.split()
+    for name in selected:
+        metadata = committed.get(name)
+        if (not metadata or metadata[0] not in (b'100644', b'100755')
+                or metadata[1] != b'blob'):
+            raise ValueError('Runtime input must be a committed regular blob')
     destination.mkdir(mode=0o755)  # exclusive; all failures preserve this directory
     for name in selected:
         reject_symlink_path(source, Path(name))
@@ -76,7 +86,7 @@ def prepare(source: Path, destination: Path) -> dict:
         output = destination / name
         output.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(origin, output)
-        output.chmod(0o755 if origin.stat().st_mode & 0o111 else 0o644)
+        output.chmod(0o755 if committed[name][0] == b'100755' else 0o644)
     for name in [*artifact['outputs'], SPA_MANIFEST]:
         output = destination / OUTPUT / name
         output.parent.mkdir(parents=True, exist_ok=True)
@@ -86,6 +96,9 @@ def prepare(source: Path, destination: Path) -> dict:
     for name in selected:
         if file_hash(destination / name) != file_hash(source / name):
             raise ValueError('Source changed during release preparation')
+        actual = git(source, 'hash-object', '--no-filters', '--', str(destination / name)).strip()
+        if actual != committed[name][2]:
+            raise ValueError('Copied runtime differs from its committed source blob')
     for name, digest in artifact['outputs'].items():
         if file_hash(destination / OUTPUT / name) != digest:
             raise ValueError('Copied SPA differs from verified artifact')

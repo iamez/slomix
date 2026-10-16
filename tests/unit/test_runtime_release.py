@@ -112,7 +112,7 @@ def test_dirty_tracked_runtime_bytes_cannot_ship_under_head(committed_runtime_so
     if staged:
         git(source, 'add', '--', 'bot/runtime.py')
     destination = source.parent / 'refused-dirty'
-    with pytest.raises(ValueError, match='clean committed'):
+    with pytest.raises(ValueError):
         package.prepare(source, destination)
     assert not destination.exists()
     assert runtime.read_text().endswith('# changed runtime source\n')
@@ -139,3 +139,59 @@ def test_tracked_drift_during_copy_retains_incomplete_unstamped_output(committed
     assert changed and destination.is_dir()
     assert not (destination / MANIFEST).exists()
     assert (source / 'bot/runtime.py').read_text().endswith('# mid-copy drift\n')
+
+
+def test_transient_runtime_drift_cannot_receive_the_original_commit_stamp(committed_runtime_source, monkeypatch):
+    source = committed_runtime_source
+    runtime = source / 'bot/runtime.py'
+    before = runtime.read_bytes()
+    copy_file, hash_file = package.shutil.copyfile, package.file_hash
+    changed = restored = False
+
+    poisoned = before + b'# transient runtime change\n'
+
+    def copy(*args, **kwargs):
+        nonlocal changed
+        if not changed:
+            runtime.write_bytes(poisoned)
+            changed = True
+        result = copy_file(*args, **kwargs)
+        if args[0] == runtime:
+            runtime.write_bytes(before)  # The next SPA/source snapshot sees clean HEAD.
+        return result
+
+    def digest(path):
+        nonlocal restored
+        if path == runtime:
+            assert runtime.read_bytes() == before
+            runtime.write_bytes(poisoned)  # A second edit coincides with source hashing.
+            try:
+                return hash_file(path)  # Actual bytes, not a fabricated hash value.
+            finally:
+                runtime.write_bytes(before)
+                restored = True
+        return hash_file(path)
+
+    monkeypatch.setattr(package.shutil, 'copyfile', copy)
+    monkeypatch.setattr(package, 'file_hash', digest)
+    destination = source.parent / 'transient-drift-output'
+    with pytest.raises(ValueError, match='committed source blob'):
+        package.prepare(source, destination)
+    assert changed and restored and runtime.read_bytes() == before
+    assert git(source, 'diff', '--name-only', 'HEAD', '--') == ''
+    assert destination.is_dir() and not (destination / MANIFEST).exists()
+
+
+def test_payload_executable_mode_comes_from_committed_tree(committed_runtime_source):
+    source = committed_runtime_source
+    runtime = source / 'bot/runtime.py'
+    git(source, 'config', 'core.filemode', 'false')
+    git(source, 'update-index', '--chmod=+x', '--', 'bot/runtime.py')
+    git(source, 'commit', '-m', 'fixture executable mode')
+    runtime.chmod(0o600)
+    build(source)
+    assert git(source, 'diff', '--name-only', 'HEAD', '--') == ''
+    destination = source.parent / 'committed-mode'
+    package.prepare(source, destination)
+    assert (destination / 'bot/runtime.py').stat().st_mode & 0o777 == 0o755
+    assert runtime.stat().st_mode & 0o777 == 0o600

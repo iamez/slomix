@@ -1047,10 +1047,11 @@ is interpreter selection evidence, not a dependency inventory certificate.
 
 ## 2026-10-16 — A clean artifact does not certify dirty runtime source
 
-SPA provenance and Git ls-files flags do not prove that tracked Python bytes
-match HEAD. Check tracked/index drift and exact HEAD before copy and before
-writing the release manifest, preserving partial outputs unstamped on failure.
-Staged, unstaged and mid-copy fixtures exercise these separate boundaries.
+SPA provenance already rejects an ordinary tracked-dirty snapshot; Git ls-files
+flags alone do not. That snapshot cannot certify bytes copied at another time.
+Keep local tracked/index guards, compare copied bytes to captured commit blobs,
+and preserve unstamped partial outputs. A transient edit/restoration fixture
+proved why self-consistent manifest hashes plus clean snapshots are insufficient.
 
 ## 2026-10-16 — Source admission must precede project imports
 
