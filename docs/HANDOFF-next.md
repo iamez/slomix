@@ -1,3 +1,46 @@
+# HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
+
+> **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
+> first, including its local-only runtime continuation path. All dated blocks
+> below are historical evidence, not current approval or deployment instructions.
+>
+> **Historical consolidation checkpoint — 2026-09-20.** Authority is docs/PLAN.md;
+> retain both historical handoff tracks below, not their old queue as current.
+> #1076 merged; #1057/#962 are conditionally approved. Runtime resumes at #1077
+> completion delivery/sealing after consolidation, then new-site audit and an
+> owner-approved reversible DEV transition. No deployment follows from merge.
+>
+> **Historical handoff override — 2026-09-07, Astra.** The "Astra execution
+> ledger" in `docs/PLAN.md` recorded that day's work; the sections below are a historical
+> snapshot, not the current queue. #955 and #912 are merged at `4f653c01`;
+> #961 merged as `28662f04`; its Claude handoff evidence is now included.
+> Merge, build, active service and runtime proof are separate states.
+> Astra did not execute the old review `cut --push`. AGENTS.md records a
+> narrow written exception for scripts/review_slices.sh and only the historical
+> review-base/NN-* and review/NN-* vehicles. This record neither revokes that
+> exception nor authorizes a new run or extends it to work branches. Consult
+> current owner instructions before changing any NEVER MERGE review vehicles.
+> Do NOT treat old server/browser commands as permission to start them.
+> Watchdog exists; delivery/retry proof is still required. Keep its 5-minute
+> cadence/two-failure policy unless explicitly changed, not a <=2-minute SLA.
+> Raw Codex hook input logging must be removed, not validated by logging
+> more real commands. Private Claude memory stays private.
+> Runtime starts with `round_stats_imported` in the canonical PG transaction,
+> NOT `round_ended` in the Discord mixin. Stability before development;
+> 1–2 week observation before activation, not before development.
+
+> **10. 9. 2026: novejša predaja je `docs/HANDOFF-fable-2026-09-10.md`** (9. 9. je posnetek tistega večera)
+>
+> **9. 9. 2026: `docs/HANDOFF-fable-2026-09-09.md`** (owner odsoten ~3 mesece; spider web
+> zaključen, merilnik podatkovnih točk 583 → 238, bot brez reakcij na Supove slike). Začni tam; ta datoteka ostaja
+> kot posnetek stanja 6. 9. in pravil.
+
+Vstopna točka za avtonomnega agenta. Vir resnice za načrt je `docs/PLAN.md`,
+pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
+KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
+`docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
+
+
 ## 2026-10-16 — Immutable application payload and external mutable state
 
 Next cohesive branch feat/runtime-app-delivery-20261016 is based on PR #1095
@@ -68,49 +111,6 @@ continue immutable application delivery, source admission/exclusive writer
 handover and observation. Retain pending proximity/gametime migrations, API,
 live mode, Spiderweb geometry/UI and all original roadmap items. Original plan
 bytes from 0261b076 remain intact. No activation follows from preparation.
-
-# HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
-
-> **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
-> first, including its local-only runtime continuation path. All dated blocks
-> below are historical evidence, not current approval or deployment instructions.
->
-> **Historical consolidation checkpoint — 2026-09-20.** Authority is docs/PLAN.md;
-> retain both historical handoff tracks below, not their old queue as current.
-> #1076 merged; #1057/#962 are conditionally approved. Runtime resumes at #1077
-> completion delivery/sealing after consolidation, then new-site audit and an
-> owner-approved reversible DEV transition. No deployment follows from merge.
->
-> **Historical handoff override — 2026-09-07, Astra.** The "Astra execution
-> ledger" in `docs/PLAN.md` recorded that day's work; the sections below are a historical
-> snapshot, not the current queue. #955 and #912 are merged at `4f653c01`;
-> #961 merged as `28662f04`; its Claude handoff evidence is now included.
-> Merge, build, active service and runtime proof are separate states.
-> Astra did not execute the old review `cut --push`. AGENTS.md records a
-> narrow written exception for scripts/review_slices.sh and only the historical
-> review-base/NN-* and review/NN-* vehicles. This record neither revokes that
-> exception nor authorizes a new run or extends it to work branches. Consult
-> current owner instructions before changing any NEVER MERGE review vehicles.
-> Do NOT treat old server/browser commands as permission to start them.
-> Watchdog exists; delivery/retry proof is still required. Keep its 5-minute
-> cadence/two-failure policy unless explicitly changed, not a <=2-minute SLA.
-> Raw Codex hook input logging must be removed, not validated by logging
-> more real commands. Private Claude memory stays private.
-> Runtime starts with `round_stats_imported` in the canonical PG transaction,
-> NOT `round_ended` in the Discord mixin. Stability before development;
-> 1–2 week observation before activation, not before development.
-
-> **10. 9. 2026: novejša predaja je `docs/HANDOFF-fable-2026-09-10.md`** (9. 9. je posnetek tistega večera)
->
-> **9. 9. 2026: `docs/HANDOFF-fable-2026-09-09.md`** (owner odsoten ~3 mesece; spider web
-> zaključen, merilnik podatkovnih točk 583 → 238, bot brez reakcij na Supove slike). Začni tam; ta datoteka ostaja
-> kot posnetek stanja 6. 9. in pravil.
-
-Vstopna točka za avtonomnega agenta. Vir resnice za načrt je `docs/PLAN.md`,
-pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
-KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
-`docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
-
 
 ## 2026-10-13 — Spiderweb review recovery and versioned research evidence
 
