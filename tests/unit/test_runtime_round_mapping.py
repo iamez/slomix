@@ -126,3 +126,9 @@ async def test_bound_replay_reconciles_only_default_team_effect(monkeypatch, def
     else:
         auto_assign.assert_awaited_once_with(3, '2026-09-25')
     assert manager.mark_file_processed.await_count == int(marked is not True)
+
+
+@pytest.mark.parametrize('name', ['map.v2', 'map+beta', 'SW_goldrush_te', 'plain-map'])
+def test_binding_accepts_transport_map_alphabet(name):
+    binding = replace(first_binding(), map_name=name, filename=f'2026-09-25-120000-{name}-round-1.txt')
+    assert binding.map_name == name

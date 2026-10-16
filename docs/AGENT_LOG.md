@@ -1003,3 +1003,11 @@ these distinct installation paths. Check the actual index keys/validity and
 use ON CONFLICT column inference for this shared tuple. A pg_constraint-only
 probe or ON CONSTRAINT target cannot represent the migration-created object.
 Native upgraded-schema acceptance must remain separate from unit SQL stubs.
+
+## 2026-10-16 — Extend mapping alphabets with a new migration
+
+The transport accepts periods/pluses in map names. Python binding validation and
+SQL checks must accept the same alphabet. Preserve 099 even before its PR merges
+when retained installations/candidates already reference its checksum; append104
+and update the effective schema/release contract. Never edit live ledger hashes
+to make a rewritten migration appear valid.

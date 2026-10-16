@@ -88,3 +88,88 @@ async def test_bound_warning_pair_persists_and_replays(full_import_db, tmp_path,
     assert await observer.fetch('SELECT validation_passed FROM runtime_events ORDER BY id') == events
     assert await observer.fetchval('SELECT count(*) FROM runtime_round_mappings') == 2
     print('BOUND WARNINGS: both canonical halves, false validation journal and mappings persist/replay once')
+
+
+@pytest.mark.parametrize('map_name', ['map.v2', 'map+beta', 'SW_goldrush_te'])
+async def test_map_alphabet_upgrade_and_bound_import(full_import_db, tmp_path, map_name):
+    from pathlib import Path
+
+    manager, conn = full_import_db
+    first, _ = completed_identity_pair(tmp_path, map_name=map_name)
+    if map_name != 'SW_goldrush_te':
+        await conn.execute('ALTER TABLE runtime_round_mappings DROP CONSTRAINT runtime_round_mappings_map_name_check')
+        await conn.execute("ALTER TABLE runtime_round_mappings ADD CONSTRAINT runtime_round_mappings_map_name_check CHECK (map_name ~ '^[A-Za-z0-9_-]{1,64}$')")
+        assert (await import_completed_round(manager, first, expected_identity=FIRST))[0] is False
+        assert await conn.fetchval('SELECT count(*) FROM rounds') == 0
+        assert await conn.fetchval('SELECT count(*) FROM runtime_events') == 0
+        assert await conn.fetchval('SELECT count(*) FROM processed_files') == 0
+        migration = Path(__file__).resolve().parents[2] / 'migrations/104_runtime_round_mapping_map_alphabet.sql'
+        await conn.execute(migration.read_text())
+    assert (await import_completed_round(manager, first, expected_identity=FIRST))[0] is True
+    assert await conn.fetchval('SELECT map_name FROM rounds WHERE round_number=1') == map_name
+    assert await conn.fetchval('SELECT map_name FROM runtime_round_mappings') == map_name
+    assert (await import_completed_round(manager, first, expected_identity=FIRST))[0] is True
+    assert await conn.fetchval('SELECT count(*) FROM runtime_round_mappings') == 1
+    print('MAP UPGRADE:', map_name, 'canonical mapping and replay verified')
+
+
+async def test_explicit_fresh_wipe_orders_runtime_children_and_rolls_back(full_import_db, tmp_path):
+    manager, conn = full_import_db
+    first, second = completed_identity_pair(tmp_path, balanced=True)
+    assert (await import_completed_round(manager, first, expected_identity=FIRST))[0] is True
+    assert (await import_completed_round(manager, second, first=first, expected_identity=SECOND))[0] is True
+    await conn.execute("INSERT INTO runtime_consumer_receipts(consumer_name,event_id) SELECT 'wipe-fixture',id FROM runtime_events")
+    await conn.execute("INSERT INTO runtime_cache_generations(cache_name,generation) VALUES ('wipe-fixture',3)")
+    await conn.execute("INSERT INTO user_permissions(discord_id,tier) VALUES (123,'admin')")
+    config = await conn.fetch('SELECT * FROM user_permissions ORDER BY id')
+    orders = {'rounds':'id', 'runtime_events':'id', 'runtime_round_mappings':'source_key,round_key',
+              'runtime_consumer_receipts':'consumer_name,event_id', 'runtime_cache_generations':'cache_name',
+              'player_comprehensive_stats':'id', 'weapon_comprehensive_stats':'id',
+              'processed_files':'filename', 'session_teams':'id'}
+    before = {name: await conn.fetch(f'SELECT * FROM {name} ORDER BY {order}') for name, order in orders.items()}
+    assert all(before[name] for name in ('rounds', 'runtime_events', 'runtime_round_mappings'))
+    # Native negative control: omit mapping cleanup, as in the old wipe list.
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+
+    original_pool = manager.pool
+
+    class SkipMappings:
+        def __init__(self, connection):
+            self.connection = connection
+
+        def __getattr__(self, name):
+            return getattr(self.connection, name)
+
+        async def execute(self, query, *args):
+            if query.startswith('DELETE FROM runtime_round_mappings'):
+                return 'DELETE 0'
+            return await self.connection.execute(query, *args)
+
+    @asynccontextmanager
+    async def skipping_pool():
+        async with original_pool.acquire() as connection:
+            yield SkipMappings(connection)
+
+    manager.pool = SimpleNamespace(acquire=skipping_pool)
+    try:
+        with pytest.raises(RuntimeError, match='runtime_round_mappings'):
+            await manager._wipe_all_tables()  # noqa: SLF001 -- native old-behavior negative control
+    finally:
+        manager.pool = original_pool
+    for name, order in orders.items():
+        assert await conn.fetch(f'SELECT * FROM {name} ORDER BY {order}') == before[name]
+    await conn.execute("CREATE FUNCTION fail_fixture_wipe() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic wipe failure'; END $$")
+    await conn.execute('CREATE TRIGGER fail_fixture_wipe BEFORE DELETE ON runtime_events FOR EACH ROW EXECUTE FUNCTION fail_fixture_wipe()')
+    with pytest.raises(RuntimeError, match='Transaction rolled back'):
+        await manager._wipe_all_tables()  # noqa: SLF001 -- explicit fixture-only destructive boundary
+    for name, order in orders.items():
+        assert await conn.fetch(f'SELECT * FROM {name} ORDER BY {order}') == before[name]
+    await conn.execute('DROP TRIGGER fail_fixture_wipe ON runtime_events')
+    await conn.execute('DROP FUNCTION fail_fixture_wipe()')
+    await manager._wipe_all_tables()  # noqa: SLF001 -- isolated fixture only, never application DB
+    for name in (*orders, 'processed_files', 'session_teams'):
+        rows = await conn.fetch(f'SELECT * FROM {name}')
+        assert len(rows) == await conn.fetchval(f'SELECT count(*) FROM {name}') == 0
+    assert await conn.fetch('SELECT * FROM user_permissions ORDER BY id') == config
+    print('FRESH WIPE: R2/R1 mapping, journal and receipts cleared atomically; config preserved; failure rolled back')
