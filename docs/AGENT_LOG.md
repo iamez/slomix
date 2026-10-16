@@ -1004,6 +1004,22 @@ weaken the outside-Git guard. AST imports alone also miss existing-module
 configuration integration and fixture exports; include their matching changes
 and run collection before claiming the extraction is complete.
 
+## 2026-10-16 — Prepared units and their manifest are separate integrity surfaces
+
+A valid startup-contract JSON does not prove its sibling service files are
+unchanged. Compare actual unit bytes against the freshly rebuilt contract,
+then recheck both hashes and contract after observation. Mutating this byte
+guard was observed failing for both roles. Keep all preparation proof distinct
+from installed-unit, dependency, schema, active-process and activation evidence.
+
+## 2026-10-16 — Keep the handoff routing preamble before the first H2
+
+Execution-ledger guards read the section preceding the first H2. Inserting a
+checkpoint at byte zero hides the authority/safety routing even if it remains
+later in the file. Insert newest checkpoints after the complete preamble and
+run test_execution_ledger_history_contract. Both original CI legs detected
+this placement mistake; the correction preserves all original lines.
+
 ## 2026-10-16 — Verify systemd empty-property claims on the actual manager
 
 Explicitly request --all for the supervisor property contract, but distinguish
@@ -1021,6 +1037,22 @@ use ON CONFLICT column inference for this shared tuple. A pg_constraint-only
 probe or ON CONSTRAINT target cannot represent the migration-created object.
 Native upgraded-schema acceptance must remain separate from unit SQL stubs.
 
+## 2026-10-16 — Preserve the venv interpreter's lexical leaf
+
+Resolving bin/python to the base executable loses pyvenv.cfg discovery. Permit
+that executable leaf link while keeping its bin/venv ancestors and config file
+canonical, then pin target bytes and verify sys.prefix through the lexical
+command. The observed standard venv test selected the intended prefix. This
+is interpreter selection evidence, not a dependency inventory certificate.
+
+## 2026-10-16 — A clean artifact does not certify dirty runtime source
+
+SPA provenance already rejects an ordinary tracked-dirty snapshot; Git ls-files
+flags alone do not. That snapshot cannot certify bytes copied at another time.
+Keep local tracked/index guards, compare copied bytes to captured commit blobs,
+and preserve unstamped partial outputs. A transient edit/restoration fixture
+proved why self-consistent manifest hashes plus clean snapshots are insufficient.
+
 ## 2026-10-16 — Source admission must precede project imports
 
 A tracked-clean Git tree can still contain untracked or ignored import shadows.
@@ -1037,6 +1069,17 @@ SQL checks must accept the same alphabet. Preserve 099 even before its PR merges
 when retained installations/candidates already reference its checksum; append104
 and update the effective schema/release contract. Never edit live ledger hashes
 to make a rewritten migration appear valid.
+
+## 2026-10-16 — ReadWritePaths and proc environment are separate evidence
+
+Systemd writable scopes do not confer filesystem permissions. Prepare this DEV
+contract as its service user and require actual effective directory access and
+write access to existing state files. A fresh child proved setdefault-loaded env
+keys are absent from /proc/environ on this host; do not claim dynamic settings
+were observed there. Compare visible approved values, preserve strict pre-start
+inherited-override rejection, and keep application/config digest proof separate.
+External state routing must include exposed SSHMonitor downloads, and compatibility
+wrappers must preserve verification-mode CLI semantics as well as preparation.
 
 ## 2026-10-16 — Additive aggregates require durable replay receipts
 

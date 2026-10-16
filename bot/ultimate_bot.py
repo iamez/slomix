@@ -58,6 +58,8 @@ except ImportError:
     WS_CLIENT_AVAILABLE = False
     StatsWebSocketClient = None
 
+# Environment has already been loaded before service imports.
+
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
 # Import our custom logging configuration

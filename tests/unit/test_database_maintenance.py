@@ -75,12 +75,23 @@ def test_init_starts_with_no_recent_runs(tmp_path, monkeypatch):
     assert m.last_cleanup is None
 
 
-def test_init_creates_backup_dir(tmp_path, monkeypatch):
-    """Constructor must create backup_dir so the first backup doesn't
-    crash on missing path."""
-    monkeypatch.chdir(tmp_path)
-    DatabaseMaintenance(bot=MagicMock(), db_path=None, admin_channel_id=42)
-    assert os.path.exists("logs/backups")
+@pytest.mark.parametrize("configured", [None, "", "external"])
+def test_init_creates_backup_dir(tmp_path, monkeypatch, configured):
+    """Create backups under the selected log root, respecting external state."""
+    release = tmp_path / "release"
+    release.mkdir()
+    monkeypatch.chdir(release)
+    if configured is None:
+        monkeypatch.delenv("BOT_LOG_DIR", raising=False)
+    else:
+        monkeypatch.setenv("BOT_LOG_DIR", str(tmp_path / "state/logs") if configured else "")
+    maintenance = DatabaseMaintenance(bot=MagicMock(), db_path=None, admin_channel_id=42)
+    expected = tmp_path / "state/logs" if configured else release / "logs"
+    assert os.path.realpath(maintenance.log_dir) == str(expected)
+    assert os.path.realpath(maintenance.backup_dir) == str(expected / "backups")
+    assert (expected / "backups").is_dir()
+    if configured:
+        assert not (release / "logs").exists()
 
 
 # ---------------------------------------------------------------------------

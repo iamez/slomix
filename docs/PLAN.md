@@ -37,6 +37,42 @@ Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
 all six review threads with evidence. Original runtime, Spiderweb and UI work
 remain preserved; merge approval and owner-run DEV activation are separate gates.
 
+## 2026-10-16 — DEV readiness access, monitor paths and CI follow-up
+
+PR #1096 CI at4f96e678 failed on two checks on both Python versions: the
+retro-viz OpenAPI description was stale (only that description differed), and
+an old maintenance test expected cwd/logs despite the shared test environment's
+BOT_LOG_DIR. Regenerated the PR snapshot (full source was already current);
+parameterized directory creation for unset/empty/external log paths.
+
+New review findings fixed: compatibility team CLI verifies contracts without
+injecting a conflicting preparation component; SSHMonitor downloads now use
+config.stats_directory (real local write with fake SSH/SCP, no remote transfer).
+DEV contracts require effective read/write/traverse permissions as the samba
+service account, including existing metrics DB files, not just ReadWritePaths.
+Preparation as another account is refused. CI fixtures substitute only service
+UID identity, retain actual chmod/access checks and restore directory modes.
+Consumer units also remove LD_AUDIT; explicit app config refuses loader overrides.
+
+Readiness accepts visible approved dotenv keys only with matching values and
+rejects mismatches, extra DB settings and loader injection. Correction to the
+review premise: an actual child load_environment/setdefault experiment loaded
+its synthetic key, while /proc/environ did NOT show that added key. Linux normally
+exposes exec-time environment there. This admits both exec-time shapes; it does
+not prove dynamic app configuration through proc. ExecStartPre still rejects
+inherited overrides, and the exact approved file digest remains checked.
+
+178 related tests passed; post-mutation narrower suite147 passed. Nine failures
+were observed across access(3), loaded-key(1), wrapper(2), SSH output(1) and audit
+environment(2) negative controls, each restored with cmp. Ancestor traversal was
+already refused by canonical resolution and is not credited as a new mutation.
+Actual offline CLI prepared three synthetic files; systemd-analyze verify passed
+both DEV units. Fake payload/interpreters only; no installation, service start,
+real dependency/DB startup proof or deployment. Existing legacy-test Ruff findings
+remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
+and additional review closure remain pending. Preserve original plan and queues.
+
+
 ## 2026-10-16 — Availability test controls the market transition explicitly
 
 #1095 bd6782ad React CI failed1 test/983passed: missing the bet-placed15 message
@@ -132,7 +168,6 @@ caller1 failure; actual ancestor dotenv leak1 failure. Every source restored wit
 cmp. No service, ET, migration, application write or production action. Refresh
 parents normally and run exact-head CI before final review closure. #1093 remains
 fully green and owner-specific merge approval is still pending. All plan retained.
-
 
 ## 2026-10-16 — Bound team contention remains retryable after canonical commit
 
@@ -239,6 +274,36 @@ Next: exact-head CI, review replies and normal dependency refresh1094–1096.
 All original runtime, handover, D5, proximity/gametime and UI plans remain open
 where previously recorded. Per-number owner permission still gates each merge.
 
+## 2026-10-16 — Package bytes match captured Git blobs, including transient drift
+
+Corrected the provenance measurement: the existing SPA validator already denies
+an ordinary tracked-dirty tree. Two earlier mutation failures only changed the
+expected error boundary; they did not demonstrate unsafe payload acceptance.
+The relevant earlier checkpoint and lesson are corrected, retaining the history.
+Explicit package state checks still make that contract local and cover the final
+manifest boundary.
+
+A stronger race fixture copies temporarily modified runtime bytes, restores the
+source before clean snapshots, then briefly repeats the edit during real source
+hashing and restores again. With Git-blob comparison deliberately disabled, the
+old per-file comparison accepts a self-consistent manifest stamped with clean
+HEAD while its runtime payload differs from that committed blob. This unsafe
+synthetic artifact was independently verified and retained privately. Both
+transient-source and executable-mode mutations were seen failing; restored
+source cmp matched and both regressions passed.
+
+The builder now captures regular blob/mode identities from the exact Git tree,
+compares copied bytes via git hash-object --no-filters against those objects,
+and takes executable bits from committed mode, not mutable checkout metadata.
+This also preserves binaries on core.filemode=false filesystems. Fourteen
+package tests passed. This is point-in-time provenance under trusted stable
+output ownership, not a signature or hostile same-UID protection.
+Evidence: /tmp/slomix-package-blob-*, /tmp/slomix-package-race-negative-proof.log
+and /tmp/slomix-package-provenance-final.log; synthetic retained /var/tmp outputs.
+No active package, installed unit, application data or service was changed.
+Next: exact-head CI/review, then original source admission/D5 and owner gates.
+Original PLAN bytes and all pending runtime/UI work remain preserved.
+
 ## 2026-10-16 — Forward-only map alphabet and explicit rebuild dependencies
 
 Two later #1093 review findings: restrictive round-mapping FKs blocked explicit
@@ -271,6 +336,44 @@ resolve review. Keep owner merge permissions per PR, source admission/exclusive
 handover, D5 and every original proximity/gametime/API/live/Spiderweb/UI item.
 Full original PLAN bytes remain preserved in the primary checkout. Production,
 services, installed units, application rows and old candidate packages untouched.
+
+## 2026-10-16 — Application delivery review closes state and provenance gaps
+
+#1096 now preserves the lexical bin/python leaf of ordinary symlink venvs for
+both DEV and standalone consumer units; venv/bin ancestors and pyvenv.cfg must
+remain canonical. Actual --without-pip venv execution confirmed sys.executable
+and sys.prefix select that venv, not the resolved base interpreter. Parent/config
+alias regressions still refuse. The compatibility wrapper explicitly exports
+canonical rather than leaving an unused import note unexplained.
+
+Packaging now checks clean tracked/index bytes against exact HEAD both before
+copying and before manifest creation, preserving its hidden-index flag guard.
+Staged/unstaged runtime changes refuse before destination creation; mid-copy
+drift retains incomplete output without a release stamp. Actual clean CLI still
+packages eighteen synthetic payload files, with independent SHA256 agreement.
+Health reads and compares resolved MemoryMax/CPUQuotaPerSecUSec, including empty
+or infinity overrides. Actual host formats were observed read-only.
+
+Both manual sync callbacks now download/list/verify the configured external
+stats directory. File-producing command fixtures exercise download and import
+arguments without SSH/Discord/DB transport and leave release cwd empty.
+Team/cache unit text clears inherited Python/loader variables; both actual
+systemd-analyze --user parses and separate verification CLIs pass. No unit is
+installed or started and configuration/handover remain unmeasured.
+
+103 selected tests passed, then 45 venv/contract tests including two added alias
+cases (overlapping, do not sum). Twelve targeted mutations produced failures;
+two dirty-source cases failed on expected-message assertions while the existing
+SPA identity validator still rejected them. Those two are boundary duplication,
+not proof of unsafe payload acceptance. The other ten guards were seen failing;
+all twelve restored cases passed. Game guards independently had five detected failures
+and ten restored passes. Ruff and script Bandit gates pass. Evidence remains
+local in /tmp/slomix-app-review2*, /tmp/slomix-review2* and retained /var/tmp proofs.
+
+Refresh parent #1095, publish and resolve exact-head CI/review. This remains
+preparation, not a new active release or complete dependency/schema acceptance.
+Original primary plan bytes, pending source admission/exclusive handover, D5,
+proximity/gametime/storage/API/live/Spiderweb/UI work all remain preserved.
 
 ## 2026-10-16 — Closed supervisor bootstrap and enforced resource contract
 
@@ -339,6 +442,56 @@ inspection. No service/game/database operation, deployment or PR merge occurred.
 Retain D5, source admission/exclusive writer handover, proximity/gametime/storage,
 API/live/Spiderweb/UI work and all original roadmap items. The full original
 plan remains byte-preserved in the primary development checkout.
+
+## 2026-10-16 — Immutable application payload and external mutable state
+
+Next cohesive branch feat/runtime-app-delivery-20261016 is based on PR #1095
+(a4095604), itself dependent on #1094 then #1093. None has number-specific merge
+permission. #1095 contains 32 changed paths independently measured by Git diff,
+tree objects and GitHub; CodeQL/security/JS/Lua/React/hygiene passed, full Python
+matrix was still running when this checkpoint was written.
+
+Application slice connects Git-free payload preparation/manifest build identity,
+offline DEV startup contract/unit verification, exact-process health checks and
+external configuration loaded before import-time constants. Bot metrics/audit,
+maintenance/shadow files and downloaded-stats lookup honor external state paths;
+comparison PNGs use memory and close attachments/figures on send failure.
+Retention can be explicitly disabled during handover. Retro gallery listing
+and byte serving share one external PNG-only root; missing explicit storage is
+unavailable, not silently empty. Independent gametime decoder work stays in the
+full development source, not accidentally copied with the bot entrypoint.
+
+107 selected tests passed (21.97s). Service-byte guard mutation failed both bot
+and web cases; restored copy cmp matched, then 40 related tests passed. Fixture
+credentials are generated. Ruff/Bandit medium-high gate pass; two narrowly
+annotated 0.0.0.0 literals only render/compare the existing DEV bind, never open
+sockets. A real CLI packaged 18 synthetic payload files, excluding .git/.env;
+Python SHA256 and sha256sum agree on every file. A separate CLI verified all
+three prepared contract/unit files, again with independent hashes. These are
+synthetic offline packaging proofs and ASGI fixture responses, not a new active
+release, real virtualenv inventory, installed units, live health or native DB
+acceptance. No service/game/migration/deployment operation occurred.
+
+Standalone team/cache delivery is included in PR #1096 with the compatibility
+team command and disabled configuration examples. Twenty consumer-delivery tests
+passed; actual separate CLI verification and systemd-analyze --user verify pass
+for both synthetic units, without installation or activation. A missing unit-hash
+guard is detected by mutation; restored cmp and regression pass. These user
+consumers are independent from the system DEV bot/web units.
+
+#1095 first full CI had exactly one documentation-routing failure on each leg:
+10288/10292 other tests passed (3.11/3.13). The leading checkpoint hid the required
+routing preamble from its guard. Moved checkpoints after the preamble preserving
+every line; eleven contract tests pass in both branches. #1095 c933793d and #1096
+include the correction, with normal dependency merge in #1096 (no PR merge).
+
+Evidence: /tmp/slomix-app-*.log; retained /var/tmp/slx-app-* proof directories.
+Next: publish/review and resolve exact-head CI; then source admission/exclusive
+writer handover, complete schema/application consolidation and D5 observation.
+Keep pending proximity/gametime migrations, storage relocation reconciliation,
+API/live/Spiderweb/UI and every original roadmap item. Original 0261b076 plan
+bytes remain intact in the preserved full development checkout. Preparation
+never authorizes activation; production remains untouched.
 
 ## 2026-10-16 — Immutable game delivery and supervised proof import
 
