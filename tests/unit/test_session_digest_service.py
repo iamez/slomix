@@ -215,7 +215,7 @@ async def test_fetch_kis_top_sends_internal_token(monkeypatch):
     assert "vid" in line
     assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
     assert sess.params == {"session_date": "2026-06-11", "limit": 3}
-    assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
+    assert sess.headers == {"X-Internal-Token": svc.config.internal_api_secret}
 
 
 @pytest.mark.asyncio
