@@ -81,6 +81,55 @@ def test_interrupted_check_permanently_invalidates_pin(child, approved, monkeypa
             pin.assert_current()
 
 
+@pytest.mark.parametrize('failure_at', [1, 2, 3, 4])
+def test_each_close_failure_still_releases_all_owned_handles(child, approved, monkeypatch, failure_at):
+    allocated, attempted = set(), []
+    real_open, real_pidfd, real_close = os.open, os.pidfd_open, os.close
+
+    def track_open(*args, **kwargs):
+        fd = real_open(*args, **kwargs)
+        allocated.add(fd)
+        return fd
+
+    def track_pidfd(*args, **kwargs):
+        fd = real_pidfd(*args, **kwargs)
+        allocated.add(fd)
+        return fd
+
+    def is_open(fd):
+        try:
+            os.fstat(fd)
+        except OSError as error:
+            assert error.errno == errno.EBADF
+            return False
+        return True
+
+    def close_then_fail(fd):
+        real_close(fd)
+        attempted.append(fd)
+        if len(attempted) == failure_at:
+            raise OSError('fixture close failure after release')
+
+    monkeypatch.setattr(os, 'open', track_open)
+    monkeypatch.setattr(os, 'pidfd_open', track_pidfd)
+    active = set()
+    try:
+        with pytest.raises(OSError, match='fixture close failure'), process.pin_process(child.pid, **approved) as pin:
+            active = {fd for fd in allocated if is_open(fd)}
+            assert len(active) == 4  # pidfd, proc directory, approved and actual executable.
+            monkeypatch.setattr(os, 'close', close_then_fail)
+        assert set(attempted) == active and len(attempted) == 4
+        assert not any(is_open(fd) for fd in active)
+        with pytest.raises(ValueError, match='invalidated'):
+            pin.assert_current()
+    finally:
+        monkeypatch.setattr(os, 'close', real_close)
+        # Contain descriptors even when a deliberate cleanup mutation fails.
+        for fd in active:
+            if is_open(fd):
+                real_close(fd)
+
+
 def test_real_exec_changes_executable_without_changing_pid(child, approved):
     with process.pin_process(child.pid, **approved) as pin:
         original = pin.identity

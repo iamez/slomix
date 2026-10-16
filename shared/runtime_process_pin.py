@@ -142,35 +142,41 @@ def pin_process(pid, *, expected_uid, expected_executable: Path, expected_sha256
         raise ValueError('Explicit absolute executable path required')
     if not isinstance(expected_sha256, str) or re.fullmatch(r'[0-9a-f]{64}', expected_sha256) is None:
         raise ValueError('Explicit approved executable SHA256 required')
-    owned, pin = [], None
+    pin = None
+    pidfd = os.pidfd_open(pid, 0)
     try:
-        pidfd = os.pidfd_open(pid, 0)
-        owned.append(pidfd)
         procfd = os.open(f'/proc/{pid}', os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW)
-        owned.append(procfd)
-        approved = os.open(expected_executable, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
-        owned.append(approved)
-        executable = _file_identity(approved)
-        actual = os.open('exe', os.O_RDONLY | os.O_CLOEXEC, dir_fd=procfd)
-        owned.append(actual)
-        if _file_identity(actual) != executable:
-            raise ValueError('Process does not run the approved executable inode')
-        digest, offset = hashlib.sha256(), 0
-        while offset < executable[2]:
-            chunk = os.pread(actual, min(1024 * 1024, executable[2] - offset), offset)
-            if not chunk:
-                raise ValueError('Executable shortened while hashing')
-            digest.update(chunk)
-            offset += len(chunk)
-        if digest.hexdigest() != expected_sha256 or _file_identity(actual) != executable:
-            raise ValueError('Executable digest or metadata disagrees with approval')
-        identity = ProcessIdentity(pid, expected_uid, _boot_id(),
-                                   _start_ticks(_read_at(procfd, 'stat', 4096), pid), expected_sha256)
-        pin = ProcessPin(identity, pidfd, procfd, executable)
-        pin.assert_current()
-        yield pin
+        try:
+            approved = os.open(expected_executable, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+            try:
+                executable = _file_identity(approved)
+                actual = os.open('exe', os.O_RDONLY | os.O_CLOEXEC, dir_fd=procfd)
+                try:
+                    if _file_identity(actual) != executable:
+                        raise ValueError('Process does not run the approved executable inode')
+                    digest, offset = hashlib.sha256(), 0
+                    while offset < executable[2]:
+                        chunk = os.pread(actual, min(1024 * 1024, executable[2] - offset), offset)
+                        if not chunk:
+                            raise ValueError('Executable shortened while hashing')
+                        digest.update(chunk)
+                        offset += len(chunk)
+                    if digest.hexdigest() != expected_sha256 or _file_identity(actual) != executable:
+                        raise ValueError('Executable digest or metadata disagrees with approval')
+                    identity = ProcessIdentity(pid, expected_uid, _boot_id(),
+                                               _start_ticks(_read_at(procfd, 'stat', 4096), pid), expected_sha256)
+                    pin = ProcessPin(identity, pidfd, procfd, executable)
+                    pin.assert_current()
+                    yield pin
+                finally:
+                    try:
+                        if pin is not None:
+                            pin.invalidate()
+                    finally:
+                        os.close(actual)
+            finally:
+                os.close(approved)
+        finally:
+            os.close(procfd)
     finally:
-        if pin is not None:
-            pin.invalidate()
-        for fd in reversed(owned):
-            os.close(fd)
+        os.close(pidfd)
