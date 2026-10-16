@@ -39,6 +39,7 @@ from discord.ext import tasks
 from bot.automation import SSHHandler
 from bot.core.dead_hours import DEAD_HOURS_END, is_dead_hour
 from bot.logging_config import get_logger
+from shared.endstats_retry import endstats_poll_pending
 
 logger = get_logger("bot.core")
 
@@ -237,6 +238,8 @@ class _MonitorTasksMixin:
 
             # Check each file
             new_files_count = 0
+            downloaded_files_count = 0
+            download_failures = 0
             for filename in sorted(remote_files):
                 is_endstats = filename.endswith('-endstats.txt')
 
@@ -255,15 +258,17 @@ class _MonitorTasksMixin:
                     # Download file
                     download_start = time.time()
                     local_path = await SSHHandler.download_file(
-                        ssh_config, filename, "local_stats"
+                        ssh_config, filename, self.config.stats_directory
                     )
                     download_time = time.time() - download_start
 
                     if local_path:
+                        downloaded_files_count += 1
                         logger.info(f"✅ Downloaded in {download_time:.2f}s: {local_path}")
 
                         # Track download time for grace period logic
-                        self.last_file_download_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
+                        if not (is_endstats and endstats_poll_pending(self, filename)):
+                            self.last_file_download_time = datetime.now()  # noqa: DTZ005 naive datetime intentional — local/UTC mix is project convention (CET game server + UTC prod). See PR #216 rationale
 
                         # Wait 3 seconds for file to fully write
                         logger.debug("⏳ Waiting 3s for file to fully write...")
@@ -319,6 +324,7 @@ class _MonitorTasksMixin:
                                 logger.warning(f"⚠️ Processing failed for {filename}: {error_msg}")
                                 logger.warning("⚠️ Skipping Discord post")
                     else:
+                        download_failures += 1
                         logger.error(f"❌ Download failed for {filename}")
 
             # Process Lua gametimes fallback files (JSON) if enabled
@@ -331,10 +337,21 @@ class _MonitorTasksMixin:
             if new_files_count == 0:
                 logger.debug(f"✅ All {len(remote_files)} files already processed")
             else:
-                logger.info(f"🎉 Processed {new_files_count} new file(s) this check")
+                logger.info(
+                    "SSH download summary: %s downloaded, %s failed, %s requested",
+                    downloaded_files_count, download_failures, new_files_count,
+                )
 
-            # Reset error tracking on successful cycle
-            await self.reset_error_tracking("ssh_monitor")
+            # Count a partially failed batch once, not once per file. Continue
+            # other downloads, but do not announce recovery while any failed.
+            if download_failures:
+                await self.track_error(
+                    "ssh_monitor",
+                    f"{download_failures} of {new_files_count} requested downloads failed",
+                    max_consecutive=3,
+                )
+            else:
+                await self.reset_error_tracking("ssh_monitor")
 
         except Exception as e:
             logger.error(f"❌ endstats_monitor error: {e}", exc_info=True)
