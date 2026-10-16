@@ -1003,3 +1003,11 @@ preparation to reject /tmp outputs as designed. Use a newly owned private
 weaken the outside-Git guard. AST imports alone also miss existing-module
 configuration integration and fixture exports; include their matching changes
 and run collection before claiming the extraction is complete.
+
+## 2026-10-16 — Verify systemd empty-property claims on the actual manager
+
+Explicitly request --all for the supervisor property contract, but distinguish
+portability from a reproduced incident: this host returns explicitly selected
+empty properties both with and without --all. The real reader accepted the
+stopped proof unit's empty namespace/cgroup. Regression guards the command
+flag; no service restart is needed for this read-only evidence.

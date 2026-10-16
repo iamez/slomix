@@ -37,7 +37,7 @@ def unit_properties(unit):
         raise ValueError('Explicit dedicated rehearsal unit name required')
     env = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C',
            'XDG_RUNTIME_DIR': f'/run/user/{os.getuid()}'}
-    result = subprocess.run(['/usr/bin/systemctl', '--user', 'show', unit,
+    result = subprocess.run(['/usr/bin/systemctl', '--user', 'show', '--all', unit,
                              '--property=' + ','.join(PROPERTIES)], env=env,
                             capture_output=True, text=True, check=True, timeout=5)
     if len(result.stdout) > 16384:
