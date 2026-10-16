@@ -15,7 +15,7 @@ from shared.runtime_spool import publish_stats_file
 from tests.unit.test_runtime_identity_contract import FIRST, SECOND
 
 
-def completed_identity_pair(root, declarations=None, *, line_ending=b'\n'):
+def completed_identity_pair(root, declarations=None, *, line_ending=b'\n', balanced=False):
     root.mkdir(mode=0o700, exist_ok=True)
     root.chmod(0o700)
     declarations = declarations if declarations is not None else [FIRST.encode(), SECOND.encode()]
@@ -26,6 +26,8 @@ def completed_identity_pair(root, declarations=None, *, line_ending=b'\n'):
         if declared is not None:
             header += b'\\' + (declared.encode() if isinstance(declared, str) else declared)
         raw = header + f'\n12345678\\Player\\1\\1\\1 {number} {number} {number} {number} {number}\n'.encode()
+        if balanced:
+            raw += f'87654321\\Opponent\\1\\2\\1 {number} {number} {number} {number} {number}\n'.encode()
         raw = raw.replace(b'\n', line_ending)
         digest, generation = hashlib.sha256(raw).hexdigest(), str(number) * 32
         directory = reserve_source_generation(root, generation)

@@ -1642,6 +1642,10 @@ class PostgreSQLDatabaseManager:
                 if mapped is not None:
                     if marker is None or marker['success'] is not True:
                         await self.mark_file_processed(filename, success=True, file_hash=payload_hash)
+                    # The canonical transaction may have committed before a cancelled
+                    # marker/team step. Reconcile the default R1 effect on replay.
+                    if runtime_binding.identity.round_number == 1 and not self.defer_team_assignment:
+                        await self._auto_assign_teams_from_r1(mapped, runtime_binding.filename[:10])
                     return True, 'Already mapped'
             if runtime_binding is None and await self.is_file_processed(filename):
                 self.stats['files_skipped'] += 1
@@ -1768,7 +1772,9 @@ class PostgreSQLDatabaseManager:
                             (type(event_id) is not int or event_id <= 0)):
                         raise ValueError('Deferred team assignment requires a durable import event')
                     if runtime_binding is not None:
-                        await record_round_mapping(conn, runtime_binding, round_id, payload_hash)
+                        await record_round_mapping(
+                            conn, runtime_binding, round_id, payload_hash,
+                            validation_passed=validation_passed)
 
             # Bound marker failures remain retryable after COMMIT; exact mapping
             # replay repairs the marker without touching stats or emitting again.

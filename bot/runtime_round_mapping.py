@@ -53,7 +53,7 @@ _FIELDS = ('source_key', 'round_key', 'match_key', 'round_number', 'first_round_
            'generation', 'filename', 'source_size', 'source_sha256', 'map_name')
 
 
-async def _parent(conn, binding, round_id, payload_hash):
+async def _parent(conn, binding, round_id, payload_hash, *, expected_validation=None):
     row = await conn.fetchrow('SELECT map_name,round_number,gaming_session_id,match_id,round_date,round_time '
                               'FROM rounds WHERE id=$1 FOR SHARE',
                               round_id)
@@ -66,7 +66,9 @@ async def _parent(conn, binding, round_id, payload_hash):
     event = await conn.fetchrow("SELECT source_filename,source_payload_sha256,validation_passed,"
                                "round_number,gaming_session_id FROM runtime_events "
                                "WHERE round_id=$1 AND event_type='round_stats_imported' FOR SHARE", round_id)
-    if (event is None or tuple(event) != (binding.filename, payload_hash, True,
+    if (event is None or type(event['validation_passed']) is not bool
+            or (expected_validation is not None and event['validation_passed'] is not expected_validation)
+            or tuple(event) != (binding.filename, payload_hash, event['validation_passed'],
                                         binding.identity.round_number, row['gaming_session_id'])):
         raise ValueError('Mapped canonical journal missing or changed')
 
@@ -100,11 +102,13 @@ async def require_first_mapping(conn, binding):
     await _parent(conn, first, row['canonical_round_id'], row['payload_sha256'])
 
 
-async def record_round_mapping(conn, binding, round_id, payload_hash):
+async def record_round_mapping(conn, binding, round_id, payload_hash, *, validation_passed):
+    if type(validation_passed) is not bool:
+        raise ValueError('Mapping requires the actual validation boolean')
     if not conn.is_in_transaction():
         raise RuntimeError('Round mapping requires import transaction')
     await require_first_mapping(conn, binding)
-    await _parent(conn, binding, round_id, payload_hash)
+    await _parent(conn, binding, round_id, payload_hash, expected_validation=validation_passed)
     await conn.execute('INSERT INTO runtime_round_mappings (' + ','.join(_FIELDS) +
                        ',canonical_round_id,payload_sha256) VALUES '
                        '($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)',

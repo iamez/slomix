@@ -83,7 +83,7 @@ async def test_preserved_schema_branches(has_session, has_identity, session_id):
     assert json.loads(first[1][1]) == ['b']  # R1 defenders remain Team A.
     assert json.loads(second[1][1]) == ['a']
     for query, args in conn.writes:
-        assert ('ON CONFLICT ON CONSTRAINT' in query) == has_identity
+        assert ('ON CONFLICT (session_identity, map_name, team_name)' in query) == has_identity
         assert len(args) == (5 if has_session else 4)
         assert args[3].tzinfo is None  # Preserve naive local timestamp storage.
     lookup = next(query for query, _ in conn.queries if 'COUNT(*)' in query)

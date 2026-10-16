@@ -186,7 +186,7 @@ async def _assign_round_teams(conn, *, round_id: int, session_date: str) -> Team
                     INSERT INTO session_teams
                     (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
                     VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4, $5)
-                    ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
+                    ON CONFLICT (session_identity, map_name, team_name) DO UPDATE SET
                         player_guids = EXCLUDED.player_guids,
                         player_names = EXCLUDED.player_names,
                         created_at = EXCLUDED.created_at,
@@ -205,7 +205,7 @@ async def _assign_round_teams(conn, *, round_id: int, session_date: str) -> Team
                     INSERT INTO session_teams
                     (session_start_date, map_name, team_name, player_guids, player_names, created_at, gaming_session_id)
                     VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4, $5)
-                    ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
+                    ON CONFLICT (session_identity, map_name, team_name) DO UPDATE SET
                         player_guids = EXCLUDED.player_guids,
                         player_names = EXCLUDED.player_names,
                         created_at = EXCLUDED.created_at,
@@ -261,7 +261,7 @@ async def _assign_round_teams(conn, *, round_id: int, session_date: str) -> Team
                     INSERT INTO session_teams
                     (session_start_date, map_name, team_name, player_guids, player_names, created_at)
                     VALUES ($1, 'ALL', 'Team A', $2::jsonb, $3::jsonb, $4)
-                    ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
+                    ON CONFLICT (session_identity, map_name, team_name) DO UPDATE SET
                         player_guids = EXCLUDED.player_guids,
                         player_names = EXCLUDED.player_names,
                         created_at = EXCLUDED.created_at
@@ -278,7 +278,7 @@ async def _assign_round_teams(conn, *, round_id: int, session_date: str) -> Team
                     INSERT INTO session_teams
                     (session_start_date, map_name, team_name, player_guids, player_names, created_at)
                     VALUES ($1, 'ALL', 'Team B', $2::jsonb, $3::jsonb, $4)
-                    ON CONFLICT ON CONSTRAINT session_teams_identity_unique DO UPDATE SET
+                    ON CONFLICT (session_identity, map_name, team_name) DO UPDATE SET
                         player_guids = EXCLUDED.player_guids,
                         player_names = EXCLUDED.player_names,
                         created_at = EXCLUDED.created_at

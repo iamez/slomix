@@ -994,3 +994,12 @@ Tests must inspect those conditions and buffer work, not only index presence.
 Retain ambiguity detection and NULL-session parents; never make this UNIQUE or
 partial on session readiness. TEMP local-buffer timing is not cold production
 latency. Preserve migration/bootstrap/release parity; apply only via owner deploy.
+
+## 2026-10-16 — Migration-created indexes and snapshot constraints differ
+
+Migration 036 creates the session-team uniqueness object with CREATE UNIQUE
+INDEX; the schema snapshot adds a UNIQUE constraint. Source inspection proves
+these distinct installation paths. Check the actual index keys/validity and
+use ON CONFLICT column inference for this shared tuple. A pg_constraint-only
+probe or ON CONSTRAINT target cannot represent the migration-created object.
+Native upgraded-schema acceptance must remain separate from unit SQL stubs.
