@@ -180,7 +180,9 @@ def properties(spec, pid):
                 Environment=" ".join(shlex.quote(f"{k}={v}") for k, v in spec["environment"].items()),
                 EnvironmentFiles="", PassEnvironment="", UnsetEnvironment="", ProtectSystem="strict",
                 NoNewPrivileges="yes", PrivateTmp="yes", ReadOnlyPaths=" ".join(spec["read_only"]),
-                ReadWritePaths=" ".join(spec["read_write"]))
+                ReadWritePaths=" ".join(spec["read_write"]),
+                MemoryMax={"1G": "1073741824", "512M": "536870912"}[spec["memory_max"]],
+                CPUQuotaPerSecUSec={"200%": "2s", "100%": "1s"}[spec["cpu_quota"]])
 
 
 @pytest.mark.parametrize("damage", [None, "Environment", "ProtectSystem", "ReadWritePaths", "ExecStartPre", "UnsetEnvironment"])
@@ -256,3 +258,51 @@ async def test_disabled_retention_preserves_old_files_and_backups(inputs, monkey
     assert await maintenance.cleanup_old_logs() == 0
     await maintenance._cleanup_old_backups()  # noqa: SLF001 - guard entrypoint
     assert before == {path: file_hash(path) for path in paths}
+
+
+def test_standard_symlink_venv_keeps_lexical_executable_and_prefix(inputs):
+    import subprocess
+    import sys
+
+    venv = inputs['release'].parent.parent / 'envs' / 'symlink-proof' / 'bot'
+    subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(venv)],
+                   check=True, capture_output=True, timeout=20)
+    python = venv / 'bin/python'
+    assert python.is_symlink()
+    values = inputs | {'bot_python': python}
+    record = contract.build_contract(**values)
+    assert record['services']['etlegacy-bot']['argv'][0] == str(python)
+    observed = subprocess.check_output([str(python), '-I', '-c',
+                                       'import json,sys; print(json.dumps([sys.executable,sys.prefix]))'],
+                                      text=True, timeout=10)
+    assert json.loads(observed) == [str(python), str(venv)]
+
+
+@pytest.mark.parametrize('property_name,value', [('MemoryMax', 'infinity'), ('MemoryMax', ''),
+                                               ('CPUQuotaPerSecUSec', 'infinity'),
+                                               ('CPUQuotaPerSecUSec', '')])
+def test_resolved_resource_overrides_refuse_readiness(inputs, property_name, value):
+    record = contract.build_contract(**inputs)
+    spec = record['services']['etlegacy-bot']
+    values = properties(spec, 123)
+    health.release_unit_matches('etlegacy-bot', values, spec)
+    values[property_name] = value
+    with pytest.raises(ValueError, match='configuration differs'):
+        health.release_unit_matches('etlegacy-bot', values, spec)
+
+
+@pytest.mark.parametrize('alias', ['venv', 'config'])
+def test_venv_link_support_does_not_allow_parent_or_config_aliases(inputs, alias):
+    if alias == 'venv':
+        original = inputs['bot_python'].parent.parent
+        linked = original.parent.parent / 'alias' / 'bot'
+        linked.parent.mkdir()
+        linked.symlink_to(original, target_is_directory=True)
+        inputs['bot_python'] = linked / 'bin/python'
+    else:
+        config = inputs['bot_python'].parent.parent / 'pyvenv.cfg'
+        held = config.with_name('retained-venv-config')
+        config.rename(held)
+        config.symlink_to(held)
+    with pytest.raises(ValueError, match='canonical'):
+        contract.build_contract(**inputs)

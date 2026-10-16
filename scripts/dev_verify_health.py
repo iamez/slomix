@@ -32,6 +32,8 @@ def release_unit_matches(name, values, specification):
             or values.get('PassEnvironment') or values.get('UnsetEnvironment')
             or values.get('EnvironmentFiles')
             or values.get('ProtectSystem') != 'strict'
+            or not values.get('MemoryMax') or values.get('MemoryMax') != {'1G': '1073741824', '512M': '536870912'}.get(specification['memory_max'])
+            or not values.get('CPUQuotaPerSecUSec') or values.get('CPUQuotaPerSecUSec') != {'200%': '2s', '100%': '1s'}.get(specification['cpu_quota'])
             or values.get('NoNewPrivileges') != 'yes' or values.get('PrivateTmp') != 'yes'
             or set(shlex.split(values.get('ReadOnlyPaths', ''))) != set(specification['read_only'])
             or set(shlex.split(values.get('ReadWritePaths', ''))) != set(specification['read_write'])
@@ -50,6 +52,7 @@ def units(run, contract=None):
             '-p', 'ExecStart', '-p', 'User', '-p', 'PassEnvironment', '-p', 'Group',
             '-p', 'UnsetEnvironment', '-p', 'ExecStartPre', '-p', 'ProtectSystem',
             '-p', 'ReadOnlyPaths', '-p', 'ReadWritePaths', '-p', 'NoNewPrivileges', '-p', 'PrivateTmp',
+            '-p', 'MemoryMax', '-p', 'CPUQuotaPerSecUSec',
         ], text=True, timeout=5)
         values = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
         if values.get('LoadState') != 'loaded' or values.get('WorkingDirectory') != str(directory):

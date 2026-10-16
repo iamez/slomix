@@ -14,6 +14,8 @@ from scripts.prepare_runtime_consumer_service import (
     prepare as prepare_consumer,
 )
 
+__all__ = ['canonical', 'prepare', 'main']
+
 
 def prepare(release, python, environment, destination, expected_commit):
     return prepare_consumer(release, python, environment, destination,

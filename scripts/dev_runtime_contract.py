@@ -24,10 +24,11 @@ IDENTITIES = {
 BOOTSTRAP = {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
 
 
-def canonical(path: Path) -> Path:
+def canonical(path: Path, *, interpreter=False) -> Path:
     path = Path(path)
     if (not re.fullmatch(r"/[A-Za-z0-9_./-]+", str(path))
-            or path.resolve(strict=True) != path):
+            or (path.parent.resolve(strict=True) != path.parent if interpreter
+                else path.resolve(strict=True) != path)):
         raise ValueError("Expected existing canonical path without systemd metacharacters")
     return path
 
@@ -63,7 +64,9 @@ def build_contract(release: Path, state: Path, bot_python: Path, web_python: Pat
         raise ValueError("Expected releases/<SHA> and sibling shared state directory")
     services = {}
     for role, python, env in (("bot", bot_python, bot_env), ("web", web_python, web_env)):
-        python, env = canonical(python), canonical(env)
+        # Preserve bin/python's lexical path so Python can find pyvenv.cfg.
+        # Only this leaf may be a link; the venv/bin ancestors stay canonical.
+        python, env = canonical(python, interpreter=True), canonical(env)
         venv = python.parent.parent
         if (python.name != "python" or python.parent.name != "bin" or venv.name != role
                 or not venv.is_relative_to(release.parent.parent / "envs")

@@ -88,3 +88,54 @@ def test_package_prepares_only_allowed_runtime_files_and_never_overwrites(source
     assert verify_release(destination) == record
     assert git(source, 'rev-parse', 'HEAD') == before
     assert (source / '.env').read_text() == 'PRIVATE_DO_NOT_COPY=fixture\n'
+
+
+@pytest.fixture
+def committed_runtime_source(source_fixture):  # noqa: F811 -- imported pytest fixture
+    source, _ = source_fixture
+    for name in package.EXPLICIT:
+        path = source / name
+        if not path.exists():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text('# synthetic, never executed\n')
+    git(source, 'add', '--', *sorted(package.EXPLICIT))
+    git(source, 'commit', '-m', 'fixture runtime inputs')
+    build(source)
+    return source
+
+
+@pytest.mark.parametrize('staged', [False, True])
+def test_dirty_tracked_runtime_bytes_cannot_ship_under_head(committed_runtime_source, staged):
+    source = committed_runtime_source
+    runtime = source / 'bot/runtime.py'
+    runtime.write_text(runtime.read_text() + '# changed runtime source\n')
+    if staged:
+        git(source, 'add', '--', 'bot/runtime.py')
+    destination = source.parent / 'refused-dirty'
+    with pytest.raises(ValueError, match='clean committed'):
+        package.prepare(source, destination)
+    assert not destination.exists()
+    assert runtime.read_text().endswith('# changed runtime source\n')
+
+
+def test_tracked_drift_during_copy_retains_incomplete_unstamped_output(committed_runtime_source, monkeypatch):
+    source = committed_runtime_source
+    original = package.shutil.copyfile
+    changed = False
+
+    def copy(*args, **kwargs):
+        nonlocal changed
+        result = original(*args, **kwargs)
+        if not changed:
+            path = source / 'bot/runtime.py'
+            path.write_text(path.read_text() + '# mid-copy drift\n')
+            changed = True
+        return result
+
+    monkeypatch.setattr(package.shutil, 'copyfile', copy)
+    destination = source.parent / 'retained-partial'
+    with pytest.raises(ValueError):
+        package.prepare(source, destination)
+    assert changed and destination.is_dir()
+    assert not (destination / MANIFEST).exists()
+    assert (source / 'bot/runtime.py').read_text().endswith('# mid-copy drift\n')

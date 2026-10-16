@@ -122,3 +122,39 @@ async def test_compare_chart_uses_memory_and_closes_attachment(external_state, m
     assert captured[0].closed
     assert plt.get_fignums() == []
     assert list(release.iterdir()) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('command', ['sync_stats', 'sync_historical'])
+async def test_manual_sync_commands_use_external_stats(external_state, command):
+    from bot.cogs.sync_cog import SyncCog
+
+    release, state = external_state
+    stats = state / 'stats'
+    filename = '2026-09-25-120000-supply-round-1.txt'
+
+    async def download(config, name, directory):
+        path = Path(directory) / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b'synthetic file, not imported\n')
+        return str(path)
+
+    bot = SimpleNamespace(
+        config=SimpleNamespace(stats_directory=str(stats)), ssh_enabled=True,
+        ssh_list_remote_files=AsyncMock(return_value=[filename]),
+        ssh_download_file=AsyncMock(side_effect=download),
+        process_gamestats_file=AsyncMock(return_value={'success': True}),
+        file_tracker=SimpleNamespace(should_process_file=AsyncMock(return_value=True)),
+    )
+    message = SimpleNamespace(edit=AsyncMock())
+    ctx = SimpleNamespace(send=AsyncMock(return_value=message))
+    cog = SyncCog(bot)
+    if command == 'sync_stats':
+        await SyncCog.sync_stats.callback(cog, ctx, period='all')
+        bot.process_gamestats_file.assert_awaited_once_with(str(stats / filename), filename)
+    else:
+        await SyncCog.sync_historical.callback(cog, ctx)
+        bot.process_gamestats_file.assert_not_awaited()
+    assert bot.ssh_download_file.await_args.args[-1] == str(stats)
+    assert (stats / filename).read_bytes() == b'synthetic file, not imported\n'
+    assert list(release.iterdir()) == []

@@ -41,6 +41,42 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-16 — Application delivery review closes state and provenance gaps
+
+#1096 now preserves the lexical bin/python leaf of ordinary symlink venvs for
+both DEV and standalone consumer units; venv/bin ancestors and pyvenv.cfg must
+remain canonical. Actual --without-pip venv execution confirmed sys.executable
+and sys.prefix select that venv, not the resolved base interpreter. Parent/config
+alias regressions still refuse. The compatibility wrapper explicitly exports
+canonical rather than leaving an unused import note unexplained.
+
+Packaging now checks clean tracked/index bytes against exact HEAD both before
+copying and before manifest creation, preserving its hidden-index flag guard.
+Staged/unstaged runtime changes refuse before destination creation; mid-copy
+drift retains incomplete output without a release stamp. Actual clean CLI still
+packages eighteen synthetic payload files, with independent SHA256 agreement.
+Health reads and compares resolved MemoryMax/CPUQuotaPerSecUSec, including empty
+or infinity overrides. Actual host formats were observed read-only.
+
+Both manual sync callbacks now download/list/verify the configured external
+stats directory. File-producing command fixtures exercise download and import
+arguments without SSH/Discord/DB transport and leave release cwd empty.
+Team/cache unit text clears inherited Python/loader variables; both actual
+systemd-analyze --user parses and separate verification CLIs pass. No unit is
+installed or started and configuration/handover remain unmeasured.
+
+103 selected tests passed, then 45 venv/contract tests including two added alias
+cases (overlapping, do not sum). All twelve targeted provenance/limit/venv/sync/
+consumer mutations were observed failing; restored sources cmp matched and all
+twelve regressions passed. Game guards independently had five detected failures
+and ten restored passes. Ruff and script Bandit gates pass. Evidence remains
+local in /tmp/slomix-app-review2*, /tmp/slomix-review2* and retained /var/tmp proofs.
+
+Refresh parent #1095, publish and resolve exact-head CI/review. This remains
+preparation, not a new active release or complete dependency/schema acceptance.
+Original primary plan bytes, pending source admission/exclusive handover, D5,
+proximity/gametime/storage/API/live/Spiderweb/UI work all remain preserved.
+
 ## 2026-10-16 — Import-consumer review follow-up before parent merge
 
 PR #1093 received three additional Codex findings after its earlier green CI.

@@ -29,10 +29,11 @@ COMPONENTS = {
 }
 
 
-def canonical(path):
+def canonical(path, *, interpreter=False):
     path = Path(path)
     if (not re.fullmatch(r'/[A-Za-z0-9_./-]+', str(path))
-            or path.resolve(strict=True) != path):
+            or (path.parent.resolve(strict=True) != path.parent if interpreter
+                else path.resolve(strict=True) != path)):
         raise ValueError('Existing canonical path without systemd expansions required')
     return path
 
@@ -41,7 +42,8 @@ def prepare(release, python, environment, destination, expected_commit, *, compo
     if component not in COMPONENTS:
         raise ValueError('Unknown runtime consumer')
     spec = COMPONENTS[component]
-    release, python, environment = map(canonical, (release, python, environment))
+    release, environment = map(canonical, (release, environment))
+    python = canonical(python, interpreter=True)
     record = verify_release(release)
     if (not re.fullmatch(r'[0-9a-f]{40}', expected_commit)
             or record['source_commit'] != expected_commit or release.name != expected_commit):
@@ -73,6 +75,7 @@ EnvironmentFile={environment}
 Environment=PYTHONDONTWRITEBYTECODE=1
 Environment=PYTHONNOUSERSITE=1
 Environment=PYTHONUNBUFFERED=1
+UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH
 ExecStart={python} -m {spec['module']}
 Restart=on-failure
 RestartSec=5
@@ -123,7 +126,7 @@ def verify_prepared(contract_path):
     if manifest['source_commit'] != record['source_commit'] or release.name != record['source_commit']:
         raise ValueError('Prepared release identity changed')
     environment = canonical(record['environment'])
-    interpreter = canonical(record['interpreter'])
+    interpreter = canonical(record['interpreter'], interpreter=True)
     info = environment.stat()
     if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
             or stat.S_IMODE(info.st_mode) != 0o600 or environment.is_relative_to(release)):

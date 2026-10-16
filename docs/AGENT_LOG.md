@@ -1036,3 +1036,18 @@ these distinct installation paths. Check the actual index keys/validity and
 use ON CONFLICT column inference for this shared tuple. A pg_constraint-only
 probe or ON CONSTRAINT target cannot represent the migration-created object.
 Native upgraded-schema acceptance must remain separate from unit SQL stubs.
+
+## 2026-10-16 — Preserve the venv interpreter's lexical leaf
+
+Resolving bin/python to the base executable loses pyvenv.cfg discovery. Permit
+that executable leaf link while keeping its bin/venv ancestors and config file
+canonical, then pin target bytes and verify sys.prefix through the lexical
+command. The observed standard venv test selected the intended prefix. This
+is interpreter selection evidence, not a dependency inventory certificate.
+
+## 2026-10-16 — A clean artifact does not certify dirty runtime source
+
+SPA provenance and Git ls-files flags do not prove that tracked Python bytes
+match HEAD. Check tracked/index drift and exact HEAD before copy and before
+writing the release manifest, preserving partial outputs unstamped on failure.
+Staged, unstaged and mid-copy fixtures exercise these separate boundaries.

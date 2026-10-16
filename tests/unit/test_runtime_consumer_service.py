@@ -68,6 +68,8 @@ def test_prepare_separate_default_off_units(inputs, component):
 
 
 def test_compatibility_team_entrypoint(inputs):
+    assert 'canonical' in team.__all__
+    assert team.canonical is delivery.canonical
     release, interpreter, environment = inputs
     output = release.parent / 'compatibility'
     assert team.prepare(release, interpreter, environment, output,
@@ -159,3 +161,29 @@ def test_verification_rejects_fifo_unit_without_opening_it(inputs, monkeypatch):
     monkeypatch.setattr(delivery, 'file_hash', hash_regular_only)
     with pytest.raises(ValueError, match='regular file'):
         delivery.verify_prepared(destination / 'contract.json')
+
+
+@pytest.mark.parametrize('component', ['team', 'cache'])
+def test_consumer_units_scrub_import_environment(inputs, component):
+    release, interpreter, environment = inputs
+    destination = release.parent / component
+    delivery.prepare(release, interpreter, environment, destination, release.name, component=component)
+    unit = (destination / f'slomix-runtime-{component}.service').read_text()
+    unset = next(line.split('=', 1)[1] for line in unit.splitlines() if line.startswith('UnsetEnvironment='))
+    assert set(unset.split()) == {'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH'}
+
+
+def test_consumer_preserves_standard_symlink_venv(inputs):
+    import subprocess
+    import sys
+
+    release, _, environment = inputs
+    venv = release.parent / 'venv'
+    subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(venv)],
+                   check=True, capture_output=True, timeout=20)
+    interpreter = venv / 'bin/python'
+    assert interpreter.is_symlink()
+    destination = release.parent / 'linked-consumer'
+    record = delivery.prepare(release, interpreter, environment, destination, release.name, component='cache')
+    assert record['interpreter'] == str(interpreter)
+    assert delivery.verify_prepared(destination / 'contract.json')['prepared_files_match'] is True

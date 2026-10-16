@@ -42,6 +42,16 @@ def included(name: str) -> bool:
             or (name.startswith('migrations/') and len(parts) == 2 and name.endswith('.sql')))
 
 
+def verify_source_state(source: Path, target: str) -> None:
+    """A manifest SHA cannot label tracked bytes from a different tree/index."""
+    if (git(source, 'rev-parse', 'HEAD').decode().strip() != target
+            or git(source, 'diff', '--name-only', '-z', 'HEAD', '--')):
+        raise ValueError('Release source must remain at its clean committed revision')
+    entries = git(source, 'ls-files', '-v', '-z').split(b'\0')
+    if any(entry[:1].islower() or entry.startswith(b'S ') for entry in entries if entry):
+        raise ValueError('Source has hidden index flags')
+
+
 def prepare(source: Path, destination: Path) -> dict:
     source = source.resolve(strict=True)
     destination = destination.absolute()
@@ -50,10 +60,8 @@ def prepare(source: Path, destination: Path) -> dict:
         raise ValueError('Destination must be NEW under a canonical existing parent')
     if any((ancestor / '.git').exists() for ancestor in (parent, *parent.parents)):
         raise ValueError('Release destination must be outside every Git checkout')
-    entries = git(source, 'ls-files', '-v', '-z').split(b'\0')
-    if any(entry[:1].islower() or entry.startswith(b'S ') for entry in entries if entry):
-        raise ValueError('Source has hidden index flags')
     target = git(source, 'rev-parse', 'HEAD').decode().strip()
+    verify_source_state(source, target)
     artifact = validate(source, source / OUTPUT, target)
     paths = [os.fsdecode(p) for p in git(source, 'ls-files', '-z').split(b'\0') if p]
     selected = sorted(name for name in paths if included(name))
@@ -81,6 +89,7 @@ def prepare(source: Path, destination: Path) -> dict:
     for name, digest in artifact['outputs'].items():
         if file_hash(destination / OUTPUT / name) != digest:
             raise ValueError('Copied SPA differs from verified artifact')
+    verify_source_state(source, target)
     files = {name: file_hash(path) for name, path in sorted(payload_files(destination).items())}
     record = {'version': 1, 'source_commit': target, 'files': files}
     with (destination / MANIFEST).open('x', encoding='utf-8') as stream:
