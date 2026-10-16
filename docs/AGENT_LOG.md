@@ -1020,3 +1020,12 @@ these distinct installation paths. Check the actual index keys/validity and
 use ON CONFLICT column inference for this shared tuple. A pg_constraint-only
 probe or ON CONSTRAINT target cannot represent the migration-created object.
 Native upgraded-schema acceptance must remain separate from unit SQL stubs.
+
+## 2026-10-16 — Source admission must precede project imports
+
+A tracked-clean Git tree can still contain untracked or ignored import shadows.
+The supervisor CLI starts in -I mode, delays project imports until a closed
+source/index inventory and exact commit pass, and disables bytecode writes. Use
+a dedicated clean checkout and external environment/state; generated inputs
+cannot be treated as source. Protocol fixtures do not prove installed-unit or
+physical-engine admission.

@@ -48,7 +48,8 @@ def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferr
 
 def stopped():
     return dict(module.POLICY, Id=UNIT, ActiveState='inactive', MainPID='0',
-                ControlGroup='', InvocationID=INVOCATION, Result='success')
+                ControlGroup='', InvocationID=INVOCATION, Result='success',
+                UnsetEnvironment=' '.join(module.CLEARED_ENVIRONMENT))
 
 
 @pytest.mark.parametrize('field', list(module.POLICY))
@@ -159,7 +160,7 @@ def test_team_policy_refused_before_containment_or_launch(monkeypatch, tmp_path,
 
 def test_new_process_deferred_without_target_is_redacted_refusal(tmp_path):
     script = Path(module.__file__).resolve()
-    result = subprocess.run([sys.executable, str(script), 'run', '--directory', str(tmp_path),
+    result = subprocess.run([sys.executable, '-I', str(script), 'run', '--directory', str(tmp_path),
                              '--unit', UNIT, '--commit', 'b' * 40, '--defer-team-assignment'],
                             capture_output=True, text=True, timeout=10)
     import json
@@ -193,3 +194,89 @@ def test_property_probe_explicitly_requests_empty_systemd_properties(monkeypatch
     values = module.unit_properties(UNIT)
     assert values['NetworkNamespacePath'] == ''
     assert values['ControlGroup'] == ''
+
+
+@pytest.mark.parametrize('shadow', ['asyncpg.py', 'shared/unknown.py', '__pycache__/asyncpg.pyc', 'ignored.py'])
+def test_source_gate_rejects_untracked_and_ignored_inputs(tmp_path, shadow):
+    from tests.unit.test_spa_artifact_preflight import git
+
+    git(tmp_path, 'init', '-b', 'fixture')
+    git(tmp_path, 'config', 'user.name', 'Fixture')
+    git(tmp_path, 'config', 'user.email', 'fixture@example.invalid')
+    git(tmp_path, 'config', 'core.hooksPath', str(tmp_path / 'absent-hooks'))
+    (tmp_path / '.gitignore').write_text('ignored.py\n__pycache__/\n')
+    (tmp_path / 'tracked.py').write_text('# trusted fixture\n')
+    git(tmp_path, 'add', '--', '.gitignore', 'tracked.py')
+    git(tmp_path, 'commit', '-m', 'fixture')
+    head = git(tmp_path, 'rev-parse', 'HEAD')
+    module.verify_source(tmp_path, head)
+    path = tmp_path / shadow
+    path.parent.mkdir(exist_ok=True)
+    path.write_text('raise RuntimeError("must never execute")\n')
+    with pytest.raises(ValueError, match='closed'):
+        module.verify_source(tmp_path, head)
+    assert path.exists()
+
+
+def test_isolated_supervisor_loads_no_project_dependency_before_admission(tmp_path):
+    import json
+
+    scripts = tmp_path / 'scripts'
+    scripts.mkdir()
+    script = scripts / 'runtime_game_supervisor.py'
+    script.write_bytes(Path(module.__file__).read_bytes())
+    sentinel = tmp_path / 'unexpected-import'
+    for name in ('asyncpg', 'shared', 'json'):
+        (scripts / f'{name}.py').write_text(f'open({str(sentinel)!r}, "w").write("unsafe")\n')
+        (tmp_path / f'{name}.py').write_text(f'open({str(sentinel)!r}, "w").write("unsafe")\n')
+    for options in ([], ['-I']):
+        result = subprocess.run([sys.executable, *options, str(script), 'run', '--directory', str(tmp_path),
+                                 '--unit', UNIT, '--commit', 'a' * 40, '--defer-team-assignment'],
+                                capture_output=True, text=True, timeout=10)
+        assert result.returncode == 1
+        assert json.loads(result.stderr)['status'] == 'refused_or_failed'
+        if not options:
+            assert json.loads(result.stderr)['reason'] == 'isolated_python_required'
+        assert not sentinel.exists() and not result.stdout
+
+
+@pytest.mark.parametrize('unset,allowed', [('', False), ('PYTHONPATH', False),
+    ('PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH EXTRA', False),
+    ('LD_LIBRARY_PATH LD_PRELOAD PYTHONHOME PYTHONPATH', True)])
+def test_unit_requires_the_complete_import_environment_scrub(monkeypatch, unset, allowed):
+    values = stopped() | {'UnsetEnvironment': unset}
+    monkeypatch.setattr(module.subprocess, 'run', lambda *args, **kwargs:
+                        SimpleNamespace(stdout='\n'.join(f'{k}={v}' for k, v in values.items())))
+    if allowed:
+        assert module.unit_properties(UNIT)['UnsetEnvironment'] == unset
+    else:
+        with pytest.raises(ValueError, match='environment is not cleared'):
+            module.unit_properties(UNIT)
+
+
+@pytest.mark.parametrize('flag', ['--assume-unchanged', '--skip-worktree'])
+def test_source_gate_refuses_hidden_index_flags(tmp_path, flag):
+    from tests.unit.test_spa_artifact_preflight import git
+
+    git(tmp_path, 'init', '-b', 'fixture')
+    git(tmp_path, 'config', 'user.name', 'Fixture')
+    git(tmp_path, 'config', 'user.email', 'fixture@example.invalid')
+    git(tmp_path, 'config', 'core.hooksPath', str(tmp_path / 'absent-hooks'))
+    (tmp_path / 'tracked.py').write_text('# committed\n')
+    git(tmp_path, 'add', '--', 'tracked.py')
+    git(tmp_path, 'commit', '-m', 'fixture')
+    head = git(tmp_path, 'rev-parse', 'HEAD')
+    git(tmp_path, 'update-index', flag, '--', 'tracked.py')
+    (tmp_path / 'tracked.py').write_text('# changed despite hidden index flag\n')
+    with pytest.raises(ValueError, match='hidden index flags'):
+        module.verify_source(tmp_path, head)
+
+
+@pytest.mark.parametrize('name', ['MemoryMax', 'TasksMax', 'LimitFSIZE', 'LimitCORE', 'NoNewPrivileges', 'UMask'])
+def test_required_resource_properties_cannot_be_omitted(monkeypatch, name):
+    values = stopped()
+    values.pop(name, None)
+    monkeypatch.setattr(module.subprocess, 'run', lambda *args, **kwargs:
+                        SimpleNamespace(stdout='\n'.join(f'{k}={v}' for k, v in values.items())))
+    with pytest.raises(ValueError, match='policy disagrees'):
+        module.unit_properties(UNIT)
