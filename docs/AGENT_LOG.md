@@ -1011,3 +1011,11 @@ unchanged. Compare actual unit bytes against the freshly rebuilt contract,
 then recheck both hashes and contract after observation. Mutating this byte
 guard was observed failing for both roles. Keep all preparation proof distinct
 from installed-unit, dependency, schema, active-process and activation evidence.
+
+## 2026-10-16 — Keep the handoff routing preamble before the first H2
+
+Execution-ledger guards read the section preceding the first H2. Inserting a
+checkpoint at byte zero hides the authority/safety routing even if it remains
+later in the file. Insert newest checkpoints after the complete preamble and
+run test_execution_ledger_history_contract. Both original CI legs detected
+this placement mistake; the correction preserves all original lines.

@@ -27,6 +27,19 @@ synthetic offline packaging proofs and ASGI fixture responses, not a new active
 release, real virtualenv inventory, installed units, live health or native DB
 acceptance. No service/game/migration/deployment operation occurred.
 
+Standalone team/cache delivery is included in PR #1096 with the compatibility
+team command and disabled configuration examples. Twenty consumer-delivery tests
+passed; actual separate CLI verification and systemd-analyze --user verify pass
+for both synthetic units, without installation or activation. A missing unit-hash
+guard is detected by mutation; restored cmp and regression pass. These user
+consumers are independent from the system DEV bot/web units.
+
+#1095 first full CI had exactly one documentation-routing failure on each leg:
+10288/10292 other tests passed (3.11/3.13). The leading checkpoint hid the required
+routing preamble from its guard. Moved checkpoints after the preamble preserving
+every line; eleven contract tests pass in both branches. #1095 c933793d and #1096
+include the correction, with normal dependency merge in #1096 (no PR merge).
+
 Evidence: /tmp/slomix-app-*.log; retained /var/tmp/slx-app-* proof directories.
 Next: publish/review and resolve exact-head CI; then source admission/exclusive
 writer handover, complete schema/application consolidation and D5 observation.
