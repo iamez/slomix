@@ -1029,3 +1029,11 @@ source/index inventory and exact commit pass, and disables bytecode writes. Use
 a dedicated clean checkout and external environment/state; generated inputs
 cannot be treated as source. Protocol fixtures do not prove installed-unit or
 physical-engine admission.
+
+## 2026-10-16 — Extend mapping alphabets with a new migration
+
+The transport accepts periods/pluses in map names. Python binding validation and
+SQL checks must accept the same alphabet. Preserve 099 even before its PR merges
+when retained installations/candidates already reference its checksum; append104
+and update the effective schema/release contract. Never edit live ledger hashes
+to make a rewritten migration appear valid.
