@@ -1440,6 +1440,21 @@ class PostgreSQLDatabaseManager:
             RuntimeError: If any tables fail to wipe, indicating database is in inconsistent state
         """
         tables = [
+            # Explicit fresh rebuild clears runtime provenance too. Ordinary
+            # round deletion still preserves the historical journal.
+            'runtime_gametime_applications',
+            'runtime_gametime_links',
+            'runtime_gametime_identities',
+            'runtime_gametime_sources',
+            'runtime_proximity_mappings',
+            'lua_correction_receipts',
+            'lua_correction_attempts',
+            'lua_correction_inputs',
+            'runtime_consumer_receipts',
+            'runtime_cache_generations',
+            'runtime_round_mappings',
+            'runtime_events',
+            'proximity_processed_files',
             # Children of rounds (FK or CASCADE)
             'weapon_comprehensive_stats',
             'player_comprehensive_stats',
@@ -1485,6 +1500,9 @@ class PostgreSQLDatabaseManager:
                     if not table_exists:
                         logger.info(f"   ⏭️  Skipped {table} (does not exist)")
                         continue
+                    if table == 'runtime_round_mappings':
+                        # R2 references R1 with RESTRICT; release that dependency first.
+                        await conn.execute('DELETE FROM runtime_round_mappings WHERE round_number=2')
                     await conn.execute(f"DELETE FROM {table}")
                     logger.info(f"   ✅ Wiped {table}")
                 except Exception as e:

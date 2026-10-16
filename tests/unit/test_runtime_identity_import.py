@@ -15,14 +15,14 @@ from shared.runtime_spool import publish_stats_file
 from tests.unit.test_runtime_identity_contract import FIRST, SECOND
 
 
-def completed_identity_pair(root, declarations=None, *, line_ending=b'\n', balanced=False):
+def completed_identity_pair(root, declarations=None, *, line_ending=b'\n', balanced=False, map_name='supply'):
     root.mkdir(mode=0o700, exist_ok=True)
     root.chmod(0o700)
     declarations = declarations if declarations is not None else [FIRST.encode(), SECOND.encode()]
     inputs = []
     for number, declared in enumerate(declarations, 1):
-        filename = f'2026-09-25-120000-supply-round-{number}.txt'
-        header = f'x\\supply\\x\\{number}\\2\\1\\20:00\\10:00\\600000'.encode()
+        filename = f'2026-09-25-120000-{map_name}-round-{number}.txt'
+        header = f'x\\{map_name}\\x\\{number}\\2\\1\\20:00\\10:00\\600000'.encode()
         if declared is not None:
             header += b'\\' + (declared.encode() if isinstance(declared, str) else declared)
         raw = header + f'\n12345678\\Player\\1\\1\\1 {number} {number} {number} {number} {number}\n'.encode()

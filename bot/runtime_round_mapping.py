@@ -29,7 +29,7 @@ class StatsRoundBinding:
             raise ValueError('Invalid mapped full digest')
         if type(self.size) is not int or not 0 < self.size <= 8 * 1024 * 1024:
             raise ValueError('Invalid mapped source size')
-        if not isinstance(self.map_name, str) or re.fullmatch(r'[A-Za-z0-9_-]{1,64}', self.map_name) is None:
+        if not isinstance(self.map_name, str) or re.fullmatch(r'[A-Za-z0-9_.+-]{1,64}', self.map_name) is None:
             raise ValueError('Invalid mapped map')
         expected = rf'\d{{4}}-\d{{2}}-\d{{2}}-\d{{6}}-{re.escape(self.map_name)}-round-{self.identity.round_number}\.txt'
         if not isinstance(self.filename, str) or re.fullmatch(expected, self.filename) is None:

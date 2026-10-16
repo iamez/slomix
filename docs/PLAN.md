@@ -1,3 +1,36 @@
+## 2026-10-16 — Forward-only map alphabet and explicit rebuild dependencies
+
+Two later #1093 review findings: restrictive round-mapping FKs blocked explicit
+fresh rebuild; binding/SQL map validation was narrower than the sealed transport.
+The explicit wipe now clears known optional runtime/proximity/gametime children,
+receipts, mappings and journal in dependency order before canonical rounds,
+deleting R2 mappings before R1. Config tables remain excluded. Ordinary round
+deletes still retain journal history; no live wipe or repair was performed.
+Native fixture adds an omitted-mapping negative control, late-failure rollback,
+full row preservation comparisons, final zero counts by two paths and retained
+user-permission config.
+
+New migration104_runtime_round_mapping_map_alphabet.sql relaxes only the map
+check to the existing [A-Za-z0-9_.+-] transport alphabet. Migration099 bytes and
+its checksum remain unchanged, even though its PR is still open. Both schema
+snapshots append the effective104 alteration; release configuration includes104
+(after103 in full source, after099 in this earlier consolidated branch).
+Do not apply it to an application DB without the owner migration procedure.
+
+106 selected local tests passed; eight native cases skipped while the private
+cluster is offline. Added four native cases: period/plus upgraded-schema import
+and replay, mixed-case map acceptance, and transactional explicit wipe. CI on
+PG14/PG17 must prove them before closing these two new review threads. Earlier
+968712a8 passed9210/9214 tests with all eight previous native additions executed;
+that is separate from the newer104 head. Original migration099 compared equal
+through both current-file and committed-file paths. New evidence stays local.
+
+Next: publish, run exact-head native acceptance, refresh dependent1094–1096 and
+resolve review. Keep owner merge permissions per PR, source admission/exclusive
+handover, D5 and every original proximity/gametime/API/live/Spiderweb/UI item.
+Full original PLAN bytes remain preserved in the primary checkout. Production,
+services, installed units, application rows and old candidate packages untouched.
+
 ## 2026-10-16 — Import-consumer review follow-up before parent merge
 
 PR #1093 received three additional Codex findings after its earlier green CI.
