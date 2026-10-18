@@ -203,3 +203,67 @@ def test_team_compatibility_cli_can_verify_prepared_contract(inputs, monkeypatch
     monkeypatch.setattr(sys, "argv", ["prepare_runtime_team_service.py", *args])
     assert team.main() == 0
     assert json.loads(capsys.readouterr().out)["component"] == "team"
+
+
+@pytest.mark.parametrize('component', ['team', 'cache'])
+@pytest.mark.parametrize('change', ['command', 'sandbox', 'guard'])
+def test_rehashed_unit_cannot_change_consumer_policy(inputs, component, change):
+    release, interpreter, environment = inputs
+    destination = release.parent / component
+    delivery.prepare(release, interpreter, environment, destination, release.name, component=component)
+    unit = destination / f'slomix-runtime-{component}.service'
+    original = unit.read_text()
+    if change == 'command':
+        altered = original.replace(f'ExecStart={interpreter} -B -m', 'ExecStart=/bin/false #')
+    elif change == 'sandbox':
+        altered = original.replace(f'ReadOnlyPaths={release}\n', '')
+    else:
+        altered = '\n'.join(line for line in original.splitlines() if not line.startswith('ExecStartPre=')) + '\n'
+    assert altered != original
+    unit.write_text(altered)
+    contract = destination / 'contract.json'
+    record = json.loads(contract.read_text())
+    record['unit_sha256'] = file_hash(unit)
+    contract.write_text(json.dumps(record))
+    with pytest.raises(ValueError, match='consumer policy'):
+        delivery.verify_prepared(contract)
+
+
+def test_mount_guard_refuses_actual_writable_release_without_writing(inputs):
+    import os
+    import subprocess
+    import sys
+
+    release, _, _ = inputs
+    assert not os.statvfs(release).f_flag & os.ST_RDONLY
+    before = verify_release(release)
+    result = subprocess.run([sys.executable, '-I', '-B', '-c', delivery.READ_ONLY_RELEASE_CHECK],
+                            cwd=release, capture_output=True, timeout=10)
+    assert result.returncode == 1
+    assert result.stdout == result.stderr == b''
+    assert verify_release(release) == before
+
+
+@pytest.mark.parametrize('writable', [None, '.', 'shared', 'shared/runtime_cache_main.py'])
+def test_mount_guard_checks_release_and_all_descendants(inputs, monkeypatch, writable):
+    import os
+    from types import SimpleNamespace
+
+    release, _, _ = inputs
+    monkeypatch.chdir(release)
+    observed = set()
+
+    def filesystem_flags(path):
+        name = path.relative_to(release).as_posix()
+        observed.add(name)
+        return SimpleNamespace(f_flag=0 if name == writable else os.ST_RDONLY)
+
+    monkeypatch.setattr(os, 'statvfs', filesystem_flags)
+    with pytest.raises(SystemExit) as exit_info:
+        exec(delivery.READ_ONLY_RELEASE_CHECK, {})  # noqa: S102 -- constant unit guard, no external code
+    assert exit_info.value.code == (0 if writable is None else 1)
+    assert '.' in observed
+    if writable is None:
+        assert observed == {'.', *(p.relative_to(release).as_posix() for p in release.rglob('*'))}
+    else:
+        assert writable in observed

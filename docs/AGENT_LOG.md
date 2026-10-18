@@ -1301,3 +1301,36 @@ No merge occurred; request unambiguous owner permission for#1093 before retry.
 Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
 all six review threads with evidence. Original runtime, Spiderweb and UI work
 remain preserved; merge approval and owner-run DEV activation are separate gates.
+
+## 2026-10-18 — Effective DEV health and consumer protection review closure
+
+Addressed six new#1096 findings. Prepared system units now unset all five unsafe
+Python/loader variables; readiness verifies the resolved filter and exact
+Restart=always/RestartUSec=10s. Actual process environment must be approved dotenv,
+prepared bootstrap or a fixed safe OS metadata allowlist; unknown application
+settings such as BETS_LIFECYCLE_SECONDS are refused, not silently inherited.
+
+A healthy website and active bot PID are insufficient. Bot emits a PID/invocation
+journal marker only at successful end of on_ready, after security/voice startup.
+The health gate requires matching journal unit/PID/invocation and fresh timestamp,
+then rechecks services. This proves startup completion, not continuous Discord
+connectivity. Current deployed builds lack this marker and are not certified by
+the new source. Read-only host checks verified actual Restart/RestartUSec and
+journald PID/invocation/unit/timestamp fields. No new service or message ran.
+
+Consumer verifier regenerates exact required unit bytes instead of trusting a
+jointly modified unit and digest. User units require PrivateUsers and ReadOnlyPaths;
+isolated prestart checks actual ST_RDONLY on the release and descendants before
+worker imports. Unsupported/ignored sandboxing fails closed on writable mounts.
+Actual protection after activation remains required_at_start_unmeasured: no
+mount/service was started, and a verifier report is not a kernel-enforcement proof.
+
+Combined app health/consumer fixtures124passed. Five parent guard/signal mutations
+each caused1observed failure; consumer semantic mutation6failures, disabled mount
+guard1failure; all restored withcmp. Native writable-filesystem child refuses;
+actual on_ready tests cover success/security rejection/startup exception with
+mock transports. Ruff and diff checks pass. Next: refresh reviewed parent,
+publish this slice, inspect exact-head CI and answer all six review comments.
+Production audit silence remains owner-pending; DEV temporary audit=false is
+confirmed active after the separately documented diagnostic recovery. No agent
+service command, DB write, migration, browser or production deployment occurred.

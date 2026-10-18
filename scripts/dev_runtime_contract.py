@@ -23,6 +23,7 @@ IDENTITIES = {
     "web": ("localhost", "5432", "etlegacy", "website_app"),
 }
 BOOTSTRAP = {"PYTHONDONTWRITEBYTECODE": "1", "PYTHONNOUSERSITE": "1"}
+UNSET_ENVIRONMENT = ("PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT")
 
 
 def canonical(path: Path, *, interpreter=False) -> Path:
@@ -144,6 +145,7 @@ def build_contract(release: Path, state: Path, bot_python: Path, web_python: Pat
             "venv_config_sha256": file_hash(venv / "pyvenv.cfg"),
             "memory_max": "1G" if role == "bot" else "512M",
             "cpu_quota": "200%" if role == "bot" else "100%",
+            "unset_environment": list(UNSET_ENVIRONMENT), "restart": "always", "restart_usec": "10s",
         }
     return {"version": 1, "release": str(release), "state": str(state),
             "revision": record["source_commit"], "services": services}
@@ -180,10 +182,11 @@ User={service['user']}
 Group={service['group']}
 WorkingDirectory={service['cwd']}
 {environment}
+UnsetEnvironment={' '.join(service['unset_environment'])}
 ExecStartPre={' '.join(service['pre_argv'])}
 ExecStart={' '.join(service['argv'])}
-Restart=always
-RestartSec=10
+Restart={service['restart']}
+RestartSec={service['restart_usec']}
 MemoryMax={service['memory_max']}
 CPUQuota={service['cpu_quota']}
 StandardOutput=journal

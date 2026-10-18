@@ -65,6 +65,7 @@ def test_preparation_has_no_secrets_and_never_overwrites(inputs, tmp_path):
         assert _FIXTURE_PASSWORD not in path.read_text()
     unit = (output / "etlegacy-bot.service").read_text()
     assert "ExecStartPre=" in unit and "--release-mode" in unit
+    assert 'UnsetEnvironment=' + ' '.join(contract.UNSET_ENVIRONMENT) in unit
     assert "ProtectSystem=strict" in unit and "PYTHONDONTWRITEBYTECODE=1" in unit
     assert "EnvironmentFile=" not in unit
     with pytest.raises(ValueError, match="NEW"):
@@ -182,14 +183,15 @@ def properties(spec, pid):
                 WorkingDirectory=spec["cwd"], User="samba", Group="samba",
                 ExecStart=command(spec["argv"]), ExecStartPre=command(spec["pre_argv"]),
                 Environment=" ".join(shlex.quote(f"{k}={v}") for k, v in spec["environment"].items()),
-                EnvironmentFiles="", PassEnvironment="", UnsetEnvironment="", ProtectSystem="strict",
+                EnvironmentFiles="", PassEnvironment="", UnsetEnvironment=" ".join(spec['unset_environment']), ProtectSystem="strict",
+                Restart=spec['restart'], RestartUSec=spec['restart_usec'], InvocationID='a' * 32,
                 NoNewPrivileges="yes", PrivateTmp="yes", ReadOnlyPaths=" ".join(spec["read_only"]),
                 ReadWritePaths=" ".join(spec["read_write"]),
                 MemoryMax={"1G": "1073741824", "512M": "536870912"}[spec["memory_max"]],
                 CPUQuotaPerSecUSec={"200%": "2s", "100%": "1s"}[spec["cpu_quota"]])
 
 
-@pytest.mark.parametrize("damage", [None, "Environment", "ProtectSystem", "ReadWritePaths", "ExecStartPre", "UnsetEnvironment"])
+@pytest.mark.parametrize("damage", [None, "Environment", "ProtectSystem", "ReadWritePaths", "ExecStartPre", "UnsetEnvironment", "Restart", "RestartUSec", "InvocationID"])
 def test_resolved_unit_matches_exact_contract(inputs, monkeypatch, damage):
     record = contract.build_contract(**inputs)
     def output(argv, **kwargs):
@@ -206,13 +208,17 @@ def test_resolved_unit_matches_exact_contract(inputs, monkeypatch, damage):
         assert health.units(inputs["release"], record)["etlegacy-bot"]["pid"] == 101
 
 
-@pytest.mark.parametrize("damage", [None, "loaded", "exe", "argv", "bootstrap", "inherited", "extra_db", "loader", "revision"])
+@pytest.mark.parametrize("damage", [None, "loaded", "exe", "argv", "bootstrap", "inherited", "extra_db", "extra_app", "extra_unknown", "loader", "revision", "not_ready"])
 def test_release_readiness_checks_actual_process(inputs, monkeypatch, damage):
     record = contract.build_contract(**inputs)
-    state = {name: {"pid": pid, "active": "active", "cwd": spec["cwd"]}
+    state = {name: {"pid": pid, "active": "active", "cwd": spec["cwd"], "invocation_id": 'a' * 32}
              for pid, (name, spec) in enumerate(record["services"].items(), 101)}
     by_pid = {str(state[name]["pid"]): spec for name, spec in record["services"].items()}
     monkeypatch.setattr(health, "units", lambda *args: state)
+    def readiness(*args):
+        if damage == 'not_ready':
+            raise ValueError('Current bot has not completed startup')
+    monkeypatch.setattr(health, "bot_ready", readiness)
     monkeypatch.setattr(health.os, "readlink", lambda path: by_pid[path.split('/')[2]]["cwd"])
     monkeypatch.setattr(health, "file_hash", lambda path: "wrong" if damage == "exe" else by_pid[path.parts[2]]["python_sha256"])
     original_read = Path.read_bytes
@@ -228,6 +234,10 @@ def test_release_readiness_checks_actual_process(inputs, monkeypatch, damage):
             env.update(read_external_environment(Path(spec["environment"]["SLOMIX_ENV_FILE"]), root=inputs["release"]))
         if damage == "extra_db":
             env["PGSERVICE"] = "unexpected"
+        if damage == "extra_app":
+            env["BETS_LIFECYCLE_SECONDS"] = "1"
+        if damage == "extra_unknown":
+            env["UNAPPROVED_CUSTOM_OPTION"] = "1"
         if damage == "loader":
             env["LD_AUDIT"] = "/unsafe"
         if damage == "bootstrap":
