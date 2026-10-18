@@ -23,7 +23,17 @@ from scripts.prepare_runtime_state import (  # noqa: E402
 
 
 def content(item: dict | None):
-    return None if item is None else (item['size'], item['sha256'])
+    if item is None:
+        return None
+    if item.get('kind') == 'directory':
+        return ('directory',)
+    return ('file', item['size'], item['sha256'])
+
+
+def entries(group):
+    """Preserve path kind even for empty directories and zero-byte files."""
+    return {**{name: {'kind': 'directory'} for name in group['directories']},
+            **{name: {'kind': 'file', **metadata} for name, metadata in group['files'].items()}}
 
 
 def validate_inventory(group):
@@ -52,7 +62,7 @@ def validate_inventory(group):
 
 
 def classify(base, source, target) -> str:
-    """Content comparison, not mtime: absence and an empty file differ."""
+    """Compare path kind and file content; absence, empty dirs and files differ."""
     base, source, target = map(content, (base, source, target))
     if source == target:
         return 'unchanged' if source == base else 'converged'
@@ -91,23 +101,28 @@ def compare(record: dict) -> dict:
     targets = {name: inventory(state / 'data' / name) for name in NAMES}
     changes, totals = {}, {}
     for name in sorted(NAMES):
-        base = record['inventory'][name]['files']
-        old, new = sources[name]['files'], targets[name]['files']
+        base = entries(record['inventory'][name])
+        old, new = entries(sources[name]), entries(targets[name])
+        old_files, new_files = sources[name]['files'], targets[name]['files']
         changes[name] = {}
         counts = {}
         for path in sorted(base.keys() | old.keys() | new.keys()):
             action = classify(base.get(path), old.get(path), new.get(path))
             parents = [str(parent) for parent in Path(path).parents if str(parent) != '.']
-            if ((path in old and (path in targets[name]['directories'] or any(parent in new for parent in parents)))
-                    or (path in new and (path in sources[name]['directories'] or any(parent in old for parent in parents)))):
+            if ((path in old_files and path in targets[name]['directories'])
+                    or (path in new_files and path in sources[name]['directories'])
+                    or (path in old and any(parent in new_files for parent in parents))
+                    or (path in new and any(parent in old_files for parent in parents))):
                 action = 'path_type_conflict'
             counts[action] = counts.get(action, 0) + 1
             if action != 'unchanged':
                 changes[name][path] = {'classification': action, 'baseline': base.get(path),
                                       'source': old.get(path), 'target': new.get(path)}
-        totals[name] = {'classifications': counts, 'source_files': len(old), 'target_files': len(new),
-                        'source_bytes': sum(item['size'] for item in old.values()),
-                        'target_bytes': sum(item['size'] for item in new.values()),
+        totals[name] = {'classifications': counts, 'source_files': len(old_files), 'target_files': len(new_files),
+                        'source_directories': len(sources[name]['directories']),
+                        'target_directories': len(targets[name]['directories']),
+                        'source_bytes': sum(item['size'] for item in old_files.values()),
+                        'target_bytes': sum(item['size'] for item in new_files.values()),
                         'source_only_directories': sorted(set(sources[name]['directories']) - set(targets[name]['directories'])),
                         'target_only_directories': sorted(set(targets[name]['directories']) - set(sources[name]['directories']))}
     # Two stable passes are still not a lock/snapshot of live writers.

@@ -12,6 +12,7 @@ import argparse
 import hashlib
 import json
 import os
+import pwd
 import shutil
 import stat
 import sys
@@ -101,6 +102,10 @@ def plan(sources: dict, state: Path) -> dict:
 
 
 def seed(record: dict) -> dict:
+    # Private output must be usable by the fixed DEV service account. Refuse
+    # before creating anything; do not manufacture a root-owned partial seed.
+    if os.geteuid() != pwd.getpwnam('samba').pw_uid:
+        raise ValueError('State seed must run as the samba service account')
     # Reconstruct the plan rather than trusting user-supplied relative filenames.
     state = Path(record['state'])
     fresh = plan(record['sources'], state)

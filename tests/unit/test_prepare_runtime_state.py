@@ -9,6 +9,19 @@ import pytest
 from scripts import prepare_runtime_state as transfer
 
 
+@pytest.fixture(autouse=True)
+def service_account_for_ci(monkeypatch):
+    # CI may not have Samba's passwd entry; substitute only the expected UID.
+    import os
+    from types import SimpleNamespace
+
+    def account(name):
+        assert name == 'samba'
+        return SimpleNamespace(pw_uid=os.geteuid())
+
+    monkeypatch.setattr(transfer.pwd, 'getpwnam', account)
+
+
 @pytest.fixture
 def source_map(tmp_path):
     sources = {}
@@ -186,3 +199,26 @@ def test_cli_malformed_json_refuses_without_traceback_or_output(tmp_path, capsys
     assert json.loads(captured.out)['status'] == 'refused'
     assert not captured.err and str(source) not in captured.out
     assert not report.exists() and not (tmp_path / 'shared').exists()
+
+
+@pytest.mark.parametrize('cli', [False, True])
+def test_wrong_service_uid_refused_before_any_seed_output(source_map, tmp_path, monkeypatch, capsys, cli):
+    from types import SimpleNamespace
+
+    state = tmp_path / 'shared'
+    record = transfer.plan(source_map, state)
+    source_before = {name: transfer.inventory(Path(root)) for name, root in source_map.items()}
+    plan_file = tmp_path / 'plan.json'
+    plan_file.write_text(json.dumps(record))
+    report = tmp_path / 'seed-report.json'
+    monkeypatch.setattr(transfer.pwd, 'getpwnam', lambda _: SimpleNamespace(pw_uid=os.geteuid() + 1))
+    if cli:
+        assert transfer.main(['seed', '--input', str(plan_file), '--report', str(report)]) == 1
+        captured = capsys.readouterr()
+        assert json.loads(captured.out)['status'] == 'refused'
+        assert not captured.err
+    else:
+        with pytest.raises(ValueError, match='samba service account'):
+            transfer.seed(record)
+    assert not state.exists() and not report.exists()
+    assert {name: transfer.inventory(Path(root)) for name, root in source_map.items()} == source_before

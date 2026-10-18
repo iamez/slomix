@@ -27,6 +27,19 @@ def test_three_way_contract(base, old, new, expected):
     assert delta.classify(item(base), item(old), item(new)) == expected
 
 
+@pytest.fixture(autouse=True)
+def service_account_for_ci(monkeypatch):
+    # CI may not have Samba's passwd entry; substitute only the expected UID.
+    import os
+    from types import SimpleNamespace
+
+    def account(name):
+        assert name == 'samba'
+        return SimpleNamespace(pw_uid=os.geteuid())
+
+    monkeypatch.setattr(seed.pwd, 'getpwnam', account)
+
+
 @pytest.fixture
 def baseline(tmp_path):
     sources = {}
@@ -127,3 +140,42 @@ def test_cli_malformed_source_map_returns_structured_refusal(tmp_path, capsys):
     assert delta.main(['--seed-report', str(baseline), '--report', str(report)]) == 1
     assert json.loads(capsys.readouterr().out)['status'] == 'refused'
     assert not report.exists()
+
+
+@pytest.mark.parametrize('base_kind,source_kind,target_kind,expected', [
+    ('file', 'absent', 'directory', 'source_absent_preserve_target'),
+    ('file', 'directory', 'absent', 'conflict'),
+    ('directory', 'absent', 'directory', 'source_absent_preserve_target'),
+    ('directory', 'directory', 'absent', 'target_changed_preserve'),
+    ('directory', 'file', 'absent', 'conflict'),
+    ('absent', 'directory', 'absent', 'copy_new'),
+    ('absent', 'absent', 'directory', 'source_absent_preserve_target'),
+    ('directory', 'absent', 'absent', 'converged'),
+    ('file', 'directory', 'directory', 'converged'),
+    ('directory', 'file', 'file', 'converged'),
+])
+def test_native_empty_directory_three_way_state(baseline, base_kind, source_kind, target_kind, expected):
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    group = baseline['inventory']['stats']
+    name = 'kind-change'
+    # Define a valid baseline snapshot; current trees then independently evolve.
+    if base_kind == 'directory':
+        group['directories'].append(name)
+    elif base_kind == 'file':
+        group['files'][name] = {'size': 0, 'mtime_ns': 1,
+                               'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+    for root, kind in ((old, source_kind), (new, target_kind)):
+        if kind == 'directory':
+            (root / name).mkdir()
+        elif kind == 'file':
+            (root / name).write_bytes(b'')
+    before = seed.inventory(old), seed.inventory(new)
+    result = delta.compare(baseline)
+    change = result['changes']['stats'][name]
+    assert change['classification'] == expected
+    for label, kind in (('baseline', base_kind), ('source', source_kind), ('target', target_kind)):
+        assert change[label] is None if kind == 'absent' else change[label]['kind'] == kind
+    assert (seed.inventory(old), seed.inventory(new)) == before
+    assert result['summary']['stats']['source_directories'] == (source_kind == 'directory')
+    assert result['summary']['stats']['target_directories'] == (target_kind == 'directory')

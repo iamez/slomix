@@ -1366,3 +1366,23 @@ No merge occurred; request unambiguous owner permission for#1093 before retry.
 Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
 all six review threads with evidence. Original runtime, Spiderweb and UI work
 remain preserved; merge approval and owner-run DEV activation are separate gates.
+
+## 2026-10-18 — State path kinds and service ownership review closure
+
+Addressed#1097 path-kind and ownership findings. Three-way comparison now covers
+files, directories and absence together; change entries carry explicit kind.
+An independently changed empty directory cannot become an agreed file deletion.
+State seed requires the effective samba service UID before creating any output;
+wrong-owner private directories are refused rather than producing an unusable
+seed. Portable CI substitutes only the account lookup, not filesystem access.
+The malformed-JSON review finding was already fixed in1c1c727a; its12cases were
+verified unchanged, not implemented twice.
+
+Combined seed/delta/writer/ledger cohort136passed. Agent-focused78passed. Removing
+the two guards caused12observed failures; restored withcmp. Actual CLI fixture
+plan→seed→delta verified samba ownership, empty-directory preservation and
+unchanged source/target inventories during comparison. Ruff/diff-check pass.
+This is not a quiescence certificate, consistent database backup or activation
+approval. No live state, database or services were modified. Next:refresh app
+parent, publish source corrections, check CI and answer all three state threads.
+Production notification silence remains owner-pending; original roadmap retained.
