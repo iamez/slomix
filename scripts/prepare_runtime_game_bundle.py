@@ -103,7 +103,7 @@ def _read_file(path, limit):
 
 def _git(source, *args):
     return subprocess.run(['git', '-C', str(source), *args], check=True, capture_output=True,
-                          env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'}, timeout=15).stdout
+                          env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_NO_REPLACE_OBJECTS': '1'}, timeout=15).stdout
 
 
 def _dynamic(path):

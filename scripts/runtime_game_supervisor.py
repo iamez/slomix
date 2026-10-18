@@ -146,7 +146,7 @@ def verify_source(source, expected_commit):
     if (not isinstance(source, Path) or source.resolve(strict=True) != source
             or re.fullmatch(r'[0-9a-f]{40}', expected_commit) is None):
         raise ValueError('Canonical committed source required')
-    env = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'}
+    env = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_NO_REPLACE_OBJECTS': '1'}
     head = subprocess.run(['/usr/bin/git', '-C', str(source), 'rev-parse', 'HEAD'],
                           env=env, capture_output=True, text=True, check=True, timeout=5)
     if head.stdout.strip() != expected_commit:

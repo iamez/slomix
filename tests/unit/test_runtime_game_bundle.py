@@ -335,3 +335,35 @@ def test_actual_shipped_bundle_loads_from_game_paths_without_connecting(inputs):
     assert failed.returncode != 0
     assert 'undefined symbol: lua_gettop' in failed.stderr
     print('NEGATIVE CONTROL:', failed.stderr.strip())
+
+
+@pytest.mark.parametrize('replacement', ['commit', 'tree', 'blob'])
+def test_bundle_reads_approved_raw_objects_despite_replacement_refs(inputs, replacement):
+    source = inputs['source']
+    revision = inputs['revision']
+    name = 'vps_scripts/c0rnp0rn8.lua'
+    original = (source / name).read_bytes()
+    original_blob = git(source, 'rev-parse', revision + ':' + name)
+    original_tree = git(source, 'rev-parse', revision + '^{tree}')
+    alternate = b'error("replacement bytes must not ship")\n'
+    (source / name).write_bytes(alternate)
+    git(source, 'add', '--', name)
+    git(source, 'commit', '-m', 'fixture replacement')
+    alternate_commit = git(source, 'rev-parse', 'HEAD')
+    alternate_tree = git(source, 'rev-parse', 'HEAD^{tree}')
+    alternate_blob = git(source, 'rev-parse', 'HEAD:' + name)
+    old, new = {'commit': (revision, alternate_commit), 'tree': (original_tree, alternate_tree),
+                'blob': (original_blob, alternate_blob)}[replacement]
+    git(source, 'replace', old, new)
+    # Independent unprotected Git confirms the fixture actually substitutes
+    # bytes while continuing to report the approved revision identity.
+    assert git(source, 'rev-parse', revision + '^{commit}') == revision
+    assert subprocess.check_output(['git', '-C', str(source), 'show', revision + ':' + name]) == alternate
+    result = bundle.prepare(**inputs)
+    root = inputs['destination']
+    actual = (root / 'legacy/c0rnp0rn8.lua').read_bytes()
+    assert actual == original
+    assert hashlib.sha256(actual).hexdigest() == subprocess.check_output(
+        ['sha256sum', str(root / 'legacy/c0rnp0rn8.lua')], text=True).split()[0]
+    assert json.loads((root / MANIFEST).read_text())['source_commit'] == revision
+    assert result['activation_ready'] is False
