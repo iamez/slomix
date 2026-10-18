@@ -1258,3 +1258,29 @@ No merge occurred; request unambiguous owner permission for#1093 before retry.
 Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
 all six review threads with evidence. Original runtime, Spiderweb and UI work
 remain preserved; merge approval and owner-run DEV activation are separate gates.
+
+## 2026-10-18 — Migration admission and raw Git provenance review closure
+
+Addressed three further#1095 findings. Marked-release migration CLI requires
+Python-I before asyncpg/dotenv/project imports and disables bytecode writes before
+imports even without-B. This avoids repeating diagnostic payload contamination.
+Interpreter/site/loader startup is still a launcher responsibility. Release DB
+settings are read directly from the verified explicit file; inherited DB/PG
+settings are refused before connection, including otherwise matching values.
+Repeated reads do not mutate os.environ; file timeouts/fingerprint labels remain.
+No migration or real database operation was part of this verification.
+
+Game bundle Git reads, supervisor source admission and shared SPA Git helper now
+force GIT_NO_REPLACE_OBJECTS=1. Native commit/tree/blob replacement fixtures show
+unprotected Git can return different bytes for the approved revision; protected
+packaging keeps original bytes. Replacement refs cannot conceal dirty checkout
+state. Child release preparation inherits the same protected SPA Git helper.
+
+284combined tests passed,1explicit opt-in ET ABI case skipped. Final strengthened
+operator-only series40passed. Observed mutations: isolation1failure, inherited
+settings8failures, replacement bundle3failures, supervisor1failure, SPA1failure,
+bytecode suppression1failure; every original restored withcmp. Ruff/configured
+Bandit/diff-check pass. These are source/fixture results, not deployed proof.
+Next:publish, refresh child branches, inspect exact-head CI and answer the three
+comments. Per-PR merge authority and owner-run activation remain separate gates.
+Original runtime/D4/D5/exclusive handover/Spiderweb/UI plans remain preserved.
