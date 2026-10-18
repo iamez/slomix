@@ -38,6 +38,58 @@ def canonical(path, *, interpreter=False):
     return path
 
 
+# Check actual mount flags, not permission bits (the owner can chmod its files).
+# Descendants are checked too, so a writable nested mount cannot evade the gate.
+# Isolated stdlib startup avoids importing release code before this check.
+READ_ONLY_RELEASE_CHECK = (
+    "import os;from pathlib import Path;p=Path.cwd();"
+    "paths=[p,*p.rglob('*')];"
+    "raise SystemExit(0 if all(not q.is_symlink() and "
+    "os.statvfs(q).f_flag & os.ST_RDONLY for q in paths) else 1)"
+)
+
+
+def render_unit(release, python, environment, expected_commit, *, component):
+    """Exact unit policy, shared by preparation and independent verification."""
+    spec = COMPONENTS[component]
+    return f'''# Prepared only: owner installs as a USER unit after final acceptance.
+# Source revision: {expected_commit}
+[Unit]
+Description=Slomix runtime {spec['description']} (DEV)
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+WorkingDirectory={release}
+EnvironmentFile={environment}
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONNOUSERSITE=1
+Environment=PYTHONUNBUFFERED=1
+UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
+ExecStartPre={python} -I -B -c "{READ_ONLY_RELEASE_CHECK}"
+ExecStart={python} -B -m {spec['module']}
+Restart=on-failure
+RestartSec=5
+KillSignal=SIGTERM
+KillMode=control-group
+TimeoutStopSec=25
+NoNewPrivileges=true
+# User mount sandbox requires user namespaces; the pre-start guard fails closed.
+PrivateUsers=true
+ReadOnlyPaths={release}
+UMask=0077
+# Must see the configured host Unix socket, including private /tmp sockets.
+PrivateTmp=false
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=slomix-runtime-{component}
+
+[Install]
+WantedBy=default.target
+'''
+
+
 def prepare(release, python, environment, destination, expected_commit, *, component):
     if component not in COMPONENTS:
         raise ValueError('Unknown runtime consumer')
@@ -61,38 +113,7 @@ def prepare(release, python, environment, destination, expected_commit, *, compo
         raise ValueError('A new output directory under a canonical parent is required')
     if destination.is_relative_to(release):
         raise ValueError('Prepared units must stay outside the immutable release')
-    unit = f'''# Prepared only: owner installs as a USER unit after final acceptance.
-# Source revision: {expected_commit}
-[Unit]
-Description=Slomix runtime {spec['description']} (DEV)
-StartLimitIntervalSec=60
-StartLimitBurst=3
-
-[Service]
-Type=simple
-WorkingDirectory={release}
-EnvironmentFile={environment}
-Environment=PYTHONDONTWRITEBYTECODE=1
-Environment=PYTHONNOUSERSITE=1
-Environment=PYTHONUNBUFFERED=1
-UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
-ExecStart={python} -m {spec['module']}
-Restart=on-failure
-RestartSec=5
-KillSignal=SIGTERM
-KillMode=control-group
-TimeoutStopSec=25
-NoNewPrivileges=true
-UMask=0077
-# Must see the configured host Unix socket, including private /tmp sockets.
-PrivateTmp=false
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=slomix-runtime-{component}
-
-[Install]
-WantedBy=default.target
-'''
+    unit = render_unit(release, python, environment, expected_commit, component=component)
     destination.mkdir(mode=0o700)
     unit_path = destination / f'slomix-runtime-{component}.service'
     with unit_path.open('x') as stream:
@@ -125,6 +146,8 @@ def verify_prepared(contract_path):
     manifest = verify_release(release)
     if manifest['source_commit'] != record['source_commit'] or release.name != record['source_commit']:
         raise ValueError('Prepared release identity changed')
+    if not COMPONENTS[record['component']]['required'] <= manifest['files'].keys():
+        raise ValueError('Release lacks standalone consumer entrypoint')
     environment = canonical(record['environment'])
     interpreter = canonical(record['interpreter'], interpreter=True)
     info = environment.stat()
@@ -136,6 +159,10 @@ def verify_prepared(contract_path):
     unit = canonical(path.parent / f"slomix-runtime-{record['component']}.service")
     if not unit.is_file():
         raise ValueError('Prepared unit must be a regular file')
+    expected_unit = render_unit(release, interpreter, environment, record['source_commit'],
+                                component=record['component'])
+    if unit.read_bytes() != expected_unit.encode('utf-8'):
+        raise ValueError('Prepared unit differs from required consumer policy')
     for artifact, key in ((environment, 'environment_sha256'),
                           (interpreter, 'interpreter_sha256'), (unit, 'unit_sha256')):
         expected = record.get(key)
@@ -145,6 +172,7 @@ def verify_prepared(contract_path):
     return dict(component=record['component'], source_commit=record['source_commit'],
                 prepared_files_match=True, configuration_validated=False,
                 effective_environment='unmeasured', handover_verified=False,
+                release_write_boundary='required_at_start_unmeasured',
                 activation_ready=False)
 
 

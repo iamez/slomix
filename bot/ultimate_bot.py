@@ -2196,6 +2196,9 @@ class UltimateETLegacyBot(
             except Exception as e:
                 logger.error(f"⚠️ Monitoring service failed to start: {e}", exc_info=True)
 
+        # Emitted only after Discord on_ready and security/startup checks finish.
+        logger.info('[RUNTIME-READY] pid=%s invocation=%s', os.getpid(), os.getenv('INVOCATION_ID', ''))
+
     async def on_command(self, ctx):
         """Track command execution start"""
         ctx.command_start_time = time.time()

@@ -19,6 +19,13 @@ from scripts.dev_runtime_contract import load_contract  # noqa: E402
 from shared.release_manifest import file_hash  # noqa: E402
 from shared.runtime_environment import read_external_environment  # noqa: E402
 
+SYSTEM_ENVIRONMENT = frozenset({
+    'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE',
+    'LC_MESSAGES', 'LC_NUMERIC', 'LC_TIME', 'LC_COLLATE', 'LC_MONETARY',
+    'INVOCATION_ID', 'JOURNAL_STREAM', 'SYSTEMD_EXEC_PID', 'XDG_RUNTIME_DIR',
+    'XDG_SESSION_ID', 'XDG_SESSION_TYPE', 'XDG_SESSION_CLASS',
+})
+
 
 def command_matches(value, expected):
     command = re.fullmatch(r'\{ path=([^;]+) ; argv\[\]=([^;]+) ; ignore_errors=no ; .* \}', value)
@@ -29,7 +36,10 @@ def release_unit_matches(name, values, specification):
     """Inspect resolved systemd properties, including overrides from drop-ins."""
     environment = dict(item.split('=', 1) for item in shlex.split(values.get('Environment', '')))
     if (values.get('Group') != specification['group'] or environment != specification['environment']
-            or values.get('PassEnvironment') or values.get('UnsetEnvironment')
+            or values.get('PassEnvironment')
+            or set(shlex.split(values.get('UnsetEnvironment', ''))) != set(specification['unset_environment'])
+            or values.get('Restart') != specification['restart']
+            or values.get('RestartUSec') != specification['restart_usec']
             or values.get('EnvironmentFiles')
             or values.get('ProtectSystem') != 'strict'
             or not values.get('MemoryMax') or values.get('MemoryMax') != {'1G': '1073741824', '512M': '536870912'}.get(specification['memory_max'])
@@ -53,6 +63,7 @@ def units(run, contract=None):
             '-p', 'UnsetEnvironment', '-p', 'ExecStartPre', '-p', 'ProtectSystem',
             '-p', 'ReadOnlyPaths', '-p', 'ReadWritePaths', '-p', 'NoNewPrivileges', '-p', 'PrivateTmp',
             '-p', 'MemoryMax', '-p', 'CPUQuotaPerSecUSec',
+            '-p', 'Restart', '-p', 'RestartUSec', '-p', 'InvocationID',
         ], text=True, timeout=5)
         values = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
         if values.get('LoadState') != 'loaded' or values.get('WorkingDirectory') != str(directory):
@@ -74,7 +85,34 @@ def units(run, contract=None):
             raise ValueError(f'{name}: unsupported inherited database configuration')
         result[name] = {'pid': int(values['MainPID']), 'active': values.get('ActiveState'),
                         'cwd': str(directory)}
+        if contract is not None:
+            invocation = values.get('InvocationID', '')
+            if re.fullmatch('[0-9a-f]{32}', invocation) is None:
+                raise ValueError(f'{name}: missing service invocation identity')
+            result[name]['invocation_id'] = invocation
     return result
+
+
+def bot_ready(state, captured_at):
+    """Require this process/invocation's post-on_ready journal signal."""
+    marker = f'[RUNTIME-READY] pid={state["pid"]} invocation={state["invocation_id"]}'
+    output = subprocess.check_output([
+        '/usr/bin/journalctl', '--unit=etlegacy-bot.service', '--no-pager', '--output=json',
+        '--lines=1', '--since=@' + str(captured_at), '--grep=' + re.escape(marker),
+        '_SYSTEMD_INVOCATION_ID=' + state['invocation_id'], '_PID=' + str(state['pid']),
+    ], text=True, timeout=5)
+    if len(output) > 65536:
+        raise ValueError('Bot readiness journal response exceeds limit')
+    rows = [json.loads(line) for line in output.splitlines() if line.strip()]
+    if len(rows) != 1 or not isinstance(rows[0], dict):
+        raise ValueError('Bot has not completed its current startup')
+    row = rows[0]
+    if (row.get('_PID') != str(state['pid'])
+            or row.get('_SYSTEMD_INVOCATION_ID') != state['invocation_id']
+            or row.get('_SYSTEMD_UNIT') != 'etlegacy-bot.service'
+            or not isinstance(row.get('MESSAGE'), str) or not row['MESSAGE'].endswith(marker)
+            or not captured_at <= int(row.get('__REALTIME_TIMESTAMP', '0')) / 1_000_000 <= time.time()):
+        raise ValueError('Bot startup signal does not match the current process')
 
 
 def read_json(path):
@@ -124,8 +162,11 @@ def check(run, target, previous, contract=None):
             for key, value in process_env.items():
                 if (key in {'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT'}
                         or (key in approved and value != approved[key])
-                        or (key not in approved and key.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_')))):
+                        or (key not in approved and key not in specification['environment']
+                            and key not in SYSTEM_ENVIRONMENT)):
                     raise ValueError(f'{name}: running configuration differs from approved environment')
+    if contract is not None:
+        bot_ready(current['etlegacy-bot'], previous['_captured_at'])
     health = read_json('/health')
     if health.get('status') != 'ok' or health.get('database') != 'ok':
         raise ValueError('HTTP/database readiness is not healthy')

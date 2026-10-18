@@ -471,3 +471,26 @@ else:
                                 timeout=10, check=True)
     assert result.returncode == 0
     assert json.loads(path.read_text()) == {'status': 'admitted' if damage == 'none' else 'refused'}
+
+
+def test_source_admission_ignores_replacement_commit_when_checking_checkout(tmp_path):
+    from tests.unit.test_spa_artifact_preflight import git
+    git(tmp_path, 'init', '-b', 'fixture')
+    git(tmp_path, 'config', 'user.name', 'Fixture')
+    git(tmp_path, 'config', 'user.email', 'fixture@example.invalid')
+    git(tmp_path, 'config', 'core.hooksPath', str(tmp_path / 'absent-hooks'))
+    (tmp_path / 'tracked.py').write_text('# approved\n')
+    git(tmp_path, 'add', '--', 'tracked.py')
+    git(tmp_path, 'commit', '-m', 'fixture approved')
+    approved = git(tmp_path, 'rev-parse', 'HEAD')
+    (tmp_path / 'tracked.py').write_text('# unapproved replacement\n')
+    git(tmp_path, 'add', '--', 'tracked.py')
+    git(tmp_path, 'commit', '-m', 'fixture replacement')
+    alternate = git(tmp_path, 'rev-parse', 'HEAD')
+    git(tmp_path, 'replace', approved, alternate)
+    git(tmp_path, 'update-ref', 'refs/heads/fixture', approved)
+    # The index/checkout matches the replacement and Git's ordinary diff is
+    # empty, but it differs from the raw commit the operator approved.
+    assert subprocess.check_output(['git', '-C', str(tmp_path), 'diff', 'HEAD']) == b''
+    with pytest.raises(subprocess.CalledProcessError):
+        module.verify_source(tmp_path, approved)

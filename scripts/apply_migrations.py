@@ -30,15 +30,29 @@ Environment variables (or .env file):
     integer seconds (at most 3600). Defaults: 10, 600, 300, 5 respectively.
     LOCK <= STATEMENT < COMMAND is required. These limits affect this runner
     only; a long migration must be deliberately given a larger finite budget.
+
+Marked Git-free payloads require Python -I and explicit SLOMIX_ENV_FILE. Their
+database identity comes from that file; inherited database/config overrides
+are refused before connecting. The launcher owns interpreter/loader isolation.
 """
+
+# ruff: noqa: E402 -- marked CLI isolation precedes third-party imports
+import os
+import sys
+
+if (__name__ == "__main__"
+        and os.path.lexists(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
+                                       ".slomix-release.json"))):
+    sys.dont_write_bytecode = True
+    if not sys.flags.isolated:
+        sys.stderr.write('{"status": "refused", "reason": "Release migrations require isolated Python (-I)"}\n')
+        raise SystemExit(1)
 
 import argparse
 import asyncio
 import hashlib
 import json
-import os
 import re
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -53,7 +67,12 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from shared.release_manifest import verify_release  # noqa: E402
-from shared.runtime_environment import explicit_env_file, load_environment  # noqa: E402
+from shared.runtime_environment import (  # noqa: E402
+    explicit_env_file,
+    load_environment,
+    read_external_environment,
+    refuse_config_overrides,
+)
 
 
 def resolve_env_file(repo_root: Path) -> Path:
@@ -72,7 +91,7 @@ def resolve_env_file(repo_root: Path) -> Path:
 
 
 # Releases require an operator-selected explicit env; verify admin identity
-# separately (process environment still wins over file values).
+# separately; marked releases reject inherited configuration overrides.
 def verify_migration_source() -> None:
     """Marked payloads must remain intact before config, SQL inventory or DB I/O."""
     marker = _REPO_ROOT / ".slomix-release.json"
@@ -298,32 +317,58 @@ def _env(*names: str, default: str = "") -> str:
     return default
 
 
-def get_target_dsn_parts() -> dict[str, str]:
-    """The resolved (non-secret) connection target this runner will use.
+def migration_settings():
+    """Resolve release settings without publishing approved values into env.
 
-    Split out from get_connection() so the fingerprint can be computed and
-    printed even when the connection itself later fails (a mismatch is most
-    useful to see BEFORE debugging a connection error, not after).
+    Release tools reject inherited database/config overrides before connecting.
+    A trusted -I launcher and interpreter environment remain prerequisites; this
+    cannot undo Python/site/LD startup effects or authenticate the payload owner.
     """
+    verify_migration_source()
+    marker = _REPO_ROOT / ".slomix-release.json"
+    if marker.exists() or marker.is_symlink():
+        selected = resolve_env_file(_REPO_ROOT)
+        values = read_external_environment(selected, root=_REPO_ROOT,
+            expected_digest=os.getenv("SLOMIX_ENV_SHA256"))
+        refuse_config_overrides(values, os.environ)
+        for names in (("POSTGRES_HOST", "DB_HOST"), ("POSTGRES_PORT", "DB_PORT"),
+                      ("POSTGRES_DATABASE", "DB_NAME"), ("POSTGRES_USER", "DB_USER"),
+                      ("POSTGRES_PASSWORD", "DB_PASSWORD")):
+            if not any(values.get(name) is not None for name in names):
+                raise ValueError("Release migrations require an explicit complete database identity")
+        return values
+    load_environment(resolve_env_file(_REPO_ROOT))
+    return os.environ
+
+
+def _setting(values, *names, default=""):
+    return next((values[name] for name in names if values.get(name) is not None), default)
+
+
+def _target_dsn_parts(values):
     return {
-        "host": _env("POSTGRES_HOST", "DB_HOST", default="localhost"),
-        "port": _env("POSTGRES_PORT", "DB_PORT", default="5432"),
-        "database": _env("POSTGRES_DATABASE", "DB_NAME", default="etlegacy"),
-        "user": _env("POSTGRES_USER", "DB_USER", default="etlegacy_user"),
+        "host": _setting(values, "POSTGRES_HOST", "DB_HOST", default="localhost"),
+        "port": _setting(values, "POSTGRES_PORT", "DB_PORT", default="5432"),
+        "database": _setting(values, "POSTGRES_DATABASE", "DB_NAME", default="etlegacy"),
+        "user": _setting(values, "POSTGRES_USER", "DB_USER", default="etlegacy_user"),
     }
+
+
+def get_target_dsn_parts() -> dict[str, str]:
+    """Resolved non-secret target, admitted against the explicit release file."""
+    return _target_dsn_parts(migration_settings())
 
 
 def get_connection_kwargs() -> dict[str, Any]:
     """Resolved connection settings shared by migration-adjacent tools."""
-    verify_migration_source()
-    load_environment(resolve_env_file(_REPO_ROOT))
-    target = get_target_dsn_parts()
+    values = migration_settings()
+    target = _target_dsn_parts(values)
     return {
         "host": target["host"],
         "port": int(target["port"]),
         "database": target["database"],
         "user": target["user"],
-        "password": _env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
+        "password": _setting(values, "POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
     }
 
 
@@ -336,11 +381,12 @@ async def get_connection() -> asyncpg.Connection:
 
 def get_timeout_kwargs() -> dict[str, Any]:
     """Finite, validated runner-only budgets; never echo an invalid env value."""
+    values = migration_settings()
     budgets = {}
     for name, default in (("CONNECT", 10), ("COMMAND", 600),
                           ("STATEMENT", 300), ("LOCK", 5)):
         key = f"MIGRATION_{name}_TIMEOUT_SECONDS"
-        value = os.environ.get(key, str(default))
+        value = _setting(values, key, default=os.environ.get(key, str(default)))
         if not re.fullmatch(r"[0-9]{1,4}", value) or not 1 <= int(value) <= 3600:
             raise ValueError(f"{key} must be an integer between 1 and 3600 seconds")
         budgets[name] = int(value)
@@ -370,7 +416,8 @@ async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:
     same output as the drift it reports, not just discoverable by manually
     cross-checking two .env files. Never includes a password.
     """
-    target = get_target_dsn_parts()
+    values = migration_settings()
+    target = _target_dsn_parts(values)
     row = await conn.fetchrow(
         "SELECT current_database() AS db, current_user AS role, "
         "inet_server_addr()::text AS server_addr, inet_server_port() AS server_port"
@@ -381,7 +428,7 @@ async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:
         # SLOMIX_ENV lets a deploy pin an explicit label (e.g. "prod",
         # "staging"); falls back to the resolved host so a fingerprint is
         # never blank.
-        "environment": os.getenv("SLOMIX_ENV") or target["host"],
+        "environment": _setting(values, "SLOMIX_ENV", default=os.getenv("SLOMIX_ENV") or target["host"]),
         "database_name": row["db"] if row else target["database"],
         "database_role": row["role"] if row else target["user"],
         "host_fingerprint": f"{target['host']}:{target['port']}",
@@ -960,6 +1007,14 @@ def main():
         print(json.dumps({"status": "refused", "reason": "Release migration source verification failed"}),
               file=sys.stderr)
         return 1
+
+    if (_REPO_ROOT / ".slomix-release.json").exists() or (_REPO_ROOT / ".slomix-release.json").is_symlink():
+        try:
+            migration_settings()
+        except (OSError, ValueError):
+            print(json.dumps({"status": "refused", "reason": "Release migration configuration verification failed"}),
+                  file=sys.stderr)
+            return 1
 
     if args.status:
         asyncio.run(cmd_status(json_out=args.json))

@@ -189,3 +189,93 @@ async def test_tampered_migration_connection_gate_precedes_driver_even_with_conf
         await migrations.get_connection()
     loader.assert_not_called()
     driver.assert_not_awaited()
+
+
+@pytest.mark.parametrize('isolated', [False, True])
+def test_marked_migration_cli_ignores_pythonpath_or_refuses_before_import(tmp_path, isolated):
+    root = payload(tmp_path, 'apply_migrations')
+    shadow = tmp_path / 'shadow'
+    shadow.mkdir()
+    sentinel = tmp_path / 'shadow-executed'
+    (shadow / 'asyncpg.py').write_text(f'open({str(sentinel)!r}, "w").write("unsafe")\n')
+    (root / 'migrations/001_fixture.sql').write_text('SELECT 2;\n')
+    result = subprocess.run([sys.executable, *(['-I'] if isolated else ['-B']),
+                             str(root / 'scripts/apply_migrations.py'), '--status'],
+                            env={'PATH': '/usr/bin:/bin', 'PYTHONPATH': str(shadow)},
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 1 and not sentinel.exists()
+    assert not list(root.rglob('__pycache__'))
+    assert result.stdout == ''
+    assert json.loads(result.stderr) == {'status': 'refused', 'reason':
+        ('Release migration source verification failed' if isolated
+         else 'Release migrations require isolated Python (-I)')}
+
+
+def approved_release_config(tmp_path, monkeypatch):
+    import os
+    root = payload(tmp_path, 'apply_migrations')
+    env_file = tmp_path / 'approved.env'
+    env_file.write_text('POSTGRES_HOST=approved.example\nPOSTGRES_PORT=5432\n'
+                        'POSTGRES_DATABASE=approved\nPOSTGRES_USER=approved_role\nPOSTGRES_PASSWORD=\n')
+    env_file.chmod(0o600)
+    for name in os.environ:
+        if name.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_')):
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv('SLOMIX_ENV_FILE', str(env_file))
+    monkeypatch.delenv('SLOMIX_ENV_SHA256', raising=False)
+    monkeypatch.setattr(migrations, '_REPO_ROOT', root)
+    monkeypatch.setattr(migrations, 'MIGRATIONS_DIR', root / 'migrations')
+    return root, env_file
+
+
+def test_release_migration_settings_are_repeatable_without_polluting_environment(tmp_path, monkeypatch):
+    import os
+    approved_release_config(tmp_path, monkeypatch)
+    expected = {'host': 'approved.example', 'port': 5432, 'database': 'approved',
+                'user': 'approved_role', 'password': ''}
+    assert migrations.get_connection_kwargs() == expected
+    assert migrations.get_connection_kwargs() == expected
+    assert migrations.get_target_dsn_parts()['database'] == 'approved'
+    assert not any(name.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_')) for name in os.environ)
+
+
+@pytest.mark.parametrize('name', ['POSTGRES_HOST', 'POSTGRES_DATABASE', 'POSTGRES_PASSWORD',
+                                  'DB_HOST', 'DB_NAME', 'PGHOST', 'PGDATABASE', 'DATABASE_URL'])
+async def test_release_migration_rejects_inherited_database_overrides_before_driver(tmp_path, monkeypatch, name):
+    approved_release_config(tmp_path, monkeypatch)
+    monkeypatch.setenv(name, 'unapproved-override')
+    driver = AsyncMock(side_effect=AssertionError('Connection attempted despite a forbidden inherited target override'))
+    monkeypatch.setattr(migrations.asyncpg, 'connect', driver)
+    with pytest.raises(ValueError, match='Inherited environment overrides'):
+        await migrations.get_connection()
+    with pytest.raises(ValueError, match='Inherited environment overrides'):
+        migrations.get_target_dsn_parts()
+    driver.assert_not_awaited()
+
+
+def test_release_migration_cli_refuses_target_override_without_exposing_settings(tmp_path, monkeypatch):
+    root, env_file = approved_release_config(tmp_path, monkeypatch)
+    result = subprocess.run([sys.executable, '-I', '-B', str(root / 'scripts/apply_migrations.py'), '--only',
+                             '001_fixture.sql'], env={'PATH': '/usr/bin:/bin', 'SLOMIX_ENV_FILE': str(env_file),
+                                                     'POSTGRES_DATABASE': 'unapproved-override'},
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 1 and result.stdout == ''
+    assert json.loads(result.stderr) == {'status': 'refused',
+                                         'reason': 'Release migration configuration verification failed'}
+
+
+async def test_release_file_timeout_and_fingerprint_settings_remain_effective(tmp_path, monkeypatch):
+    _, env_file = approved_release_config(tmp_path, monkeypatch)
+    with env_file.open('a') as stream:
+        stream.write('MIGRATION_CONNECT_TIMEOUT_SECONDS=2\nMIGRATION_COMMAND_TIMEOUT_SECONDS=5\n'
+                     'MIGRATION_STATEMENT_TIMEOUT_SECONDS=3\nMIGRATION_LOCK_TIMEOUT_SECONDS=1\n'
+                     'SLOMIX_ENV=fixture\n')
+    assert migrations.get_timeout_kwargs() == {
+        'timeout': 2, 'command_timeout': 5,
+        'server_settings': {'application_name': 'slomix-migrations', 'lock_timeout': '1s', 'statement_timeout': '3s'},
+    }
+    conn = AsyncMock()
+    conn.fetchrow.return_value = {'db': 'approved', 'role': 'approved_role',
+                                 'server_addr': '192.0.2.1', 'server_port': 5432}
+    conn.fetch.return_value = []
+    assert (await migrations.get_db_fingerprint(conn))['environment'] == 'fixture'

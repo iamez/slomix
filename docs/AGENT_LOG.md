@@ -1386,3 +1386,62 @@ This is not a quiescence certificate, consistent database backup or activation
 approval. No live state, database or services were modified. Next:refresh app
 parent, publish source corrections, check CI and answer all three state threads.
 Production notification silence remains owner-pending; original roadmap retained.
+
+## 2026-10-18 — Effective DEV health and consumer protection review closure
+
+Addressed six new#1096 findings. Prepared system units now unset all five unsafe
+Python/loader variables; readiness verifies the resolved filter and exact
+Restart=always/RestartUSec=10s. Actual process environment must be approved dotenv,
+prepared bootstrap or a fixed safe OS metadata allowlist; unknown application
+settings such as BETS_LIFECYCLE_SECONDS are refused, not silently inherited.
+
+A healthy website and active bot PID are insufficient. Bot emits a PID/invocation
+journal marker only at successful end of on_ready, after security/voice startup.
+The health gate requires matching journal unit/PID/invocation and fresh timestamp,
+then rechecks services. This proves startup completion, not continuous Discord
+connectivity. Current deployed builds lack this marker and are not certified by
+the new source. Read-only host checks verified actual Restart/RestartUSec and
+journald PID/invocation/unit/timestamp fields. No new service or message ran.
+
+Consumer verifier regenerates exact required unit bytes instead of trusting a
+jointly modified unit and digest. User units require PrivateUsers and ReadOnlyPaths;
+isolated prestart checks actual ST_RDONLY on the release and descendants before
+worker imports. Unsupported/ignored sandboxing fails closed on writable mounts.
+Actual protection after activation remains required_at_start_unmeasured: no
+mount/service was started, and a verifier report is not a kernel-enforcement proof.
+
+Combined app health/consumer fixtures124passed. Five parent guard/signal mutations
+each caused1observed failure; consumer semantic mutation6failures, disabled mount
+guard1failure; all restored withcmp. Native writable-filesystem child refuses;
+actual on_ready tests cover success/security rejection/startup exception with
+mock transports. Ruff and diff checks pass. Next: refresh reviewed parent,
+publish this slice, inspect exact-head CI and answer all six review comments.
+Production audit silence remains owner-pending; DEV temporary audit=false is
+confirmed active after the separately documented diagnostic recovery. No agent
+service command, DB write, migration, browser or production deployment occurred.
+
+## 2026-10-18 — Migration admission and raw Git provenance review closure
+
+Addressed three further#1095 findings. Marked-release migration CLI requires
+Python-I before asyncpg/dotenv/project imports and disables bytecode writes before
+imports even without-B. This avoids repeating diagnostic payload contamination.
+Interpreter/site/loader startup is still a launcher responsibility. Release DB
+settings are read directly from the verified explicit file; inherited DB/PG
+settings are refused before connection, including otherwise matching values.
+Repeated reads do not mutate os.environ; file timeouts/fingerprint labels remain.
+No migration or real database operation was part of this verification.
+
+Game bundle Git reads, supervisor source admission and shared SPA Git helper now
+force GIT_NO_REPLACE_OBJECTS=1. Native commit/tree/blob replacement fixtures show
+unprotected Git can return different bytes for the approved revision; protected
+packaging keeps original bytes. Replacement refs cannot conceal dirty checkout
+state. Child release preparation inherits the same protected SPA Git helper.
+
+284combined tests passed,1explicit opt-in ET ABI case skipped. Final strengthened
+operator-only series40passed. Observed mutations: isolation1failure, inherited
+settings8failures, replacement bundle3failures, supervisor1failure, SPA1failure,
+bytecode suppression1failure; every original restored withcmp. Ruff/configured
+Bandit/diff-check pass. These are source/fixture results, not deployed proof.
+Next:publish, refresh child branches, inspect exact-head CI and answer the three
+comments. Per-PR merge authority and owner-run activation remain separate gates.
+Original runtime/D4/D5/exclusive handover/Spiderweb/UI plans remain preserved.
