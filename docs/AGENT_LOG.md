@@ -1380,3 +1380,18 @@ passed. This is a fixture/source result, not a new exact-head CI result.
 Next:publish, refresh child dependencies and inspect both Python CI legs again.
 Production audit override still absent at read-only host check; owner commands
 were provided, no production service/config/code was changed by the agent.
+
+## 2026-10-19 — Admit systemd memory-pressure metadata without app overrides
+
+New1096review identified systemd>=254's MEMORY_PRESSURE_WATCH/WRITE metadata.
+Both exact keys now belong to the safe OS allowlist; similarly named keys,
+unknown application settings, loader variables and approved-value overrides
+remain refused. Official systemd resource-control documentation confirms the
+keys; the actual CI runner environment contains a cgroup WATCH and base64 WRITE.
+Host systemd249 cannot prove a systemd254 service launch, so no such claim is made.
+
+44health tests pass with27actual child process combinations and /proc metadata
+checks. Removing both keys causes2observed failures; original restored withcmp.
+After integrating the common runner fixture correction,160app/operator/startup
+checks pass. Ruff/diff-check clean. No service/mount/DB/deployed payload operation.
+Next:publish, refresh state child, answer review4307535251 and inspect exact-headCI.

@@ -76,3 +76,52 @@ def test_cli_deadline_returns_failure_not_success(ready, tmp_path, monkeypatch, 
     assert gate.main(['verify', '--run', str(tmp_path), '--target', 'a' * 40,
                       '--previous', str(path)]) == 1
     assert json.loads(capsys.readouterr().out)['healthy'] is False
+
+
+@pytest.mark.parametrize('metadata', [
+    {},  # Older systemd / MemoryPressureWatch=skip.
+    {'MEMORY_PRESSURE_WATCH': '/dev/null'},  # MemoryPressureWatch=no.
+    {'MEMORY_PRESSURE_WATCH': '/sys/fs/cgroup/system.slice/example.service/memory.pressure',
+     'MEMORY_PRESSURE_WRITE': 'c29tZSAyMDAwMDAgMjAwMDAwMAA='},
+])
+@pytest.mark.parametrize('extra', [None, 'UNAPPROVED_APP_SETTING', 'MEMORY_PRESSURE_UNKNOWN',
+                                 'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD',
+                                 'LD_LIBRARY_PATH', 'LD_AUDIT', 'APP_MODE'])
+def test_actual_process_pressure_metadata_preserves_environment_guards(
+        tmp_path, monkeypatch, metadata, extra):
+    """Read real /proc exec identity; service, dotenv and HTTP are isolated doubles."""
+    import subprocess
+    import sys
+
+    bootstrap = {'SLOMIX_ENV_FILE': str(tmp_path / 'approved.env')}
+    environment = {**bootstrap, **metadata}
+    if extra is not None:
+        # Empty loader paths are harmless to the child but still forbidden by the gate.
+        environment[extra] = ''
+    argv = [sys.executable, '-B', '-S', '-c',
+            'import sys; print("ready", flush=True); sys.stdin.buffer.read()']
+    with subprocess.Popen(argv, cwd=tmp_path, env=environment, stdin=subprocess.PIPE,
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE) as child:
+        try:
+            assert child.stdout.readline() == b'ready\n'
+            state = {'etlegacy-bot': {'pid': child.pid, 'active': 'active', 'cwd': str(tmp_path)}}
+            specification = {'argv': argv, 'environment': bootstrap, 'env_sha256': 'fixture',
+                             'python_sha256': gate.file_hash(Path(f'/proc/{child.pid}/exe'))}
+            contract = {'revision': 'a' * 40, 'services': {'etlegacy-bot': specification}}
+            monkeypatch.setattr(gate, 'units', lambda *args: state)
+            monkeypatch.setattr(gate, 'bot_ready', lambda *args: None)
+            monkeypatch.setattr(gate, 'read_external_environment',
+                                lambda *args, **kwargs: {'APP_MODE': 'approved'})
+            payloads = {'/health': {'status': 'ok', 'database': 'ok'},
+                        '/api/build': {'revision': 'a' * 40,
+                                       'started_at': '2026-01-01T00:00:00+00:00'}}
+            monkeypatch.setattr(gate, 'read_json', lambda path: payloads[path])
+            previous = {'etlegacy-bot': {'pid': 0}, '_captured_at': 0}
+            if extra is None:
+                assert gate.check(tmp_path, 'a' * 40, previous, contract) == state
+            else:
+                with pytest.raises(ValueError, match='running configuration differs'):
+                    gate.check(tmp_path, 'a' * 40, previous, contract)
+        finally:
+            child.communicate(timeout=5)
+        assert child.returncode == 0
