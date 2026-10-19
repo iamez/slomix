@@ -33,7 +33,7 @@ def canonical(path: Path) -> Path:
 
 def new_outside_git(path: Path):
     parent = canonical(path.parent)
-    if (path.exists() or path.is_symlink() or path.name in {'.', '..'}
+    if (path.exists() or path.is_symlink() or path.name in {'.', '..', '.git', '.slomix-release.json'}
             or any((ancestor / marker).exists() or (ancestor / marker).is_symlink()
                    for ancestor in (parent, *parent.parents)
                    for marker in ('.git', '.slomix-release.json'))):

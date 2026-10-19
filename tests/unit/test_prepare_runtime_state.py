@@ -222,3 +222,20 @@ def test_wrong_service_uid_refused_before_any_seed_output(source_map, tmp_path, 
             transfer.seed(record)
     assert not state.exists() and not report.exists()
     assert {name: transfer.inventory(Path(root)) for name, root in source_map.items()} == source_before
+
+
+@pytest.mark.parametrize('name', ['.git', '.slomix-release.json'])
+@pytest.mark.parametrize('command', ['plan', 'seed'])
+def test_cli_cannot_create_reserved_report_marker(source_map, tmp_path, capsys, name, command):
+    state = tmp_path / 'shared'
+    record = source_map if command == 'plan' else transfer.plan(source_map, state)
+    source = tmp_path / 'input.json'
+    source.write_text(json.dumps(record))
+    before = set(tmp_path.iterdir())
+    args = [command, '--input', str(source), '--report', str(tmp_path / name)]
+    if command == 'plan':
+        args += ['--state', str(state)]
+    assert transfer.main(args) == 1
+    assert json.loads(capsys.readouterr().out)['status'] == 'refused'
+    assert set(tmp_path.iterdir()) == before
+    assert not state.exists()

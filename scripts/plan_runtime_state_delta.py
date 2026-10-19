@@ -26,7 +26,7 @@ def content(item: dict | None):
     if item is None:
         return None
     if item.get('kind') == 'directory':
-        return ('directory',)
+        return ('directory', None, None)
     return ('file', item['size'], item['sha256'])
 
 
@@ -55,7 +55,7 @@ def validate_inventory(group):
     for metadata in files.values():
         if (not isinstance(metadata, dict) or set(metadata) != {'size', 'mtime_ns', 'sha256'}
                 or type(metadata['size']) is not int or metadata['size'] < 0
-                or type(metadata['mtime_ns']) is not int or metadata['mtime_ns'] < 0
+                or type(metadata['mtime_ns']) is not int
                 or not isinstance(metadata['sha256'], str)
                 or not re.fullmatch('[0-9a-f]{64}', metadata['sha256'])):
             raise ValueError('Invalid baseline file metadata')

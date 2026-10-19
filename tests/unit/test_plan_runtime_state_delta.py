@@ -179,3 +179,43 @@ def test_native_empty_directory_three_way_state(baseline, base_kind, source_kind
     assert (seed.inventory(old), seed.inventory(new)) == before
     assert result['summary']['stats']['source_directories'] == (source_kind == 'directory')
     assert result['summary']['stats']['target_directories'] == (target_kind == 'directory')
+
+
+def test_content_tokens_have_fixed_shape_and_distinct_path_kinds():
+    directory = delta.content({'kind': 'directory'})
+    empty_file = delta.content({'kind': 'file', 'size': 0, 'sha256': 'empty'})
+    assert directory == ('directory', None, None)
+    assert empty_file == ('file', 0, 'empty')
+    assert len(directory) == len(empty_file) == 3
+    assert directory != empty_file and delta.content(None) is None
+
+
+def test_pre_epoch_timestamp_survives_seed_and_delta(tmp_path):
+    import os
+
+    sources = {}
+    for name in sorted(seed.NAMES):
+        root = tmp_path / 'old' / name
+        root.mkdir(parents=True)
+        sources[name] = str(root)
+    original = Path(sources['stats']) / 'before-epoch.txt'
+    original.write_bytes(b'pre-epoch synthetic source')
+    stamp = -1_000_000_000
+    os.utime(original, ns=(stamp, stamp))
+    assert original.stat().st_mtime_ns == stamp
+    baseline = seed.seed(seed.plan(sources, tmp_path / 'shared'))
+    copied = Path(baseline['state']) / 'data/stats/before-epoch.txt'
+    assert copied.stat().st_mtime_ns == stamp
+    assert baseline['inventory']['stats']['files']['before-epoch.txt']['mtime_ns'] == stamp
+    before = seed.inventory(original.parent), seed.inventory(copied.parent)
+    report = delta.compare(baseline)
+    assert report['changes']['stats'] == {}
+    assert report['summary']['stats']['classifications'] == {'unchanged': 1}
+    assert (seed.inventory(original.parent), seed.inventory(copied.parent)) == before
+
+
+@pytest.mark.parametrize('bad', [True, False, 1.5, '-1', None])
+def test_timestamp_requires_integer_not_nonnegative(baseline, bad):
+    baseline['inventory']['stats']['files']['original.txt']['mtime_ns'] = bad
+    with pytest.raises(ValueError, match='file metadata'):
+        delta.compare(baseline)

@@ -1,3 +1,19 @@
+## 2026-10-19 — State metadata and reserved report path review corrections
+
+Addressed all three new1097findings. content() now uses fixed-length3tuples for
+both directory and file tokens. Negative integer POSIX mtime_ns is accepted,
+matching the inventory/seed producer, while boolean/noninteger metadata remains
+invalid. Both state/report boundary helpers reject basename.git and
+.slomix-release.json before creating reserved markers or state output.
+
+138dedicated tests pass, Ruff/diff-check clean. Restored old behavior caused8
+observed failures; all three scripts restored withcmp. Actual CLI fixture retained
+mtime_ns=-1000000000 through seed/delta, refused both marker names and preserved
+source/target inventories. No local CodeQL engine run is claimed: public scanning
+must recheck the fixed tuple shape. No live data, database or services touched.
+Next:refresh app parent, publish and answer the three review threads; inspect CI.
+Original runtime/D4/D5/handover/Spiderweb/UI plans remain preserved.
+
 ## 2026-10-18 — Migration admission and raw Git provenance review closure
 
 Addressed three further#1095 findings. Marked-release migration CLI requires

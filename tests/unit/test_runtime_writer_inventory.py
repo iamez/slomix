@@ -143,3 +143,11 @@ def test_report_refuses_even_a_dangling_boundary_marker(tmp_path, name):
     with pytest.raises(ValueError, match='outside'):
         inventory.write_report(output, '{}')
     assert not output.exists()
+
+
+@pytest.mark.parametrize('name', ['.git', '.slomix-release.json'])
+def test_writer_report_cannot_create_reserved_marker(tmp_path, name):
+    before = set(tmp_path.iterdir())
+    with pytest.raises(ValueError, match='reserved'):
+        inventory.write_report(tmp_path / name, '{}')
+    assert set(tmp_path.iterdir()) == before

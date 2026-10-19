@@ -87,6 +87,8 @@ def inventory(system_units: list[str], user_units: list[str]) -> dict:
 
 
 def write_report(path: Path, report: str) -> None:
+    if path.name in {".git", ".slomix-release.json"}:
+        raise ValueError("output basename is reserved")
     parent = path.parent.resolve(strict=True)
     if any((ancestor / ".git").exists() or (ancestor / ".git").is_symlink()
            for ancestor in (parent, *parent.parents)):
