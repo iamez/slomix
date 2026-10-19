@@ -1284,3 +1284,23 @@ Bandit/diff-check pass. These are source/fixture results, not deployed proof.
 Next:publish, refresh child branches, inspect exact-head CI and answer the three
 comments. Per-PR merge authority and owner-run activation remain separate gates.
 Original runtime/D4/D5/exclusive handover/Spiderweb/UI plans remain preserved.
+
+## 2026-10-19 — Reproduce and fix runner loader fixture contamination
+
+Both Python CI legs on1095/1096/1097 failed the same two new release settings
+tests. The runner's LD_LIBRARY_PATH reached the positive approved-config fixture;
+release admission correctly refused it. Tests now clear all five loader/Python
+keys when constructing the approved scenario, while explicit negative cases
+still require their rejection before the driver. Public shared admission also
+rejects LD_AUDIT consistently (full local candidate already had this guard).
+No production isolation was weakened to turn the tests green.
+
+With a synthetic runner LD_LIBRARY_PATH:62operator/environment tests pass. Restoring
+old fixture behavior reproduces both CI failures; removing LD_AUDIT admission
+causes1observed failure. Originals restored withcmp. No real DB/DDL was used.
+Initial source integration patch refused because full candidate already carried
+LD_AUDIT; adapted only the missing test hunk, then200combined operator/state tests
+passed. This is a fixture/source result, not a new exact-head CI result.
+Next:publish, refresh child dependencies and inspect both Python CI legs again.
+Production audit override still absent at read-only host check; owner commands
+were provided, no production service/config/code was changed by the agent.

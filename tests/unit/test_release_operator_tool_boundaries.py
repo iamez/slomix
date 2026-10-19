@@ -219,7 +219,8 @@ def approved_release_config(tmp_path, monkeypatch):
                         'POSTGRES_DATABASE=approved\nPOSTGRES_USER=approved_role\nPOSTGRES_PASSWORD=\n')
     env_file.chmod(0o600)
     for name in os.environ:
-        if name.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_')):
+        if (name.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_'))
+                or name in {'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT'}):
             monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv('SLOMIX_ENV_FILE', str(env_file))
     monkeypatch.delenv('SLOMIX_ENV_SHA256', raising=False)
@@ -240,7 +241,8 @@ def test_release_migration_settings_are_repeatable_without_polluting_environment
 
 
 @pytest.mark.parametrize('name', ['POSTGRES_HOST', 'POSTGRES_DATABASE', 'POSTGRES_PASSWORD',
-                                  'DB_HOST', 'DB_NAME', 'PGHOST', 'PGDATABASE', 'DATABASE_URL'])
+                                  'DB_HOST', 'DB_NAME', 'PGHOST', 'PGDATABASE', 'DATABASE_URL',
+                                  'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT'])
 async def test_release_migration_rejects_inherited_database_overrides_before_driver(tmp_path, monkeypatch, name):
     approved_release_config(tmp_path, monkeypatch)
     monkeypatch.setenv(name, 'unapproved-override')
