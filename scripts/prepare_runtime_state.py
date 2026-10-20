@@ -59,6 +59,8 @@ def inventory(root: Path | None) -> dict:
     if root is None:
         return {'directories': [], 'files': {}}
     canonical(root)
+    if root.name == ".git" or root.name.startswith(".env"):
+        raise ValueError("Configuration or Git source root is forbidden")
     directories, files = [], {}
     def fail(error):
         raise error
@@ -68,6 +70,8 @@ def inventory(root: Path | None) -> dict:
             relative_path = path.relative_to(root)
             if '.git' in relative_path.parts:
                 raise ValueError('Git metadata found in data source')
+            if any(part.startswith('.env') for part in relative_path.parts):
+                raise ValueError('Configuration metadata found in data source')
             relative = relative_path.as_posix()
             info = path.lstat()
             if stat.S_ISLNK(info.st_mode):

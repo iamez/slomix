@@ -1,6 +1,7 @@
 """Named metadata is an observation, never handover authority."""
 import argparse
 import json
+import os
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,7 +29,7 @@ def runner(monkeypatch, values=None, code=0):
     return calls
 
 
-@pytest.mark.parametrize("unit", ["*", "*.service", "--help", "../x.service", "x.socket", "x.service\n", "x service", "x;stop.service"])
+@pytest.mark.parametrize("unit", ["*", "*.service", "--help", "../x.service", "x.socket", "x.service\n", "x service", "x;stop.service", "worker@.service", "worker@.timer", "worker@@one.service"])
 def test_rejects_ambiguous_names(unit):
     with pytest.raises(argparse.ArgumentTypeError):
         inventory.unit_name(unit)
@@ -40,7 +41,7 @@ def test_rejects_ambiguous_names(unit):
 def test_named_observation_never_authorizes(monkeypatch, scope, state, suffix):
     unit = "example." + suffix
     calls = runner(monkeypatch, metadata(unit, state))
-    report = inventory.inventory([unit] if scope == "system" else [], [unit] if scope == "user" else [])
+    report = inventory.inventory([unit] if scope == "system" else [], [unit] if scope == "user" else [], expected_user_uid=os.getuid())
     assert report["observations"][0]["observation"] == state
     assert report["handover_verified"] is False
     assert report["activation_ready"] is False
@@ -87,7 +88,7 @@ def test_probe_errors_are_unknown(monkeypatch, error):
     def fail(*args, **kwargs):
         raise error
     monkeypatch.setattr(inventory.subprocess, "run", fail)
-    result = inventory.observe("user", "example.service")
+    result = inventory.observe("user", "example.service", expected_user_uid=os.getuid())
     assert result["observation"] == "unknown"
     assert "SECRET" not in json.dumps(result)
 
@@ -151,3 +152,82 @@ def test_writer_report_cannot_create_reserved_marker(tmp_path, name):
     with pytest.raises(ValueError, match='reserved'):
         inventory.write_report(tmp_path / name, '{}')
     assert set(tmp_path.iterdir()) == before
+
+
+@pytest.mark.parametrize('name', ['worker@one.service', 'worker@one.timer', 'worker.service'])
+def test_concrete_instances_remain_supported(name):
+    assert inventory.unit_name(name) == name
+
+
+@pytest.mark.parametrize('expected', [None, -1, True, '1000'])
+def test_user_identity_required_before_probe(monkeypatch, expected):
+    calls = runner(monkeypatch, metadata())
+    result = inventory.observe('user', 'example.service', expected_user_uid=expected)
+    assert result['observation'] == 'unknown'
+    assert result['error'] == 'expected_user_identity_required'
+    assert calls == []
+
+
+@pytest.mark.parametrize('changed', ['real', 'effective', 'expected'])
+def test_wrong_user_identity_never_probes_another_manager(monkeypatch, changed):
+    uid = os.getuid()
+    calls = runner(monkeypatch, metadata())
+    monkeypatch.setattr(inventory.os, 'getuid', lambda: uid + (changed == 'real'))
+    monkeypatch.setattr(inventory.os, 'geteuid', lambda: uid + (changed == 'effective'))
+    expected = uid + (changed == 'expected')
+    result = inventory.observe('user', 'example.service', expected_user_uid=expected)
+    assert result['observation'] == 'unknown' and result['error'] == 'user_identity_mismatch'
+    assert result['user_identity']['expected_uid'] == expected
+    assert calls == []
+
+
+def test_user_observation_records_uid_and_pins_manager_bus(monkeypatch):
+    uid = os.getuid()
+    calls = runner(monkeypatch, metadata())
+    monkeypatch.setenv('XDG_RUNTIME_DIR', '/synthetic/wrong-user')
+    monkeypatch.setenv('DBUS_SESSION_BUS_ADDRESS', 'unix:path=/synthetic/wrong-bus')
+    monkeypatch.setenv('SYSTEMD_BUS_ADDRESS', 'unix:path=/synthetic/wrong-bus')
+    result = inventory.observe('user', 'example.service', expected_user_uid=uid)
+    assert result['user_identity'] == {'expected_uid': uid, 'real_uid': uid, 'effective_uid': uid}
+    assert result['observation'] == 'inactive'
+    environment = calls[0][1]['env']
+    assert environment['XDG_RUNTIME_DIR'] == f'/run/user/{uid}'
+    assert environment['DBUS_SESSION_BUS_ADDRESS'] == f'unix:path=/run/user/{uid}/bus'
+    assert 'SYSTEMD_BUS_ADDRESS' not in environment
+
+
+def test_cli_user_scope_requires_expected_uid():
+    with pytest.raises(SystemExit) as error:
+        inventory.main(['--user-unit', 'example.service'])
+    assert error.value.code == 2
+
+
+@pytest.mark.parametrize('case', ['matched', 'wrong-user', 'template'])
+def test_native_cli_binds_user_identity_before_systemctl(tmp_path, case):
+    import sys
+
+    trace = tmp_path / 'probe.json'
+    command = tmp_path / 'systemctl'
+    command.write_text('#!/usr/bin/python3 -B\nimport json,os\n'
+                       f'open({str(trace)!r}, "w").write(json.dumps({{"bus": os.environ.get("DBUS_SESSION_BUS_ADDRESS")}}))\n'
+                       f'print({chr(10).join(k+"="+v for k,v in metadata().items())!r})\n')
+    command.chmod(0o700)
+    uid = os.getuid()
+    unit = 'worker@.service' if case == 'template' else 'example.service'
+    result = subprocess.run([sys.executable, '-B', inventory.__file__, '--user-unit', unit,
+                             '--expected-user-uid', str(uid + (case == 'wrong-user'))],
+                            env={'PATH': str(tmp_path) + os.pathsep + os.defpath,
+                                 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/synthetic/wrong-bus'},
+                            capture_output=True, text=True, timeout=5)
+    if case == 'template':
+        assert result.returncode == 2 and not trace.exists()
+        return
+    report = json.loads(result.stdout)
+    row = report['observations'][0]
+    assert row['user_identity']['expected_uid'] == uid + (case == 'wrong-user')
+    assert report['activation_ready'] is False and report['all_writers_absent'] is None
+    if case == 'wrong-user':
+        assert result.returncode == 1 and row['observation'] == 'unknown' and not trace.exists()
+    else:
+        assert result.returncode == 0 and row['observation'] == 'inactive'
+        assert json.loads(trace.read_text())['bus'] == f'unix:path=/run/user/{uid}/bus'

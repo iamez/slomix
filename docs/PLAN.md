@@ -1,3 +1,32 @@
+## 2026-10-20 — Bind writer observations to user identity and reject credential trees
+
+Validated three new1097reviews. State inventory rejects every relative .env*
+component before type dispatch/traversal, including directories with innocuously
+named children. Explicitly selected .env* and .git roots also refuse. Git and
+other data/DB exclusions stay intact. No state copy or source deletion occurred.
+
+User-scope writer probes require --expected-user-uid; library probes without it
+return unknown. Expected UID must equal real and effective UID before systemctl
+runs. Reports record all three UIDs; user-bus/runtime paths are derived from the
+validated UID instead of inherited bus overrides. System probes remain unchanged.
+Empty-instance templates and multiple-at names refuse before probing; concrete
+instances remain accepted. Existing prepared invocation snippets need the UID
+argument. Named observations never certify exclusion, handover or activation.
+
+181targeted state/writer/delta/path tests passed. Native CLI systemctl doubles
+prove matching/wrong UID and template handling, plus .env directory refusal
+without destination/report or content disclosure. Removed directory/identity/
+template guards cause7/4/3observed failures; all restored andcmp verified. Ruff
+and diff checks pass. Actual read-only host probe, independently compared with
+systemctl: DEV bot456340/web3549798active, watchdog service/timer inactive.
+Named team/cache user units are unknown in inventory; direct UID1000 manager
+LoadState=not-found confirms neither installed unit. This is point-in-time named
+metadata, not all-writer exclusion or operational runtime acceptance.
+
+Next:refresh reviewed app parent, publish/answer three threads and inspect exact
+CI.1093is merged;1094requires its own owner approval. Original D4/D5/exclusive
+writer handover, consumer-off proof and preserved roadmap remain open.
+
 ## 2026-10-20 — Second game review: explicit targets and closed proof environment
 
 Validated and corrected five additional #1095 findings. Standalone marked audit

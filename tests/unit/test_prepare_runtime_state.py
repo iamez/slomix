@@ -284,3 +284,45 @@ def test_native_cli_empty_git_directory_refuses_without_output(source_map, tmp_p
     after = {str(path.relative_to(tmp_path)): (path.is_dir(), path.read_bytes() if path.is_file() else None)
              for path in tmp_path.rglob('*') if path != source}
     assert after == before
+
+
+@pytest.mark.parametrize('name', ['.env', '.env.d', '.environment'])
+@pytest.mark.parametrize('nested', [False, True])
+def test_configuration_directory_components_refused(source_map, tmp_path, name, nested):
+    root = Path(source_map['stats'])
+    directory = root / 'nested' / name if nested else root / name
+    directory.mkdir()
+    (directory / 'token').write_text('synthetic-private-value')
+    with pytest.raises(ValueError, match='Configuration'):
+        transfer.plan(source_map, tmp_path / 'shared')
+    assert not (tmp_path / 'shared').exists()
+
+
+@pytest.mark.parametrize('name', ['.git', '.env.d'])
+def test_selected_configuration_or_git_root_is_refused(tmp_path, name):
+    root = tmp_path / name
+    root.mkdir()
+    (root / 'token').write_text('synthetic-private-value')
+    with pytest.raises(ValueError, match='source root'):
+        transfer.inventory(root)
+
+
+def test_native_cli_configuration_directory_refuses_without_copy(source_map, tmp_path):
+    import subprocess
+    import sys
+
+    directory = Path(source_map['stats']) / '.env.d'
+    directory.mkdir()
+    token = directory / 'token'
+    token.write_bytes(b'synthetic-private-value')
+    source = tmp_path / 'sources.json'
+    source.write_text(json.dumps(source_map))
+    report = tmp_path / 'report.json'
+    state = tmp_path / 'shared'
+    result = subprocess.run([sys.executable, '-B', transfer.__file__, 'plan', '--input', str(source),
+                             '--state', str(state), '--report', str(report)],
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 1 and json.loads(result.stdout)['status'] == 'refused'
+    assert not result.stderr and not report.exists() and not state.exists()
+    assert token.read_bytes() == b'synthetic-private-value'
+    assert b'synthetic-private-value' not in result.stdout.encode()
