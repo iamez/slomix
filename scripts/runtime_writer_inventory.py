@@ -33,6 +33,8 @@ def observe(scope: str, unit: str, *, expected_user_uid: int | None = None) -> d
         raise ValueError("invalid manager scope")
     result = {"scope": scope, "unit": unit, "observation": "unknown", "properties": {}}
     environment = {**os.environ, "LC_ALL": "C", "SYSTEMD_COLORS": "0"}
+    for name in ("DBUS_SYSTEM_BUS_ADDRESS", "SYSTEMD_BUS_ADDRESS"):
+        environment.pop(name, None)
     if scope == "user":
         result["user_identity"] = {"expected_uid": expected_user_uid,
                                    "real_uid": os.getuid(), "effective_uid": os.geteuid()}
@@ -42,7 +44,7 @@ def observe(scope: str, unit: str, *, expected_user_uid: int | None = None) -> d
             return {**result, "error": "user_identity_mismatch"}
         runtime = f"/run/user/{expected_user_uid}"
         environment.update(XDG_RUNTIME_DIR=runtime, DBUS_SESSION_BUS_ADDRESS=f"unix:path={runtime}/bus")
-        for name in ("SYSTEMD_BUS_ADDRESS", "DBUS_STARTER_ADDRESS", "DBUS_STARTER_BUS_TYPE"):
+        for name in ("DBUS_STARTER_ADDRESS", "DBUS_STARTER_BUS_TYPE"):
             environment.pop(name, None)
     properties = PROPERTIES + (("MainPID", "Restart") if unit.endswith(".service") else ())
     command = ["systemctl", f"--{scope}", "show", "--no-pager", "--all",

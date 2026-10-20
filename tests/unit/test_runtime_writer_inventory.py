@@ -249,3 +249,37 @@ def test_native_writer_report_refuses_bare_git_ancestor(tmp_path):
                             capture_output=True, text=True, timeout=5)
     assert result.returncode != 0 and not target.exists()
     assert 'outside a Git checkout' in result.stderr
+
+
+@pytest.mark.parametrize('scope', ['system', 'user'])
+def test_inherited_system_bus_overrides_never_reach_probe(monkeypatch, scope):
+    calls = runner(monkeypatch, metadata())
+    for name in ('DBUS_SYSTEM_BUS_ADDRESS', 'SYSTEMD_BUS_ADDRESS'):
+        monkeypatch.setenv(name, 'unix:path=/synthetic/foreign-manager')
+    result = inventory.observe(scope, 'example.service', expected_user_uid=os.getuid())
+    assert result['observation'] == 'inactive'
+    environment = calls[0][1]['env']
+    assert 'DBUS_SYSTEM_BUS_ADDRESS' not in environment
+    assert 'SYSTEMD_BUS_ADDRESS' not in environment
+
+
+def test_native_cli_system_probe_removes_inherited_bus_overrides(tmp_path):
+    import sys
+
+    trace = tmp_path / 'probe.json'
+    command = tmp_path / 'systemctl'
+    command.write_text('#!/usr/bin/python3 -B\nimport json,os\n'
+                       f'open({str(trace)!r}, "w").write(json.dumps({{"system": os.environ.get("DBUS_SYSTEM_BUS_ADDRESS"), "generic": os.environ.get("SYSTEMD_BUS_ADDRESS")}}))\n'
+                       f'print({chr(10).join(k+"="+v for k,v in metadata().items())!r})\n')
+    command.chmod(0o700)
+    result = subprocess.run([sys.executable, '-B', inventory.__file__, '--system-unit', 'example.service'],
+                            env={'PATH': str(tmp_path) + os.pathsep + os.defpath,
+                                 'DBUS_SYSTEM_BUS_ADDRESS': 'unix:path=/synthetic/foreign-manager',
+                                 'SYSTEMD_BUS_ADDRESS': 'unix:path=/synthetic/foreign-manager'},
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report['observations'][0]['scope'] == 'system'
+    assert report['observations'][0]['observation'] == 'inactive'
+    assert report['activation_ready'] is False and report['all_writers_absent'] is None
+    assert json.loads(trace.read_text()) == {'system': None, 'generic': None}

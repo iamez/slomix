@@ -1,3 +1,25 @@
+## 2026-10-20 — Keep system writer observations on the local system bus
+
+Validated review4325190528: inherited DBUS_SYSTEM_BUS_ADDRESS selected another
+bus for non-root systemctl probes. Both scopes now drop that variable and
+SYSTEMD_BUS_ADDRESS before querying; user scope keeps its existing validated UID
+and explicit user-bus path. Unknown metadata/exclusion/activation semantics stay
+unchanged. No bus proxy, manager or service is started by this change.
+
+71writer tests pass. Native child fake-systemctl records absent override keys;
+removing the new guard causes3observed failures, restored/cmp. Actual UID1000
+read-only proof: direct systemctl with poisoned bus exits1; sanitized CLI and an
+independent clean systemctl agree on etlegacy-bot active/PID456340. This is one
+named-unit point-in-time metadata observation, not all-writer exclusion, freshness
+of application code or activation. Official sd_bus_default docs confirm the env
+variable selects the system bus. Ruff/diff pass; no live data/config changed.
+
+1093/1094already merged under their own owner approvals.1095has two further P1
+source-admission/entrypoint findings being corrected; no1095–1097merge approval
+is inferred from generic continue. Next:coordinate reviewed parent refresh,
+publish/reply and verify exact-head CI. Original D4/D5/exclusive handover and
+all preserved proximity/gametime/API/UI/Spiderweb/Stats lanes remain open.
+
 ## 2026-10-20 — Owner-approved PR1094 merged; next game source remains forward-only
 
 Owner explicitly approved1094. Prescribed cycle ran on30775c84 with all13checks
