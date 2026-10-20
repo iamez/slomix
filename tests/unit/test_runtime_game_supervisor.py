@@ -30,7 +30,7 @@ def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferr
     monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
     monkeypatch.setattr(module, 'validate_launch_commands', lambda *args: None)
     monkeypatch.setattr(module, 'verify_source', lambda *args: None)
-    monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kw: dict(argv=[], cwd='/', env={}, workspace={}))
+    monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kw: dict(argv=[], cwd='/', env={}, workspace={'source_commit': 'b' * 40}))
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kw: child)
     monkeypatch.setattr(module.os, 'set_blocking', lambda *args: None)
     monkeypatch.setattr(module, 'capture_process', lambda *args: captured)
@@ -404,7 +404,7 @@ def test_capture_interruption_closes_supervisor_input_without_claiming_shutdown(
     monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
     monkeypatch.setattr(module, 'validate_launch_commands', lambda *args: None)
     monkeypatch.setattr(module, 'verify_source', lambda *args: None)
-    monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kwargs: dict(argv=[], cwd='/', env={}, workspace={}))
+    monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kwargs: dict(argv=[], cwd='/', env={}, workspace={'source_commit': 'b' * 40}))
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kwargs: SimpleNamespace(pid=123, stdin=pipe))
     monkeypatch.setattr(module.os, 'set_blocking', lambda *args: None)
     def interrupted(*args):

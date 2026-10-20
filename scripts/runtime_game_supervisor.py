@@ -151,23 +151,29 @@ def verify_source(source, expected_commit):
             or re.fullmatch(r'[0-9a-f]{40}', expected_commit) is None):
         raise ValueError('Canonical committed source required')
     env = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_NO_REPLACE_OBJECTS': '1'}
-    head = subprocess.run(['/usr/bin/git', '-C', str(source), 'rev-parse', 'HEAD'],
+    head = subprocess.run(['/usr/bin/git', '-c', 'core.fsmonitor=false', '-C', str(source), 'rev-parse', 'HEAD'],
                           env=env, capture_output=True, text=True, check=True, timeout=5)
     if head.stdout.strip() != expected_commit:
         raise ValueError('Supervisor source commit moved')
-    entries = subprocess.run(['/usr/bin/git', '-C', str(source), 'ls-files', '-v', '-z'],
+    entries = subprocess.run(['/usr/bin/git', '-c', 'core.fsmonitor=false', '-C', str(source), 'ls-files', '-v', '-z'],
                              env=env, capture_output=True, check=True, timeout=5).stdout
     if any(entry[:1].islower() or entry.startswith(b'S ') for entry in entries.split(b'\0') if entry):
         raise ValueError('Source has hidden index flags')
     # No excluded-standard flag: ignored Python modules/bytecode can shadow
     # imports too. Use a dedicated source checkout without generated state.
-    unknown = subprocess.run(['/usr/bin/git', '-C', str(source), 'ls-files', '--others', '-z'],
+    unknown = subprocess.run(['/usr/bin/git', '-c', 'core.fsmonitor=false', '-C', str(source), 'ls-files', '--others', '-z'],
                              env=env, capture_output=True, check=True, timeout=5).stdout
     if unknown:
         raise ValueError('Source inventory must be closed, including ignored files')
     # Include staged and unstaged edits before admitting any project imports.
-    subprocess.run(['/usr/bin/git', '-C', str(source), 'diff', '--quiet', 'HEAD', '--'],
+    subprocess.run(['/usr/bin/git', '-c', 'core.fsmonitor=false', '-C', str(source), 'diff', '--quiet', 'HEAD', '--'],
                    env=env, capture_output=True, check=True, timeout=5)
+
+
+def require_workspace_commit(recipe, expected_commit):
+    """Bind the admitted Lua workspace bytes to the supervisor revision."""
+    if recipe['workspace']['source_commit'] != expected_commit:
+        raise ValueError('Workspace source commit does not match supervisor source')
 
 
 def startup_recipe(*args, **kwargs):
@@ -234,6 +240,7 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
     validate_launch_commands(rechecked, expected_argv)
     if rechecked['InvocationID'] != admitted['InvocationID']:
         raise ValueError('Service invocation changed during admission')
+    require_workspace_commit(recipe, expected_commit)
     print(json.dumps({'status': 'admitted_not_captured', 'unit': unit,
                       'invocation_id': admitted['InvocationID']}), flush=True)
     # stdout/stderr inherit the unit's retained log file, NOT undrained PIPEs.

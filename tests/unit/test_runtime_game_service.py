@@ -51,7 +51,7 @@ def test_offline_unit_parser_and_exclusive_output(
     tmp_path.chmod(0o700)
     checks = []
     monkeypatch.setattr(module, 'verify_source', lambda *a: checks.append('source'))
-    monkeypatch.setattr(module, 'startup_recipe', lambda *a, **k: checks.append('workspace'))
+    monkeypatch.setattr(module, 'startup_recipe', lambda *a, **k: (checks.append('workspace') or {'workspace': {'source_commit': 'a' * 40}}))
     args = dict(source=source, interpreter=Path(sys.executable), workspace=workspace,
                 destination=tmp_path / 'unit', commit='a' * 40,
                 defer_team_assignment=defer_team_assignment)

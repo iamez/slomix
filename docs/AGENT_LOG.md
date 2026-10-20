@@ -1411,3 +1411,28 @@ not additive or service/runtime activation proof. PR1100remains a separate npm
 security review; its documented unpatched braces residual remains unresolved.
 Original full plan, D4/D5/exclusive writer handover and all remaining roadmap
 items are retained. Production remains frozen; no DB/state or service change.
+
+## 2026-10-20 — Bind rehearsal revision and disable executable Git fsmonitor
+
+Validated two additional #1095 P1 review findings. Every supervisor source Git
+probe now explicitly sets core.fsmonitor=false, including both ls-files calls
+and diff, before admission. A native synthetic repository with an executable
+configured fsmonitor hook proves the local Git build executes the hook without
+the override and never executes it during the protected source inspection.
+
+Preparation now requires the verified startup recipe workspace.source_commit to
+match the supervisor commit before creating unit artifacts. Launch checks the
+same binding after the second containment/command admission and immediately
+before the process boundary. A valid workspace from another revision is refused;
+matching preparation and launch controls still reach their next independent
+boundary. Existing synthetic recipe fixtures now supply their explicit revision.
+
+Native targeted suite:132 passed, covering source binding, supervisor/service and
+launch contract controls, including existing actual local UDP fixture and offline
+systemd parser. Three guard mutations produced1/1/1 observed failing tests; both
+binding mutations retained a passing matching control. Every source was restored
+and compared with cmp; five restored source-binding tests then passed. Ruff and
+diff checks pass. No service, engine, live database or deployed payload touched.
+Next: publish, answer both reviews and refresh child dependencies with exact-head
+CI. Original D4/D5 and exclusive writer handover remain open; #1094 owner merge
+authorization does not authorize #1095 or activation. Preserve original roadmap.
