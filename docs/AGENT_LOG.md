@@ -1304,3 +1304,28 @@ passed. This is a fixture/source result, not a new exact-head CI result.
 Next:publish, refresh child dependencies and inspect both Python CI legs again.
 Production audit override still absent at read-only host check; owner commands
 were provided, no production service/config/code was changed by the agent.
+
+## 2026-10-20 — Audit admission, bytecode and fixed launch contract corrections
+
+Addressed all five new1095findings. Marked audit CLI requires-I before project/
+driver imports and verifies the full manifest before round-time/rule definitions,
+configuration and DB/cursor entry points. Library callers retain their startup
+trust boundary. The bot's dynamic caller suppresses bytecode BEFORE importing the
+validator/exec_module: the module body alone cannot prevent its own loader.pyc.
+Marked schema preflight also suppresses bytecode even with-I without-B.
+
+Launch and shutdown share fixed rehearsal port27962; another port is refused
+before host inspection. Native UDP fixture now tests the actual dedicated port,
+not an unrelated ephemeral socket. Marked migration timeouts use only explicit
+file values or constants; legacy environment budgets remain supported through
+legacy settings. No env fallback remains for omitted marked timeout keys.
+
+Public game219tests passed; full local candidate409targeted tests passed after
+app integration (overlapping sets, not additive). Six audit mutations each
+produced observed failures andcmp restoration; root budget mutation4failures,
+port mutation3failures. Actual child CLI wrong-port refusal, source/driver shadow
+sentinels and bytecode inventory failures were observed before restoration.
+Ruff/configured security/diff checks pass. No engine, real DB, service, deployed
+payload or production configuration was touched. Next:publish, refresh children,
+answer five comments and inspect newly triggered exact-head CI. Original plan
+and per-PR owner merge/activation gates remain in force.

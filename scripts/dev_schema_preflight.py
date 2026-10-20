@@ -12,9 +12,11 @@ from __future__ import annotations
 # ruff: noqa: E402 -- isolated CLI admission precedes third-party imports
 import sys
 
-if __name__ == "__main__" and "--release-mode" in sys.argv and not sys.flags.isolated:
-    sys.stdout.write('{"clean": false, "error": "Release preflight requires isolated Python (-I)"}\n')
-    raise SystemExit(1)
+if __name__ == "__main__" and "--release-mode" in sys.argv:
+    sys.dont_write_bytecode = True
+    if not sys.flags.isolated:
+        sys.stdout.write('{"clean": false, "error": "Release preflight requires isolated Python (-I)"}\n')
+        raise SystemExit(1)
 
 import argparse
 import asyncio
