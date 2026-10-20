@@ -41,6 +41,30 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-20 — Application launch isolation and pre-start policy review closure
+
+Addressed all three new1096findings. Bot/web use-E-B-s, consumers additionally-u:
+-E ignores every PYTHON* influence, explicit-B/-s preserve bytecode/user-site
+protection, and-u preserves consumer output behavior otherwise lost when-E ignores
+PYTHONUNBUFFERED. Isolated preflight remains-I-B. Actual child interpreter tests
+exercise PYTHONPLATLIBDIR, no-user-site and output buffering, not just unit text.
+
+Prepared contracts record Requires/Wants/After. Resolved health requires every
+contract member while permitting implicit systemd dependencies. Release schema
+preflight now rejects unapproved environment BEFORE DB access. Health shares the
+same safe environment policy; legacy unmarked APIs retain their existing mode.
+Old prepared contracts fail closed and must be regenerated. Temporary audit
+mute overrides must be reconciled into an approved config/contract before later
+activation; do not silently certify the currently installed old contract.
+
+Agent256tests passed and six mutations were observed failing withcmp restoration.
+Public app269tests pass after game-parent integration; full candidate409targeted
+checks pass (overlapping sets). Native child/preflight tests use driver doubles,
+not live services or databases. Ruff/security/diff checks pass. No activation,
+mount, DB migration or deployed payload change occurred. Next:publish, refresh
+state child, answer three review threads and inspect exact-head CI. First merge
+candidate1093remains clean/green atc40537ba,behindmain0,owner approval required.
+
 ## 2026-10-19 — Admit systemd memory-pressure metadata without app overrides
 
 New1096review identified systemd>=254's MEMORY_PRESSURE_WATCH/WRITE metadata.

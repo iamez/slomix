@@ -14,6 +14,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+SYSTEM_ENVIRONMENT = frozenset({
+    'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE',
+    'LC_MESSAGES', 'LC_NUMERIC', 'LC_TIME', 'LC_COLLATE', 'LC_MONETARY',
+    # systemd 254+ memory-pressure protocol metadata (not application config).
+    'MEMORY_PRESSURE_WATCH', 'MEMORY_PRESSURE_WRITE',
+    'INVOCATION_ID', 'JOURNAL_STREAM', 'SYSTEMD_EXEC_PID', 'XDG_RUNTIME_DIR',
+    'XDG_SESSION_ID', 'XDG_SESSION_TYPE', 'XDG_SESSION_CLASS',
+})
+
+RELEASE_BOOTSTRAP_KEYS = frozenset({
+    "PATH", "SLOMIX_ENV_FILE", "SLOMIX_ENV_SHA256",
+    "PYTHONDONTWRITEBYTECODE", "PYTHONNOUSERSITE",
+})
+
+
+def refuse_unapproved_environment(values: dict, environment: dict, bootstrap) -> None:
+    """Only approved config, explicit bootstrap and systemd metadata may survive."""
+    for key, value in environment.items():
+        if (key in {"LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT"}
+                or (key.startswith("PYTHON") and key not in RELEASE_BOOTSTRAP_KEYS)
+                or (key in values and value != values[key])
+                or (key not in values and key not in bootstrap and key not in SYSTEM_ENVIRONMENT)):
+            raise ValueError("Unapproved process environment")
+
+
 def external_config_path(value: str, root: Path = ROOT) -> Path:
     """Require a canonical, private regular file outside the code payload."""
     path = Path(value)
@@ -75,9 +100,11 @@ def read_external_environment(path: Path, *, root: Path = ROOT, expected_digest:
         return dict(dotenv_values(stream=stream, interpolate=False))
 
 
-def refuse_config_overrides(values: dict, environment: dict) -> None:
+def refuse_config_overrides(values: dict, environment: dict, *, strict=False) -> None:
     """Pre-start guard: a file proof cannot certify shadowed process settings."""
     if any(key in values or key.startswith(("POSTGRES_", "DB_", "PG", "DATABASE_"))
            or key in {"PYTHONPATH", "PYTHONHOME", "LD_PRELOAD", "LD_LIBRARY_PATH", "LD_AUDIT"}
            for key in environment):
         raise ValueError("Inherited environment overrides explicit application configuration")
+    if strict:
+        refuse_unapproved_environment({}, environment, RELEASE_BOOTSTRAP_KEYS)

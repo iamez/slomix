@@ -1420,3 +1420,27 @@ Ruff/configured security/diff checks pass. No engine, real DB, service, deployed
 payload or production configuration was touched. Next:publish, refresh children,
 answer five comments and inspect newly triggered exact-head CI. Original plan
 and per-PR owner merge/activation gates remain in force.
+
+## 2026-10-20 — Application launch isolation and pre-start policy review closure
+
+Addressed all three new1096findings. Bot/web use-E-B-s, consumers additionally-u:
+-E ignores every PYTHON* influence, explicit-B/-s preserve bytecode/user-site
+protection, and-u preserves consumer output behavior otherwise lost when-E ignores
+PYTHONUNBUFFERED. Isolated preflight remains-I-B. Actual child interpreter tests
+exercise PYTHONPLATLIBDIR, no-user-site and output buffering, not just unit text.
+
+Prepared contracts record Requires/Wants/After. Resolved health requires every
+contract member while permitting implicit systemd dependencies. Release schema
+preflight now rejects unapproved environment BEFORE DB access. Health shares the
+same safe environment policy; legacy unmarked APIs retain their existing mode.
+Old prepared contracts fail closed and must be regenerated. Temporary audit
+mute overrides must be reconciled into an approved config/contract before later
+activation; do not silently certify the currently installed old contract.
+
+Agent256tests passed and six mutations were observed failing withcmp restoration.
+Public app269tests pass after game-parent integration; full candidate409targeted
+checks pass (overlapping sets). Native child/preflight tests use driver doubles,
+not live services or databases. Ruff/security/diff checks pass. No activation,
+mount, DB migration or deployed payload change occurred. Next:publish, refresh
+state child, answer three review threads and inspect exact-head CI. First merge
+candidate1093remains clean/green atc40537ba,behindmain0,owner approval required.

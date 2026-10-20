@@ -214,7 +214,7 @@ def test_rehashed_unit_cannot_change_consumer_policy(inputs, component, change):
     unit = destination / f'slomix-runtime-{component}.service'
     original = unit.read_text()
     if change == 'command':
-        altered = original.replace(f'ExecStart={interpreter} -B -m', 'ExecStart=/bin/false #')
+        altered = original.replace(f'ExecStart={interpreter} -E -B -s -u -m', 'ExecStart=/bin/false #')
     elif change == 'sandbox':
         altered = original.replace(f'ReadOnlyPaths={release}\n', '')
     else:
@@ -267,3 +267,24 @@ def test_mount_guard_checks_release_and_all_descendants(inputs, monkeypatch, wri
         assert observed == {'.', *(p.relative_to(release).as_posix() for p in release.rglob('*'))}
     else:
         assert writable in observed
+
+
+@pytest.mark.parametrize('component', ['team', 'cache'])
+def test_consumer_actual_python_flags_ignore_ambient_python_settings(inputs, component):
+    import shlex
+    import subprocess
+    import sys
+
+    release, _, environment = inputs
+    unit = delivery.render_unit(release, sys.executable, environment, release.name, component=component)
+    argv = shlex.split(next(line.split('=', 1)[1] for line in unit.splitlines()
+                            if line.startswith('ExecStart=')))
+    assert argv[1:5] == ['-E', '-B', '-s', '-u']
+    result = subprocess.run([*argv[:5], '-c',
+                             'import sys; assert sys.flags.ignore_environment; '
+                             'assert sys.stdout.write_through; assert sys.flags.no_user_site; '
+                             'assert sys.dont_write_bytecode; print("startup-flags-ok")'],
+                            env={'PYTHONPLATLIBDIR': 'nonexistent-library'},
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'startup-flags-ok'

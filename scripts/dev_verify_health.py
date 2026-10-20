@@ -17,16 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.dev_runtime_contract import load_contract  # noqa: E402
 from shared.release_manifest import file_hash  # noqa: E402
-from shared.runtime_environment import read_external_environment  # noqa: E402
-
-SYSTEM_ENVIRONMENT = frozenset({
-    'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE',
-    'LC_MESSAGES', 'LC_NUMERIC', 'LC_TIME', 'LC_COLLATE', 'LC_MONETARY',
-    # systemd 254+ memory-pressure protocol metadata (not application config).
-    'MEMORY_PRESSURE_WATCH', 'MEMORY_PRESSURE_WRITE',
-    'INVOCATION_ID', 'JOURNAL_STREAM', 'SYSTEMD_EXEC_PID', 'XDG_RUNTIME_DIR',
-    'XDG_SESSION_ID', 'XDG_SESSION_TYPE', 'XDG_SESSION_CLASS',
-})
+from shared.runtime_environment import read_external_environment, refuse_unapproved_environment  # noqa: E402
 
 
 def command_matches(value, expected):
@@ -36,6 +27,9 @@ def command_matches(value, expected):
 
 def release_unit_matches(name, values, specification):
     """Inspect resolved systemd properties, including overrides from drop-ins."""
+    if any(not set(specification[key]) <= set(values.get(prop, '').split())
+           for key, prop in (('requires', 'Requires'), ('wants', 'Wants'), ('after', 'After'))):
+        raise ValueError(f'{name}: release unit dependencies differ from prepared contract')
     environment = dict(item.split('=', 1) for item in shlex.split(values.get('Environment', '')))
     if (values.get('Group') != specification['group'] or environment != specification['environment']
             or values.get('PassEnvironment')
@@ -66,6 +60,7 @@ def units(run, contract=None):
             '-p', 'ReadOnlyPaths', '-p', 'ReadWritePaths', '-p', 'NoNewPrivileges', '-p', 'PrivateTmp',
             '-p', 'MemoryMax', '-p', 'CPUQuotaPerSecUSec',
             '-p', 'Restart', '-p', 'RestartUSec', '-p', 'InvocationID',
+            '-p', 'Requires', '-p', 'Wants', '-p', 'After',
         ], text=True, timeout=5)
         values = dict(line.split('=', 1) for line in output.splitlines() if '=' in line)
         if values.get('LoadState') != 'loaded' or values.get('WorkingDirectory') != str(directory):
@@ -161,12 +156,10 @@ def check(run, target, previous, contract=None):
                                                  expected_digest=specification['env_sha256'])
             # /proc usually exposes exec-time values; some launchers also export
             # approved dotenv keys before exec. Both shapes must match when visible.
-            for key, value in process_env.items():
-                if (key in {'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT'}
-                        or (key in approved and value != approved[key])
-                        or (key not in approved and key not in specification['environment']
-                            and key not in SYSTEM_ENVIRONMENT)):
-                    raise ValueError(f'{name}: running configuration differs from approved environment')
+            try:
+                refuse_unapproved_environment(approved, process_env, specification['environment'])
+            except ValueError:
+                raise ValueError(f'{name}: running configuration differs from approved environment') from None
     if contract is not None:
         bot_ready(current['etlegacy-bot'], previous['_captured_at'])
     health = read_json('/health')
