@@ -78,7 +78,7 @@ def test_offline_unit_parser_and_exclusive_output(
     assert 'UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT' in text.splitlines()
     assert '[Install]' not in text and 'ExecStop=' not in text
     assert ' -I ' in text
-    expected = (f"ExecStart={args['interpreter']} -I -B {source}/scripts/runtime_game_supervisor.py"
+    expected = (f"ExecStart=/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C {args['interpreter']} -I -B {source}/scripts/runtime_game_supervisor.py"
                 f" run --directory {workspace} --unit {record['unit']} --commit {'a' * 40}")
     if bots:
         expected += f" --bot-fixture {tmp_path / 'bots'} --bot-manifest-sha256 {'b' * 64}"

@@ -88,7 +88,12 @@ except (OSError, RuntimeError, ValueError):
 
 
 from shared.round_time import MMSS_SQL_REGEX, round_duration_sql  # noqa: E402 (needs the sys.path bootstrap above)
-from shared.runtime_environment import explicit_env_file, load_environment  # noqa: E402
+from shared.runtime_environment import (
+    explicit_env_file,
+    load_environment,
+    read_external_environment,  # noqa: E402
+    refuse_config_overrides,
+)
 
 # The date the backfill import (supastats history) hands off to live capture.
 # Every historical row before this date came through the lossy backfill path;
@@ -1458,7 +1463,19 @@ def main(argv: list[str] | None = None) -> int:
     validate_rules(RULES)
     validate_trend_rules(TREND_RULES)
 
-    conn = get_connection()
+    try:
+        # Library/sentinel callers already loaded their approved environment.
+        # Only the standalone marked CLI must reject inherited configuration.
+        marker = _REPO_ROOT / ".slomix-release.json"
+        if __name__ == "__main__" and (marker.exists() or marker.is_symlink()):
+            selected = explicit_env_file(_REPO_ROOT)
+            refuse_config_overrides(read_external_environment(selected, root=_REPO_ROOT,
+                expected_digest=os.getenv("SLOMIX_ENV_SHA256")), os.environ)
+        conn = get_connection()
+    except Exception:
+        print(json.dumps({"status": "refused", "reason": "Audit database configuration or connection failed"}),
+              file=sys.stderr)
+        return 1
     try:
         results = run_audit(conn, RULES, top_n=args.top)
         trends = run_trend_audit(conn, TREND_RULES)

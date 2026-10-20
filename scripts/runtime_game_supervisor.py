@@ -29,7 +29,6 @@ import os
 import re
 import stat
 import subprocess
-import zipfile
 from pathlib import Path
 
 POLICY = {'Type': 'exec', 'KillMode': 'control-group', 'Restart': 'no',
@@ -41,7 +40,7 @@ POLICY = {'Type': 'exec', 'KillMode': 'control-group', 'Restart': 'no',
 CLEARED_ENVIRONMENT = ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT')
 REHEARSAL_PORT = 27962
 AUXILIARY_COMMANDS = ('ExecCondition', 'ExecStartPre', 'ExecStartPost', 'ExecReload', 'ExecStop', 'ExecStopPost')
-PROPERTIES = (*POLICY, *AUXILIARY_COMMANDS, 'ExecStart', 'StandardOutput', 'StandardError', 'UnsetEnvironment', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
+PROPERTIES = (*POLICY, *AUXILIARY_COMMANDS, 'ExecStart', 'StandardOutput', 'StandardError', 'UnsetEnvironment', 'Environment', 'EnvironmentFiles', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
               'InvocationID', 'Result')
 
 
@@ -65,6 +64,8 @@ def unit_properties(unit):
         raise ValueError('Dedicated unit cleanup/lifetime policy disagrees')
     if set(values.get('UnsetEnvironment', '').split()) != set(CLEARED_ENVIRONMENT):
         raise ValueError('Dedicated unit inherited import environment is not cleared')
+    if values.get('Environment', '') or values.get('EnvironmentFiles', ''):
+        raise ValueError('Dedicated unit application environment must be empty')
     return values
 
 
@@ -72,7 +73,7 @@ def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture
                     bot_manifest_sha256=None, proof_socket=None, proof_database_name=None,
                     import_lock_directory=None, defer_team_assignment=False, evidence_log=None):
     """One unambiguous argv shared by offline generation and live admission."""
-    argv = [str(interpreter), '-I', '-B', str(source / 'scripts/runtime_game_supervisor.py'),
+    argv = ['/usr/bin/env', '-i', 'PATH=/usr/bin:/bin', 'LC_ALL=C', str(interpreter), '-I', '-B', str(source / 'scripts/runtime_game_supervisor.py'),
             'run', '--directory', str(directory), '--unit', unit, '--commit', commit]
     if bot_fixture is not None:
         argv += ['--bot-fixture', str(bot_fixture), '--bot-manifest-sha256', bot_manifest_sha256]
@@ -83,7 +84,7 @@ def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture
         argv += ['--defer-team-assignment']
     if evidence_log is not None:
         argv += ['--evidence-log', str(evidence_log)]
-    if any(not isinstance(value, str) or re.fullmatch(r'[A-Za-z0-9_./-]+', value) is None
+    if any(not isinstance(value, str) or re.fullmatch(r'[A-Za-z0-9_./=:-]+', value) is None
            for value in argv):
         raise ValueError('Unambiguous ASCII supervisor arguments required')
     return argv
@@ -140,6 +141,8 @@ def require_containment(unit):
             or not group.endswith('/' + unit)
             or f'0::{group}' not in Path('/proc/self/cgroup').read_text().splitlines()):
         raise ValueError('Supervisor is not in the declared unified service cgroup')
+    if any(key not in {'PATH', 'LC_ALL', 'LC_CTYPE'} for key in os.environ):
+        raise ValueError('Unexpected effective application environment')
     return values
 
 
@@ -315,8 +318,7 @@ def main(argv=None):
                   else verify_stopped(args.unit, args.port, args.invocation_id))
         print(json.dumps(result, sort_keys=True), flush=True)
         return 0 if result.get('import', {}).get('status', 'completed') == 'completed' else 1
-    except (OSError, ValueError, KeyError, TypeError, ImportError, zipfile.BadZipFile,
-            subprocess.SubprocessError) as exc:
+    except Exception as exc:
         print(json.dumps({'status': 'refused_or_failed', 'error_type': type(exc).__name__,
                           'shutdown_verified': False, 'evidence_retained': True}),
               file=sys.stderr, flush=True)

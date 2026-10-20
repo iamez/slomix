@@ -9,10 +9,14 @@ environment before starting Python and use a trusted interpreter environment.
 """
 from __future__ import annotations
 
+import os
+
 # ruff: noqa: E402 -- isolated CLI admission precedes third-party imports
 import sys
 
-if __name__ == "__main__" and "--release-mode" in sys.argv:
+_MARKED_RELEASE = os.path.lexists(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
+                                             ".slomix-release.json"))
+if __name__ == "__main__" and ("--release-mode" in sys.argv or _MARKED_RELEASE):
     sys.dont_write_bytecode = True
     if not sys.flags.isolated:
         sys.stdout.write('{"clean": false, "error": "Release preflight requires isolated Python (-I)"}\n')
@@ -22,7 +26,6 @@ import argparse
 import asyncio
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import asyncpg
@@ -158,7 +161,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         release_root = None
-        if args.release_mode:
+        if args.release_mode or _MARKED_RELEASE:
             release_root = Path(__file__).resolve().parents[1]
             verify_release(release_root)
             if (args.migrations_dir != release_root / "migrations"
