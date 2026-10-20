@@ -994,3 +994,42 @@ Tests must inspect those conditions and buffer work, not only index presence.
 Retain ambiguity detection and NULL-session parents; never make this UNIQUE or
 partial on session readiness. TEMP local-buffer timing is not cold production
 latency. Preserve migration/bootstrap/release parity; apply only via owner deploy.
+
+## 2026-10-20 — Narrow npm security fixes without a legacy Tailwind migration
+
+Security detour from the runtime v2 #1093–#1097 review/CI/handover queue. All
+three open GitHub alerts are addressed in source: source-map-js 1.2.1 -> 1.2.2
+in both lockfiles (GHSA-68fv-2mgg-jv7q; alerts43/44), and root
+postcss-selector-parser 6.1.4 -> 7.1.6 through an exact transitive override
+(GHSA-rj75-hqrm-r3gf; alert45). Root Tailwind remains 3.4.17 and the existing
+build:css command is unchanged. Existing Dependabot1098 instead upgrades legacy
+Tailwind to4, removes its CLI without adding @tailwindcss/cli, and is not the
+compatible fix represented here;1099 only covers the root source-map alert.
+
+Node22.23.2/npm10.9.8 performed sequential npm ci --ignore-scripts resolution.
+Actual npm ls confirms both parser consumers use7.1.6 and both source-map trees
+use1.2.2. Native legacy build:css with a temporary output is byte-identical to
+an independent existing Tailwind3 build over the same content/config:342828bytes,
+SHA256 caa17a12dc38ca7fc2fbfd51df2f58a9118646097ca6b8df0c2ec933f1982722.
+Shell sha256sum and Node crypto independently agree; cmp passes. SPA production
+Vite build succeeds into a temporary directory after API generation; it reports
+its existing plugin warning: "Sourcemap is likely to be incorrect: a plugin
+(@tailwindcss/vite:generate:build) was used to transform files, but didn't
+generate a sourcemap for the transformation." This is compatibility evidence,
+not a deployed or provenance-certified SPA artifact. No browser or server ran.
+
+Actual npm advisory negative controls reject untouched baseline locks for the
+original package vulnerabilities. Patched SPA audit has0vulnerabilities; patched
+root audit no longer includes source-map-js/postcss-selector-parser but still
+exits1 for pre-existing GHSA-vfj7-8cjw-p6xm (braces<=3.0.3), propagated through
+chokidar/fast-glob/micromatch/Tailwind as5high package entries. Official advisory
+https://github.com/advisories/GHSA-vfj7-8cjw-p6xm lists no patched version;
+registry latest remains3.0.3. This residual is explicitly unresolved, not
+suppressed or claimed fixed. No major framework migration or fake substitute.
+
+Only package manifest/lock files and existing four ledgers changed. Source is
+not deployed; GitHub alerts remain open until reviewed fixes reach default
+branch and are rescanned. Next: publish a separately reviewed security slice,
+then return to exact-head runtime CI, review closure and owner-approved handover.
+Every PR still needs its own explicit owner merge permission; production remains
+frozen and no service/config/database/state activation was performed.
