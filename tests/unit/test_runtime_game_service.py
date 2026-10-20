@@ -52,6 +52,8 @@ def test_offline_unit_parser_and_exclusive_output(
     checks = []
     monkeypatch.setattr(module, 'verify_source', lambda *a: checks.append('source'))
     monkeypatch.setattr(module, 'startup_recipe', lambda *a, **k: (checks.append('workspace') or {'workspace': {'source_commit': 'a' * 40}}))
+    artifact = (source / 'scripts/runtime_game_supervisor.py').read_bytes()
+    monkeypatch.setattr(module, 'committed_supervisor', lambda *args: artifact)
     args = dict(source=source, interpreter=Path(sys.executable), workspace=workspace,
                 destination=tmp_path / 'unit', commit='a' * 40,
                 defer_team_assignment=defer_team_assignment)
@@ -78,17 +80,16 @@ def test_offline_unit_parser_and_exclusive_output(
     assert 'UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT' in text.splitlines()
     assert '[Install]' not in text and 'ExecStop=' not in text
     assert ' -I ' in text
-    expected = (f"ExecStart=/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C {args['interpreter']} -I -B {source}/scripts/runtime_game_supervisor.py"
-                f" run --directory {workspace} --unit {record['unit']} --commit {'a' * 40}")
-    if bots:
-        expected += f" --bot-fixture {tmp_path / 'bots'} --bot-manifest-sha256 {'b' * 64}"
-    if import_requested:
-        expected += (f" --proof-socket {args['proof_socket']} --proof-database-name {args['proof_database_name']}"
-                     f" --import-lock-directory {args['import_lock_directory']}")
-    if defer_team_assignment:
-        expected += ' --defer-team-assignment'
-    expected += f" --evidence-log {args['destination'] / 'service.log'}"
-    assert expected in text.splitlines()
+    import shlex
+    actual = shlex.split(next(line.removeprefix('ExecStart=') for line in text.splitlines() if line.startswith('ExecStart=')))
+    expected = module.supervisor_argv(source, args['interpreter'], workspace, record['unit'], 'a' * 40,
+        bot_fixture=args.get('bot_fixture'), bot_manifest_sha256=args.get('bot_manifest_sha256'),
+        proof_socket=args.get('proof_socket'), proof_database_name=args.get('proof_database_name'),
+        import_lock_directory=args.get('import_lock_directory'), defer_team_assignment=defer_team_assignment,
+        evidence_log=args['destination'] / 'service.log', supervisor_sha256=hashlib.sha256(artifact).hexdigest())
+    assert actual == expected
+    pinned = args['destination'] / ('supervisor-' + record['supervisor_sha256'] + '.py')
+    assert pinned.read_bytes() == artifact and pinned.stat().st_mode & 0o777 == 0o600
     assert ('--bot-fixture' in text) == bots
     if bots:
         assert '--bot-manifest-sha256 ' + 'b' * 64 in text

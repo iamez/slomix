@@ -21,7 +21,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.prepare_runtime_game_bundle import _write_new  # noqa: E402
 from scripts.runtime_game_startup import startup_recipe  # noqa: E402
-from scripts.runtime_game_supervisor import require_workspace_commit, supervisor_argv, verify_source  # noqa: E402
+from scripts.runtime_game_supervisor import (
+    SUPERVISOR_BOOTSTRAP,
+    require_workspace_commit,
+    supervisor_argv,
+    verify_source,
+)  # noqa: E402
 
 
 def safe_path(path):
@@ -43,7 +48,7 @@ def _validate_team_policy(defer_team_assignment, proof_socket, proof_database_na
 
 def render(*, source, interpreter, workspace, destination, unit, commit,
            bot_fixture=None, bot_manifest_sha256=None, proof_socket=None,
-           proof_database_name=None, import_lock_directory=None, defer_team_assignment=False):
+           proof_database_name=None, import_lock_directory=None, defer_team_assignment=False, supervisor_sha256=None):
     _validate_team_policy(defer_team_assignment, proof_socket, proof_database_name,
                           import_lock_directory)
     for path in (source, interpreter, workspace, destination):
@@ -69,13 +74,13 @@ def render(*, source, interpreter, workspace, destination, unit, commit,
         bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256,
         proof_socket=proof_socket, proof_database_name=proof_database_name,
         import_lock_directory=import_lock_directory, defer_team_assignment=defer_team_assignment,
-        evidence_log=destination / 'service.log')
+        evidence_log=destination / 'service.log', supervisor_sha256=supervisor_sha256)
     return f'''[Unit]
 Description=Slomix isolated ET capture rehearsal (owner activation only)
 
 [Service]
 Type=exec
-ExecStart={' '.join(argv)}
+ExecStart={' '.join(json.dumps(value) if value == SUPERVISOR_BOOTSTRAP else value for value in argv)}
 WorkingDirectory={source}
 Restart=no
 RemainAfterExit=no
@@ -98,6 +103,17 @@ StandardInput=null
 StandardOutput=append:{destination}/service.log
 StandardError=inherit
 '''
+
+
+def committed_supervisor(source, commit):
+    # Read the artifact from the exact approved object, never the mutable path.
+    raw = subprocess.run(['/usr/bin/git', '-c', 'core.fsmonitor=false', '-C', str(source),
+                          'show', commit + ':scripts/runtime_game_supervisor.py'],
+                         env={'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'GIT_NO_REPLACE_OBJECTS': '1'},
+                         capture_output=True, check=True, timeout=5).stdout
+    if not raw or len(raw) > 1024 * 1024:
+        raise ValueError('Bounded committed supervisor required')
+    return raw
 
 
 def prepare(*, source, interpreter, workspace, destination, commit,
@@ -126,13 +142,16 @@ def prepare(*, source, interpreter, workspace, destination, commit,
     if destination.is_relative_to(workspace) or workspace.is_relative_to(destination):
         raise ValueError('Service output and game workspace must be separate')
     unit = 'slomix-et-proof-' + secrets.token_hex(8) + '.service'
+    raw = committed_supervisor(source, commit)
+    digest = hashlib.sha256(raw).hexdigest()
     content = render(source=source, interpreter=interpreter, workspace=workspace,
                      destination=destination, unit=unit, commit=commit,
                      bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256,
                      proof_socket=proof_socket, proof_database_name=proof_database_name,
                      import_lock_directory=import_lock_directory,
-                     defer_team_assignment=defer_team_assignment).encode('ascii')
+                     defer_team_assignment=defer_team_assignment, supervisor_sha256=digest).encode('ascii')
     destination.mkdir(mode=0o700)
+    _write_new(destination / ('supervisor-' + digest + '.py'), raw)
     _write_new(destination / unit, content)
     _write_new(destination / 'service.log', b'')
     # Offline parser validation only: does not load/link/start the unit.
@@ -151,6 +170,7 @@ def prepare(*, source, interpreter, workspace, destination, commit,
               'defer_team_assignment': defer_team_assignment,
               'database_readiness_verified': False,
               'unit_sha256': hashlib.sha256(content).hexdigest(),
+              'supervisor_sha256': digest,
               'limits': {'runtime_seconds': 3600, 'stop_seconds': 30,
                          'memory_bytes': 805306368, 'tasks': 64, 'per_file_bytes': 67108864},
               'remaining': ['explicit round fixture', 'owner activation',

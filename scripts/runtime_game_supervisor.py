@@ -24,6 +24,7 @@ if __name__ == '__main__':
 import argparse
 import asyncio
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -69,11 +70,20 @@ def unit_properties(unit):
     return values
 
 
+# Trusted launch program is embedded verbatim in the prepared unit.
+SUPERVISOR_BOOTSTRAP = "exec(bytes.fromhex('696d706f727420686173686c69622c6f732c737461742c7379730a706174682c6469676573742c736f757263653d7379732e617267765b313a345d0a7472793a0a2066643d6f732e6f70656e28706174682c6f732e4f5f52444f4e4c597c6f732e4f5f4e4f464f4c4c4f577c6f732e4f5f4e4f4e424c4f434b7c6f732e4f5f434c4f45584543290a207472793a0a2020696e666f3d6f732e6673746174286664290a20206966206e6f7420737461742e535f495352454728696e666f2e73745f6d6f646529206f7220696e666f2e73745f756964213d6f732e6765747569642829206f7220737461742e535f494d4f444528696e666f2e73745f6d6f646529213d306f3630303a2072616973652056616c75654572726f7228290a202077697468206f732e66646f70656e2866642c227262222c636c6f736566643d46616c7365292061732073747265616d3a207261773d73747265616d2e726561642831303438353737290a2066696e616c6c793a206f732e636c6f7365286664290a206966206c656e28726177293e31303438353736206f7220686173686c69622e73686132353628726177292e6865786469676573742829213d6469676573743a2072616973652056616c75654572726f7228290a65786365707420457863657074696f6e3a0a207379732e7374646572722e777269746528277b22737461747573223a22726566757365645f6f725f6661696c6564222c22726561736f6e223a2273757065727669736f725f61727469666163745f72656675736564222c2273687574646f776e5f7665726966696564223a66616c73652c2265766964656e63655f72657461696e6564223a747275657d5c6e27290a2072616973652053797374656d457869742831292066726f6d204e6f6e650a7379732e617267763d5b736f757263652c2a7379732e617267765b343a5d5d0a6578656328636f6d70696c65287261772c736f757263652c226578656322292c7b225f5f6e616d655f5f223a225f5f6d61696e5f5f222c225f5f66696c655f5f223a736f757263652c225f53555045525649534f525f534841323536223a6469676573747d290a'))"
+
 def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture=None,
                     bot_manifest_sha256=None, proof_socket=None, proof_database_name=None,
-                    import_lock_directory=None, defer_team_assignment=False, evidence_log=None):
+                    import_lock_directory=None, defer_team_assignment=False, evidence_log=None,
+                    supervisor_sha256=None):
     """One unambiguous argv shared by offline generation and live admission."""
-    argv = ['/usr/bin/env', '-i', 'PATH=/usr/bin:/bin', 'LC_ALL=C', str(interpreter), '-I', '-B', str(source / 'scripts/runtime_game_supervisor.py'),
+    digest = supervisor_sha256 or globals().get('_SUPERVISOR_SHA256') or hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    if re.fullmatch(r'[a-f0-9]{64}', digest) is None:
+        raise ValueError('Pinned supervisor digest required')
+    artifact = (evidence_log.parent if evidence_log is not None else directory.parent) / ('supervisor-' + digest + '.py')
+    argv = ['/usr/bin/env', '-i', 'PATH=/usr/bin:/bin', 'LC_ALL=C', str(interpreter), '-I', '-B', '-c',
+            SUPERVISOR_BOOTSTRAP, str(artifact), digest, str(source / 'scripts/runtime_game_supervisor.py'),
             'run', '--directory', str(directory), '--unit', unit, '--commit', commit]
     if bot_fixture is not None:
         argv += ['--bot-fixture', str(bot_fixture), '--bot-manifest-sha256', bot_manifest_sha256]
@@ -84,7 +94,7 @@ def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture
         argv += ['--defer-team-assignment']
     if evidence_log is not None:
         argv += ['--evidence-log', str(evidence_log)]
-    if any(not isinstance(value, str) or re.fullmatch(r'[A-Za-z0-9_./=:-]+', value) is None
+    if any(not isinstance(value, str) or (value != SUPERVISOR_BOOTSTRAP and re.fullmatch(r'[A-Za-z0-9_./=:-]+', value) is None)
            for value in argv):
         raise ValueError('Unambiguous ASCII supervisor arguments required')
     return argv
@@ -165,9 +175,65 @@ def verify_source(source, expected_commit):
                              env=env, capture_output=True, check=True, timeout=5).stdout
     if unknown:
         raise ValueError('Source inventory must be closed, including ignored files')
-    # Include staged and unstaged edits before admitting any project imports.
-    subprocess.run(['/usr/bin/git', '-c', 'core.fsmonitor=false', '-C', str(source), 'diff', '--quiet', 'HEAD', '--'],
-                   env=env, capture_output=True, check=True, timeout=5)
+    # Compare raw Git objects/index/worktree bytes: diff may execute local
+    # clean filters even with fsmonitor disabled. No attributes conversion.
+    command = ['/usr/bin/git', '-c', 'core.fsmonitor=false', '-C', str(source)]
+    tree = subprocess.run([*command, 'ls-tree', '-r', '-z', expected_commit], env=env,
+                          capture_output=True, check=True, timeout=5).stdout
+    index = subprocess.run([*command, 'ls-files', '--stage', '-z'], env=env,
+                           capture_output=True, check=True, timeout=5).stdout
+    expected = {}
+    for entry in tree.split(b'\0'):
+        if not entry:
+            continue
+        meta, name = entry.split(b'\t', 1)
+        mode, kind, oid = meta.split()
+        if kind != b'blob' or mode not in {b'100644', b'100755', b'120000'}:
+            raise ValueError('Unsupported committed source entry')
+        expected[name] = (mode, oid)
+    actual = {}
+    for entry in index.split(b'\0'):
+        if not entry:
+            continue
+        meta, name = entry.split(b'\t', 1)
+        mode, oid, stage = meta.split()
+        if stage != b'0' or name in actual:
+            raise ValueError('Unmerged source index')
+        actual[name] = (mode, oid)
+    if actual != expected:
+        raise subprocess.CalledProcessError(1, ['raw-source-index-comparison'])
+    for name, (mode, oid) in expected.items():
+        path = source / os.fsdecode(name)
+        info = path.lstat()
+        if mode == b'120000':
+            if not stat.S_ISLNK(info.st_mode):
+                raise ValueError('Source file type drift')
+            raw = os.fsencode(os.readlink(path))
+        else:
+            if not stat.S_ISREG(info.st_mode):
+                raise ValueError('Source file type drift')
+            if bool(info.st_mode & 0o111) != (mode == b'100755'):
+                raise subprocess.CalledProcessError(1, ['raw-source-mode-comparison'])
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
+            try:
+                opened = os.fstat(fd)
+                if (not stat.S_ISREG(opened.st_mode)
+                        or (opened.st_dev, opened.st_ino, opened.st_mode, opened.st_mtime_ns, opened.st_ctime_ns) !=
+                        (info.st_dev, info.st_ino, info.st_mode, info.st_mtime_ns, info.st_ctime_ns)):
+                    raise ValueError('Source changed while opening')
+                with os.fdopen(fd, 'rb', closefd=False) as stream:
+                    raw = stream.read()
+                after = os.fstat(fd)
+                if (opened.st_size, opened.st_mtime_ns, opened.st_ctime_ns) != (
+                        after.st_size, after.st_mtime_ns, after.st_ctime_ns):
+                    raise ValueError('Source changed while reading')
+            finally:
+                os.close(fd)
+        encoded = b'blob ' + str(len(raw)).encode() + b'\0' + raw
+        digest = (hashlib.sha1(encoded, usedforsecurity=False).hexdigest() if len(oid) == 40
+                  else hashlib.sha256(encoded).hexdigest())
+        if digest.encode() != oid:
+            raise subprocess.CalledProcessError(1, ['raw-source-byte-comparison'])
 
 
 def require_workspace_commit(recipe, expected_commit):
@@ -211,6 +277,8 @@ def capture_process(record, pid, stdin_fd):
 def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha256=None,
         proof_socket=None, proof_database_name=None, import_lock_directory=None,
         defer_team_assignment=False, evidence_log=None):
+    if __name__ == '__main__' and not globals().get('_SUPERVISOR_SHA256'):
+        raise ValueError('Verified external supervisor bootstrap required')
     if type(defer_team_assignment) is not bool:
         raise ValueError('Explicit boolean team ownership policy required')
     if defer_team_assignment and any(value is None for value in
