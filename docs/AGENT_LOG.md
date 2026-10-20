@@ -1545,3 +1545,21 @@ not live services or databases. Ruff/security/diff checks pass. No activation,
 mount, DB migration or deployed payload change occurred. Next:publish, refresh
 state child, answer three review threads and inspect exact-head CI. First merge
 candidate1093remains clean/green atc40537ba,behindmain0,owner approval required.
+
+## 2026-10-20 — Reject Git directory markers before state inventory dispatch
+
+PR1097 review4322041171 confirmed an empty .git directory could be inventoried
+and seeded because only regular files checked Git components. Inventory now
+rejects every relative .git component before lstat/type dispatch, including empty
+and nested directories, files and symlinks. Existing source-drift and report
+fences remain intact; no live data, service or deployment was touched.
+
+Targeted state suites:105passed with synthetic external fixtures. Six type/depth
+regressions plus two native child CLI cases cover plan/seed refusal without
+report/destination creation and byte-for-byte source preservation. Guard removal
+produced7observed failures; the independent seed drift guard still refused its
+case. Source restored andcmp verified. Ruff anddiff checks pass. The initial
+standard/tmp fixture run correctly hit this host's existing/tmp/.git fence;
+rerunning in a fresh/var/tmp fixture root avoided that unrelated Git ancestor.
+Next:coordinate parent refresh, publish and answer the review with exact-head
+CI. Original plan and per-PR merge/owner activation requirements remain intact.

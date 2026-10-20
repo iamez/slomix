@@ -65,15 +65,17 @@ def inventory(root: Path | None) -> dict:
     for parent, dirs, names in os.walk(root, followlinks=False, onerror=fail):
         for name in sorted([*dirs, *names]):
             path = Path(parent) / name
-            relative = path.relative_to(root).as_posix()
+            relative_path = path.relative_to(root)
+            if '.git' in relative_path.parts:
+                raise ValueError('Git metadata found in data source')
+            relative = relative_path.as_posix()
             info = path.lstat()
             if stat.S_ISLNK(info.st_mode):
                 raise ValueError('Nested symlinks require explicit review before seeding')
             if stat.S_ISDIR(info.st_mode):
                 directories.append(relative)
             elif stat.S_ISREG(info.st_mode):
-                if (name.startswith('.env') or name.lower().endswith(('.db', '.sqlite', '.sqlite3', '-wal', '-shm', '-journal'))
-                        or '.git' in path.relative_to(root).parts):
+                if (name.startswith('.env') or name.lower().endswith(('.db', '.sqlite', '.sqlite3', '-wal', '-shm', '-journal'))):
                     raise ValueError('Configuration, Git or database file found in data source')
                 files[relative] = fingerprint(path)
             else:

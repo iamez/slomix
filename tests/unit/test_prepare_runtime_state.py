@@ -239,3 +239,48 @@ def test_cli_cannot_create_reserved_report_marker(source_map, tmp_path, capsys, 
     assert json.loads(capsys.readouterr().out)['status'] == 'refused'
     assert set(tmp_path.iterdir()) == before
     assert not state.exists()
+
+
+@pytest.mark.parametrize('nested', [False, True])
+@pytest.mark.parametrize('kind', ['empty_directory', 'file', 'symlink'])
+def test_git_source_component_refused_before_type_dispatch(source_map, tmp_path, nested, kind):
+    origin = Path(source_map['stats'])
+    marker = origin / 'nested' / '.git' if nested else origin / '.git'
+    if kind == 'empty_directory':
+        marker.mkdir()
+    elif kind == 'file':
+        marker.write_text('gitdir: synthetic metadata')
+    else:
+        marker.symlink_to(origin / 'missing-target')
+    with pytest.raises(ValueError, match='Git metadata'):
+        transfer.plan(source_map, tmp_path / 'shared')
+    assert not (tmp_path / 'shared').exists()
+
+
+@pytest.mark.parametrize('command', ['plan', 'seed'])
+def test_native_cli_empty_git_directory_refuses_without_output(source_map, tmp_path, command):
+    import subprocess
+    import sys
+
+    state = tmp_path / 'shared'
+    # A directory arriving after a valid plan must also be rejected before copy.
+    record = source_map if command == 'plan' else transfer.plan(source_map, state)
+    marker = Path(source_map['stats']) / 'nested' / '.git'
+    marker.mkdir()
+    before = {str(path.relative_to(tmp_path)): (path.is_dir(), path.read_bytes() if path.is_file() else None)
+              for path in tmp_path.rglob('*')}
+    source = tmp_path / 'input.json'
+    source.write_text(json.dumps(record))
+    report = tmp_path / 'report.json'
+    args = [sys.executable, '-B', str(Path(transfer.__file__)), command,
+            '--input', str(source), '--report', str(report)]
+    if command == 'plan':
+        args += ['--state', str(state)]
+    result = subprocess.run(args, capture_output=True, text=True, check=False)
+    assert result.returncode == 1
+    assert json.loads(result.stdout)['status'] == 'refused'
+    assert not result.stderr
+    assert not state.exists() and not report.exists()
+    after = {str(path.relative_to(tmp_path)): (path.is_dir(), path.read_bytes() if path.is_file() else None)
+             for path in tmp_path.rglob('*') if path != source}
+    assert after == before
