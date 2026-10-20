@@ -108,7 +108,10 @@ def test_shutdown_requires_same_invocation(monkeypatch):
 def test_native_occupied_udp_is_not_shutdown(monkeypatch):
     monkeypatch.setattr(module, 'unit_properties', lambda unit: stopped())
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.bind(('127.0.0.1', 0))
+        try:
+            sock.bind(('127.0.0.1', module.REHEARSAL_PORT))
+        except OSError:
+            pytest.skip('Dedicated rehearsal port already occupied; existing holder remains untouched')
         port = sock.getsockname()[1]
         with pytest.raises(ValueError, match='occupied'):
             module.verify_stopped(UNIT, port, INVOCATION)

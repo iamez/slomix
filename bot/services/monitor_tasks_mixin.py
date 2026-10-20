@@ -1174,7 +1174,16 @@ class _MonitorTasksMixin:
         import importlib.util
         import sys
 
-        script = Path(__file__).resolve().parents[2] / "scripts" / "data_plausibility_audit.py"
+        root = Path(__file__).resolve().parents[2]
+        marker = root / ".slomix-release.json"
+        if marker.exists() or marker.is_symlink():
+            # Even importing the verifier can cache bytecode. Keep this enabled
+            # for marked payloads; restoring a global flag would race threads.
+            sys.dont_write_bytecode = True
+            from shared.release_manifest import verify_release
+
+            verify_release(root)
+        script = root / "scripts" / "data_plausibility_audit.py"
         spec = importlib.util.spec_from_file_location("data_plausibility_audit", script)
         mod = importlib.util.module_from_spec(spec)
         # dataclass machinery looks the module up in sys.modules during class

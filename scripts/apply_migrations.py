@@ -34,6 +34,7 @@ Environment variables (or .env file):
 Marked Git-free payloads require Python -I and explicit SLOMIX_ENV_FILE. Their
 database identity comes from that file; inherited database/config overrides
 are refused before connecting. The launcher owns interpreter/loader isolation.
+Timeouts use file values or built-in defaults; inherited timeout settings are ignored.
 """
 
 # ruff: noqa: E402 -- marked CLI isolation precedes third-party imports
@@ -386,7 +387,7 @@ def get_timeout_kwargs() -> dict[str, Any]:
     for name, default in (("CONNECT", 10), ("COMMAND", 600),
                           ("STATEMENT", 300), ("LOCK", 5)):
         key = f"MIGRATION_{name}_TIMEOUT_SECONDS"
-        value = _setting(values, key, default=os.environ.get(key, str(default)))
+        value = _setting(values, key, default=str(default))
         if not re.fullmatch(r"[0-9]{1,4}", value) or not 1 <= int(value) <= 3600:
             raise ValueError(f"{key} must be an integer between 1 and 3600 seconds")
         budgets[name] = int(value)
