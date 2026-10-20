@@ -1024,6 +1024,30 @@ Legacy date repair must refuse bound sources before deletes until reconciliation
 has separately admitted the original sources. Legacy schema setup and runtime
 workers must share the same usable unique-index admission predicate.
 
+## 2026-10-16 — Persistent Lua VM supports both stopwatch halves
+
+Four #1094 findings corrected before activation. Each fresh InitGame invalidates
+old leases, receiver, ticket and consumed write attempt; only a newly validated
+binding clears the write fence. Each active bootstrap receives a fresh one-shot
+completion sender, so a persistent map_restart Lua VM can write R2 after R1.
+Real active-start ET counter values are1 for R1 and0 for R2; both observation and
+writer validation now encode2-counter. Tests no longer conceal this by inventing
+half-1 counter values. An unchanged sender/lease still cannot replay a write.
+
+Listener has separate bounded initial_readiness_wait1800 and between-half
+bootstrap_wait1800 (each max3600), distinct from completion and IPC exchange.
+Timeout preserves writer claims and terminally fences reuse. The game supervisor
+must pass the new argument from this parent; its existing global60-minute unit
+lifetime remains a stricter overall cap and may abort incomplete captures.
+
+424 selected regressions passed, then6 final claim/deadline tests passed. Five
+negative controls produced2+2+2+16+1 failures; every source restored with cmp.
+Lua5.1 and5.4 same-VM proof performs warmup/R1/shutdown/warmup/R2 with two actual
+closed files, independent hashes/sizes and two distinct completion messages.
+ET API and channel are synthetic, not a real engine/server or deploy proof.
+Ruff/diff-check pass. New exact-head CI and review replies are next. No services,
+units, application rows, live Lua or production changed. Preserve all prior plan.
+
 ## 2026-10-16 — Bound team contention remains retryable after canonical commit
 
 New #1093 review found the legacy auto-team bool/error wrapper swallowed global
@@ -1048,3 +1072,68 @@ Ruff adds no diagnostics (root12 unchanged). No service restart/deploy, migratio
 application data write or production change. Refresh dependent1094–1096 normally,
 answer the final review and retain per-PR owner merge permission. Original plan,
 state handover, D5 and remaining proximity/gametime/API/live/Spiderweb/UI retained.
+
+## 2026-10-16 — Completion deadline covers the bounded proof lifetime
+
+New #1094 review arrived during final closure after all four heads were green.
+The completion accept wait does bound elapsed play plus pauses, despite the old
+misleading docstring. Default completion_wait now covers3600s, the whole existing
+60-minute proof-unit lifetime, instead of cutting capture off at30 minutes.
+The supervisor in #1095 also needs3600 rather than its former1500s override.
+The overall unit cap is unchanged; incomplete/over-budget capture remains a
+terminal failure requiring reconciliation. Standalone callers may explicitly
+budget up to7200s per half; this is not unlimited gameplay or activation proof.
+
+Native pinned-peer/real-file test advances a virtual monotonic clock31 minutes
+after completion acceptance starts. Both halves capture under the new default;
+restoring1800s causes an observed TimeoutError. Source restored with cmp and42
+listener tests passed. No actual31-minute process or ET server was run.
+A related test race was exposed: socket creation can precede dispatch reservation,
+so root-replacement tests now wait on actual on_ready before asserting retained
+writer claims. An earlier run had41 pass/1 failure on that false test assumption.
+
+Previous exact heads all passed CI: #1093 c40537ba9261/9265 tests;
+#1094 2ed21c4e10075/10079; #1095 e12e035b10417/10421;
+#1096 dd351e0510565/10569 (Python3.11/PG14, Python3.13/PG17).
+Both new native team-lock cases ran in every branch/platform and passed counts
+were checked independently. New producer/game review fixes require new CI.
+#1093 remains ready with zero open threads and no commits behind main; per-number
+owner approval is still required. No merge, service or production change occurred.
+
+## 2026-10-16 — Accept native path-absence refusal in the replacement fixture
+
+Latest #1094 Python3.11 CI failed the root-replacement test with FileNotFoundError
+for the deliberately renamed listener directory; Python3.13 passed10080 tests.
+The guard correctly failed closed. Its test wrongly required only ValueError or
+TimeoutError during the rename/recreate gap. The fixture now accepts only the
+expected missing listener/root path, retains terminal failure and source-claim
+assertions, and adds one deterministic remove-root variant. Production code is
+unchanged. All five native timeout/path variants pass locally; the earlier full
+42-case listener suite passed before adding that new variant. Refresh child
+branches normally and check new exact-head CI; do not hide the prior failure.
+Original plan, owner-specific approvals and frozen production remain unchanged.
+
+## 2026-10-20 — Owner-approved PR1093 merged; producer successor prepared
+
+Owner explicitly approved the pending1093merge. Prescribed slomix-ops/cycle.sh
+ran with exactc40537ba head and the full420-second review pause. Final checks:
+failed0,unresolved0,behindmain0,head unchanged. GitHub confirms merged at
+2026-10-20T07:22:10Z, commit8c1a6cc395d3485852240117aacbe44c3c37dca2.
+Independent Git ancestry, empty full-tree diff and tree-ID equality confirm main
+contains precisely the reviewed source. No service or deployment occurred.
+
+Next producer1094already contains originalc40537ba. Only after proving the new
+main tree EXACTLY equals that contained original parent, an ancestry-only local
+merge records main into its feature branch. Whole producer tree remained
+00fb1ac6ad2105919a652c5c7b85a100b4904dfa; empty parent diff independently confirms.
+This strategy must not be reused if main has any differing content. Subsequent
+ledger updates are documentation only. Publish and retarget1094to main, then
+inspect its new exact-head CI; no1094merge is authorized by1093permission.
+
+Before this metadata refresh1094–1097exact heads were all green. Python3.11/3.13
+passed counts independently checked against result nodes:1094 10077/10081,
+1095 10540/10544,1096 10788/10792,1097 10934/10938. These are overlapping suites,
+not additive or service/runtime activation proof. PR1100remains a separate npm
+security review; its documented unpatched braces residual remains unresolved.
+Original full plan, D4/D5/exclusive writer handover and all remaining roadmap
+items are retained. Production remains frozen; no DB/state or service change.
