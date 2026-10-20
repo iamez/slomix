@@ -169,6 +169,36 @@ remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
 and additional review closure remain pending. Preserve original plan and queues.
 
 
+## 2026-10-20 — Second game review: explicit targets and closed proof environment
+
+Validated and corrected five additional #1095 findings. Standalone marked audit
+CLI refuses inherited application/DB overrides before loading credentials or
+calling the driver; library sentinel behavior remains supported. Marker presence
+automatically enforces isolated preflight admission and packaged migration paths,
+even when --release-mode is omitted. Marked migration CLI normalizes connection
+port and all timeout budgets inside its redacted refusal boundary; invalid and
+out-of-range ports fail before command execution.
+
+Proof units now use an exact /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C prefix
+before isolated Python. env exec preserves the systemd main PID; Type=exec only
+confirms initial executable startup, not application readiness. Effective unit
+Environment/EnvironmentFiles must be empty; actual supervisor application env
+must contain only PATH/LC_ALL and Python-added LC_CTYPE before project imports.
+Unknown future application variables and BOT_NAME_REGEX therefore cannot alter
+capture classification. Existing loader UnsetEnvironment policy remains.
+Ordinary supervisor failures, including EOFError and RuntimeError, produce the
+structured redacted failure; KeyboardInterrupt/SystemExit still propagate.
+
+Native synthetic CLI, driver-sentinel, env-prefix, systemd parser and UDP fixture
+checks: 210 passed (overlapping suite, not additive). Seven deliberate guard
+mutations produced respectively 4/2/6/1/2/1/2 failing tests; every source restored
+and compared with cmp. Ruff and diff checks pass. Initial sandbox run had 8
+fixture-environment failures (/tmp Git ancestry and restricted UDP); native
+private /var/tmp run resolved those without weakening guards. No service, engine,
+real database or deployed payload was touched. Next: refresh dependent PR parents,
+answer the five review comments, and inspect exact-head CI; per-PR merge and owner
+activation gates remain unchanged. Existing original runtime plan is retained.
+
 ## 2026-10-20 — Audit admission, bytecode and fixed launch contract corrections
 
 Addressed all five new1095findings. Marked audit CLI requires-I before project/
