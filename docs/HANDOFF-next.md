@@ -169,6 +169,55 @@ remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
 and additional review closure remain pending. Preserve original plan and queues.
 
 
+## 2026-10-20 — Owner-approved PR1094 merged; next game source remains forward-only
+
+Owner explicitly approved1094. Prescribed cycle ran on30775c84 with all13checks
+successful, zero review threads and full420-second pause. Final cycle gate:
+failed0,threads0,behind0,head unchanged. GitHub confirms merge at12:46:40UTC,
+commita12a55b51b6d17d818d76a124a91b61b786bdd26. Full-tree diff, tree-ID equality
+and main ancestry independently prove reviewed producer content preserved.
+Exact-head CI counts10077/10081passed (Python3.11/3.13),160/156skipped, verified
+against individual passed-node lines. No service, database or ET activation.
+
+Game source a03f3455 fixes two later P1 findings, separately from approved1094.
+Before ancestry reconciliation, new main tree was proved exactly equal to the
+original producer30775c84 already contained in game. Metadata-only merge leaves
+the complete game tree unchanged at3b07da9936e8e98d74e42ef363218785fa7cf2b1;
+subsequent checkpoint changes are ledgers only. Do not apply that strategy if
+main content differs. Publish/retarget1095to main; its own merge remains unapproved.
+
+State source7914c41d fixes ancestor conflicts/metadata paths/bare repositories;
+combined native targeted integration344passes, game132/state192groups overlap.
+Six guard mutations each fail and restore/cmp. Refresh app/state dependency
+parents and answer all five reviews before new exact-head CI. Original D4/D5,
+writer exclusion, trusted-source admission, future observed DEV handover and
+all preserved proximity/gametime/API/UI/Spiderweb/Stats work remain required.
+
+## 2026-10-20 — Bind rehearsal revision and disable executable Git fsmonitor
+
+Validated two additional #1095 P1 review findings. Every supervisor source Git
+probe now explicitly sets core.fsmonitor=false, including both ls-files calls
+and diff, before admission. A native synthetic repository with an executable
+configured fsmonitor hook proves the local Git build executes the hook without
+the override and never executes it during the protected source inspection.
+
+Preparation now requires the verified startup recipe workspace.source_commit to
+match the supervisor commit before creating unit artifacts. Launch checks the
+same binding after the second containment/command admission and immediately
+before the process boundary. A valid workspace from another revision is refused;
+matching preparation and launch controls still reach their next independent
+boundary. Existing synthetic recipe fixtures now supply their explicit revision.
+
+Native targeted suite:132 passed, covering source binding, supervisor/service and
+launch contract controls, including existing actual local UDP fixture and offline
+systemd parser. Three guard mutations produced1/1/1 observed failing tests; both
+binding mutations retained a passing matching control. Every source was restored
+and compared with cmp; five restored source-binding tests then passed. Ruff and
+diff checks pass. No service, engine, live database or deployed payload touched.
+Next: publish, answer both reviews and refresh child dependencies with exact-head
+CI. Original D4/D5 and exclusive writer handover remain open; #1094 owner merge
+authorization does not authorize #1095 or activation. Preserve original roadmap.
+
 ## 2026-10-20 — Owner-approved PR1093 merged; producer successor prepared
 
 Owner explicitly approved the pending1093merge. Prescribed slomix-ops/cycle.sh

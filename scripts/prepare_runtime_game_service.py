@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.prepare_runtime_game_bundle import _write_new  # noqa: E402
 from scripts.runtime_game_startup import startup_recipe  # noqa: E402
-from scripts.runtime_game_supervisor import supervisor_argv, verify_source  # noqa: E402
+from scripts.runtime_game_supervisor import require_workspace_commit, supervisor_argv, verify_source  # noqa: E402
 
 
 def safe_path(path):
@@ -108,7 +108,8 @@ def prepare(*, source, interpreter, workspace, destination, commit,
     for path in (source, interpreter, workspace, destination):
         safe_path(path)
     verify_source(source, commit)
-    startup_recipe(workspace, bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256)
+    recipe = startup_recipe(workspace, bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256)
+    require_workspace_commit(recipe, commit)
     # Preserve lexical venv interpreter path; resolving its symlink would lose
     # pyvenv.cfg lookup and may silently select a different Python environment.
     if (not interpreter.is_file() or not os.access(interpreter, os.X_OK)
