@@ -17,7 +17,7 @@ main content differs. Publish/retarget1095to main; its own merge remains unappro
 
 State source7914c41d fixes ancestor conflicts/metadata paths/bare repositories;
 combined native targeted integration344passes, game132/state192groups overlap.
-Five guard mutations each fail and restore/cmp. Refresh app/state dependency
+Six guard mutations each fail and restore/cmp. Refresh app/state dependency
 parents and answer all five reviews before new exact-head CI. Original D4/D5,
 writer exclusion, trusted-source admission, future observed DEV handover and
 all preserved proximity/gametime/API/UI/Spiderweb/Stats work remain required.
