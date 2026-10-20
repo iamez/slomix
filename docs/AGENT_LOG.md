@@ -1386,3 +1386,28 @@ No service, live database or deployed payload changed.
 Next:refresh producer parent after1093merge, publish, refresh app/state children,
 answer three reviews and inspect exact-head CI. Original runtime D4/D5/exclusive
 handover and all preserved roadmap/owner activation gates remain in force.
+
+## 2026-10-20 — Owner-approved PR1093 merged; producer successor prepared
+
+Owner explicitly approved the pending1093merge. Prescribed slomix-ops/cycle.sh
+ran with exactc40537ba head and the full420-second review pause. Final checks:
+failed0,unresolved0,behindmain0,head unchanged. GitHub confirms merged at
+2026-10-20T07:22:10Z, commit8c1a6cc395d3485852240117aacbe44c3c37dca2.
+Independent Git ancestry, empty full-tree diff and tree-ID equality confirm main
+contains precisely the reviewed source. No service or deployment occurred.
+
+Next producer1094already contains originalc40537ba. Only after proving the new
+main tree EXACTLY equals that contained original parent, an ancestry-only local
+merge records main into its feature branch. Whole producer tree remained
+00fb1ac6ad2105919a652c5c7b85a100b4904dfa; empty parent diff independently confirms.
+This strategy must not be reused if main has any differing content. Subsequent
+ledger updates are documentation only. Publish and retarget1094to main, then
+inspect its new exact-head CI; no1094merge is authorized by1093permission.
+
+Before this metadata refresh1094–1097exact heads were all green. Python3.11/3.13
+passed counts independently checked against result nodes:1094 10077/10081,
+1095 10540/10544,1096 10788/10792,1097 10934/10938. These are overlapping suites,
+not additive or service/runtime activation proof. PR1100remains a separate npm
+security review; its documented unpatched braces residual remains unresolved.
+Original full plan, D4/D5/exclusive writer handover and all remaining roadmap
+items are retained. Production remains frozen; no DB/state or service change.
