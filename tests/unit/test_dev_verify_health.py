@@ -80,13 +80,15 @@ def test_cli_deadline_returns_failure_not_success(ready, tmp_path, monkeypatch, 
 
 @pytest.mark.parametrize('metadata', [
     {},  # Older systemd / MemoryPressureWatch=skip.
+    dict.fromkeys(('LC_PAPER', 'LC_NAME', 'LC_ADDRESS', 'LC_TELEPHONE',
+                   'LC_MEASUREMENT', 'LC_IDENTIFICATION'), 'C'),
     {'MEMORY_PRESSURE_WATCH': '/dev/null'},  # MemoryPressureWatch=no.
     {'MEMORY_PRESSURE_WATCH': '/sys/fs/cgroup/system.slice/example.service/memory.pressure',
      'MEMORY_PRESSURE_WRITE': 'c29tZSAyMDAwMDAgMjAwMDAwMAA='},
 ])
 @pytest.mark.parametrize('extra', [None, 'UNAPPROVED_APP_SETTING', 'MEMORY_PRESSURE_UNKNOWN',
                                  'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD',
-                                 'LD_LIBRARY_PATH', 'LD_AUDIT', 'APP_MODE'])
+                                 'LD_LIBRARY_PATH', 'LD_AUDIT', 'APP_MODE', 'LC_UNKNOWN'])
 def test_actual_process_pressure_metadata_preserves_environment_guards(
         tmp_path, monkeypatch, metadata, extra):
     """Read real /proc exec identity; service, dotenv and HTTP are isolated doubles."""

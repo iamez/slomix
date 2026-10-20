@@ -364,9 +364,12 @@ def get_connection_kwargs() -> dict[str, Any]:
     """Resolved connection settings shared by migration-adjacent tools."""
     values = migration_settings()
     target = _target_dsn_parts(values)
+    port = int(target["port"])
+    if not 1 <= port <= 65535:
+        raise ValueError("Database port must be between 1 and 65535")
     return {
         "host": target["host"],
-        "port": int(target["port"]),
+        "port": port,
         "database": target["database"],
         "user": target["user"],
         "password": _setting(values, "POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
@@ -1011,8 +1014,9 @@ def main():
 
     if (_REPO_ROOT / ".slomix-release.json").exists() or (_REPO_ROOT / ".slomix-release.json").is_symlink():
         try:
-            migration_settings()
-        except (OSError, ValueError):
+            get_connection_kwargs()
+            get_timeout_kwargs()
+        except (OSError, ValueError, TypeError):
             print(json.dumps({"status": "refused", "reason": "Release migration configuration verification failed"}),
                   file=sys.stderr)
             return 1

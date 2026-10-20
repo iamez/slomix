@@ -1563,3 +1563,53 @@ standard/tmp fixture run correctly hit this host's existing/tmp/.git fence;
 rerunning in a fresh/var/tmp fixture root avoided that unrelated Git ancestor.
 Next:coordinate parent refresh, publish and answer the review with exact-head
 CI. Original plan and per-PR merge/owner activation requirements remain intact.
+
+## 2026-10-20 — Admit exact GNU locale metadata without weakening configuration guards
+
+Review1096 found six missing GNU libc locale categories. Add only LC_PAPER,
+LC_NAME, LC_ADDRESS, LC_TELEPHONE, LC_MEASUREMENT and LC_IDENTIFICATION to the
+shared system metadata allowlist; arbitrary LC_* remains refused. Approved-file
+value conflicts still refuse, including these exact names. GNU libc/Linux locale
+reference checked; no wildcard environment permission was added.
+
+162 focused environment, contract and health tests pass. Actual isolated child
+preflight accepts each category before its database double; /proc health reads
+real child environments containing all six and still rejects unknown/loader/app
+settings. Removing the six entries produces12observed regression failures;
+source restored andcmp verified. Ruff/diff checks pass. Initial fixture run:
+6failed156passed because /tmp/.git correctly fences preparation; a NEW private
+/var/tmp fixture rerun passes. No production, service or live database was used.
+
+Next: integrate reviewed game parent, refresh state child, publish and answer
+review4322079388, then inspect exact-head CI. Original plan and owner-specific
+merge/activation gates remain in force; old prepared contracts need regeneration.
+
+## 2026-10-20 — Second game review: explicit targets and closed proof environment
+
+Validated and corrected five additional #1095 findings. Standalone marked audit
+CLI refuses inherited application/DB overrides before loading credentials or
+calling the driver; library sentinel behavior remains supported. Marker presence
+automatically enforces isolated preflight admission and packaged migration paths,
+even when --release-mode is omitted. Marked migration CLI normalizes connection
+port and all timeout budgets inside its redacted refusal boundary; invalid and
+out-of-range ports fail before command execution.
+
+Proof units now use an exact /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C prefix
+before isolated Python. env exec preserves the systemd main PID; Type=exec only
+confirms initial executable startup, not application readiness. Effective unit
+Environment/EnvironmentFiles must be empty; actual supervisor application env
+must contain only PATH/LC_ALL and Python-added LC_CTYPE before project imports.
+Unknown future application variables and BOT_NAME_REGEX therefore cannot alter
+capture classification. Existing loader UnsetEnvironment policy remains.
+Ordinary supervisor failures, including EOFError and RuntimeError, produce the
+structured redacted failure; KeyboardInterrupt/SystemExit still propagate.
+
+Native synthetic CLI, driver-sentinel, env-prefix, systemd parser and UDP fixture
+checks: 210 passed (overlapping suite, not additive). Seven deliberate guard
+mutations produced respectively 4/2/6/1/2/1/2 failing tests; every source restored
+and compared with cmp. Ruff and diff checks pass. Initial sandbox run had 8
+fixture-environment failures (/tmp Git ancestry and restricted UDP); native
+private /var/tmp run resolved those without weakening guards. No service, engine,
+real database or deployed payload was touched. Next: refresh dependent PR parents,
+answer the five review comments, and inspect exact-head CI; per-PR merge and owner
+activation gates remain unchanged. Existing original runtime plan is retained.
