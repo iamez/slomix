@@ -219,3 +219,58 @@ def test_timestamp_requires_integer_not_nonnegative(baseline, bad):
     baseline['inventory']['stats']['files']['original.txt']['mtime_ns'] = bad
     with pytest.raises(ValueError, match='file metadata'):
         delta.compare(baseline)
+
+
+@pytest.mark.parametrize('nested', [False, True])
+def test_baseline_type_conflict_blocks_descendant_copy_candidates(baseline, nested):
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    parent = 'outer/a' if nested else 'a'
+    before = old / parent
+    before.parent.mkdir(parents=True, exist_ok=True)
+    before.write_bytes(b'baseline file')
+    if nested:
+        baseline['inventory']['stats']['directories'].append('outer')
+        (new / 'outer').mkdir()
+    baseline['inventory']['stats']['files'][parent] = seed.fingerprint(before)
+    (new / parent).write_bytes(b'baseline file')
+    (new / parent).unlink()
+    # Independent target removal conflicts with replacing a baseline file by a directory.
+    before.unlink()
+    before.mkdir()
+    (before / 'deep').mkdir()
+    (before / 'deep/child').write_bytes(b'new source bytes')
+    snapshot = seed.inventory(old), seed.inventory(new)
+    report = delta.compare(baseline)
+    changes = report['changes']['stats']
+    assert changes[parent]['classification'] == 'conflict'
+    assert changes[parent + '/deep']['classification'] == 'path_type_conflict'
+    assert changes[parent + '/deep/child']['classification'] == 'path_type_conflict'
+    assert (seed.inventory(old), seed.inventory(new)) == snapshot
+
+
+def test_native_cli_type_conflict_preserves_trees(baseline, tmp_path):
+    import subprocess
+    import sys
+
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    path = old / 'a'
+    path.write_bytes(b'baseline')
+    baseline['inventory']['stats']['files']['a'] = seed.fingerprint(path)
+    (new / 'a').write_bytes(b'baseline')
+    (new / 'a').unlink()
+    path.unlink()
+    path.mkdir()
+    (path / 'child').write_bytes(b'new source')
+    before = seed.inventory(old), seed.inventory(new)
+    report = tmp_path / 'delta.json'
+    initial = tmp_path / 'seed.json'
+    initial.write_text(json.dumps(baseline))
+    result = subprocess.run([sys.executable, '-B', delta.__file__, '--seed-report', str(initial),
+                             '--report', str(report)], capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    value = json.loads(report.read_text())
+    assert value['changes']['stats']['a/child']['classification'] == 'path_type_conflict'
+    assert value['ready_for_activation'] is False
+    assert (seed.inventory(old), seed.inventory(new)) == before

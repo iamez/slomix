@@ -231,3 +231,21 @@ def test_native_cli_binds_user_identity_before_systemctl(tmp_path, case):
     else:
         assert result.returncode == 0 and row['observation'] == 'inactive'
         assert json.loads(trace.read_text())['bus'] == f'unix:path=/run/user/{uid}/bus'
+
+
+def test_native_writer_report_refuses_bare_git_ancestor(tmp_path):
+    import sys
+
+    bare = tmp_path / 'bare-repository'
+    subprocess.run(['git', 'init', '--bare', '--template=', str(bare)],
+                   check=True, capture_output=True)
+    target = bare / 'report.json'
+    # No user units means no manager/DB access; explicit invalid-name refusal is separate.
+    result = subprocess.run([sys.executable, '-B', '-c',
+                             'import sys;sys.path.insert(0,sys.argv[1]);'
+                             'from scripts.runtime_writer_inventory import write_report;'
+                             'from pathlib import Path;write_report(Path(sys.argv[2]),"{}")',
+                             str(Path(inventory.__file__).parents[1]), str(target)],
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode != 0 and not target.exists()
+    assert 'outside a Git checkout' in result.stderr

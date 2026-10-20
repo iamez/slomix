@@ -42,6 +42,32 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-20 — Propagate type conflicts and close metadata ancestry boundaries
+
+Validated three new1097reviews. An ancestor's baseline/source/target type conflict
+now makes descendants path_type_conflict even when the target independently
+removed the parent. No descendant copy_new can recreate that unresolved parent;
+existing classifications and nonmutating/manual reconciliation remain intact.
+
+Selected source checks inspect all absolute path components for .git/.env*, not
+only the leaf. State/report output boundaries share writer inventory's stdlib
+Git-layout helper: worktree markers and bare repository-shaped HEAD/objects/
+refs (also packed-refs/reftable) layouts refuse. No Git subprocess/config executes
+in admission; conservative metadata-shaped paths fail closed. Legacy dangling
+marker and immutable-release fences remain. No live data was copied or changed.
+
+192targeted state/delta/writer/path tests passed. Actual Git-init bare fixtures,
+native CLI refusal and native nonmutating delta output cover all three mechanisms.
+Kind/ancestor/bare mutations cause3/3/5observed failures; sources restored/cmp.
+Initial one source-ancestor fixture triggered the independent output Git fence;
+placing that source under a separate parent exercises the intended source guard.
+Ruff/diff pass. No service, real database or deployment was touched.
+
+1094owner-approved cycle is in progress at30775c84, later PRs not authorized.
+Next: coordinate reviewed game/app parent refresh, publish/answer three comments
+and inspect exact-head CI. Original plan/D4/D5/exclusive handover remains open;
+source safeguards do not certify all writers absent or activate a new lane.
+
 ## 2026-10-20 — Owner-approved PR1093 merged; producer successor prepared
 
 Owner explicitly approved the pending1093merge. Prescribed slomix-ops/cycle.sh

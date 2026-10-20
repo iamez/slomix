@@ -104,6 +104,13 @@ def compare(record: dict) -> dict:
         base = entries(record['inventory'][name])
         old, new = entries(sources[name]), entries(targets[name])
         old_files, new_files = sources[name]['files'], targets[name]['files']
+        paths = base.keys() | old.keys() | new.keys()
+        type_conflicts = {
+            path for path in paths
+            if classify(base.get(path), old.get(path), new.get(path)) == 'conflict'
+            and len({entry['kind'] for entry in (base.get(path), old.get(path), new.get(path))
+                     if entry is not None}) > 1
+        }
         changes[name] = {}
         counts = {}
         for path in sorted(base.keys() | old.keys() | new.keys()):
@@ -112,7 +119,8 @@ def compare(record: dict) -> dict:
             if ((path in old_files and path in targets[name]['directories'])
                     or (path in new_files and path in sources[name]['directories'])
                     or (path in old and any(parent in new_files for parent in parents))
-                    or (path in new and any(parent in old_files for parent in parents))):
+                    or (path in new and any(parent in old_files for parent in parents))
+                    or any(parent in type_conflicts for parent in parents)):
                 action = 'path_type_conflict'
             counts[action] = counts.get(action, 0) + 1
             if action != 'unchanged':

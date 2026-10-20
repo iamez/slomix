@@ -326,3 +326,64 @@ def test_native_cli_configuration_directory_refuses_without_copy(source_map, tmp
     assert not result.stderr and not report.exists() and not state.exists()
     assert token.read_bytes() == b'synthetic-private-value'
     assert b'synthetic-private-value' not in result.stdout.encode()
+
+
+@pytest.mark.parametrize('marker', ['.git', '.env.d'])
+def test_selected_source_beneath_metadata_ancestor_is_refused(source_map, tmp_path, marker):
+    root = tmp_path / 'metadata-parent' / marker / 'payload'
+    root.mkdir(parents=True)
+    token = root / 'innocent'
+    token.write_bytes(b'synthetic-private-bytes')
+    source_map['stats'] = str(root)
+    with pytest.raises(ValueError, match='source root'):
+        transfer.plan(source_map, tmp_path / 'shared')
+    assert not (tmp_path / 'shared').exists()
+    assert token.read_bytes() == b'synthetic-private-bytes'
+
+
+@pytest.mark.parametrize('operation', ['destination', 'state-report', 'writer-report'])
+def test_bare_git_repository_output_ancestry_refused(tmp_path, operation):
+    import subprocess
+
+    from scripts import runtime_writer_inventory as writer
+
+    bare = tmp_path / 'bare-repository'
+    subprocess.run(['git', 'init', '--bare', '--template=', str(bare)],
+                   check=True, capture_output=True)
+    parent = bare / 'nested'
+    parent.mkdir()
+    target = parent / ('shared' if operation == 'destination' else 'report.json')
+    with pytest.raises(ValueError, match='outside'):
+        if operation == 'destination':
+            transfer.new_outside_git(target)
+        elif operation == 'state-report':
+            transfer.write_report(target, {'state': str(tmp_path / 'shared'), 'sources': {}})
+        else:
+            writer.write_report(target, '{}')
+    assert not target.exists()
+
+
+@pytest.mark.parametrize('boundary', ['source', 'destination'])
+def test_native_cli_hidden_source_or_bare_destination_refuses(source_map, tmp_path, boundary):
+    import subprocess
+    import sys
+
+    state = tmp_path / 'shared'
+    if boundary == 'source':
+        root = tmp_path / '.env.d' / 'payload'
+        root.mkdir(parents=True)
+        (root / 'token').write_bytes(b'synthetic-private-bytes')
+        source_map['stats'] = str(root)
+    else:
+        bare = tmp_path / 'bare-repository'
+        subprocess.run(['git', 'init', '--bare', '--template=', str(bare)],
+                       check=True, capture_output=True)
+        state = bare / 'shared'
+    source = tmp_path / 'sources.json'
+    source.write_text(json.dumps(source_map))
+    report = tmp_path / 'report.json'
+    result = subprocess.run([sys.executable, '-B', transfer.__file__, 'plan', '--input', str(source),
+                             '--state', str(state), '--report', str(report)],
+                            capture_output=True, text=True, timeout=5)
+    assert result.returncode == 1 and json.loads(result.stdout)['status'] == 'refused'
+    assert not result.stderr and not report.exists() and not state.exists()

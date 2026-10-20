@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.dev_runtime_contract import state_paths  # noqa: E402
+from scripts.runtime_writer_inventory import git_boundary  # noqa: E402
 
 NAMES = frozenset({'stats', 'gametimes', 'proximity', 'processed', 'greatshot', 'uploads', 'retro-viz'})
 
@@ -34,9 +35,9 @@ def canonical(path: Path) -> Path:
 def new_outside_git(path: Path):
     parent = canonical(path.parent)
     if (path.exists() or path.is_symlink() or path.name in {'.', '..', '.git', '.slomix-release.json'}
-            or any((ancestor / marker).exists() or (ancestor / marker).is_symlink()
-                   for ancestor in (parent, *parent.parents)
-                   for marker in ('.git', '.slomix-release.json'))):
+            or any(git_boundary(ancestor) or (ancestor / '.slomix-release.json').exists()
+                   or (ancestor / '.slomix-release.json').is_symlink()
+                   for ancestor in (parent, *parent.parents))):
         raise ValueError('Destination must be new and outside Git or immutable releases')
 
 
@@ -59,7 +60,7 @@ def inventory(root: Path | None) -> dict:
     if root is None:
         return {'directories': [], 'files': {}}
     canonical(root)
-    if root.name == ".git" or root.name.startswith(".env"):
+    if any(part == ".git" or part.startswith(".env") for part in root.parts):
         raise ValueError("Configuration or Git source root is forbidden")
     directories, files = [], {}
     def fail(error):

@@ -99,12 +99,20 @@ def inventory(system_units: list[str], user_units: list[str], *, expected_user_u
     }
 
 
+
+def git_boundary(directory: Path) -> bool:
+    """Recognize worktree markers and bare Git layouts without running Git."""
+    def present(name):
+        entry = directory / name
+        return entry.exists() or entry.is_symlink()
+    return (present('.git') or (present('HEAD') and present('objects')
+            and any(present(name) for name in ('refs', 'packed-refs', 'reftable'))))
+
 def write_report(path: Path, report: str) -> None:
     if path.name in {".git", ".slomix-release.json"}:
         raise ValueError("output basename is reserved")
     parent = path.parent.resolve(strict=True)
-    if any((ancestor / ".git").exists() or (ancestor / ".git").is_symlink()
-           for ancestor in (parent, *parent.parents)):
+    if any(git_boundary(ancestor) for ancestor in (parent, *parent.parents)):
         raise ValueError("output must be outside a Git checkout")
     if any((ancestor / ".slomix-release.json").exists() or (ancestor / ".slomix-release.json").is_symlink()
            for ancestor in (parent, *parent.parents)):
