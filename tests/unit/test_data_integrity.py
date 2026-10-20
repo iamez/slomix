@@ -2,7 +2,7 @@
 Data Integrity Tests for ET:Legacy Discord Bot
 
 Tests for:
-1. Cross-field validation (headshots <= kills, etc.)
+1. Cross-field validation (headshot_kills <= kills, etc.)
 2. File hash calculation
 3. Configuration validation
 4. Stats boundary conditions
@@ -17,24 +17,30 @@ import os
 import sys
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 
+@pytest.fixture
+def db_manager(monkeypatch):
+    """Validation is pure: no ambient config/logging or database access."""
+    import postgresql_database_manager as module
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Unexpected application setup or DB connection in validation test")
+
+    monkeypatch.setattr(module, "load_config", forbidden)
+    monkeypatch.setattr(module.asyncpg, "connect", forbidden)
+    monkeypatch.setattr(module.asyncpg, "create_pool", forbidden)
+    return module.PostgreSQLDatabaseManager(
+        config=SimpleNamespace(database_type="postgresql"), allow_legacy_r1_fallback=False)
+
+
 class TestCrossFieldValidation:
     """Test cross-field validation in postgresql_database_manager.py"""
-
-    @pytest.fixture
-    def db_manager(self):
-        """Create a database manager instance for testing validation."""
-        from postgresql_database_manager import PostgreSQLDatabaseManager
-        # Note: This will fail if PostgreSQL isn't configured, which is expected in CI
-        try:
-            return PostgreSQLDatabaseManager()
-        except Exception:
-            pytest.skip("PostgreSQL not configured")
 
     def test_headshot_kills_cannot_exceed_kills(self, db_manager):
         """headshot_kills should be capped at kills"""
@@ -56,15 +62,15 @@ class TestCrossFieldValidation:
         assert corrected['objective_stats']['headshot_kills'] == 5
         assert not any('headshot_kills' in issue for issue in issues)
 
-    def test_team_kills_cannot_exceed_kills(self, db_manager):
-        """team_kills should be capped at kills"""
+    def test_team_kills_are_not_capped_by_enemy_kills(self, db_manager):
+        """The engine reports team kills separately from enemy/weapon kills."""
         player = {
             'kills': 5,
             'objective_stats': {'team_kills': 10}
         }
         corrected, issues = db_manager.validate_player_stats(player)
-        assert corrected['objective_stats']['team_kills'] <= 5
-        assert any('team_kills' in issue for issue in issues)
+        assert corrected['objective_stats']['team_kills'] == 10
+        assert not any('team_kills' in issue for issue in issues)
 
     def test_time_dead_cannot_exceed_time_played(self, db_manager):
         """time_dead_minutes should be capped at time_played_minutes"""
@@ -212,12 +218,19 @@ class TestConfigurationValues:
     """Test configuration timing values"""
 
     @pytest.fixture(autouse=True)
-    def _bot_environment(self, monkeypatch):
+    def _bot_environment(self, monkeypatch, tmp_path):
         """BotConfig() now requires BOT_ENVIRONMENT to be set (fail-closed,
         see docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md). Also pin
         SSH_ENABLED=false explicitly: this dev host's real ambient config has
         it true (the exact condition the new check exists to catch), and
         these tests aren't about SSH at all."""
+        import dotenv
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(dotenv, "load_dotenv", lambda *args, **kwargs: False)
+        for key in ("ROUND_MATCH_WINDOW_MINUTES", "MONITORING_GRACE_PERIOD_MINUTES",
+                    "SESSION_GAP_MINUTES"):
+            monkeypatch.delenv(key, raising=False)
         monkeypatch.setenv("BOT_ENVIRONMENT", "dev")
         monkeypatch.setenv("SSH_ENABLED", "false")
 
@@ -266,14 +279,8 @@ class TestParserConfiguration:
 class TestEdgeCases:
     """Test edge cases and boundary conditions"""
 
-    def test_zero_kills_with_headshots(self):
+    def test_zero_kills_with_headshots(self, db_manager):
         """Zero kills but headshots present should be fixed"""
-        from postgresql_database_manager import PostgreSQLDatabaseManager
-        try:
-            db_manager = PostgreSQLDatabaseManager()
-        except Exception:
-            pytest.skip("PostgreSQL not configured")
-
         player = {
             'kills': 0,
             'objective_stats': {'headshot_kills': 5}
@@ -281,14 +288,8 @@ class TestEdgeCases:
         corrected, issues = db_manager.validate_player_stats(player)
         assert corrected['objective_stats']['headshot_kills'] == 0
 
-    def test_zero_time_played(self):
+    def test_zero_time_played(self, db_manager):
         """Zero time played should not cause division by zero"""
-        from postgresql_database_manager import PostgreSQLDatabaseManager
-        try:
-            db_manager = PostgreSQLDatabaseManager()
-        except Exception:
-            pytest.skip("PostgreSQL not configured")
-
         player = {
             'time_played_seconds': 0,
             'objective_stats': {
@@ -298,7 +299,8 @@ class TestEdgeCases:
         }
         # Should not raise exception
         corrected, issues = db_manager.validate_player_stats(player)
-        assert 'objective_stats' in corrected
+        assert corrected['objective_stats']['time_dead_minutes'] == 0.0
+        assert corrected['time_played_seconds'] == 0
 
 
 if __name__ == '__main__':

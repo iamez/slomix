@@ -210,3 +210,60 @@ def test_health_does_not_claim_ingest_progress(capsys):
     assert output["status"] == "unavailable"
     assert output["last_success_age_seconds"] is None
     assert output["generation"] == 7 and output["unsupported_pending"] == 2
+
+
+@pytest.mark.parametrize('primary', ['worker', 'cancel', 'none'])
+@pytest.mark.parametrize('secondary', ['close', 'report', 'both'])
+async def test_cleanup_preserves_primary_failure(config_env, primary, secondary):
+    pool = fake_pool()
+    if secondary in ('close', 'both'):
+        pool.close.side_effect = OSError('close-only')
+    worker = Worker('fail' if primary == 'worker' else 'hang')
+    stop = asyncio.Event()
+
+    def reporter(state):
+        if worker.cleaned and secondary in ('report', 'both'):
+            raise LookupError('report-only')
+
+    task = asyncio.create_task(entry.serve(
+        entry.DatabaseConfig.from_environment(), stop, worker=worker,
+        pool_factory=AsyncMock(return_value=pool), reporter=reporter, drain_seconds=0.01,
+    ))
+    await asyncio.wait_for(worker.entered.wait(), 1)
+    if primary == 'cancel':
+        task.cancel()
+    elif primary == 'none':
+        stop.set()
+    expected = (RuntimeError if primary == 'worker' else
+                asyncio.CancelledError if primary == 'cancel' else
+                OSError if secondary in ('close', 'both') else LookupError)
+    with pytest.raises(expected):
+        await task
+    assert worker.cleaned and pool.released
+    pool.close.assert_awaited_once()
+    assert pool.terminate.call_count == (secondary in ('close', 'both'))
+
+
+@pytest.mark.parametrize('phase', ['close', 'report'])
+async def test_cleanup_cancellation_remains_visible(config_env, phase):
+    pool = fake_pool()
+    worker = Worker('hang')
+    stop = asyncio.Event()
+    if phase == 'close':
+        pool.close.side_effect = asyncio.CancelledError
+
+    def reporter(state):
+        if phase == 'report' and worker.cleaned:
+            raise asyncio.CancelledError
+
+    task = asyncio.create_task(entry.serve(
+        entry.DatabaseConfig.from_environment(), stop, worker=worker,
+        pool_factory=AsyncMock(return_value=pool), reporter=reporter, drain_seconds=0.01,
+    ))
+    await asyncio.wait_for(worker.entered.wait(), 1)
+    stop.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert worker.cleaned and pool.released
+    pool.close.assert_awaited_once()
+    assert pool.terminate.call_count == (phase == 'close')

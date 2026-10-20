@@ -41,6 +41,131 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-16 — Bound team contention remains retryable after canonical commit
+
+New #1093 review found the legacy auto-team bool/error wrapper swallowed global
+TeamWriteBusy after a bound R1 canonical commit and again during replay, so the
+batch reported success without a roster. Bound callers now opt into exception
+propagation; the existing post-commit importer boundary returns RetryableImportFailure.
+Canonical rows/mappings/events and successful warning-aware markers survive for
+reconciliation. Legacy callers keep their existing bool behavior. Cancellation
+still propagates; team identity conflicts also remain visible, never false success.
+
+126 selected tests passed;15 native cases skipped locally. Disabling strict
+propagation caused14 observed failures; source restored with cmp and126 passed.
+Two new native cases hold a real global advisory lock across fresh R1/replay,
+compare complete canonical/marker rows, require a retryable outcome and no teams,
+then release it, reconcile two teams and admit R2. The optional real batch envelope
+uses a fixture-manager attempt transport, not a new pool/connection-path proof.
+PG14/PG17 CI on this new head is required. Prior92a3ab64 CI was fully green:
+9229/9233 passed with179/175 skips; independent passed-node counts match. That
+proves receipt/warning/date/index changes, not this new lock propagation patch.
+
+Ruff adds no diagnostics (root12 unchanged). No service restart/deploy, migration,
+application data write or production change. Refresh dependent1094–1096 normally,
+answer the final review and retain per-PR owner merge permission. Original plan,
+state handover, D5 and remaining proximity/gametime/API/live/Spiderweb/UI retained.
+
+## 2026-10-16 — Preserve proximity replay fences and warning recovery
+
+Review of #1093 found that the previous explicit-reset change deleted proximity
+receipts while retaining additive proximity aggregates. Corrected before merge
+or deployment: retain those receipts, hashes, aggregate-applied/admission flags
+and all aggregates; release only linked_round_id during explicit canonical reset.
+The native fixture compares retained rows through rollback and successful reset.
+
+Bound replay restores WARN markers from the immutable validation_passed=false
+journal value after a missing/failed marker write, retains original warning text
+where available and leaves complete markers unchanged on subsequent replay.
+Legacy date repair locks its selected rounds and refuses runtime mappings or
+strict proximity links before any DELETE. Bound date repair remains a separate
+explicit source-admission/reconciliation task, not silently downgraded legacy
+reimport. The legacy test mocks reimport and proves only deletion/admission.
+
+Centralized the usable team-identity index predicate: the legacy schema setup
+must accept migration036's standalone unique index just like the team worker.
+No constraint promotion or duplicate-name DDL is needed on that valid shape.
+
+133 selected tests passed locally; 20 native PostgreSQL cases skipped because
+the private cluster is offline. Disabling warning preservation produced six
+observed failures; restoration compared byte-identical and all 12 replay cases
+passed. Root-manager Ruff remains its existing 12 diagnostics, with no added
+code/message; other changed Python paths pass. PG14/PG17 acceptance is pending
+on this new head. Earlier c71a13c1 CI passed9218/9222 tests, but does not prove
+these newer changes. No application data, services or production were changed.
+
+Next: exact-head CI, review replies and normal dependency refresh1094–1096.
+All original runtime, handover, D5, proximity/gametime and UI plans remain open
+where previously recorded. Per-number owner permission still gates each merge.
+
+## 2026-10-16 — Forward-only map alphabet and explicit rebuild dependencies
+
+Two later #1093 review findings: restrictive round-mapping FKs blocked explicit
+fresh rebuild; binding/SQL map validation was narrower than the sealed transport.
+The explicit wipe now clears known optional runtime/proximity/gametime children,
+receipts, mappings and journal in dependency order before canonical rounds,
+deleting R2 mappings before R1. Config tables remain excluded. Ordinary round
+deletes still retain journal history; no live wipe or repair was performed.
+Native fixture adds an omitted-mapping negative control, late-failure rollback,
+full row preservation comparisons, final zero counts by two paths and retained
+user-permission config.
+
+New migration104_runtime_round_mapping_map_alphabet.sql relaxes only the map
+check to the existing [A-Za-z0-9_.+-] transport alphabet. Migration099 bytes and
+its checksum remain unchanged, even though its PR is still open. Both schema
+snapshots append the effective104 alteration; release configuration includes104
+(after103 in full source, after099 in this earlier consolidated branch).
+Do not apply it to an application DB without the owner migration procedure.
+
+106 selected local tests passed; eight native cases skipped while the private
+cluster is offline. Added four native cases: period/plus upgraded-schema import
+and replay, mixed-case map acceptance, and transactional explicit wipe. CI on
+PG14/PG17 must prove them before closing these two new review threads. Earlier
+968712a8 passed9210/9214 tests with all eight previous native additions executed;
+that is separate from the newer104 head. Original migration099 compared equal
+through both current-file and committed-file paths. New evidence stays local.
+
+Next: publish, run exact-head native acceptance, refresh dependent1094–1096 and
+resolve review. Keep owner merge permissions per PR, source admission/exclusive
+handover, D5 and every original proximity/gametime/API/live/Spiderweb/UI item.
+Full original PLAN bytes remain preserved in the primary checkout. Production,
+services, installed units, application rows and old candidate packages untouched.
+
+## 2026-10-16 — Import-consumer review follow-up before parent merge
+
+PR #1093 received three additional Codex findings after its earlier green CI.
+Do not treat the old zero-thread snapshot as current approval. Default bound R1
+replay now repeats the legacy team assignment after canonical commit/marker
+recovery; deferred mode remains untouched. Mapping verifies the actual boolean
+validation value recorded by the importer, preserving save-with-warning on both
+halves and replay rather than converting warnings to rollback.
+
+Migration 036 creates session_teams_identity_unique as a standalone unique index,
+whereas the schema snapshot defines a constraint. Consumer readiness now checks
+the actual valid, ready, immediate, nonpartial unique index and exact three keys;
+team assignment and TeamManager infer that same key tuple for ON CONFLICT.
+No merged migration is edited and no application database is changed.
+
+141 selected tests passed, 11 native tests skipped because the isolated proof
+cluster is offline. Added eight native cases: cancellation after commit with
+default/deferred team policy, warning pair persistence/replay, and five index
+layouts (constraint, standalone, wrong keys, nonunique, partial). CI must prove
+these against PG14/PG17 before claiming native acceptance or merge readiness.
+Three local mutations target mapping warnings, replay team effect and index
+inference; logs/restoration evidence remain local. Ruff selected paths pass;
+the standalone manager has twelve preexisting diagnostics, independently
+compared baseline/current with no new diagnostic codes/messages.
+
+#1095/#1096 continue as dependent delivery PRs (37/30 paths at their prior heads).
+They must receive this parent correction through normal dependency merges and
+repeat exact-head checks. First #1095 full-run documentation failure was fixed;
+its c933793d Python legs passed 10289/10293 tests, distinct from later heads.
+Actual DEV remains bot b46f675c and web da69e923; health/database OK on read-only
+inspection. No service/game/database operation, deployment or PR merge occurred.
+Retain D5, source admission/exclusive writer handover, proximity/gametime/storage,
+API/live/Spiderweb/UI work and all original roadmap items. The full original
+plan remains byte-preserved in the primary development checkout.
+
 ## 2026-10-13 — Spiderweb review recovery and versioned research evidence
 
 Timeline failures now restore ordinary controls to the rendered time/POV;

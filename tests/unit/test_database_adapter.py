@@ -9,6 +9,8 @@ Tests for PostgreSQL database operations including:
 - Connection pooling
 """
 
+import secrets
+
 import pytest
 
 from bot.core.database_adapter import PostgreSQLAdapter
@@ -32,14 +34,15 @@ class TestDatabaseConnection:
         )
 
         assert adapter is not None
-        assert adapter.database == "etlegacy_test"
+        assert adapter.database == test_db_config["database"]
+        assert adapter.database.startswith("slomix_fixture_")
 
         # Connect and verify
-        await adapter.connect()
-        assert adapter.is_connected()
-
-        # Cleanup
-        await adapter.close()
+        try:
+            await adapter.connect()
+            assert adapter.is_connected()
+        finally:
+            await adapter.close()
 
     @pytest.mark.asyncio
     @pytest.mark.requires_db
@@ -53,19 +56,26 @@ class TestDatabaseConnection:
         assert result == 1
 
     @pytest.mark.asyncio
-    async def test_database_invalid_credentials(self):
-        """Test connection fails with invalid credentials"""
+    async def test_database_invalid_credentials(self, monkeypatch):
+        """Pool authentication failure propagates without contacting localhost."""
+        from unittest.mock import AsyncMock
+
+        import asyncpg
+
+        denied = AsyncMock(side_effect=asyncpg.InvalidPasswordError("synthetic auth failure"))
+        monkeypatch.setattr(asyncpg, "create_pool", denied)
         adapter = PostgreSQLAdapter(
             host="localhost",
             port=5432,
             database="nonexistent_db",
             user="invalid_user",
-            password="wrong_password"
+            password=secrets.token_urlsafe()
         )
 
         # Connection should fail
-        with pytest.raises(Exception):
+        with pytest.raises(asyncpg.InvalidPasswordError, match="synthetic auth failure"):
             await adapter.connect()
+        denied.assert_awaited_once()
 
 
 class TestDatabaseQueries:

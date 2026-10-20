@@ -994,3 +994,57 @@ Tests must inspect those conditions and buffer work, not only index presence.
 Retain ambiguity detection and NULL-session parents; never make this UNIQUE or
 partial on session readiness. TEMP local-buffer timing is not cold production
 latency. Preserve migration/bootstrap/release parity; apply only via owner deploy.
+
+## 2026-10-16 — Migration-created indexes and snapshot constraints differ
+
+Migration 036 creates the session-team uniqueness object with CREATE UNIQUE
+INDEX; the schema snapshot adds a UNIQUE constraint. Source inspection proves
+these distinct installation paths. Check the actual index keys/validity and
+use ON CONFLICT column inference for this shared tuple. A pg_constraint-only
+probe or ON CONSTRAINT target cannot represent the migration-created object.
+Native upgraded-schema acceptance must remain separate from unit SQL stubs.
+
+## 2026-10-16 — Extend mapping alphabets with a new migration
+
+The transport accepts periods/pluses in map names. Python binding validation and
+SQL checks must accept the same alphabet. Preserve 099 even before its PR merges
+when retained installations/candidates already reference its checksum; append104
+and update the effective schema/release contract. Never edit live ledger hashes
+to make a rewritten migration appear valid.
+
+## 2026-10-16 — Additive aggregates require durable replay receipts
+
+A canonical rebuild must preserve proximity receipts whenever it preserves the
+additive teamplay/crossfire/heatmap aggregates. Clearing only the receipt permits
+double application on replay. Release explicit round links, retain admission and
+hash flags, and compare complete receipt/aggregate rows after rollback and reset.
+Bound import marker recovery must also preserve the journal validation warning;
+missing original warning text requires an explicit warning, never false success.
+Legacy date repair must refuse bound sources before deletes until reconciliation
+has separately admitted the original sources. Legacy schema setup and runtime
+workers must share the same usable unique-index admission predicate.
+
+## 2026-10-16 — Bound team contention remains retryable after canonical commit
+
+New #1093 review found the legacy auto-team bool/error wrapper swallowed global
+TeamWriteBusy after a bound R1 canonical commit and again during replay, so the
+batch reported success without a roster. Bound callers now opt into exception
+propagation; the existing post-commit importer boundary returns RetryableImportFailure.
+Canonical rows/mappings/events and successful warning-aware markers survive for
+reconciliation. Legacy callers keep their existing bool behavior. Cancellation
+still propagates; team identity conflicts also remain visible, never false success.
+
+126 selected tests passed;15 native cases skipped locally. Disabling strict
+propagation caused14 observed failures; source restored with cmp and126 passed.
+Two new native cases hold a real global advisory lock across fresh R1/replay,
+compare complete canonical/marker rows, require a retryable outcome and no teams,
+then release it, reconcile two teams and admit R2. The optional real batch envelope
+uses a fixture-manager attempt transport, not a new pool/connection-path proof.
+PG14/PG17 CI on this new head is required. Prior92a3ab64 CI was fully green:
+9229/9233 passed with179/175 skips; independent passed-node counts match. That
+proves receipt/warning/date/index changes, not this new lock propagation patch.
+
+Ruff adds no diagnostics (root12 unchanged). No service restart/deploy, migration,
+application data write or production change. Refresh dependent1094–1096 normally,
+answer the final review and retain per-PR owner merge permission. Original plan,
+state handover, D5 and remaining proximity/gametime/API/live/Spiderweb/UI retained.
