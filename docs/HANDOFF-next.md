@@ -169,6 +169,41 @@ remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
 and additional review closure remain pending. Preserve original plan and queues.
 
 
+## 2026-10-20 — External supervisor bootstrap and raw source comparison
+
+Addressed #1095 P1 reviews4325182407/4325182418. Source admission no longer runs
+Git diff: local clean filters can execute arbitrary commands even with fsmonitor
+disabled. It compares approved ls-tree entries against the stage-zero index and
+raw worktree blob hashes/modes, without attributes conversion. Ignored/unknown
+files, hidden index flags, staged changes, executable drift and wrong file kinds
+remain refused. Regular files use non-following descriptors and stat stability
+checks. SHA1 is used only for Git object-format identity, with usedforsecurity=False;
+SHA256 remains the trusted supervisor artifact pin.
+
+Prepared units now embed a fixed stdlib bootstrap in isolated Python -c argv.
+The bootstrap opens an owner-only regular0600 artifact with O_NOFOLLOW/nonblocking,
+reads at most1MiB+1 once, verifies the SHA256 pinned in the unit, then compiles and
+executes that same verified buffer. It never executes a supervisor from the mutable
+checkout or reopens its artifact after hashing. The artifact is copied from the
+exact approved commit blob; original source filename/revision remain available
+for subsequent source/project admission. Direct main-process run without the
+external bootstrap is refused. Source/workspace commit binding and exact effective
+unit argv/environment/log-sink checks remain. Existing prepared units need
+regeneration; Type=exec still confirms launcher startup, not app readiness.
+
+Native controls cover an actually executed clean-filter positive control, no
+filter execution under admission, committed artifact extraction despite mutable
+checkout drift, valid artifact guard execution, checkout/artifact/symlink/mode
+tampering and replacement AFTER hashing. Tampered bytes never execute a sentinel.
+Offline systemd parser plus exact decoded generated argv checks pass. No unit was
+installed or started; no ET, live DB, mount or deployed payload was touched.
+Five deliberate mutations (clean-filter fallback, artifact hash, reopen-after-hash,
+mutable artifact extraction, missing bootstrap provenance) each produced an
+observed failing test; every file restored and compared with cmp. Restored targeted
+suite166passed; Ruff and diff checks pass. Counts overlap earlier runs.
+Next:publish and answer both reviews, refresh dependent parents and inspect exact
+head CI; preserve original D4/D5/exclusive writer handover and owner merge gates.
+
 ## 2026-10-20 — Owner-approved PR1094 merged; next game source remains forward-only
 
 Owner explicitly approved1094. Prescribed cycle ran on30775c84 with all13checks
