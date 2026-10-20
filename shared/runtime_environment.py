@@ -17,6 +17,9 @@ ROOT = Path(__file__).resolve().parents[1]
 SYSTEM_ENVIRONMENT = frozenset({
     'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LANGUAGE', 'LC_ALL', 'LC_CTYPE',
     'LC_MESSAGES', 'LC_NUMERIC', 'LC_TIME', 'LC_COLLATE', 'LC_MONETARY',
+    # Additional GNU libc locale categories; never allow arbitrary LC_* keys.
+    'LC_PAPER', 'LC_NAME', 'LC_ADDRESS', 'LC_TELEPHONE',
+    'LC_MEASUREMENT', 'LC_IDENTIFICATION',
     # systemd 254+ memory-pressure protocol metadata (not application config).
     'MEMORY_PRESSURE_WATCH', 'MEMORY_PRESSURE_WRITE',
     'INVOCATION_ID', 'JOURNAL_STREAM', 'SYSTEMD_EXEC_PID', 'XDG_RUNTIME_DIR',

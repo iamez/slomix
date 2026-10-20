@@ -1,3 +1,23 @@
+## 2026-10-20 — Admit exact GNU locale metadata without weakening configuration guards
+
+Review1096 found six missing GNU libc locale categories. Add only LC_PAPER,
+LC_NAME, LC_ADDRESS, LC_TELEPHONE, LC_MEASUREMENT and LC_IDENTIFICATION to the
+shared system metadata allowlist; arbitrary LC_* remains refused. Approved-file
+value conflicts still refuse, including these exact names. GNU libc/Linux locale
+reference checked; no wildcard environment permission was added.
+
+162 focused environment, contract and health tests pass. Actual isolated child
+preflight accepts each category before its database double; /proc health reads
+real child environments containing all six and still rejects unknown/loader/app
+settings. Removing the six entries produces12observed regression failures;
+source restored andcmp verified. Ruff/diff checks pass. Initial fixture run:
+6failed156passed because /tmp/.git correctly fences preparation; a NEW private
+/var/tmp fixture rerun passes. No production, service or live database was used.
+
+Next: integrate reviewed game parent, refresh state child, publish and answer
+review4322079388, then inspect exact-head CI. Original plan and owner-specific
+merge/activation gates remain in force; old prepared contracts need regeneration.
+
 ## 2026-10-20 — Application launch isolation and pre-start policy review closure
 
 Addressed all three new1096findings. Bot/web use-E-B-s, consumers additionally-u:

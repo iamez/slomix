@@ -392,7 +392,9 @@ def test_dependencies_allow_implicit_units_but_require_each_contract_member(inpu
 
 
 @pytest.mark.parametrize('extra', [None, 'BETS_LIFECYCLE_SECONDS', 'PYTHONPLATLIBDIR',
-                                  'UNKNOWN_APP_OPTION', 'LD_AUDIT'])
+                                  'UNKNOWN_APP_OPTION', 'LD_AUDIT', 'LC_UNKNOWN',
+                                  'LC_PAPER', 'LC_NAME', 'LC_ADDRESS', 'LC_TELEPHONE',
+                                  'LC_MEASUREMENT', 'LC_IDENTIFICATION'])
 def test_native_child_preflight_checks_environment_before_database(inputs, extra):
     import subprocess
     import sys
@@ -422,7 +424,7 @@ print(json.dumps({"exit": status, "database_calls": len(calls)}))
     env = dict(spec['environment'], MEMORY_PRESSURE_WATCH='/dev/null')
     if extra:
         # Empty LD_AUDIT prevents the OS loader opening anything before the guard.
-        env[extra] = '' if extra == 'LD_AUDIT' else '1'
+        env[extra] = '' if extra == 'LD_AUDIT' else 'C' if extra.startswith('LC_') else '1'
     result = subprocess.run([sys.executable, *spec['pre_argv'][1:3], '-c', code,
                              str(Path(__file__).resolve().parents[2]),
                              str(root / 'scripts/dev_schema_preflight.py'),
@@ -430,8 +432,12 @@ print(json.dumps({"exit": status, "database_calls": len(calls)}))
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
     reports = [json.loads(line) for line in result.stdout.splitlines()]
-    assert reports[-1] == {'exit': 1 if extra else 0, 'database_calls': 0 if extra else 1}
-    assert reports[0]['clean'] is (extra is None)
+    refused = extra is not None and extra not in {
+        'LC_PAPER', 'LC_NAME', 'LC_ADDRESS', 'LC_TELEPHONE',
+        'LC_MEASUREMENT', 'LC_IDENTIFICATION',
+    }
+    assert reports[-1] == {'exit': 1 if refused else 0, 'database_calls': 0 if refused else 1}
+    assert reports[0]['clean'] is (not refused)
 
 
 def test_unmarked_preflight_override_policy_keeps_legacy_compatibility():
