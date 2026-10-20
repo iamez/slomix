@@ -169,6 +169,58 @@ remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
 and additional review closure remain pending. Preserve original plan and queues.
 
 
+## 2026-10-20 — Owner-approved PR1093 merged; producer successor prepared
+
+Owner explicitly approved the pending1093merge. Prescribed slomix-ops/cycle.sh
+ran with exactc40537ba head and the full420-second review pause. Final checks:
+failed0,unresolved0,behindmain0,head unchanged. GitHub confirms merged at
+2026-10-20T07:22:10Z, commit8c1a6cc395d3485852240117aacbe44c3c37dca2.
+Independent Git ancestry, empty full-tree diff and tree-ID equality confirm main
+contains precisely the reviewed source. No service or deployment occurred.
+
+Next producer1094already contains originalc40537ba. Only after proving the new
+main tree EXACTLY equals that contained original parent, an ancestry-only local
+merge records main into its feature branch. Whole producer tree remained
+00fb1ac6ad2105919a652c5c7b85a100b4904dfa; empty parent diff independently confirms.
+This strategy must not be reused if main has any differing content. Subsequent
+ledger updates are documentation only. Publish and retarget1094to main, then
+inspect its new exact-head CI; no1094merge is authorized by1093permission.
+
+Before this metadata refresh1094–1097exact heads were all green. Python3.11/3.13
+passed counts independently checked against result nodes:1094 10077/10081,
+1095 10540/10544,1096 10788/10792,1097 10934/10938. These are overlapping suites,
+not additive or service/runtime activation proof. PR1100remains a separate npm
+security review; its documented unpatched braces residual remains unresolved.
+Original full plan, D4/D5/exclusive writer handover and all remaining roadmap
+items are retained. Production remains frozen; no DB/state or service change.
+
+## 2026-10-20 — Correct relative metrics defaults and bounded preflight startup
+
+Validated three new1095reviews. With external BOT_LOG_DIR, documented relative
+metrics defaults bot/logs/metrics/metrics.db and logs/metrics/metrics.db now use
+that external root. Explicit separate stores, empty/None fallback and legacy
+PostgreSQL-vs-application-SQLite protections remain. Native async metrics proof
+creates/counts one event and exports JSON outside an untouched synthetic release.
+
+Preflight missing asyncpg/python-dotenv returns structured dependency refusal
+without traceback on CLI; library imports still raise ImportError. Actual system
+interpreter confirms this refusal. Release config path/expected digest admission
+now uses the existing bounded external reader directly, without first calling
+unbounded file_hash. Native FIFO,/dev/zero, sparse oversized and wrong-digest
+cases refuse promptly without DB access. Do not import deployed code for proof.
+
+116targeted tests pass. Metrics/dependency/bounded-config mutations cause2/2/1
+observed failures andcmp restoration. Initial dependency fixture failed2cases
+because it changed sys.argv before the hook read the selected module; freeze the
+module name first, then both refusal paths execute. Source/new-test Ruff and
+diff pass. Existing metrics test file retains exactly its two pre-existingSLF001
+diagnostics, independently compared with parent; no suppression or hidden fix.
+No service, live database or deployed payload changed.
+
+Next:refresh producer parent after1093merge, publish, refresh app/state children,
+answer three reviews and inspect exact-head CI. Original runtime D4/D5/exclusive
+handover and all preserved roadmap/owner activation gates remain in force.
+
 ## 2026-10-20 — Second game review: explicit targets and closed proof environment
 
 Validated and corrected five additional #1095 findings. Standalone marked audit

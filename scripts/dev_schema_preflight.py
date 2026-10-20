@@ -28,11 +28,17 @@ import hashlib
 import json
 from pathlib import Path
 
-import asyncpg
-from dotenv import dotenv_values
+try:
+    import asyncpg
+    from dotenv import dotenv_values
+except ImportError:
+    if __name__ != "__main__":
+        raise
+    sys.stdout.write('{"clean": false, "error": "Preflight dependencies are unavailable"}\n')
+    raise SystemExit(1) from None
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from shared.release_manifest import file_hash, verify_release  # noqa: E402
+from shared.release_manifest import verify_release  # noqa: E402
 from shared.runtime_environment import read_external_environment, refuse_config_overrides  # noqa: E402
 
 REQUIRED_COLUMNS = {
@@ -166,7 +172,7 @@ def main(argv=None):
             verify_release(release_root)
             if (args.migrations_dir != release_root / "migrations"
                     or os.getenv("SLOMIX_ENV_FILE") != str(args.env_file)
-                    or file_hash(args.env_file) != args.expected_env_sha256):
+                    or not args.expected_env_sha256):
                 raise PreflightError("Release migration/config paths do not match startup contract")
             refuse_config_overrides(
                 read_external_environment(args.env_file, root=release_root,
