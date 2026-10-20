@@ -1359,3 +1359,30 @@ private /var/tmp run resolved those without weakening guards. No service, engine
 real database or deployed payload was touched. Next: refresh dependent PR parents,
 answer the five review comments, and inspect exact-head CI; per-PR merge and owner
 activation gates remain unchanged. Existing original runtime plan is retained.
+
+## 2026-10-20 — Correct relative metrics defaults and bounded preflight startup
+
+Validated three new1095reviews. With external BOT_LOG_DIR, documented relative
+metrics defaults bot/logs/metrics/metrics.db and logs/metrics/metrics.db now use
+that external root. Explicit separate stores, empty/None fallback and legacy
+PostgreSQL-vs-application-SQLite protections remain. Native async metrics proof
+creates/counts one event and exports JSON outside an untouched synthetic release.
+
+Preflight missing asyncpg/python-dotenv returns structured dependency refusal
+without traceback on CLI; library imports still raise ImportError. Actual system
+interpreter confirms this refusal. Release config path/expected digest admission
+now uses the existing bounded external reader directly, without first calling
+unbounded file_hash. Native FIFO,/dev/zero, sparse oversized and wrong-digest
+cases refuse promptly without DB access. Do not import deployed code for proof.
+
+116targeted tests pass. Metrics/dependency/bounded-config mutations cause2/2/1
+observed failures andcmp restoration. Initial dependency fixture failed2cases
+because it changed sys.argv before the hook read the selected module; freeze the
+module name first, then both refusal paths execute. Source/new-test Ruff and
+diff pass. Existing metrics test file retains exactly its two pre-existingSLF001
+diagnostics, independently compared with parent; no suppression or hidden fix.
+No service, live database or deployed payload changed.
+
+Next:refresh producer parent after1093merge, publish, refresh app/state children,
+answer three reviews and inspect exact-head CI. Original runtime D4/D5/exclusive
+handover and all preserved roadmap/owner activation gates remain in force.

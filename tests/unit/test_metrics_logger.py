@@ -300,7 +300,7 @@ def test_summary_uptime_grows_over_time(logger_, monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('configured_db', ['default', 'explicit', 'legacy', 'empty'])
+@pytest.mark.parametrize('configured_db', ['default', 'explicit', 'legacy', 'empty', 'documented-relative', 'relative-default', 'none'])
 async def test_configured_metrics_store_and_exports_stay_outside_release(tmp_path, monkeypatch, configured_db):
     import json
     import sqlite3
@@ -316,7 +316,8 @@ async def test_configured_metrics_store_and_exports_stay_outside_release(tmp_pat
     legacy = tmp_path / 'application.db'
     explicit = tmp_path / 'custom-store' / 'automation.db'
     configured = {'default': str(default_db), 'explicit': str(explicit),
-                  'legacy': str(legacy), 'empty': ''}[configured_db]
+                  'legacy': str(legacy), 'empty': '', 'documented-relative': 'bot/logs/metrics/metrics.db',
+                  'relative-default': 'logs/metrics/metrics.db', 'none': None}[configured_db]
     config = SimpleNamespace(database_type='postgresql', metrics_db_path=configured,
                              sqlite_db_path=str(legacy))
     metrics = MetricsLogger.from_config(config)

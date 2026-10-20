@@ -83,7 +83,8 @@ class MetricsLogger:
         """Keep report files under BOT_LOG_DIR; explicit metrics DB paths win.
 
         PostgreSQL mode refuses the legacy application SQLite database as a
-        metrics target, while preserving separately configured metrics stores.
+        metrics target. Documented relative defaults follow BOT_LOG_DIR; separately
+        configured metrics stores retain their explicit paths.
         """
         log_dir = getattr(config, "metrics_log_dir", None) or os.path.join(
             os.getenv("BOT_LOG_DIR") or "logs", "metrics"
@@ -93,7 +94,9 @@ class MetricsLogger:
         if db_type in ("postgresql", "postgres"):
             sqlite_path = getattr(config, "sqlite_db_path", "") or ""
             database_abs = os.path.abspath(db_path) if db_path else ""
-            if (not db_path
+            legacy_relative_default = (bool(db_path) and os.getenv("BOT_LOG_DIR") and not os.path.isabs(db_path)
+                and os.path.normpath(db_path) in {"bot/logs/metrics/metrics.db", "logs/metrics/metrics.db"})
+            if (not db_path or legacy_relative_default
                     or (sqlite_path and database_abs == os.path.abspath(sqlite_path))
                     or os.path.basename(database_abs) == "etlegacy.db"):
                 db_path = os.path.join(log_dir, "metrics.db")
