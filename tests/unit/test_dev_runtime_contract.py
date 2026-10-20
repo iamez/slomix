@@ -68,6 +68,9 @@ def test_preparation_has_no_secrets_and_never_overwrites(inputs, tmp_path):
     assert 'UnsetEnvironment=' + ' '.join(contract.UNSET_ENVIRONMENT) in unit
     assert "ProtectSystem=strict" in unit and "PYTHONDONTWRITEBYTECODE=1" in unit
     assert "EnvironmentFile=" not in unit
+    assert "Requires=postgresql.service\n" in unit
+    assert "Wants=network-online.target\n" in unit
+    assert "After=network-online.target postgresql.service\n" in unit
     with pytest.raises(ValueError, match="NEW"):
         contract.prepare(output, **inputs)
 
@@ -179,7 +182,8 @@ def test_release_prestart_cli_refuses_before_database(inputs, monkeypatch, capsy
 def properties(spec, pid):
     def command(argv):
         return f"{{ path={argv[0]} ; argv[]={' '.join(argv)} ; ignore_errors=no ; pid=0 }}"
-    return dict(LoadState="loaded", ActiveState="active", MainPID=str(pid),
+    return dict(Requires=" ".join(spec["requires"]), Wants=" ".join(spec["wants"]),
+                After=" ".join(spec["after"]), LoadState="loaded", ActiveState="active", MainPID=str(pid),
                 WorkingDirectory=spec["cwd"], User="samba", Group="samba",
                 ExecStart=command(spec["argv"]), ExecStartPre=command(spec["pre_argv"]),
                 Environment=" ".join(shlex.quote(f"{k}={v}") for k, v in spec["environment"].items()),
@@ -191,10 +195,12 @@ def properties(spec, pid):
                 CPUQuotaPerSecUSec={"200%": "2s", "100%": "1s"}[spec["cpu_quota"]])
 
 
-@pytest.mark.parametrize("damage", [None, "Environment", "ProtectSystem", "ReadWritePaths", "ExecStartPre", "UnsetEnvironment", "Restart", "RestartUSec", "InvocationID"])
+@pytest.mark.parametrize("damage", [None, "Environment", "ProtectSystem", "ReadWritePaths", "ExecStartPre", "UnsetEnvironment", "Restart", "RestartUSec", "InvocationID", "Requires", "Wants", "After"])
 def test_resolved_unit_matches_exact_contract(inputs, monkeypatch, damage):
     record = contract.build_contract(**inputs)
     def output(argv, **kwargs):
+        for prop in ("Requires", "Wants", "After"):
+            assert any(argv[i:i + 2] == ["-p", prop] for i in range(len(argv) - 1))
         name = argv[2]
         values = properties(record["services"][name], 101 if name == "etlegacy-bot" else 102)
         if damage:
@@ -208,7 +214,7 @@ def test_resolved_unit_matches_exact_contract(inputs, monkeypatch, damage):
         assert health.units(inputs["release"], record)["etlegacy-bot"]["pid"] == 101
 
 
-@pytest.mark.parametrize("damage", [None, "loaded", "exe", "argv", "bootstrap", "inherited", "extra_db", "extra_app", "extra_unknown", "loader", "revision", "not_ready"])
+@pytest.mark.parametrize("damage", [None, "loaded", "exe", "argv", "bootstrap", "inherited", "extra_db", "extra_app", "extra_unknown", "loader", "python_setting", "revision", "not_ready"])
 def test_release_readiness_checks_actual_process(inputs, monkeypatch, damage):
     record = contract.build_contract(**inputs)
     state = {name: {"pid": pid, "active": "active", "cwd": spec["cwd"], "invocation_id": 'a' * 32}
@@ -238,6 +244,8 @@ def test_release_readiness_checks_actual_process(inputs, monkeypatch, damage):
             env["BETS_LIFECYCLE_SECONDS"] = "1"
         if damage == "extra_unknown":
             env["UNAPPROVED_CUSTOM_OPTION"] = "1"
+        if damage == "python_setting":
+            env["PYTHONPLATLIBDIR"] = "unexpected"
         if damage == "loader":
             env["LD_AUDIT"] = "/unsafe"
         if damage == "bootstrap":
@@ -350,3 +358,83 @@ def test_state_permissions_are_checked_as_service_account(inputs, monkeypatch, k
             path.chmod(mode)
     if kind != "user":
         assert contract.build_contract(**inputs)["revision"] == "a" * 40
+
+
+@pytest.mark.parametrize('role', ['bot', 'web'])
+def test_actual_application_python_flags_ignore_ambient_settings(inputs, role):
+    import subprocess
+    import sys
+
+    spec = contract.build_contract(**inputs)['services']['etlegacy-' + role]
+    assert spec['argv'][1:4] == ['-E', '-B', '-s']
+    result = subprocess.run([sys.executable, *spec['argv'][1:4], '-c',
+                             'import sys; assert sys.flags.ignore_environment; '
+                             'assert sys.flags.no_user_site; assert sys.dont_write_bytecode; print("startup-flags-ok")'],
+                            env={'PYTHONPLATLIBDIR': 'nonexistent-library'},
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'startup-flags-ok'
+
+
+@pytest.mark.parametrize('property_name,missing', [('Requires', 'postgresql.service'),
+                                                 ('Wants', 'network-online.target'),
+                                                 ('After', 'network-online.target'),
+                                                 ('After', 'postgresql.service')])
+def test_dependencies_allow_implicit_units_but_require_each_contract_member(inputs, property_name, missing):
+    spec = contract.build_contract(**inputs)['services']['etlegacy-bot']
+    values = properties(spec, 123)
+    for name in ('Requires', 'Wants', 'After'):
+        values[name] += ' sysinit.target basic.target'
+    health.release_unit_matches('etlegacy-bot', values, spec)
+    values[property_name] = ' '.join(value for value in values[property_name].split() if value != missing)
+    with pytest.raises(ValueError, match='dependencies differ'):
+        health.release_unit_matches('etlegacy-bot', values, spec)
+
+
+@pytest.mark.parametrize('extra', [None, 'BETS_LIFECYCLE_SECONDS', 'PYTHONPLATLIBDIR',
+                                  'UNKNOWN_APP_OPTION', 'LD_AUDIT'])
+def test_native_child_preflight_checks_environment_before_database(inputs, extra):
+    import subprocess
+    import sys
+
+    record = contract.build_contract(**inputs)
+    spec = record['services']['etlegacy-bot']
+    root = inputs['release']
+    sql = root / 'migrations/001.sql'
+    sql.parent.mkdir()
+    sql.write_text('SELECT 1;\n')
+    manifest = json.loads((root / MANIFEST).read_text())
+    manifest['files']['migrations/001.sql'] = file_hash(sql)
+    (root / MANIFEST).write_text(json.dumps(manifest))
+    code = '''
+import json, sys
+sys.path.insert(0, sys.argv[1])
+from scripts import dev_schema_preflight as schema
+schema.__file__ = sys.argv[2]
+calls = []
+async def inspect(*args):
+    calls.append("database-double")
+    return {"clean": True}
+schema.inspect_database = inspect
+status = schema.main(json.loads(sys.argv[3]))
+print(json.dumps({"exit": status, "database_calls": len(calls)}))
+'''
+    env = dict(spec['environment'], MEMORY_PRESSURE_WATCH='/dev/null')
+    if extra:
+        # Empty LD_AUDIT prevents the OS loader opening anything before the guard.
+        env[extra] = '' if extra == 'LD_AUDIT' else '1'
+    result = subprocess.run([sys.executable, *spec['pre_argv'][1:3], '-c', code,
+                             str(Path(__file__).resolve().parents[2]),
+                             str(root / 'scripts/dev_schema_preflight.py'),
+                             json.dumps(spec['pre_argv'][4:])], env=env,
+                            capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    reports = [json.loads(line) for line in result.stdout.splitlines()]
+    assert reports[-1] == {'exit': 1 if extra else 0, 'database_calls': 0 if extra else 1}
+    assert reports[0]['clean'] is (extra is None)
+
+
+def test_unmarked_preflight_override_policy_keeps_legacy_compatibility():
+    refuse_config_overrides({}, {'LEGACY_OPERATOR_OPTION': 'value'})
+    with pytest.raises(ValueError, match='Unapproved'):
+        refuse_config_overrides({}, {'LEGACY_OPERATOR_OPTION': 'value'}, strict=True)

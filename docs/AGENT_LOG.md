@@ -1496,3 +1496,52 @@ checks. Removing both keys causes2observed failures; original restored withcmp.
 After integrating the common runner fixture correction,160app/operator/startup
 checks pass. Ruff/diff-check clean. No service/mount/DB/deployed payload operation.
 Next:publish, refresh state child, answer review4307535251 and inspect exact-headCI.
+
+## 2026-10-20 — Audit admission, bytecode and fixed launch contract corrections
+
+Addressed all five new1095findings. Marked audit CLI requires-I before project/
+driver imports and verifies the full manifest before round-time/rule definitions,
+configuration and DB/cursor entry points. Library callers retain their startup
+trust boundary. The bot's dynamic caller suppresses bytecode BEFORE importing the
+validator/exec_module: the module body alone cannot prevent its own loader.pyc.
+Marked schema preflight also suppresses bytecode even with-I without-B.
+
+Launch and shutdown share fixed rehearsal port27962; another port is refused
+before host inspection. Native UDP fixture now tests the actual dedicated port,
+not an unrelated ephemeral socket. Marked migration timeouts use only explicit
+file values or constants; legacy environment budgets remain supported through
+legacy settings. No env fallback remains for omitted marked timeout keys.
+
+Public game219tests passed; full local candidate409targeted tests passed after
+app integration (overlapping sets, not additive). Six audit mutations each
+produced observed failures andcmp restoration; root budget mutation4failures,
+port mutation3failures. Actual child CLI wrong-port refusal, source/driver shadow
+sentinels and bytecode inventory failures were observed before restoration.
+Ruff/configured security/diff checks pass. No engine, real DB, service, deployed
+payload or production configuration was touched. Next:publish, refresh children,
+answer five comments and inspect newly triggered exact-head CI. Original plan
+and per-PR owner merge/activation gates remain in force.
+
+## 2026-10-20 — Application launch isolation and pre-start policy review closure
+
+Addressed all three new1096findings. Bot/web use-E-B-s, consumers additionally-u:
+-E ignores every PYTHON* influence, explicit-B/-s preserve bytecode/user-site
+protection, and-u preserves consumer output behavior otherwise lost when-E ignores
+PYTHONUNBUFFERED. Isolated preflight remains-I-B. Actual child interpreter tests
+exercise PYTHONPLATLIBDIR, no-user-site and output buffering, not just unit text.
+
+Prepared contracts record Requires/Wants/After. Resolved health requires every
+contract member while permitting implicit systemd dependencies. Release schema
+preflight now rejects unapproved environment BEFORE DB access. Health shares the
+same safe environment policy; legacy unmarked APIs retain their existing mode.
+Old prepared contracts fail closed and must be regenerated. Temporary audit
+mute overrides must be reconciled into an approved config/contract before later
+activation; do not silently certify the currently installed old contract.
+
+Agent256tests passed and six mutations were observed failing withcmp restoration.
+Public app269tests pass after game-parent integration; full candidate409targeted
+checks pass (overlapping sets). Native child/preflight tests use driver doubles,
+not live services or databases. Ruff/security/diff checks pass. No activation,
+mount, DB migration or deployed payload change occurred. Next:publish, refresh
+state child, answer three review threads and inspect exact-head CI. First merge
+candidate1093remains clean/green atc40537ba,behindmain0,owner approval required.

@@ -128,15 +128,18 @@ def build_contract(release: Path, state: Path, bot_python: Path, web_python: Pat
         # mutable; archived backups and old installations must stay outside it.
         writable = [str(state / "data"), str(state / "logs" / role), str(state / "cache" / role)]
         cwd = release if role == "bot" else release / "website"
+        # -E ignores PYTHON*; -s/-B preserve no-user-site/no-bytecode explicitly.
         # Preserve the existing DEV bind in offline unit text; no socket is opened.
-        argv = ([str(python), "bot/ultimate_bot.py"] if role == "bot" else
-                [str(python), "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"])  # noqa: S104  # nosec B104
+        argv = ([str(python), "-E", "-B", "-s", "bot/ultimate_bot.py"] if role == "bot" else
+                [str(python), "-E", "-B", "-s", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"])  # noqa: S104  # nosec B104
         pre = [str(python), "-I", "-B", str(release / "scripts/dev_schema_preflight.py"), "--release-mode",
                "--env-file", str(env), "--expected-env-sha256", env_digest,
                "--expected-host", identity[0], "--expected-port", identity[1],
                "--expected-database", identity[2], "--expected-user", identity[3],
                "--migrations-dir", str(release / "migrations")]
         services[f"etlegacy-{role}"] = {
+            "requires": ["postgresql.service"], "wants": ["network-online.target"],
+            "after": ["network-online.target", "postgresql.service"],
             "cwd": str(cwd), "argv": argv, "pre_argv": pre, "user": "samba", "group": "samba",
             "environment": dict(BOOTSTRAP, SLOMIX_ENV_FILE=str(env), SLOMIX_ENV_SHA256=env_digest,
                                 PATH=f"{python.parent}:/usr/local/bin:/usr/bin:/bin"),
@@ -172,9 +175,9 @@ def render_unit(name: str, service: dict) -> str:
     return f"""# Prepared offline. Installation/restart requires owner approval.
 [Unit]
 Description=Slomix clean DEV {name}
-After=network-online.target postgresql.service
-Wants=network-online.target
-Requires=postgresql.service
+After={' '.join(service['after'])}
+Wants={' '.join(service['wants'])}
+Requires={' '.join(service['requires'])}
 
 [Service]
 Type=simple

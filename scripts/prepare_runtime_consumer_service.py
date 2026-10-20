@@ -68,7 +68,7 @@ Environment=PYTHONNOUSERSITE=1
 Environment=PYTHONUNBUFFERED=1
 UnsetEnvironment=PYTHONPATH PYTHONHOME LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT
 ExecStartPre={python} -I -B -c "{READ_ONLY_RELEASE_CHECK}"
-ExecStart={python} -B -m {spec['module']}
+ExecStart={python} -E -B -s -u -m {spec['module']}
 Restart=on-failure
 RestartSec=5
 KillSignal=SIGTERM

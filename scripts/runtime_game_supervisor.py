@@ -39,6 +39,7 @@ POLICY = {'Type': 'exec', 'KillMode': 'control-group', 'Restart': 'no',
           'MemoryMax': '805306368', 'TasksMax': '64', 'LimitFSIZE': '67108864',
           'LimitCORE': '0', 'NoNewPrivileges': 'yes', 'UMask': '0077'}
 CLEARED_ENVIRONMENT = ('PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT')
+REHEARSAL_PORT = 27962
 AUXILIARY_COMMANDS = ('ExecCondition', 'ExecStartPre', 'ExecStartPost', 'ExecReload', 'ExecStop', 'ExecStopPost')
 PROPERTIES = (*POLICY, *AUXILIARY_COMMANDS, 'ExecStart', 'StandardOutput', 'StandardError', 'UnsetEnvironment', 'Id', 'MainPID', 'ControlGroup', 'ActiveState', 'SubState',
               'InvocationID', 'Result')
@@ -224,7 +225,8 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
         from scripts.runtime_game_import import preflight_import
         asyncio.run(preflight_import(socket=proof_socket, database=proof_database_name,
                                     lock_directory=import_lock_directory))
-    recipe = startup_recipe(directory, bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256)
+    recipe = startup_recipe(directory, port=REHEARSAL_PORT,
+                            bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256)
     rechecked = require_containment(unit)
     validate_launch_commands(rechecked, expected_argv)
     if rechecked['InvocationID'] != admitted['InvocationID']:
@@ -257,8 +259,8 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
 
 
 def verify_stopped(unit, port, invocation_id):
-    if type(port) is not int or not 1024 <= port <= 65535:
-        raise ValueError('Explicit rehearsal UDP port required')
+    if type(port) is not int or port != REHEARSAL_PORT:
+        raise ValueError('Shutdown proof requires the fixed launched rehearsal UDP port')
     if not isinstance(invocation_id, str) or re.fullmatch(r'[0-9a-f]{32}', invocation_id) is None:
         raise ValueError('Explicit recorded invocation ID required')
     values = unit_properties(unit)
@@ -301,7 +303,7 @@ def main(argv=None):
                         help='Defer team effects to the consumer; requires the complete proof import target')
     check = actions.add_parser('verify-stopped')
     check.add_argument('--unit', required=True)
-    check.add_argument('--port', type=int, default=27962)
+    check.add_argument('--port', type=int, default=REHEARSAL_PORT)
     check.add_argument('--invocation-id', required=True)
     args = parser.parse_args(argv)
     try:

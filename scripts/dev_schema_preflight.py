@@ -12,9 +12,11 @@ from __future__ import annotations
 # ruff: noqa: E402 -- isolated CLI admission precedes third-party imports
 import sys
 
-if __name__ == "__main__" and "--release-mode" in sys.argv and not sys.flags.isolated:
-    sys.stdout.write('{"clean": false, "error": "Release preflight requires isolated Python (-I)"}\n')
-    raise SystemExit(1)
+if __name__ == "__main__" and "--release-mode" in sys.argv:
+    sys.dont_write_bytecode = True
+    if not sys.flags.isolated:
+        sys.stdout.write('{"clean": false, "error": "Release preflight requires isolated Python (-I)"}\n')
+        raise SystemExit(1)
 
 import argparse
 import asyncio
@@ -165,7 +167,7 @@ def main(argv=None):
                 raise PreflightError("Release migration/config paths do not match startup contract")
             refuse_config_overrides(
                 read_external_environment(args.env_file, root=release_root,
-                                          expected_digest=args.expected_env_sha256), os.environ)
+                                          expected_digest=args.expected_env_sha256), os.environ, strict=True)
         options = connection_options(args.env_file, (
             args.expected_host, args.expected_port, args.expected_database, args.expected_user),
             release_root=release_root, expected_digest=args.expected_env_sha256)
