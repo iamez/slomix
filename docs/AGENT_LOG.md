@@ -1436,3 +1436,27 @@ diff checks pass. No service, engine, live database or deployed payload touched.
 Next: publish, answer both reviews and refresh child dependencies with exact-head
 CI. Original D4/D5 and exclusive writer handover remain open; #1094 owner merge
 authorization does not authorize #1095 or activation. Preserve original roadmap.
+
+## 2026-10-20 — Owner-approved PR1094 merged; next game source remains forward-only
+
+Owner explicitly approved1094. Prescribed cycle ran on30775c84 with all13checks
+successful, zero review threads and full420-second pause. Final cycle gate:
+failed0,threads0,behind0,head unchanged. GitHub confirms merge at12:46:40UTC,
+commita12a55b51b6d17d818d76a124a91b61b786bdd26. Full-tree diff, tree-ID equality
+and main ancestry independently prove reviewed producer content preserved.
+Exact-head CI counts10077/10081passed (Python3.11/3.13),160/156skipped, verified
+against individual passed-node lines. No service, database or ET activation.
+
+Game source a03f3455 fixes two later P1 findings, separately from approved1094.
+Before ancestry reconciliation, new main tree was proved exactly equal to the
+original producer30775c84 already contained in game. Metadata-only merge leaves
+the complete game tree unchanged at3b07da9936e8e98d74e42ef363218785fa7cf2b1;
+subsequent checkpoint changes are ledgers only. Do not apply that strategy if
+main content differs. Publish/retarget1095to main; its own merge remains unapproved.
+
+State source7914c41d fixes ancestor conflicts/metadata paths/bare repositories;
+combined native targeted integration344passes, game132/state192groups overlap.
+Five guard mutations each fail and restore/cmp. Refresh app/state dependency
+parents and answer all five reviews before new exact-head CI. Original D4/D5,
+writer exclusion, trusted-source admission, future observed DEV handover and
+all preserved proximity/gametime/API/UI/Spiderweb/Stats work remain required.
