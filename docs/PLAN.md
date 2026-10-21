@@ -1,3 +1,26 @@
+## 2026-10-21 — Patched Vite exact-source SPA build verified
+
+Required npm run build:app completed successfully on clean committed source
+be890e18b78a50b66f6af36692e883dc0699aa59 using installed Vite8.2.4 and
+Node22.23.2. The provenance helper recorded that exact source commit. Its actual
+verify command accepts the resulting SPA artifact for that revision; independent
+GNU sha256sum agrees with every recorded output hash. This is a local built
+artifact, not a live page/browser/deployment certificate. This follow-up changes
+only continuity documentation and does not relabel the artifact as another SHA.
+
+Existing build warnings remain: __dirname/native config compatibility warning and
+Tailwind Vite plugin SOURCEMAP_BROKEN. Neither was hidden or expanded into an
+unrelated framework/source-map migration. Typecheck and117targeted tests passed,
+ordinary clean npm ci passed, actual patched SPA audit0 and vulnerable baseline
+negative audit1/allthreeGHSA remain recorded. Root braces advisory still unresolved
+with5high propagated entries and no official patched release. No processes or
+monitors were left running; no browser/server/service/DB/provider was activated.
+
+PR#1100 remains unapproved for merge. Next: root publishes these two security
+commits for review, preserves all prior Tailwind3/parser/source-map fixes, and
+continues the owner's approved runtime merge queue and original D4/D5/exclusive
+writer development plan. No additional activation authority is implied.
+
 ## 2026-10-21 — Patch newly disclosed bundled Vite editor vulnerabilities
 
 Security detour remains in PR#1100, which is not merge-approved. Official GitHub
