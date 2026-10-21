@@ -42,6 +42,37 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-21 — Redact marked audit failures after successful connection
+
+Corrected #1095 review4332958068. Audit main now owns a marked-release ordinary
+Exception boundary across rule validation, cursor/query execution, connection
+close and reporting. It returns structured refusal without raw driver/query/path
+messages. Existing configuration/connection refusals remain compatible; unmarked
+legacy execution errors retain their existing propagation. KeyboardInterrupt,
+SystemExit and cancellation are not swallowed. In marked execution, an ordinary
+close failure cannot mask an already active control-flow BaseException.
+
+Native isolated Python fixtures use successful fake psycopg2 connections and
+actual audit rules/cursor execution: read-only session, cursor/query/close errors,
+rule validation, legacy controls and interrupts with/without cleanup failure.
+No actual DB/Discord/network connection occurs. Driver event markers confirm the
+intended paths ran and close was attempted. Initial harness10failures came from
+an empty synthetic password rejected by the audit's existing nonempty setting
+contract before the driver; fixture corrected, production policy unchanged.
+
+Combined targeted suite75passed. Redaction guard mutation produces4failing marked
+controls and4passing legacy controls; cleanup guard mutation produces2failures
+and2passing ordinary interrupt controls. Source restored and cmp verified after
+each. Final restored twelve native execution controls pass; Ruff/diff pass. Counts
+overlap prior runs. Pillow13.0.0 security fix retained unchanged. No service,
+engine, live database, deployed payload or production configuration touched.
+
+Owner explicitly approved1095/1096/1097merges onOct21; approval remains conditional
+on green exact-head CI/reviews and the ordered merge procedure, not activation.
+Next: refresh dependent parents/full candidate, publish, resolve this review and
+complete approved cycles. Original D4/D5/exclusive writer handover and the entire
+runtime roadmap remain preserved.
+
 ## 2026-10-21 — Repair newly failing Pillow security gate
 
 Fresh exact-head Security CI failed: pip-audit reports8new CVEs for pinned
