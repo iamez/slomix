@@ -41,6 +41,45 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-21 — Patch newly disclosed bundled Vite editor vulnerabilities
+
+Security detour remains in PR#1100, which is not merge-approved. Official GitHub
+advisories GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm and GHSA-698v-4r3x-3vcv all
+identify Vite8.2.0–8.2.3 as affected and8.2.4 as patched. Registry metadata confirms
+that release and its integrity/Node engines. SPA manifest minimum is now^8.2.4;
+lock pins8.2.4. Its required PostCSS/Rolldown/nanoid/native-binding dependency
+closure is updated; unrelated peer dependencies are retained. Root Tailwind3,
+source-map-js1.2.2 and postcss-selector-parser7.1.6 fixes remain unchanged.
+
+Node22.23.2/npm10.9.8 ordinary clean npm ci --ignore-scripts --no-audit passes.
+Initial targeted npm resolver crashed with "Cannot read properties of null
+(reading 'edgesOut')". Legacy peer resolver was used only to calculate the narrow
+update, after which unrelated peer entries were restored and ordinary npm ci
+validated it without that flag. An attempted nanoid minimization correctly failed
+clean-install validation because patched PostCSS requires^3.3.20; it was corrected
+to registry nanoid3.3.20 before successful install.
+
+Actual SPA audit changed from1high Vite entry containing all three GHSA to0.
+Restoring vulnerable manifest/lock as a deliberate negative control reproduces
+exit1/all three advisories; patched files restored with cmp, audit again exit0.
+Native installed Vite reports8.2.4. API-regenerated typecheck passes;117tests in
+five relevant SPA files pass with one worker. Existing __dirname/native-config
+warning remains. No browser/server/provider ran. Provenance-certified npm run
+build:app follows immediately after this committed checkpoint, because the build
+contract requires a clean committed tree; its result is not yet claimed here.
+
+Root npm audit still reports5high propagated package entries for the existing
+braces GHSA-vfj7-8cjw-p6xm; official advisory has no patched version and registry
+latest remains3.0.3. This is unresolved and unsuppressed. No Tailwind major migration
+or unrelated dependency update is introduced. References:
+https://github.com/advisories/GHSA-r825-w8mm-5pxw
+https://github.com/advisories/GHSA-587h-7wmj-h5pm
+https://github.com/advisories/GHSA-698v-4r3x-3vcv
+https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
+Next: finish exact-source SPA build, publish for review only when requested, then
+resume original runtime D4/D5/exclusive writer plan. No service/config/DB change,
+deployment, merge or production activation occurred.
+
 ## 2026-10-20 — Narrow npm security fixes without a legacy Tailwind migration
 
 Security detour from the runtime v2 #1093–#1097 review/CI/handover queue. All
