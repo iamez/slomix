@@ -1495,3 +1495,33 @@ observed failing test; every file restored and compared with cmp. Restored targe
 suite166passed; Ruff and diff checks pass. Counts overlap earlier runs.
 Next:publish and answer both reviews, refresh dependent parents and inspect exact
 head CI; preserve original D4/D5/exclusive writer handover and owner merge gates.
+
+## 2026-10-21 — Marked migration execution redaction and nonempty identities
+
+Owner explicitly approved merging #1095, #1096 and #1097 on2026-10-21, subject to
+successful review/CI closure and the existing ordered merge procedure. No service
+activation or production deployment follows from that approval.
+
+Corrected #1095 reviews4328317906/4328317921 before consolidation. The marked CLI
+now wraps every command's asyncio.run dispatch in an ordinary Exception boundary,
+returning a structured redacted refused_or_failed result with explicit
+partial_commits_possible=true. This is not a rollback claim. KeyboardInterrupt,
+SystemExit and cancellation remain outside that boundary; legacy unmarked errors
+retain their existing propagation.
+
+Marked explicit configuration must select a nonempty host/database/user (and
+port). A blank primary POSTGRES value cannot silently fall back to a populated
+DB alias or implicit PostgreSQL driver defaults. Missing passwords remain refused,
+but an explicitly empty password remains valid for supported local authentication.
+
+Native isolated Python children exercise all six actual CLI command paths with a
+synthetic asyncpg.connect failure and no real connection. Driver sentinels confirm
+command execution; raw exception text never escapes the marked redaction. Six
+empty/whitespace identity cases refuse before the driver. Exit73 and SIGINT-style
+KeyboardInterrupt propagate. Combined targeted suite91passed; two deliberate
+guard mutations each caused6observed test failures, restored byte-for-byte with
+cmp. Final restored native group14passed; counts overlap and must not be added.
+Ruff and diff checks pass. No services, ET, live database or deployed files touched.
+Next: refresh dependent application/state parents, publish, answer both reviews,
+then exact-head CI and ordered owner-approved merges. Original D4/D5, exclusive
+writer handover and all runtime roadmap/activation obligations remain preserved.

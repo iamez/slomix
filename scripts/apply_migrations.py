@@ -337,6 +337,8 @@ def migration_settings():
                       ("POSTGRES_PASSWORD", "DB_PASSWORD")):
             if not any(values.get(name) is not None for name in names):
                 raise ValueError("Release migrations require an explicit complete database identity")
+            if names[0] != "POSTGRES_PASSWORD" and not _setting(values, *names).strip():
+                raise ValueError("Release migrations require a nonempty explicit database identity")
         return values
     load_environment(resolve_env_file(_REPO_ROOT))
     return os.environ
@@ -1012,7 +1014,9 @@ def main():
               file=sys.stderr)
         return 1
 
-    if (_REPO_ROOT / ".slomix-release.json").exists() or (_REPO_ROOT / ".slomix-release.json").is_symlink():
+    release_mode = ((_REPO_ROOT / ".slomix-release.json").exists()
+                    or (_REPO_ROOT / ".slomix-release.json").is_symlink())
+    if release_mode:
         try:
             get_connection_kwargs()
             get_timeout_kwargs()
@@ -1021,20 +1025,29 @@ def main():
                   file=sys.stderr)
             return 1
 
-    if args.status:
-        asyncio.run(cmd_status(json_out=args.json))
-    elif args.validate:
-        asyncio.run(cmd_validate(json_out=args.json,
-                                 tolerate_missing=args.tolerate_missing))
-    elif args.baseline:
-        asyncio.run(cmd_baseline())
-    elif args.mark:
-        # Strip leading paths if the user pasted them.
-        asyncio.run(cmd_mark([Path(a).name for a in args.mark]))
-    elif args.only:
-        asyncio.run(cmd_apply(only=[Path(a).name for a in args.only]))
-    else:
-        asyncio.run(cmd_apply())
+    try:
+        if args.status:
+            asyncio.run(cmd_status(json_out=args.json))
+        elif args.validate:
+            asyncio.run(cmd_validate(json_out=args.json,
+                                     tolerate_missing=args.tolerate_missing))
+        elif args.baseline:
+            asyncio.run(cmd_baseline())
+        elif args.mark:
+            # Strip leading paths if the user pasted them.
+            asyncio.run(cmd_mark([Path(a).name for a in args.mark]))
+        elif args.only:
+            asyncio.run(cmd_apply(only=[Path(a).name for a in args.only]))
+        else:
+            asyncio.run(cmd_apply())
+    except Exception:
+        if not release_mode:
+            raise
+        # A command may have committed earlier work. Refusal is not rollback.
+        print(json.dumps({"status": "refused_or_failed",
+                          "reason": "Release migration command could not complete safely",
+                          "partial_commits_possible": True}), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
