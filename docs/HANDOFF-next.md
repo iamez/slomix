@@ -42,6 +42,14 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-21 — PR #1101 review: strict relational provenance and recoverable admission
+
+- Addressed reviews 4337378411/8425/8436/8445/8462: release v1.45.0 explicitly lists unmerged migrations 096 and 100; admission source IDs use the existing lowercase RoundIdentity alphabet; shared publication refuses unreadable/non-private temporary modes before the atomic link, preserving restrictive 0400 and ordinary 0600 without chmod.
+- Migration 100 adds unique parent indexes and composite foreign keys: source/round/canonical ID must name the SAME stats mapping; filename/canonical ID/SHA-256 must name the SAME strictly linked receipt. Migration 096 requires runtime_parent_gate IS TRUE (NULL must not pass SQL CHECK). No merged migration was edited, no backfill or historical receipt adoption is introduced. Exact bootstrap blocks match both migration files.
+- Local proof: 292 passed, 49 disposable-PG cases skipped; shared spool, completion, manifest read/retry, release contract and fresh-process admission recovery included. Source/mode/release guard mutants visibly failed 1/3/1 cases and source bytes were restored with cmp. Ruff and diff checks passed. New SQL rejection, post-link receipt mutation and three in-memory SQL guard-mutant cases await disposable CI PostgreSQL; skipped tests are NOT database proof.
+- Prior published head CI job log independently confirms 42 schema cases passed and the sole Python 3.11 failure was the missing release config entries (11120 passed,161 skipped). That old SQL execution does NOT validate the new relational constraints. No database/service/browser was started and no production or DEV state changed.
+- Continue the preserved runtime plan after fresh CI/review; #1101 still needs its own explicit owner merge permission. Existing approval for #1095–#1097 does not extend here.
+
 ## 2026-10-21 — Proximity schema/admission slice, not activation
 
 Source base3551ca21; extracted existing candidate9c09267c schema096/100 and

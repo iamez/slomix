@@ -37,7 +37,7 @@ def _scope(directory, source_id, generation):
             or directory.name != generation):
         raise ValueError('Admission requires its absolute generation directory')
     if (not isinstance(source_id, str)
-            or re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,63}', source_id, re.ASCII) is None):
+            or re.fullmatch(r'[a-z0-9][a-z0-9_.-]{0,63}', source_id, re.ASCII) is None):
         raise ValueError('Admission requires a bounded configured source ID')
 
 

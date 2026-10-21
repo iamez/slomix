@@ -115,7 +115,7 @@ def test_sync_failure_does_not_claim_success_or_overwrite(directory, monkeypatch
 
 @pytest.mark.parametrize('override', [
     {'generation': 'a' * 32}, {'generation': '../unsafe'}, {'source_id': ''},
-    {'source_id': 'x' * 65}, {'source_id': 'secret\nvalue'}, {'session_date': None},
+    {'source_id': 'Fixture'}, {'source_id': 'x' * 65}, {'source_id': 'secret\nvalue'}, {'session_date': None},
     {'session_date': '2026-10-05'}, {'expected_sha256': None}, {'expected_sha256': 'invalid'},
     {'completion': {**COMPLETION, 'bytes': True}},
     {'completion': {**COMPLETION, 'state': 'round_ended'}},
@@ -175,3 +175,18 @@ def test_read_only_record_from_umask_stays_readable(directory):
         os.umask(mask)
     assert stat.S_IMODE(path.stat().st_mode) == 0o400
     assert read(directory).completion() == COMPLETION
+
+
+@pytest.mark.parametrize('mask', [0o777, 0o677, 0o477])
+def test_unreadable_admission_refused_before_publication(directory, mask):
+    original = os.umask(mask)
+    try:
+        with pytest.raises(ValueError, match='owner-readable private file'):
+            publish_proximity_admission(directory, **OPTIONS)
+    finally:
+        os.umask(original)
+    assert list(directory.iterdir()) == []
+    assert read(directory) is None
+    # Refusal did not consume the no-clobber name; an ordinary retry recovers.
+    publish_proximity_admission(directory, **OPTIONS)
+    assert read(directory).sha256 == HASH

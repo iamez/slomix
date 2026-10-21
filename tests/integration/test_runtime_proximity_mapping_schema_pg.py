@@ -15,10 +15,14 @@ acl_db = _acl_db
 pytestmark = pytest.mark.timeout(120)
 
 
-async def parents(conn):
+async def parents(conn, *, link_sql=None):
     """Only synthetic transaction-scoped parents; no application data."""
     await conn.execute('CREATE TABLE rounds (id INTEGER PRIMARY KEY)')
-    await conn.execute('CREATE TABLE proximity_processed_files (filename TEXT PRIMARY KEY)')
+    await conn.execute('CREATE TABLE proximity_processed_files ('
+                       'filename TEXT PRIMARY KEY, runtime_parent_gate BOOLEAN, '
+                       'aggregates_applied BOOLEAN, file_hash TEXT)')
+    await conn.execute(link_sql if link_sql is not None else
+                       (ROOT / 'migrations/096_proximity_receipt_round_link.sql').read_text())
     await conn.execute((ROOT / 'migrations/099_runtime_round_mappings.sql').read_text())
     await conn.execute('INSERT INTO rounds VALUES (1),(2),(3)')
     for number in (1, 2):
@@ -29,7 +33,9 @@ async def parents(conn):
             key, f'stats-{number}.txt', 'a' * 64, number,
         )
     await conn.execute(
-        "INSERT INTO proximity_processed_files VALUES ('first.txt'),('second.txt'),('third.txt')"
+        "INSERT INTO proximity_processed_files VALUES "
+        "('first.txt',true,true,$1,1),('second.txt',true,true,$1,2),('third.txt',true,true,$1,3)",
+        'b' * 64,
     )
 
 
@@ -210,3 +216,90 @@ async def test_public_column_access_is_removed(acl_db, privilege):
         "'SELECT,INSERT,UPDATE,REFERENCES')"
     )
     await denied(conn, 'SELECT round_key FROM runtime_proximity_mappings')
+
+
+async def test_stats_identity_cannot_bind_another_existing_round(acl_db):
+    await parents(acl_db)
+    await acl_db.execute(MIGRATION.read_text())
+    with pytest.raises(asyncpg.ForeignKeyViolationError):
+        async with acl_db.transaction():
+            await insert(acl_db, filename='second.txt', canonical_round_id=2)
+    assert await acl_db.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 0
+
+
+@pytest.mark.parametrize('receipt', [
+    (None, None, None, None), (True, True, 'b' * 64, None),
+    (True, True, 'c' * 64, 1), (True, True, 'b' * 64, 2),
+])
+async def test_legacy_unlinked_or_mismatched_receipt_cannot_be_adopted(acl_db, receipt):
+    await parents(acl_db)
+    await acl_db.execute(MIGRATION.read_text())
+    await acl_db.execute("UPDATE proximity_processed_files SET runtime_parent_gate=$1, "
+                        "aggregates_applied=$2, file_hash=$3, linked_round_id=$4 "
+                        "WHERE filename='first.txt'", *receipt)
+    with pytest.raises(asyncpg.ForeignKeyViolationError):
+        async with acl_db.transaction():
+            await insert(acl_db)
+    assert await acl_db.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 0
+
+
+@pytest.mark.parametrize('gate,aggregates', [(None, True), (False, True), (True, None), (True, False)])
+async def test_link_requires_true_gate_and_applied_aggregates(acl_db, gate, aggregates):
+    await parents(acl_db)
+    with pytest.raises(asyncpg.CheckViolationError):
+        async with acl_db.transaction():
+            await acl_db.execute("UPDATE proximity_processed_files SET runtime_parent_gate=$1, "
+                                "aggregates_applied=$2 WHERE filename='first.txt'", gate, aggregates)
+
+
+@pytest.mark.parametrize('change', ["file_hash='c'", 'linked_round_id=NULL', 'linked_round_id=2'])
+async def test_receipt_binding_cannot_change_after_mapping(acl_db, change):
+    await parents(acl_db)
+    await acl_db.execute(MIGRATION.read_text())
+    await insert(acl_db)
+    with pytest.raises(asyncpg.ForeignKeyViolationError):
+        async with acl_db.transaction():
+            await acl_db.execute(f"UPDATE proximity_processed_files SET {change} WHERE filename='first.txt'")
+    assert await acl_db.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 1
+
+
+@pytest.mark.parametrize('guard', ['stats_parent', 'strict_receipt', 'nullable_gate'])
+async def test_mutated_schema_guard_accepts_invalid_binding(acl_db, guard):
+    """In-memory mutants prove each SQL guard is exercised on disposable PG."""
+    migration = MIGRATION.read_bytes()
+    link_path = ROOT / 'migrations/096_proximity_receipt_round_link.sql'
+    link_original = link_path.read_bytes()
+    link_sql = link_original.decode()
+    sql = migration.decode()
+    if guard == 'stats_parent':
+        sql = sql.replace('FOREIGN KEY (source_key, round_key, canonical_round_id)',
+                          'FOREIGN KEY (source_key, round_key)').replace(
+            'REFERENCES runtime_round_mappings(source_key, round_key, canonical_round_id)',
+            'REFERENCES runtime_round_mappings(source_key, round_key)')
+    elif guard == 'strict_receipt':
+        sql = sql.replace(',\n    FOREIGN KEY (filename, canonical_round_id, source_sha256)\n'
+                          '        REFERENCES proximity_processed_files(filename, linked_round_id, file_hash) '
+                          'ON DELETE RESTRICT', '')
+    else:
+        link_sql = link_sql.replace('runtime_parent_gate IS TRUE AND', 'runtime_parent_gate AND')
+    assert sql != migration.decode() or link_sql != link_original.decode()
+    await parents(acl_db, link_sql=link_sql)
+    await acl_db.execute(sql)
+    if guard == 'stats_parent':
+        await insert(acl_db, filename='second.txt', canonical_round_id=2)
+    else:
+        if guard == 'strict_receipt':
+            await acl_db.execute("UPDATE proximity_processed_files SET linked_round_id=NULL "
+                                "WHERE filename='first.txt'")
+        else:
+            await acl_db.execute("UPDATE proximity_processed_files SET runtime_parent_gate=NULL "
+                                "WHERE filename='first.txt'")
+        await insert(acl_db)
+    invalid_rows = await acl_db.fetch('SELECT * FROM runtime_proximity_mappings')
+    assert len(invalid_rows) == await acl_db.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 1
+    # The same no-invalid-row assertion must visibly fail with the guard removed.
+    with pytest.raises(AssertionError):
+        assert invalid_rows == []
+    assert MIGRATION.read_bytes() == migration
+    assert link_path.read_bytes() == link_original
+    print(f'Observed failing SQL guard mutation: {guard}; source bytes unchanged')
