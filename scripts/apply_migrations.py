@@ -858,6 +858,9 @@ async def cmd_apply(only: list[str] | None = None):
                         "record it with --mark."
                     )
             except MigrationRejected as e:
+                if ((_REPO_ROOT / ".slomix-release.json").exists()
+                        or (_REPO_ROOT / ".slomix-release.json").is_symlink()):
+                    raise
                 print("REJECTED")
                 print(f"    Error: {e}")
                 sys.exit(1)
@@ -871,6 +874,9 @@ async def cmd_apply(only: list[str] | None = None):
             except Exception as e:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 await _record_failure(conn, version, filename, checksum, elapsed_ms)
+                if ((_REPO_ROOT / ".slomix-release.json").exists()
+                        or (_REPO_ROOT / ".slomix-release.json").is_symlink()):
+                    raise
                 print(f"FAILED ({elapsed_ms}ms)")
                 print(f"    Error: {e}")
                 print("  Stopping at first failure.\n")

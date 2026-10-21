@@ -64,3 +64,72 @@ def test_native_marked_execution_preserves_control_flow(tmp_path, kind, code):
     assert sentinel.read_text() == 'driver called'
     assert result.returncode == code
     assert 'refused_or_failed' not in result.stderr
+
+INNER_BOOTSTRAP = '''
+import asyncpg,pathlib,runpy,sys
+kind,events,script,*args=sys.argv[1:]
+def record(value):
+ with open(events,'a') as stream: stream.write(value+'\\n')
+class Transaction:
+ async def __aenter__(self): record('transaction-start')
+ async def __aexit__(self,*args): record('transaction-end')
+class Connection:
+ def transaction(self): return Transaction()
+ async def fetch(self,*args): return []
+ async def fetchval(self,sql,*args): return 'pg_try_advisory_lock' in sql
+ async def execute(self,sql,*args):
+  if sql.strip() == 'SELECT 1;':
+   record('migration-execute')
+   if kind == 'execute': raise RuntimeError('PRIVATE_DDL_ERROR_CONTENT')
+  if 'FALSE)' in sql: record('failure-recorded')
+  return 'OK'
+ async def close(self):
+  record('close')
+  if kind == 'close': raise RuntimeError('PRIVATE_CLOSE_ERROR_CONTENT')
+async def connect(**kwargs): return Connection()
+asyncpg.connect=connect
+sys.argv=[script,*args]
+runpy.run_path(script,run_name='__main__')
+'''
+
+
+@pytest.mark.parametrize('kind', ['execute', 'close', 'rejected'])
+@pytest.mark.parametrize('marked', [False, True])
+def test_native_inner_migration_and_close_failures_obey_release_redaction(tmp_path, kind, marked):
+    import hashlib
+    root = payload(tmp_path, 'apply_migrations')
+    marker = root / '.slomix-release.json'
+    if kind == 'rejected':
+        sql = root / 'migrations/001_fixture.sql'
+        sql.write_text('CREATE INDEX CONCURRENTLY fixture ON fixture(id);\n')
+        manifest = json.loads(marker.read_text())
+        manifest['files']['migrations/001_fixture.sql'] = hashlib.sha256(sql.read_bytes()).hexdigest()
+        marker.write_text(json.dumps(manifest))
+    if not marked:
+        marker.unlink()
+    config = tmp_path / 'approved.env'
+    config.write_text('POSTGRES_HOST=fixture\nPOSTGRES_PORT=5432\nPOSTGRES_DATABASE=fixture\n'
+                      'POSTGRES_USER=fixture\nPOSTGRES_PASSWORD=\n')
+    config.chmod(0o600)
+    events = tmp_path / 'driver-events'
+    result = subprocess.run([sys.executable, '-I', '-B', '-c', INNER_BOOTSTRAP, kind, str(events),
+                             str(root / 'scripts/apply_migrations.py')],
+                            env={'PATH': '/usr/bin:/bin', 'SLOMIX_ENV_FILE': str(config)},
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 1
+    measured = events.read_text().splitlines()
+    assert measured[-1] == 'close'
+    if kind == 'execute':
+        assert 'migration-execute' in measured and 'failure-recorded' in measured
+    if kind == 'close':
+        assert 'migration-execute' in measured
+    if marked:
+        assert 'PRIVATE_' not in result.stdout + result.stderr
+        assert json.loads(result.stderr) == {'status': 'refused_or_failed',
+            'reason': 'Release migration command could not complete safely', 'partial_commits_possible': True}
+    elif kind == 'execute':
+        assert 'PRIVATE_DDL_ERROR_CONTENT' in result.stdout and 'FAILED' in result.stdout
+    elif kind == 'rejected':
+        assert 'REJECTED' in result.stdout and 'CONCURRENTLY' in result.stdout
+    else:
+        assert 'PRIVATE_CLOSE_ERROR_CONTENT' in result.stderr and 'Traceback' in result.stderr

@@ -42,6 +42,32 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-21 — Complete marked inner migration failure redaction
+
+Root self-review found two pre-existing cmd_apply catches that printed raw error
+text and raised SystemExit before the new outer Exception boundary could redact
+it. Marked MigrationRejected now propagates to the structured outer refusal.
+Marked DDL exceptions still record the failure ledger row, then propagate without
+printing the original error. Unmarked legacy REJECTED/FAILED text and error detail
+remain unchanged. Connection-close failures already reach the outer boundary.
+
+Native synthetic connection fixtures now reach actual cmd_apply transaction,
+execute, failure-recording and close code, rather than only connect failures.
+Marked execute/rejection/close failures return redacted structured results with
+partial_commits_possible=true; matching unmarked controls retain legacy error
+printing/trace behavior. Driver event markers prove execute/failure recording and
+close paths ran. No database connection or real SQL execution occurs.
+
+Twenty native migration tests pass, including prior command/identity/interrupt
+controls. Three mutations (rejection catch, DDL catch, outer close boundary) each
+produce respectively1/1/3observed failing marked controls while retaining
+1/1/3passing legacy controls. All source restored and cmp verified; final restored twenty-test group
+passes. Ruff/diff checks pass. Owner's explicit Oct21 merge approvals for
+#1095/#1096/#1097 remain conditional on review/CI and the ordered merge procedure;
+no service/deploy authority is added. Next:publish both migration corrections,
+refresh parents, resolve reviews and inspect exact-head CI before approved cycles.
+Original D4/D5, exclusive writer and full runtime roadmap remain preserved.
+
 ## 2026-10-21 — Marked migration execution redaction and nonempty identities
 
 Owner explicitly approved merging #1095, #1096 and #1097 on2026-10-21, subject to
