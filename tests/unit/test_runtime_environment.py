@@ -55,15 +55,16 @@ def test_invalid_explicit_environment_never_falls_back(configuration, monkeypatc
     assert "RUNTIME_TEST_WIN" not in os.environ
 
 
-def test_literal_values_and_process_precedence(configuration, monkeypatch):
+def test_literal_values_and_repeated_identical_load(configuration, monkeypatch):
     root, config = configuration
     monkeypatch.setenv("SLOMIX_ENV_FILE", str(config))
     monkeypatch.setenv("RUNTIME_TEST_AMBIENT", "do-not-expand")
-    monkeypatch.setenv("RUNTIME_TEST_WIN", "process")
+    monkeypatch.setenv("RUNTIME_TEST_WIN", "file")
     load_environment(root=root)
     assert explicit_env_file(root) == config
     assert os.environ["RUNTIME_TEST_LITERAL"] == "${RUNTIME_TEST_AMBIENT}"
-    assert os.environ["RUNTIME_TEST_WIN"] == "process"
+    assert os.environ["RUNTIME_TEST_WIN"] == "file"
+    load_environment(root=root)
 
 
 def test_invalid_syntax_refuses_before_partial_environment(configuration, monkeypatch):
