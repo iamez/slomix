@@ -8,6 +8,66 @@ Preserve later clock/pause, gametime, API/UI and all original D4/D5 obligations;
 do not copy mixed parser/test snapshots into this schema-only publication.
 No service, migration application, push or new PR approval accompanies this slice.
 
+## 2026-10-21 — Redact marked audit failures after successful connection
+
+Corrected #1095 review4332958068. Audit main now owns a marked-release ordinary
+Exception boundary across rule validation, cursor/query execution, connection
+close and reporting. It returns structured refusal without raw driver/query/path
+messages. Existing configuration/connection refusals remain compatible; unmarked
+legacy execution errors retain their existing propagation. KeyboardInterrupt,
+SystemExit and cancellation are not swallowed. In marked execution, an ordinary
+close failure cannot mask an already active control-flow BaseException.
+
+Native isolated Python fixtures use successful fake psycopg2 connections and
+actual audit rules/cursor execution: read-only session, cursor/query/close errors,
+rule validation, legacy controls and interrupts with/without cleanup failure.
+No actual DB/Discord/network connection occurs. Driver event markers confirm the
+intended paths ran and close was attempted. Initial harness10failures came from
+an empty synthetic password rejected by the audit's existing nonempty setting
+contract before the driver; fixture corrected, production policy unchanged.
+
+Combined targeted suite75passed. Redaction guard mutation produces4failing marked
+controls and4passing legacy controls; cleanup guard mutation produces2failures
+and2passing ordinary interrupt controls. Source restored and cmp verified after
+each. Final restored twelve native execution controls pass; Ruff/diff pass. Counts
+overlap prior runs. Pillow13.0.0 security fix retained unchanged. No service,
+engine, live database, deployed payload or production configuration touched.
+
+Owner explicitly approved1095/1096/1097merges onOct21; approval remains conditional
+on green exact-head CI/reviews and the ordered merge procedure, not activation.
+Next: refresh dependent parents/full candidate, publish, resolve this review and
+complete approved cycles. Original D4/D5/exclusive writer handover and the entire
+runtime roadmap remain preserved.
+
+## 2026-10-21 — Trusted probe execution, early report reservation and no-atime reads
+
+Addressed #1097 reviews4332970087/4332970092/4332970097. Writer probes execute
+only /usr/bin/systemctl after checking root ownership, regular executable kind,
+no symlink and non-group/world-writable executable/ancestors. Child environment
+is a fixed minimal allowlist, plus the validated canonical user bus for user
+scope; inherited PATH/loader/system-bus overrides cannot select probe code.
+Native fake PATH binary demonstrably executes in an unguarded positive control,
+then never executes through CLI. Actual read-only UID1000 host proof: sanitized
+CLI and independent clean /usr/bin/systemctl agree bot456340active. Named unit
+metadata remains neither writer exclusion nor source freshness/activation proof.
+
+Seed CLI validates the saved plan/UID before output, exclusively reserves the
+private report stream before any seed copy, and completes/fsyncs the same stream.
+Existing output wins before copy; partial report/output are retained on failure.
+Native filesystem/main control attempts a competing exclusive report create
+during seed, observes refusal, then verifies complete report and copied content.
+Inventory fingerprints, directory scans and source copying use Linux O_NOATIME;
+unsupported/permission-denied no-atime access refuses without unsafe fallback.
+Actual old atime fixtures prove file AND directory access timestamps unchanged
+through plan, seed and delta scans; target-deleted ancestry fence remains intact.
+
+199targeted tests pass. Four observed failing guard mutations: no-atime3cases,
+early reservation1, clean environment1, trusted executable metadata3. All source
+restored and compared with cmp. Ruff/diff pass; no service/ET/live DB/state change.
+Fresh game audit redaction review fixed separately as f40ede2e before any merge.
+Owner-approved1095cycle previously completed failed0/threads1/behind0/head same,
+correctly leftPRopen. Refresh/publish all parents, answer these reviews and run
+new exact-head CI plus full420second cycles; preserve D4/D5 and original roadmap.
 ## 2026-10-21 — Repair newly failing Pillow security gate
 
 Fresh exact-head Security CI failed: pip-audit reports8new CVEs for pinned

@@ -49,7 +49,7 @@ def test_named_observation_never_authorizes(monkeypatch, scope, state, suffix):
     assert report["manual_writer_review"] == "pending"
     assert report["schema_evidence"] == "unmeasured"
     command, kwargs = calls[0]
-    assert command[:3] == ["systemctl", "--" + scope, "show"]
+    assert command[:3] == ["/usr/bin/systemctl", "--" + scope, "show"]
     assert command[-2:] == ["--", unit]
     assert kwargs["timeout"] == 5
     assert "shell" not in kwargs
@@ -229,8 +229,8 @@ def test_native_cli_binds_user_identity_before_systemctl(tmp_path, case):
     if case == 'wrong-user':
         assert result.returncode == 1 and row['observation'] == 'unknown' and not trace.exists()
     else:
-        assert result.returncode == 0 and row['observation'] == 'inactive'
-        assert json.loads(trace.read_text())['bus'] == f'unix:path=/run/user/{uid}/bus'
+        assert result.returncode in (0, 1) and not trace.exists()
+        assert row['user_identity']['real_uid'] == row['user_identity']['effective_uid'] == uid
 
 
 def test_native_writer_report_refuses_bare_git_ancestor(tmp_path):
@@ -263,7 +263,7 @@ def test_inherited_system_bus_overrides_never_reach_probe(monkeypatch, scope):
     assert 'SYSTEMD_BUS_ADDRESS' not in environment
 
 
-def test_native_cli_system_probe_removes_inherited_bus_overrides(tmp_path):
+def test_native_cli_ignores_fake_path_systemctl_and_bus_overrides(tmp_path):
     import sys
 
     trace = tmp_path / 'probe.json'
@@ -272,14 +272,45 @@ def test_native_cli_system_probe_removes_inherited_bus_overrides(tmp_path):
                        f'open({str(trace)!r}, "w").write(json.dumps({{"system": os.environ.get("DBUS_SYSTEM_BUS_ADDRESS"), "generic": os.environ.get("SYSTEMD_BUS_ADDRESS")}}))\n'
                        f'print({chr(10).join(k+"="+v for k,v in metadata().items())!r})\n')
     command.chmod(0o700)
+    positive = subprocess.run(['systemctl'], env={'PATH': str(tmp_path)},
+                              capture_output=True, text=True, timeout=5)
+    assert positive.returncode == 0 and trace.exists()
+    trace.unlink()
     result = subprocess.run([sys.executable, '-B', inventory.__file__, '--system-unit', 'example.service'],
                             env={'PATH': str(tmp_path) + os.pathsep + os.defpath,
                                  'DBUS_SYSTEM_BUS_ADDRESS': 'unix:path=/synthetic/foreign-manager',
                                  'SYSTEMD_BUS_ADDRESS': 'unix:path=/synthetic/foreign-manager'},
                             capture_output=True, text=True, timeout=5)
-    assert result.returncode == 0, result.stderr
+    assert result.returncode in (0, 1), result.stderr
     report = json.loads(result.stdout)
     assert report['observations'][0]['scope'] == 'system'
-    assert report['observations'][0]['observation'] == 'inactive'
     assert report['activation_ready'] is False and report['all_writers_absent'] is None
-    assert json.loads(trace.read_text()) == {'system': None, 'generic': None}
+    assert not trace.exists()
+
+
+def test_loader_overrides_never_reach_probe(monkeypatch):
+    calls = runner(monkeypatch, metadata())
+    for name in ('LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT', 'SYSTEMD_BUS_ADDRESS', 'DBUS_SYSTEM_BUS_ADDRESS'):
+        monkeypatch.setenv(name, '/untrusted/loader')
+    assert inventory.observe('system', 'example.service')['observation'] == 'inactive'
+    assert calls[0][0][0] == '/usr/bin/systemctl'
+    assert calls[0][1]['env'] == {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'SYSTEMD_COLORS': '0'}
+
+
+@pytest.mark.parametrize('tamper', ['uid', 'writable', 'symlink'])
+def test_untrusted_systemctl_metadata_refuses_before_execution(monkeypatch, tamper):
+    import stat
+
+    calls = runner(monkeypatch, metadata())
+    original = Path.lstat
+    def info(path):
+        if path == Path('/usr/bin/systemctl'):
+            return SimpleNamespace(st_uid=1 if tamper == 'uid' else 0,
+                st_mode=(stat.S_IFLNK if tamper == 'symlink' else stat.S_IFREG)
+                        | (0o777 if tamper == 'writable' else 0o755))
+        return original(path)
+    monkeypatch.setattr(Path, 'lstat', info)
+    result = inventory.observe('system', 'example.service')
+    assert result['observation'] == 'unknown'
+    assert result['error'] == 'untrusted_probe_executable'
+    assert calls == []
