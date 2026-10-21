@@ -1686,3 +1686,19 @@ passes. Ruff/diff checks pass. Owner's explicit Oct21 merge approvals for
 no service/deploy authority is added. Next:publish both migration corrections,
 refresh parents, resolve reviews and inspect exact-head CI before approved cycles.
 Original D4/D5, exclusive writer and full runtime roadmap remain preserved.
+
+## 2026-10-21 — Repair newly failing Pillow security gate
+
+Fresh exact-head Security CI failed: pip-audit reports8new CVEs for pinned
+Pillow12.3.0, all fixed in13.0.0. Updated only the root runtime Pillow pin.
+Official13.0.0release notes/Python support retain Python3.11and3.13 compatibility.
+Isolated actual13.0.0wheel (not installed in active venv) passes9existing image
+reader tests with real7/8map screenshots, exact numeric results, malformed and
+wrong-zoom refusal. Actual Pillow module path/version verified at runtime.
+Independent old/new pip-audit JSON control:12.3.0has8findings,13.0.0has0.
+No audit suppressions. Full CI will validate both Python lanes before merge.
+Collected entire obsolete1095wrapper output and stopped only that wrapper;
+no source merge had happened. Restart full420-second cycle only on corrected
+head and fresh checks. Owner approval1095–1097remains valid; no service/deploy.
+Sources: https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html
+https://pillow.readthedocs.io/en/stable/installation/python-support.html
