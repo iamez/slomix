@@ -148,7 +148,7 @@ class FileTracker:
 
             # 3. Check if local file exists (SKIP if check_db_only=True)
             if not check_db_only:
-                local_path = os.path.join("local_stats", filename)
+                local_path = os.path.join(getattr(self.config, "stats_directory", "local_stats"), filename)
                 if os.path.exists(local_path):
                     # Do not auto-mark as processed just because the file exists locally.
                     # Local files can be leftovers from failed/incomplete imports.
@@ -335,7 +335,7 @@ class FileTracker:
         - postgresql_database_manager.py bulk import
         """
         try:
-            local_dir = "local_stats"
+            local_dir = getattr(self.config, "stats_directory", "local_stats")
             if not os.path.exists(local_dir):
                 return
 

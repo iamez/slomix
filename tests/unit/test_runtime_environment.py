@@ -194,3 +194,13 @@ def test_bot_entrypoint_environment_precedes_application_imports():
     assert bot_imports and boundary < min(bot_imports)
     assert not any(isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                    and node.func.id == 'load_dotenv' for node in ast.walk(tree))
+
+
+@pytest.mark.parametrize('key', ['LC_PAPER', 'LC_NAME', 'LC_ADDRESS', 'LC_TELEPHONE',
+                                 'LC_MEASUREMENT', 'LC_IDENTIFICATION'])
+def test_locale_metadata_still_cannot_override_approved_configuration(key):
+    from shared.runtime_environment import refuse_unapproved_environment
+
+    refuse_unapproved_environment({}, {key: 'C'}, set())
+    with pytest.raises(ValueError, match='Unapproved'):
+        refuse_unapproved_environment({key: 'C'}, {key: 'different'}, set())
