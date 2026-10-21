@@ -1,3 +1,24 @@
+## 2026-10-21 — Verify application payload before any project execution
+
+PR1096 closes the launcher integration for1095 review4337326790. Prepared unit
+commands now embed a standard-library-only bootstrap under isolated Python.
+External unit pins bind both manifest and verifier bytes; the verified verifier
+buffer executes before any project import, then verifies the complete payload.
+Bot/preflight entry buffers are rehashed and executed directly with the verified
+root marker. Web CLI starts only after the same admission. No payload-local
+launcher is trusted before verification. Stable trusted owner/unit/interpreter
+remain prerequisites; this is not protection against an authorized hostile owner.
+
+104 targeted tests pass, including native child execution, preflight and actual
+uvicorn --version without binding a server. Tampering with entry, imports,
+verifier, manifest, extra files and symlinks refuses before application output.
+Three removed guards (manifest pin/verifier pin/full inventory) each visibly fail;
+original file restored and cmp verified. Older contract tests were updated for
+new argv shape and systemd quoting; isolation flags remain actually exercised.
+No service was installed/started/restarted and no database was contacted.
+Existing prepared units must be regenerated from final reviewed source before
+any owner activation. Original runtime/D4/D5 and proximity/UI roadmap retained.
+
 ## 2026-10-21 — Redact marked audit failures after successful connection
 
 Corrected #1095 review4332958068. Audit main now owns a marked-release ordinary
