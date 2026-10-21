@@ -1,3 +1,13 @@
+## 2026-10-21 — Publish proximity foundations without importing later lanes
+
+Admission tests include three later ingest-dependent cases; publishing the file
+unchanged before the ingest module exists breaks that boundary. Retain those
+cases in the full candidate until the ingestion slice. Keep schema096/100 bytes
+identical and append only their blocks to the current bootstrap, rather than
+copying the full candidate schema with unrelated pending migrations. Fresh-process
+admission recovery proves local persistence, not producer authentication or DB
+commit.40offline tests pass;34native PG cases remain explicitly pending.
+
 ## 2026-10-11 — Generated API prose and handoff preambles are contracts
 
 A router docstring changes the frozen OpenAPI description even if its schema
@@ -1973,3 +1983,11 @@ on green exact-head CI/reviews and the ordered merge procedure, not activation.
 Next: refresh dependent parents/full candidate, publish, resolve this review and
 complete approved cycles. Original D4/D5/exclusive writer handover and the entire
 runtime roadmap remain preserved.
+
+## 2026-10-21 — PR #1101 review: strict relational provenance and recoverable admission
+
+- Addressed reviews 4337378411/8425/8436/8445/8462: release v1.45.0 explicitly lists unmerged migrations 096 and 100; admission source IDs use the existing lowercase RoundIdentity alphabet; shared publication refuses unreadable/non-private temporary modes before the atomic link, preserving restrictive 0400 and ordinary 0600 without chmod.
+- Migration 100 adds unique parent indexes and composite foreign keys: source/round/canonical ID must name the SAME stats mapping; filename/canonical ID/SHA-256 must name the SAME strictly linked receipt. Migration 096 requires runtime_parent_gate IS TRUE (NULL must not pass SQL CHECK). No merged migration was edited, no backfill or historical receipt adoption is introduced. Exact bootstrap blocks match both migration files.
+- Local proof: 292 passed, 49 disposable-PG cases skipped; shared spool, completion, manifest read/retry, release contract and fresh-process admission recovery included. Source/mode/release guard mutants visibly failed 1/3/1 cases and source bytes were restored with cmp. Ruff and diff checks passed. New SQL rejection, post-link receipt mutation and three in-memory SQL guard-mutant cases await disposable CI PostgreSQL; skipped tests are NOT database proof.
+- Prior published head CI job log independently confirms 42 schema cases passed and the sole Python 3.11 failure was the missing release config entries (11120 passed,161 skipped). That old SQL execution does NOT validate the new relational constraints. No database/service/browser was started and no production or DEV state changed.
+- Continue the preserved runtime plan after fresh CI/review; #1101 still needs its own explicit owner merge permission. Existing approval for #1095–#1097 does not extend here.

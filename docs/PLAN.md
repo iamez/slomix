@@ -1,3 +1,32 @@
+## 2026-10-21 — PR #1101 review: strict relational provenance and recoverable admission
+
+- Addressed reviews 4337378411/8425/8436/8445/8462: release v1.45.0 explicitly lists unmerged migrations 096 and 100; admission source IDs use the existing lowercase RoundIdentity alphabet; shared publication refuses unreadable/non-private temporary modes before the atomic link, preserving restrictive 0400 and ordinary 0600 without chmod.
+- Migration 100 adds unique parent indexes and composite foreign keys: source/round/canonical ID must name the SAME stats mapping; filename/canonical ID/SHA-256 must name the SAME strictly linked receipt. Migration 096 requires runtime_parent_gate IS TRUE (NULL must not pass SQL CHECK). No merged migration was edited, no backfill or historical receipt adoption is introduced. Exact bootstrap blocks match both migration files.
+- Local proof: 292 passed, 49 disposable-PG cases skipped; shared spool, completion, manifest read/retry, release contract and fresh-process admission recovery included. Source/mode/release guard mutants visibly failed 1/3/1 cases and source bytes were restored with cmp. Ruff and diff checks passed. New SQL rejection, post-link receipt mutation and three in-memory SQL guard-mutant cases await disposable CI PostgreSQL; skipped tests are NOT database proof.
+- Prior published head CI job log independently confirms 42 schema cases passed and the sole Python 3.11 failure was the missing release config entries (11120 passed,161 skipped). That old SQL execution does NOT validate the new relational constraints. No database/service/browser was started and no production or DEV state changed.
+- Continue the preserved runtime plan after fresh CI/review; #1101 still needs its own explicit owner merge permission. Existing approval for #1095–#1097 does not extend here.
+
+## 2026-10-21 — Proximity schema and admission publication slice
+
+Prepared from reviewed local candidate 9c09267c onto state-handover base 3551ca21.
+Only migrations 096/100, their exact bootstrap blocks, persistent admission and
+focused tests enter this slice. Existing bootstrap bytes remain unchanged.
+This publishes existing implementation; it does not replace the original roadmap.
+Admission persists trusted caller input before capture, never an import ACK.
+
+Validation: 40 passed, 34 explicitly skipped without a disposable PostgreSQL
+configuration. Actual fresh processes recover identical source/generation/date/
+size/hash without payload, database or Discord imports. Source-binding and exact
+bootstrap mutations each failed, then files were restored and cmp verified.
+Ruff and whitespace checks pass. Native PostgreSQL constraints/ACL/replay proof
+is pending; textual bootstrap checks are not SQL execution. No service or DB use.
+
+Next: review this <=25-file slice, then identity/parent/receipt publication and
+bounded ingestion/queue publication. Three admission-to-ingest test cases stay
+in the full candidate for that later dependency. D4/D5, trusted producer admission,
+exclusive legacy/manual/remote writer handover and sustained consumer-off/recovery
+acceptance remain open. No merge approval, publication or activation is implied.
+
 ## 2026-10-21 — Redact marked audit failures after successful connection
 
 Corrected #1095 review4332958068. Audit main now owns a marked-release ordinary

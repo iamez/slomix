@@ -42,6 +42,23 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-21 — PR #1101 review: strict relational provenance and recoverable admission
+
+- Addressed reviews 4337378411/8425/8436/8445/8462: release v1.45.0 explicitly lists unmerged migrations 096 and 100; admission source IDs use the existing lowercase RoundIdentity alphabet; shared publication refuses unreadable/non-private temporary modes before the atomic link, preserving restrictive 0400 and ordinary 0600 without chmod.
+- Migration 100 adds unique parent indexes and composite foreign keys: source/round/canonical ID must name the SAME stats mapping; filename/canonical ID/SHA-256 must name the SAME strictly linked receipt. Migration 096 requires runtime_parent_gate IS TRUE (NULL must not pass SQL CHECK). No merged migration was edited, no backfill or historical receipt adoption is introduced. Exact bootstrap blocks match both migration files.
+- Local proof: 292 passed, 49 disposable-PG cases skipped; shared spool, completion, manifest read/retry, release contract and fresh-process admission recovery included. Source/mode/release guard mutants visibly failed 1/3/1 cases and source bytes were restored with cmp. Ruff and diff checks passed. New SQL rejection, post-link receipt mutation and three in-memory SQL guard-mutant cases await disposable CI PostgreSQL; skipped tests are NOT database proof.
+- Prior published head CI job log independently confirms 42 schema cases passed and the sole Python 3.11 failure was the missing release config entries (11120 passed,161 skipped). That old SQL execution does NOT validate the new relational constraints. No database/service/browser was started and no production or DEV state changed.
+- Continue the preserved runtime plan after fresh CI/review; #1101 still needs its own explicit owner merge permission. Existing approval for #1095–#1097 does not extend here.
+
+## 2026-10-21 — Proximity schema/admission slice, not activation
+
+Source base3551ca21; extracted existing candidate9c09267c schema096/100 and
+admission implementation.40passed/34PGskipped; fresh-process admission recovery
+and two observed guard failures/restored cmp. PostgreSQL acceptance remains
+pending an explicitly disposable target. Bootstrap adds only the two exact
+migration blocks; all prior bytes remain. Next identity/receipt, then queue.
+D4/D5 and exclusive writer handover remain open. No push/merge/service authority.
+
 ## 2026-10-21 — Trusted probe execution, early report reservation and no-atime reads
 
 Addressed #1097 reviews4332970087/4332970092/4332970097. Writer probes execute
@@ -71,6 +88,37 @@ Fresh game audit redaction review fixed separately as f40ede2e before any merge.
 Owner-approved1095cycle previously completed failed0/threads1/behind0/head same,
 correctly leftPRopen. Refresh/publish all parents, answer these reviews and run
 new exact-head CI plus full420second cycles; preserve D4/D5 and original roadmap.
+
+## 2026-10-21 — Redact marked audit failures after successful connection
+
+Corrected #1095 review4332958068. Audit main now owns a marked-release ordinary
+Exception boundary across rule validation, cursor/query execution, connection
+close and reporting. It returns structured refusal without raw driver/query/path
+messages. Existing configuration/connection refusals remain compatible; unmarked
+legacy execution errors retain their existing propagation. KeyboardInterrupt,
+SystemExit and cancellation are not swallowed. In marked execution, an ordinary
+close failure cannot mask an already active control-flow BaseException.
+
+Native isolated Python fixtures use successful fake psycopg2 connections and
+actual audit rules/cursor execution: read-only session, cursor/query/close errors,
+rule validation, legacy controls and interrupts with/without cleanup failure.
+No actual DB/Discord/network connection occurs. Driver event markers confirm the
+intended paths ran and close was attempted. Initial harness10failures came from
+an empty synthetic password rejected by the audit's existing nonempty setting
+contract before the driver; fixture corrected, production policy unchanged.
+
+Combined targeted suite75passed. Redaction guard mutation produces4failing marked
+controls and4passing legacy controls; cleanup guard mutation produces2failures
+and2passing ordinary interrupt controls. Source restored and cmp verified after
+each. Final restored twelve native execution controls pass; Ruff/diff pass. Counts
+overlap prior runs. Pillow13.0.0 security fix retained unchanged. No service,
+engine, live database, deployed payload or production configuration touched.
+
+Owner explicitly approved1095/1096/1097merges onOct21; approval remains conditional
+on green exact-head CI/reviews and the ordered merge procedure, not activation.
+Next: refresh dependent parents/full candidate, publish, resolve this review and
+complete approved cycles. Original D4/D5/exclusive writer handover and the entire
+runtime roadmap remain preserved.
 ## 2026-10-21 — Preserve target-deleted directory ancestry
 
 Addressed #1097 review4328261007. A baseline directory missing from the target
@@ -131,37 +179,6 @@ Ruff/diff pass. No service, real database or deployment was touched.
 Next: coordinate reviewed game/app parent refresh, publish/answer three comments
 and inspect exact-head CI. Original plan/D4/D5/exclusive handover remains open;
 source safeguards do not certify all writers absent or activate a new lane.
-
-## 2026-10-21 — Redact marked audit failures after successful connection
-
-Corrected #1095 review4332958068. Audit main now owns a marked-release ordinary
-Exception boundary across rule validation, cursor/query execution, connection
-close and reporting. It returns structured refusal without raw driver/query/path
-messages. Existing configuration/connection refusals remain compatible; unmarked
-legacy execution errors retain their existing propagation. KeyboardInterrupt,
-SystemExit and cancellation are not swallowed. In marked execution, an ordinary
-close failure cannot mask an already active control-flow BaseException.
-
-Native isolated Python fixtures use successful fake psycopg2 connections and
-actual audit rules/cursor execution: read-only session, cursor/query/close errors,
-rule validation, legacy controls and interrupts with/without cleanup failure.
-No actual DB/Discord/network connection occurs. Driver event markers confirm the
-intended paths ran and close was attempted. Initial harness10failures came from
-an empty synthetic password rejected by the audit's existing nonempty setting
-contract before the driver; fixture corrected, production policy unchanged.
-
-Combined targeted suite75passed. Redaction guard mutation produces4failing marked
-controls and4passing legacy controls; cleanup guard mutation produces2failures
-and2passing ordinary interrupt controls. Source restored and cmp verified after
-each. Final restored twelve native execution controls pass; Ruff/diff pass. Counts
-overlap prior runs. Pillow13.0.0 security fix retained unchanged. No service,
-engine, live database, deployed payload or production configuration touched.
-
-Owner explicitly approved1095/1096/1097merges onOct21; approval remains conditional
-on green exact-head CI/reviews and the ordered merge procedure, not activation.
-Next: refresh dependent parents/full candidate, publish, resolve this review and
-complete approved cycles. Original D4/D5/exclusive writer handover and the entire
-runtime roadmap remain preserved.
 
 ## 2026-10-21 — Repair newly failing Pillow security gate
 
