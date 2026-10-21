@@ -11,12 +11,24 @@ import re
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+_release_root = Path(__file__).resolve().parents[1]
+_release_marker = _release_root / ".slomix-release.json"
+if ((_release_marker.exists() or _release_marker.is_symlink())
+        and globals().get("_VERIFIED_RELEASE_ROOT") != str(_release_root)):
+    raise RuntimeError("Marked bot requires verified external release bootstrap")
 
 import discord
 from discord.ext import commands
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from shared.runtime_environment import load_environment, validate_bot_state_paths
+
+load_environment()  # Before modules with import-time SSH/log/config constants.
+validate_bot_state_paths()
 
 # Import extracted core classes
 from bot.automation import FileTracker, SSHHandler
@@ -53,14 +65,6 @@ try:
 except ImportError:
     WS_CLIENT_AVAILABLE = False
     StatsWebSocketClient = None
-
-# Load environment variables if available
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:  # nosec B110
-    pass  # python-dotenv is optional
 
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
@@ -757,28 +761,9 @@ class UltimateETLegacyBot(
             # Get configuration from already-parsed channel config
             admin_channel_id = self.admin_channel_id
 
-            # For PostgreSQL, we don't have a db_path, but metrics_logger needs one for its own SQLite db
-            # Use a sensible default path for metrics database
             db_type = str(getattr(self.config, "database_type", "postgresql")).strip().lower()
-            metrics_db_path = getattr(self.config, "metrics_db_path", "")
-
-            if db_type in ("postgresql", "postgres"):
-                sqlite_path = getattr(self.config, "sqlite_db_path", "") or ""
-                default_metrics_path = os.path.join("logs", "metrics", "metrics.db")
-                sqlite_abs = os.path.abspath(sqlite_path) if sqlite_path else ""
-                metrics_abs = os.path.abspath(metrics_db_path) if metrics_db_path else ""
-                metrics_basename = os.path.basename(metrics_abs) if metrics_abs else ""
-                needs_dedicated_metrics_store = (
-                    not metrics_db_path
-                    or (sqlite_abs and metrics_abs == sqlite_abs)
-                    or metrics_basename == "etlegacy.db"
-                )
-                if needs_dedicated_metrics_store:
-                    metrics_db_path = default_metrics_path
-                    logger.info("Using dedicated metrics SQLite store for PostgreSQL mode")
-
-            # Create automation services in correct order (MetricsLogger first, it's needed by HealthMonitor)
-            self.metrics = MetricsLogger(db_path=metrics_db_path)
+            # Both the SQLite store and exported reports belong to mutable state.
+            self.metrics = MetricsLogger.from_config(self.config)
             await self.metrics.initialize_metrics_db()
             self.ssh_monitor = SSHMonitor(self)
             self.health_monitor = HealthMonitor(self, admin_channel_id, self.metrics)

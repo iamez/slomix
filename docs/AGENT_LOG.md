@@ -995,6 +995,23 @@ Retain ambiguity detection and NULL-session parents; never make this UNIQUE or
 partial on session readiness. TEMP local-buffer timing is not cold production
 latency. Preserve migration/bootstrap/release parity; apply only via owner deploy.
 
+## 2026-10-16 — Outside-Git proof outputs must have outside-Git ancestors
+
+An existing /tmp/.git causes private bundle/workspace/service and bot-fixture
+preparation to reject /tmp outputs as designed. Use a newly owned private
+/var/tmp proof directory when that marker exists; do not remove the marker or
+weaken the outside-Git guard. AST imports alone also miss existing-module
+configuration integration and fixture exports; include their matching changes
+and run collection before claiming the extraction is complete.
+
+## 2026-10-16 — Verify systemd empty-property claims on the actual manager
+
+Explicitly request --all for the supervisor property contract, but distinguish
+portability from a reproduced incident: this host returns explicitly selected
+empty properties both with and without --all. The real reader accepted the
+stopped proof unit's empty namespace/cgroup. Regression guards the command
+flag; no service restart is needed for this read-only evidence.
+
 ## 2026-10-16 — Migration-created indexes and snapshot constraints differ
 
 Migration 036 creates the session-team uniqueness object with CREATE UNIQUE
@@ -1003,6 +1020,15 @@ these distinct installation paths. Check the actual index keys/validity and
 use ON CONFLICT column inference for this shared tuple. A pg_constraint-only
 probe or ON CONSTRAINT target cannot represent the migration-created object.
 Native upgraded-schema acceptance must remain separate from unit SQL stubs.
+
+## 2026-10-16 — Source admission must precede project imports
+
+A tracked-clean Git tree can still contain untracked or ignored import shadows.
+The supervisor CLI starts in -I mode, delays project imports until a closed
+source/index inventory and exact commit pass, and disables bytecode writes. Use
+a dedicated clean checkout and external environment/state; generated inputs
+cannot be treated as source. Protocol fixtures do not prove installed-unit or
+physical-engine admission.
 
 ## 2026-10-16 — Extend mapping alphabets with a new migration
 
@@ -1023,6 +1049,31 @@ missing original warning text requires an explicit warning, never false success.
 Legacy date repair must refuse bound sources before deletes until reconciliation
 has separately admitted the original sources. Legacy schema setup and runtime
 workers must share the same usable unique-index admission predicate.
+
+## 2026-10-16 — Game startup redaction, loader audit and metrics outputs
+
+Three new #1095 review findings corrected: both rendered unit and effective
+containment gate require LD_AUDIT removal; missing deferred dependencies now
+produce structured redacted ImportError JSON before launch, including an actual
+isolated CLI child proof; cancellation/SystemExit remain unmasked. MetricsLogger
+from_config routes reports and default SQLite metrics DB to BOT_LOG_DIR/metrics,
+retains explicit separate metrics DB paths and the existing PostgreSQL protection
+against using the legacy application DB as metrics. UltimateBot uses this factory.
+
+Supervisor explicitly passes initial_readiness_wait1800 and bootstrap_wait1800
+from the new #1094 listener, plus completion_wait1500. Global RuntimeMaxSec60min
+remains the stricter overall resource cap; an early/incomplete capture is failure.
+New supervisor code must not run with the older listener API.
+
+143 selected tests passed with the new parent listener temporarily checked in
+place; source was then restored with cmp pending the normal dependency merge.
+Without that new dependency142 passed and the new caller test was deselected.
+Five mutations actually failed (audit2, import3, metrics4, render6, readiness1),
+each restored with cmp. Metrics proof writes real SQLite rows and JSON exports;
+SSH/game/Discord are synthetic or absent. Ruff and configured Bandit pass; two
+legacy test SLF001 findings are unchanged. Exact-head combined CI is next.
+No live ET, services, installation, application writes or production changes.
+All prior plan and owner-specific merge/activation gates remain in force.
 
 ## 2026-10-16 — Persistent Lua VM supports both stopwatch halves
 
@@ -1073,6 +1124,38 @@ application data write or production change. Refresh dependent1094–1096 normal
 answer the final review and retain per-PR owner merge permission. Original plan,
 state handover, D5 and remaining proximity/gametime/API/live/Spiderweb/UI retained.
 
+## 2026-10-16 — Effective launch commands, explicit config and voting capability
+
+Three later #1095 review findings fixed. Rendered and admitted units share one
+unambiguous argv builder; resolved ExecStart must match its exact interpreter,
+isolation flags, script and arguments. Wrappers, extra/multiple/ignored commands
+and all populated ExecCondition/StartPre/Post/Reload/Stop/Post are refused, both
+initially and immediately before our Popen. Actual stopped-unit property format
+was checked read-only: systemd can omit empty execution arrays even with--all.
+Current metadata cannot prove an earlier wrapper made no side effects; refusal
+prevents our next ET launch, not retroactive certification of the whole unit.
+
+UltimateBot now calls the same early explicit load_environment as the app slice,
+before imports, and removes plain load_dotenv ancestor search. A real isolated
+child with a missing synthetic key in explicit config and that key in ancestor
+.env remains clean. Reintroducing fallback genuinely loaded the ancestor marker
+and failed the environment assertion; source restored with cmp. The first
+mutation measured only a forbidden-loader-call assertion, so it was rerun with
+the child's cwd corrected to expose the actual leak before claiming that proof.
+
+MVP vote CTA forces the functional legacy route while ordinary session links
+still follow WEBSITE_UI_MODE. SPA voting mutation remains future UI work: its
+current read-only view cannot deliver the advertised action. Both embed modes
+are rendered in tests. Supervisor completion wait now3600 agrees with #1094;
+global60-minute lifetime is unchanged, partial capture is never success.
+
+202 selected tests passed, Ruff/configured Bandit/diff-check clean. Observed
+negative controls: command admission10 failures; vote1 failure/1 pass; completion
+caller1 failure; actual ancestor dotenv leak1 failure. Every source restored with
+cmp. No service, ET, migration, application write or production action. Refresh
+parents normally and run exact-head CI before final review closure. #1093 remains
+fully green and owner-specific merge approval is still pending. All plan retained.
+
 ## 2026-10-16 — Completion deadline covers the bounded proof lifetime
 
 New #1094 review arrived during final closure after all four heads were green.
@@ -1113,6 +1196,197 @@ unchanged. All five native timeout/path variants pass locally; the earlier full
 branches normally and check new exact-head CI; do not hide the prior failure.
 Original plan, owner-specific approvals and frozen production remain unchanged.
 
+## 2026-10-16 — Availability test controls the market transition explicitly
+
+#1095 bd6782ad React CI failed1 test/983passed: missing the bet-placed15 message
+at AvailabilityPage.test.tsx354. The original failure did not reproduce locally;
+no production bug is claimed. The test changed global fetch behavior between
+two submissions of one form while the first submission/refetch was still
+settling. Split amount validation and market reseeding into separate tests.
+The new stateful fetch simulation explicitly holds the invalidation GET, checks
+POST{choice:team_a,amount:15}, disabled/busy UI and unchanged input/no early toast,
+then releases the response and checks confirmation15, reseed60 and enabled UI.
+No timeout was increased and no production code changed.
+
+Node22.23.2 typecheck passes and18 page tests pass through sequential repeats.
+Disabling the existing setDirty(false) guard caused a genuine Expected60/Received15
+failure; source restored withcmp. All jsdom/tsc processes ended; no browser or
+server was started. The first diagnostic accidentally used Node20 before Node22
+was selected; that result is not used as project toolchain acceptance.
+
+Refresh1096 and the new external-state cohort with this test correction; require
+fresh exact-head CI. #1093 remains13 checks successful/zero threads/behindmain0,
+but its merge was rejected by automatic approval review for missing explicit
+permission for that PR. No merge occurred. Continue authorized development,
+retain the full original plan and request specific merge permission separately.
+
+## 2026-10-16 — Six further game-delivery review findings addressed
+
+#1095 review exposed six additional boundaries after its earlier green CI.
+Release schema-preflight CLI now requires isolated Python before third-party
+imports and refuses abbreviated arguments. Marked-release migrations verify
+payload integrity and the exact migrations directory before configuration,
+SQL discovery or connection. Release audit refuses its legacy in-payload report
+default and resolved output aliases before configuration or database access.
+The child DEV contract must supply Python -I -B for its schema preflight.
+Interpreter startup and hostile same-UID actors remain outside this boundary.
+
+BadZipFile is redacted at startup, supervisor and unit-preparation CLI boundaries;
+interruption still propagates. Prepared units pin --evidence-log. Admission and
+its immediate prelaunch recheck require append/inherit manager modes and actual
+stdout/stderr descriptors sharing the private owned canonical log inode with
+O_APPEND. This proves the current descriptors, not durable storage or historical
+absence of tampering. Smart-stats embeds now link app mode to the selected date's
+story tab; legacy /story remains unchanged.
+
+Public game-branch local verification:201 tests passed, including the actual
+rehashed corrupt PK3 child CLI and six native descriptor cases. The operator
+agent separately recorded135 passing tests including27 new boundary cases;
+primary combined operator/startup/DEV-contract tests passed93 cases. These sets
+overlap and must not be summed as unique tests. Observed mutations: wrong story
+1failed/1passed, missing archive catch1failed, missing output-mode guard2failed,
+missing descriptor guard3failed; restored originals compared withcmp. Agent
+mutations reached the shadow module and forbidden config/DB boundaries before
+restoration. Ruff and configured Bandit passed. An unconfigured Bandit invocation
+reported existing B608 constant-built SQL findings; the project configuration
+excludes B608. No database, game or service was started or modified.
+
+#1097 state-handover remains open at1c1c727a, awaiting dependency refresh and CI.
+#1093 remains the first merge candidate. Automatic approval review rejected the
+merge attempt: generic continuation is not explicit permission for that PR.
+No merge occurred; request unambiguous owner permission for#1093 before retry.
+Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
+all six review threads with evidence. Original runtime, Spiderweb and UI work
+remain preserved; merge approval and owner-run DEV activation are separate gates.
+
+## 2026-10-18 — Migration admission and raw Git provenance review closure
+
+Addressed three further#1095 findings. Marked-release migration CLI requires
+Python-I before asyncpg/dotenv/project imports and disables bytecode writes before
+imports even without-B. This avoids repeating diagnostic payload contamination.
+Interpreter/site/loader startup is still a launcher responsibility. Release DB
+settings are read directly from the verified explicit file; inherited DB/PG
+settings are refused before connection, including otherwise matching values.
+Repeated reads do not mutate os.environ; file timeouts/fingerprint labels remain.
+No migration or real database operation was part of this verification.
+
+Game bundle Git reads, supervisor source admission and shared SPA Git helper now
+force GIT_NO_REPLACE_OBJECTS=1. Native commit/tree/blob replacement fixtures show
+unprotected Git can return different bytes for the approved revision; protected
+packaging keeps original bytes. Replacement refs cannot conceal dirty checkout
+state. Child release preparation inherits the same protected SPA Git helper.
+
+284combined tests passed,1explicit opt-in ET ABI case skipped. Final strengthened
+operator-only series40passed. Observed mutations: isolation1failure, inherited
+settings8failures, replacement bundle3failures, supervisor1failure, SPA1failure,
+bytecode suppression1failure; every original restored withcmp. Ruff/configured
+Bandit/diff-check pass. These are source/fixture results, not deployed proof.
+Next:publish, refresh child branches, inspect exact-head CI and answer the three
+comments. Per-PR merge authority and owner-run activation remain separate gates.
+Original runtime/D4/D5/exclusive handover/Spiderweb/UI plans remain preserved.
+
+## 2026-10-19 — Reproduce and fix runner loader fixture contamination
+
+Both Python CI legs on1095/1096/1097 failed the same two new release settings
+tests. The runner's LD_LIBRARY_PATH reached the positive approved-config fixture;
+release admission correctly refused it. Tests now clear all five loader/Python
+keys when constructing the approved scenario, while explicit negative cases
+still require their rejection before the driver. Public shared admission also
+rejects LD_AUDIT consistently (full local candidate already had this guard).
+No production isolation was weakened to turn the tests green.
+
+With a synthetic runner LD_LIBRARY_PATH:62operator/environment tests pass. Restoring
+old fixture behavior reproduces both CI failures; removing LD_AUDIT admission
+causes1observed failure. Originals restored withcmp. No real DB/DDL was used.
+Initial source integration patch refused because full candidate already carried
+LD_AUDIT; adapted only the missing test hunk, then200combined operator/state tests
+passed. This is a fixture/source result, not a new exact-head CI result.
+Next:publish, refresh child dependencies and inspect both Python CI legs again.
+Production audit override still absent at read-only host check; owner commands
+were provided, no production service/config/code was changed by the agent.
+
+## 2026-10-20 — Audit admission, bytecode and fixed launch contract corrections
+
+Addressed all five new1095findings. Marked audit CLI requires-I before project/
+driver imports and verifies the full manifest before round-time/rule definitions,
+configuration and DB/cursor entry points. Library callers retain their startup
+trust boundary. The bot's dynamic caller suppresses bytecode BEFORE importing the
+validator/exec_module: the module body alone cannot prevent its own loader.pyc.
+Marked schema preflight also suppresses bytecode even with-I without-B.
+
+Launch and shutdown share fixed rehearsal port27962; another port is refused
+before host inspection. Native UDP fixture now tests the actual dedicated port,
+not an unrelated ephemeral socket. Marked migration timeouts use only explicit
+file values or constants; legacy environment budgets remain supported through
+legacy settings. No env fallback remains for omitted marked timeout keys.
+
+Public game219tests passed; full local candidate409targeted tests passed after
+app integration (overlapping sets, not additive). Six audit mutations each
+produced observed failures andcmp restoration; root budget mutation4failures,
+port mutation3failures. Actual child CLI wrong-port refusal, source/driver shadow
+sentinels and bytecode inventory failures were observed before restoration.
+Ruff/configured security/diff checks pass. No engine, real DB, service, deployed
+payload or production configuration was touched. Next:publish, refresh children,
+answer five comments and inspect newly triggered exact-head CI. Original plan
+and per-PR owner merge/activation gates remain in force.
+
+## 2026-10-20 — Second game review: explicit targets and closed proof environment
+
+Validated and corrected five additional #1095 findings. Standalone marked audit
+CLI refuses inherited application/DB overrides before loading credentials or
+calling the driver; library sentinel behavior remains supported. Marker presence
+automatically enforces isolated preflight admission and packaged migration paths,
+even when --release-mode is omitted. Marked migration CLI normalizes connection
+port and all timeout budgets inside its redacted refusal boundary; invalid and
+out-of-range ports fail before command execution.
+
+Proof units now use an exact /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C prefix
+before isolated Python. env exec preserves the systemd main PID; Type=exec only
+confirms initial executable startup, not application readiness. Effective unit
+Environment/EnvironmentFiles must be empty; actual supervisor application env
+must contain only PATH/LC_ALL and Python-added LC_CTYPE before project imports.
+Unknown future application variables and BOT_NAME_REGEX therefore cannot alter
+capture classification. Existing loader UnsetEnvironment policy remains.
+Ordinary supervisor failures, including EOFError and RuntimeError, produce the
+structured redacted failure; KeyboardInterrupt/SystemExit still propagate.
+
+Native synthetic CLI, driver-sentinel, env-prefix, systemd parser and UDP fixture
+checks: 210 passed (overlapping suite, not additive). Seven deliberate guard
+mutations produced respectively 4/2/6/1/2/1/2 failing tests; every source restored
+and compared with cmp. Ruff and diff checks pass. Initial sandbox run had 8
+fixture-environment failures (/tmp Git ancestry and restricted UDP); native
+private /var/tmp run resolved those without weakening guards. No service, engine,
+real database or deployed payload was touched. Next: refresh dependent PR parents,
+answer the five review comments, and inspect exact-head CI; per-PR merge and owner
+activation gates remain unchanged. Existing original runtime plan is retained.
+
+## 2026-10-20 — Correct relative metrics defaults and bounded preflight startup
+
+Validated three new1095reviews. With external BOT_LOG_DIR, documented relative
+metrics defaults bot/logs/metrics/metrics.db and logs/metrics/metrics.db now use
+that external root. Explicit separate stores, empty/None fallback and legacy
+PostgreSQL-vs-application-SQLite protections remain. Native async metrics proof
+creates/counts one event and exports JSON outside an untouched synthetic release.
+
+Preflight missing asyncpg/python-dotenv returns structured dependency refusal
+without traceback on CLI; library imports still raise ImportError. Actual system
+interpreter confirms this refusal. Release config path/expected digest admission
+now uses the existing bounded external reader directly, without first calling
+unbounded file_hash. Native FIFO,/dev/zero, sparse oversized and wrong-digest
+cases refuse promptly without DB access. Do not import deployed code for proof.
+
+116targeted tests pass. Metrics/dependency/bounded-config mutations cause2/2/1
+observed failures andcmp restoration. Initial dependency fixture failed2cases
+because it changed sys.argv before the hook read the selected module; freeze the
+module name first, then both refusal paths execute. Source/new-test Ruff and
+diff pass. Existing metrics test file retains exactly its two pre-existingSLF001
+diagnostics, independently compared with parent; no suppression or hidden fix.
+No service, live database or deployed payload changed.
+
+Next:refresh producer parent after1093merge, publish, refresh app/state children,
+answer three reviews and inspect exact-head CI. Original runtime D4/D5/exclusive
+handover and all preserved roadmap/owner activation gates remain in force.
+
 ## 2026-10-20 — Owner-approved PR1093 merged; producer successor prepared
 
 Owner explicitly approved the pending1093merge. Prescribed slomix-ops/cycle.sh
@@ -1137,3 +1411,226 @@ not additive or service/runtime activation proof. PR1100remains a separate npm
 security review; its documented unpatched braces residual remains unresolved.
 Original full plan, D4/D5/exclusive writer handover and all remaining roadmap
 items are retained. Production remains frozen; no DB/state or service change.
+
+## 2026-10-20 — Bind rehearsal revision and disable executable Git fsmonitor
+
+Validated two additional #1095 P1 review findings. Every supervisor source Git
+probe now explicitly sets core.fsmonitor=false, including both ls-files calls
+and diff, before admission. A native synthetic repository with an executable
+configured fsmonitor hook proves the local Git build executes the hook without
+the override and never executes it during the protected source inspection.
+
+Preparation now requires the verified startup recipe workspace.source_commit to
+match the supervisor commit before creating unit artifacts. Launch checks the
+same binding after the second containment/command admission and immediately
+before the process boundary. A valid workspace from another revision is refused;
+matching preparation and launch controls still reach their next independent
+boundary. Existing synthetic recipe fixtures now supply their explicit revision.
+
+Native targeted suite:132 passed, covering source binding, supervisor/service and
+launch contract controls, including existing actual local UDP fixture and offline
+systemd parser. Three guard mutations produced1/1/1 observed failing tests; both
+binding mutations retained a passing matching control. Every source was restored
+and compared with cmp; five restored source-binding tests then passed. Ruff and
+diff checks pass. No service, engine, live database or deployed payload touched.
+Next: publish, answer both reviews and refresh child dependencies with exact-head
+CI. Original D4/D5 and exclusive writer handover remain open; #1094 owner merge
+authorization does not authorize #1095 or activation. Preserve original roadmap.
+
+## 2026-10-20 — Owner-approved PR1094 merged; next game source remains forward-only
+
+Owner explicitly approved1094. Prescribed cycle ran on30775c84 with all13checks
+successful, zero review threads and full420-second pause. Final cycle gate:
+failed0,threads0,behind0,head unchanged. GitHub confirms merge at12:46:40UTC,
+commita12a55b51b6d17d818d76a124a91b61b786bdd26. Full-tree diff, tree-ID equality
+and main ancestry independently prove reviewed producer content preserved.
+Exact-head CI counts10077/10081passed (Python3.11/3.13),160/156skipped, verified
+against individual passed-node lines. No service, database or ET activation.
+
+Game source a03f3455 fixes two later P1 findings, separately from approved1094.
+Before ancestry reconciliation, new main tree was proved exactly equal to the
+original producer30775c84 already contained in game. Metadata-only merge leaves
+the complete game tree unchanged at3b07da9936e8e98d74e42ef363218785fa7cf2b1;
+subsequent checkpoint changes are ledgers only. Do not apply that strategy if
+main content differs. Publish/retarget1095to main; its own merge remains unapproved.
+
+State source7914c41d fixes ancestor conflicts/metadata paths/bare repositories;
+combined native targeted integration344passes, game132/state192groups overlap.
+Six guard mutations each fail and restore/cmp. Refresh app/state dependency
+parents and answer all five reviews before new exact-head CI. Original D4/D5,
+writer exclusion, trusted-source admission, future observed DEV handover and
+all preserved proximity/gametime/API/UI/Spiderweb/Stats work remain required.
+
+## 2026-10-20 — External supervisor bootstrap and raw source comparison
+
+Addressed #1095 P1 reviews4325182407/4325182418. Source admission no longer runs
+Git diff: local clean filters can execute arbitrary commands even with fsmonitor
+disabled. It compares approved ls-tree entries against the stage-zero index and
+raw worktree blob hashes/modes, without attributes conversion. Ignored/unknown
+files, hidden index flags, staged changes, executable drift and wrong file kinds
+remain refused. Regular files use non-following descriptors and stat stability
+checks. SHA1 is used only for Git object-format identity, with usedforsecurity=False;
+SHA256 remains the trusted supervisor artifact pin.
+
+Prepared units now embed a fixed stdlib bootstrap in isolated Python -c argv.
+The bootstrap opens an owner-only regular0600 artifact with O_NOFOLLOW/nonblocking,
+reads at most1MiB+1 once, verifies the SHA256 pinned in the unit, then compiles and
+executes that same verified buffer. It never executes a supervisor from the mutable
+checkout or reopens its artifact after hashing. The artifact is copied from the
+exact approved commit blob; original source filename/revision remain available
+for subsequent source/project admission. Direct main-process run without the
+external bootstrap is refused. Source/workspace commit binding and exact effective
+unit argv/environment/log-sink checks remain. Existing prepared units need
+regeneration; Type=exec still confirms launcher startup, not app readiness.
+
+Native controls cover an actually executed clean-filter positive control, no
+filter execution under admission, committed artifact extraction despite mutable
+checkout drift, valid artifact guard execution, checkout/artifact/symlink/mode
+tampering and replacement AFTER hashing. Tampered bytes never execute a sentinel.
+Offline systemd parser plus exact decoded generated argv checks pass. No unit was
+installed or started; no ET, live DB, mount or deployed payload was touched.
+Five deliberate mutations (clean-filter fallback, artifact hash, reopen-after-hash,
+mutable artifact extraction, missing bootstrap provenance) each produced an
+observed failing test; every file restored and compared with cmp. Restored targeted
+suite166passed; Ruff and diff checks pass. Counts overlap earlier runs.
+Next:publish and answer both reviews, refresh dependent parents and inspect exact
+head CI; preserve original D4/D5/exclusive writer handover and owner merge gates.
+
+## 2026-10-21 — Marked migration execution redaction and nonempty identities
+
+Owner explicitly approved merging #1095, #1096 and #1097 on2026-10-21, subject to
+successful review/CI closure and the existing ordered merge procedure. No service
+activation or production deployment follows from that approval.
+
+Corrected #1095 reviews4328317906/4328317921 before consolidation. The marked CLI
+now wraps every command's asyncio.run dispatch in an ordinary Exception boundary,
+returning a structured redacted refused_or_failed result with explicit
+partial_commits_possible=true. This is not a rollback claim. KeyboardInterrupt,
+SystemExit and cancellation remain outside that boundary; legacy unmarked errors
+retain their existing propagation.
+
+Marked explicit configuration must select a nonempty host/database/user (and
+port). A blank primary POSTGRES value cannot silently fall back to a populated
+DB alias or implicit PostgreSQL driver defaults. Missing passwords remain refused,
+but an explicitly empty password remains valid for supported local authentication.
+
+Native isolated Python children exercise all six actual CLI command paths with a
+synthetic asyncpg.connect failure and no real connection. Driver sentinels confirm
+command execution; raw exception text never escapes the marked redaction. Six
+empty/whitespace identity cases refuse before the driver. Exit73 and SIGINT-style
+KeyboardInterrupt propagate. Combined targeted suite91passed; two deliberate
+guard mutations each caused6observed test failures, restored byte-for-byte with
+cmp. Final restored native group14passed; counts overlap and must not be added.
+Ruff and diff checks pass. No services, ET, live database or deployed files touched.
+Next: refresh dependent application/state parents, publish, answer both reviews,
+then exact-head CI and ordered owner-approved merges. Original D4/D5, exclusive
+writer handover and all runtime roadmap/activation obligations remain preserved.
+
+## 2026-10-21 — Complete marked inner migration failure redaction
+
+Root self-review found two pre-existing cmd_apply catches that printed raw error
+text and raised SystemExit before the new outer Exception boundary could redact
+it. Marked MigrationRejected now propagates to the structured outer refusal.
+Marked DDL exceptions still record the failure ledger row, then propagate without
+printing the original error. Unmarked legacy REJECTED/FAILED text and error detail
+remain unchanged. Connection-close failures already reach the outer boundary.
+
+Native synthetic connection fixtures now reach actual cmd_apply transaction,
+execute, failure-recording and close code, rather than only connect failures.
+Marked execute/rejection/close failures return redacted structured results with
+partial_commits_possible=true; matching unmarked controls retain legacy error
+printing/trace behavior. Driver event markers prove execute/failure recording and
+close paths ran. No database connection or real SQL execution occurs.
+
+Twenty native migration tests pass, including prior command/identity/interrupt
+controls. Three mutations (rejection catch, DDL catch, outer close boundary) each
+produce respectively1/1/3observed failing marked controls while retaining
+1/1/3passing legacy controls. All source restored and cmp verified; final restored twenty-test group
+passes. Ruff/diff checks pass. Owner's explicit Oct21 merge approvals for
+#1095/#1096/#1097 remain conditional on review/CI and the ordered merge procedure;
+no service/deploy authority is added. Next:publish both migration corrections,
+refresh parents, resolve reviews and inspect exact-head CI before approved cycles.
+Original D4/D5, exclusive writer and full runtime roadmap remain preserved.
+
+## 2026-10-21 — Repair newly failing Pillow security gate
+
+Fresh exact-head Security CI failed: pip-audit reports8new CVEs for pinned
+Pillow12.3.0, all fixed in13.0.0. Updated only the root runtime Pillow pin.
+Official13.0.0release notes/Python support retain Python3.11and3.13 compatibility.
+Isolated actual13.0.0wheel (not installed in active venv) passes9existing image
+reader tests with real7/8map screenshots, exact numeric results, malformed and
+wrong-zoom refusal. Actual Pillow module path/version verified at runtime.
+Independent old/new pip-audit JSON control:12.3.0has8findings,13.0.0has0.
+No audit suppressions. Full CI will validate both Python lanes before merge.
+Collected entire obsolete1095wrapper output and stopped only that wrapper;
+no source merge had happened. Restart full420-second cycle only on corrected
+head and fresh checks. Owner approval1095–1097remains valid; no service/deploy.
+Sources: https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html
+https://pillow.readthedocs.io/en/stable/installation/python-support.html
+
+## 2026-10-21 — Redact marked audit failures after successful connection
+
+Corrected #1095 review4332958068. Audit main now owns a marked-release ordinary
+Exception boundary across rule validation, cursor/query execution, connection
+close and reporting. It returns structured refusal without raw driver/query/path
+messages. Existing configuration/connection refusals remain compatible; unmarked
+legacy execution errors retain their existing propagation. KeyboardInterrupt,
+SystemExit and cancellation are not swallowed. In marked execution, an ordinary
+close failure cannot mask an already active control-flow BaseException.
+
+Native isolated Python fixtures use successful fake psycopg2 connections and
+actual audit rules/cursor execution: read-only session, cursor/query/close errors,
+rule validation, legacy controls and interrupts with/without cleanup failure.
+No actual DB/Discord/network connection occurs. Driver event markers confirm the
+intended paths ran and close was attempted. Initial harness10failures came from
+an empty synthetic password rejected by the audit's existing nonempty setting
+contract before the driver; fixture corrected, production policy unchanged.
+
+Combined targeted suite75passed. Redaction guard mutation produces4failing marked
+controls and4passing legacy controls; cleanup guard mutation produces2failures
+and2passing ordinary interrupt controls. Source restored and cmp verified after
+each. Final restored twelve native execution controls pass; Ruff/diff pass. Counts
+overlap prior runs. Pillow13.0.0 security fix retained unchanged. No service,
+engine, live database, deployed payload or production configuration touched.
+
+Owner explicitly approved1095/1096/1097merges onOct21; approval remains conditional
+on green exact-head CI/reviews and the ordered merge procedure, not activation.
+Next: refresh dependent parents/full candidate, publish, resolve this review and
+complete approved cycles. Original D4/D5/exclusive writer handover and the entire
+runtime roadmap remain preserved.
+
+## 2026-10-21 — Enforce marked bot configuration and writable-state boundaries
+
+Addressed #1095 reviews4337326762/4337326777. Marked release environment loading
+now refuses differing inherited file settings and additional database/PG settings
+before any partial environment update. Identical settings permit repeated imports;
+unmarked legacy checkouts retain process precedence. Literal dotenv values and
+approved digest checks remain unchanged.
+
+Marked bot startup requires canonical absolute external STATS_DIRECTORY,
+LOCAL_STATS_PATH, BACKUP_DIRECTORY and BOT_LOG_DIR before importing bot services
+or logging. Active gametimes/proximity paths are mandatory; supplied metrics,
+cache and storage paths are checked too. Metrics and error-streak defaults derive
+from the validated external log root. Missing, relative, payload-local and symlink
+paths fail closed; legacy paths remain compatible.
+
+Review4337326790 integration: direct marked bot script/module startup now refuses
+unless the executing namespace contains the verified release root. This is not
+an environment toggle. #1096 must supply that namespace only after its external,
+pinned bootstrap verifies the payload; direct startup refusal alone is not proof
+of trusted launch. Unmarked source startup remains available. No service change.
+
+Functional/native evidence: isolated subprocesses load marked payload copies,
+refuse inherited database/path overrides without writes, reject unsafe writable
+paths and direct entry, and permit a repeated approved load followed by an
+external stats-directory write. Final shared bot/migration/audit regressions:
+103 passed in19.08s. Three observed guard mutations fail3(environment),4(required
+paths),1(bootstrap) tests respectively, then each source is restored with cmp.
+Ruff and diff checks pass. Initial sandbox fixture run failed with read-only
+/var/tmp; rerun with isolated fixture permission succeeded. No real database,
+Discord, game, network listener, service or deployed payload was touched.
+
+Original runtime/UI/Spiderweb plan remains preserved. Owner approval for
+#1095/#1096/#1097 remains unconsumed; final CI/reviews and prescribed merge cycle
+still apply, and bootstrap integration is required before considering the queue
+ready. No merge/deploy approval is inferred for any other PR.
