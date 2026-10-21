@@ -111,6 +111,10 @@ def compare(record: dict) -> dict:
             and len({entry['kind'] for entry in (base.get(path), old.get(path), new.get(path))
                      if entry is not None}) > 1
         }
+        target_deleted_directories = {
+            path for path, entry in base.items()
+            if entry['kind'] == 'directory' and path not in new
+        }
         changes[name] = {}
         counts = {}
         for path in sorted(base.keys() | old.keys() | new.keys()):
@@ -122,6 +126,8 @@ def compare(record: dict) -> dict:
                     or (path in new and any(parent in old_files for parent in parents))
                     or any(parent in type_conflicts for parent in parents)):
                 action = 'path_type_conflict'
+            if any(parent in target_deleted_directories for parent in parents):
+                action = 'target_changed_preserve'
             counts[action] = counts.get(action, 0) + 1
             if action != 'unchanged':
                 changes[name][path] = {'classification': action, 'baseline': base.get(path),

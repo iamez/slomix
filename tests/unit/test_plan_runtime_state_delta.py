@@ -274,3 +274,38 @@ def test_native_cli_type_conflict_preserves_trees(baseline, tmp_path):
     assert value['changes']['stats']['a/child']['classification'] == 'path_type_conflict'
     assert value['ready_for_activation'] is False
     assert (seed.inventory(old), seed.inventory(new)) == before
+
+
+@pytest.mark.parametrize('nested', [False, True])
+def test_target_deleted_directory_preserves_added_descendants(baseline, tmp_path, nested):
+    import subprocess
+    import sys
+
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    parent = 'outer/a' if nested else 'a'
+    (old / parent).mkdir(parents=True)
+    (new / parent).mkdir(parents=True)
+    baseline['inventory']['stats'] = seed.inventory(old)
+    (new / parent).rmdir()
+    (old / parent / 'deep').mkdir()
+    (old / parent / 'empty').mkdir()
+    (old / parent / 'deep/child').write_bytes(b'new source')
+    (old / parent / 'zero').write_bytes(b'')
+    # A genuinely new sibling remains eligible; only deleted ancestry fences copying.
+    (old / 'sibling').write_bytes(b'new sibling')
+    before = seed.inventory(old), seed.inventory(new)
+    initial, report = tmp_path / 'seed.json', tmp_path / 'delta.json'
+    initial.write_text(json.dumps(baseline))
+    result = subprocess.run([sys.executable, '-B', delta.__file__, '--seed-report', str(initial),
+                             '--report', str(report)], capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    native = json.loads(report.read_text())
+    measured = delta.compare(baseline)
+    assert native == measured
+    changes = measured['changes']['stats']
+    for suffix in ('', '/deep', '/empty', '/deep/child', '/zero'):
+        assert changes[parent + suffix]['classification'] == 'target_changed_preserve'
+    assert changes['sibling']['classification'] == 'copy_new'
+    assert measured['ready_for_activation'] is False
+    assert (seed.inventory(old), seed.inventory(new)) == before

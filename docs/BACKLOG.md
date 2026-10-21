@@ -1,3 +1,16 @@
+## 2026-10-21 — Preserve target-deleted directory ancestry
+
+Addressed #1097 review4328261007. A baseline directory missing from the target
+now fences every descendant as target_changed_preserve, including newly added
+source files and empty directories; none can be proposed as copy_new and undo
+the independent deletion. Genuinely new siblings remain copy candidates.
+Native CLI and direct library results agree for shallow/nested deleted parents,
+empty dirs, zero-byte and nested files. Both source/target inventories remain
+unchanged and activation stays false.50targeted tests pass; disabling ancestry
+propagation produces2observed failures, then exact cmp restoration. Ruff/diff
+pass. No state application, DB write, service or deployment performed.
+Owner explicitly approved1095/1096/1097 on Oct21; fresh review findings are fixed
+before the ordered prescribed merge cycles. Preserve full original roadmap.
 ## 2026-10-20 — External supervisor bootstrap and raw source comparison
 
 Addressed #1095 P1 reviews4325182407/4325182418. Source admission no longer runs
