@@ -11,9 +11,15 @@ from typing import Any
 
 from bot.core.round_contract import DEFAULT_EXCLUDED_MAPS
 from bot.website_links import validate_ui_mode
-from shared.runtime_environment import explicit_env_file, external_config_path, load_environment
+from shared.runtime_environment import (
+    explicit_env_file,
+    external_config_path,
+    load_environment,
+    validate_bot_state_paths,
+)
 
 load_environment()
+validate_bot_state_paths()
 
 logger = logging.getLogger('BotConfig')
 

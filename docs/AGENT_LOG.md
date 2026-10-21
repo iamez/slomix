@@ -1598,3 +1598,39 @@ on green exact-head CI/reviews and the ordered merge procedure, not activation.
 Next: refresh dependent parents/full candidate, publish, resolve this review and
 complete approved cycles. Original D4/D5/exclusive writer handover and the entire
 runtime roadmap remain preserved.
+
+## 2026-10-21 — Enforce marked bot configuration and writable-state boundaries
+
+Addressed #1095 reviews4337326762/4337326777. Marked release environment loading
+now refuses differing inherited file settings and additional database/PG settings
+before any partial environment update. Identical settings permit repeated imports;
+unmarked legacy checkouts retain process precedence. Literal dotenv values and
+approved digest checks remain unchanged.
+
+Marked bot startup requires canonical absolute external STATS_DIRECTORY,
+LOCAL_STATS_PATH, BACKUP_DIRECTORY and BOT_LOG_DIR before importing bot services
+or logging. Active gametimes/proximity paths are mandatory; supplied metrics,
+cache and storage paths are checked too. Metrics and error-streak defaults derive
+from the validated external log root. Missing, relative, payload-local and symlink
+paths fail closed; legacy paths remain compatible.
+
+Review4337326790 integration: direct marked bot script/module startup now refuses
+unless the executing namespace contains the verified release root. This is not
+an environment toggle. #1096 must supply that namespace only after its external,
+pinned bootstrap verifies the payload; direct startup refusal alone is not proof
+of trusted launch. Unmarked source startup remains available. No service change.
+
+Functional/native evidence: isolated subprocesses load marked payload copies,
+refuse inherited database/path overrides without writes, reject unsafe writable
+paths and direct entry, and permit a repeated approved load followed by an
+external stats-directory write. Final shared bot/migration/audit regressions:
+103 passed in19.08s. Three observed guard mutations fail3(environment),4(required
+paths),1(bootstrap) tests respectively, then each source is restored with cmp.
+Ruff and diff checks pass. Initial sandbox fixture run failed with read-only
+/var/tmp; rerun with isolated fixture permission succeeded. No real database,
+Discord, game, network listener, service or deployed payload was touched.
+
+Original runtime/UI/Spiderweb plan remains preserved. Owner approval for
+#1095/#1096/#1097 remains unconsumed; final CI/reviews and prescribed merge cycle
+still apply, and bootstrap integration is required before considering the queue
+ready. No merge/deploy approval is inferred for any other PR.

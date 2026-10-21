@@ -11,6 +11,13 @@ import re
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
+
+_release_root = Path(__file__).resolve().parents[1]
+_release_marker = _release_root / ".slomix-release.json"
+if ((_release_marker.exists() or _release_marker.is_symlink())
+        and globals().get("_VERIFIED_RELEASE_ROOT") != str(_release_root)):
+    raise RuntimeError("Marked bot requires verified external release bootstrap")
 
 import discord
 from discord.ext import commands
@@ -18,9 +25,10 @@ from discord.ext import commands
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from shared.runtime_environment import load_environment
+from shared.runtime_environment import load_environment, validate_bot_state_paths
 
 load_environment()  # Before modules with import-time SSH/log/config constants.
+validate_bot_state_paths()
 
 # Import extracted core classes
 from bot.automation import FileTracker, SSHHandler
