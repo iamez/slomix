@@ -42,6 +42,63 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-21 — Verify application payload before any project execution
+
+PR1096 closes the launcher integration for1095 review4337326790. Prepared unit
+commands now embed a standard-library-only bootstrap under isolated Python.
+External unit pins bind both manifest and verifier bytes; the verified verifier
+buffer executes before any project import, then verifies the complete payload.
+Bot/preflight entry buffers are rehashed and executed directly with the verified
+root marker. Web CLI starts only after the same admission. No payload-local
+launcher is trusted before verification. Stable trusted owner/unit/interpreter
+remain prerequisites; this is not protection against an authorized hostile owner.
+
+104 targeted tests pass, including native child execution, preflight and actual
+uvicorn --version without binding a server. Tampering with entry, imports,
+verifier, manifest, extra files and symlinks refuses before application output.
+Three removed guards (manifest pin/verifier pin/full inventory) each visibly fail;
+original file restored and cmp verified. Older contract tests were updated for
+new argv shape and systemd quoting; isolation flags remain actually exercised.
+No service was installed/started/restarted and no database was contacted.
+Existing prepared units must be regenerated from final reviewed source before
+any owner activation. Original runtime/D4/D5 and proximity/UI roadmap retained.
+
+## 2026-10-21 — Enforce marked bot configuration and writable-state boundaries
+
+Addressed #1095 reviews4337326762/4337326777. Marked release environment loading
+now refuses differing inherited file settings and additional database/PG settings
+before any partial environment update. Identical settings permit repeated imports;
+unmarked legacy checkouts retain process precedence. Literal dotenv values and
+approved digest checks remain unchanged.
+
+Marked bot startup requires canonical absolute external STATS_DIRECTORY,
+LOCAL_STATS_PATH, BACKUP_DIRECTORY and BOT_LOG_DIR before importing bot services
+or logging. Active gametimes/proximity paths are mandatory; supplied metrics,
+cache and storage paths are checked too. Metrics and error-streak defaults derive
+from the validated external log root. Missing, relative, payload-local and symlink
+paths fail closed; legacy paths remain compatible.
+
+Review4337326790 integration: direct marked bot script/module startup now refuses
+unless the executing namespace contains the verified release root. This is not
+an environment toggle. #1096 must supply that namespace only after its external,
+pinned bootstrap verifies the payload; direct startup refusal alone is not proof
+of trusted launch. Unmarked source startup remains available. No service change.
+
+Functional/native evidence: isolated subprocesses load marked payload copies,
+refuse inherited database/path overrides without writes, reject unsafe writable
+paths and direct entry, and permit a repeated approved load followed by an
+external stats-directory write. Final shared bot/migration/audit regressions:
+103 passed in19.08s. Three observed guard mutations fail3(environment),4(required
+paths),1(bootstrap) tests respectively, then each source is restored with cmp.
+Ruff and diff checks pass. Initial sandbox fixture run failed with read-only
+/var/tmp; rerun with isolated fixture permission succeeded. No real database,
+Discord, game, network listener, service or deployed payload was touched.
+
+Original runtime/UI/Spiderweb plan remains preserved. Owner approval for
+#1095/#1096/#1097 remains unconsumed; final CI/reviews and prescribed merge cycle
+still apply, and bootstrap integration is required before considering the queue
+ready. No merge/deploy approval is inferred for any other PR.
+
 ## 2026-10-21 — Trusted probe execution, early report reservation and no-atime reads
 
 Addressed #1097 reviews4332970087/4332970092/4332970097. Writer probes execute

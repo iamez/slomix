@@ -27,7 +27,7 @@ def inputs(tmp_path, monkeypatch):
     (state / "config").mkdir(parents=True)
     files = {}
     for name in ("scripts/dev_runtime_contract.py", "scripts/dev_schema_preflight.py",
-                 "bot/ultimate_bot.py", "website/backend/main.py"):
+                 "bot/ultimate_bot.py", "website/backend/main.py", "shared/release_manifest.py"):
         path = release / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("# synthetic; never executed\n")
@@ -158,7 +158,7 @@ def test_release_prestart_cli_refuses_before_database(inputs, monkeypatch, capsy
     inspect = AsyncMock(return_value={"clean": True})
     monkeypatch.setattr(schema, "inspect_database", inspect)
     assert spec["pre_argv"][1:3] == ["-I", "-B"]
-    args = list(spec["pre_argv"][4:])
+    args = list(spec["pre_argv"][9:])
     if damage == "digest":
         with inputs["bot_env"].open("a") as stream:
             stream.write("OTHER=value\n")
@@ -181,7 +181,7 @@ def test_release_prestart_cli_refuses_before_database(inputs, monkeypatch, capsy
 
 def properties(spec, pid):
     def command(argv):
-        return f"{{ path={argv[0]} ; argv[]={' '.join(argv)} ; ignore_errors=no ; pid=0 }}"
+        return f"{{ path={argv[0]} ; argv[]={shlex.join(argv)} ; ignore_errors=no ; pid=0 }}"
     return dict(Requires=" ".join(spec["requires"]), Wants=" ".join(spec["wants"]),
                 After=" ".join(spec["after"]), LoadState="loaded", ActiveState="active", MainPID=str(pid),
                 WorkingDirectory=spec["cwd"], User="samba", Group="samba",
@@ -366,8 +366,8 @@ def test_actual_application_python_flags_ignore_ambient_settings(inputs, role):
     import sys
 
     spec = contract.build_contract(**inputs)['services']['etlegacy-' + role]
-    assert spec['argv'][1:4] == ['-E', '-B', '-s']
-    result = subprocess.run([sys.executable, *spec['argv'][1:4], '-c',
+    assert spec['argv'][1:4] == ['-I', '-B', '-c']
+    result = subprocess.run([sys.executable, *spec['argv'][1:3], '-c',
                              'import sys; assert sys.flags.ignore_environment; '
                              'assert sys.flags.no_user_site; assert sys.dont_write_bytecode; print("startup-flags-ok")'],
                             env={'PYTHONPLATLIBDIR': 'nonexistent-library'},
@@ -428,7 +428,7 @@ print(json.dumps({"exit": status, "database_calls": len(calls)}))
     result = subprocess.run([sys.executable, *spec['pre_argv'][1:3], '-c', code,
                              str(Path(__file__).resolve().parents[2]),
                              str(root / 'scripts/dev_schema_preflight.py'),
-                             json.dumps(spec['pre_argv'][4:])], env=env,
+                             json.dumps(spec['pre_argv'][9:])], env=env,
                             capture_output=True, text=True, timeout=15)
     assert result.returncode == 0, result.stderr
     reports = [json.loads(line) for line in result.stdout.splitlines()]
