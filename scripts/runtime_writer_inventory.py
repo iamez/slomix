@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import stat
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,9 +33,7 @@ def observe(scope: str, unit: str, *, expected_user_uid: int | None = None) -> d
     if scope not in {"system", "user"}:
         raise ValueError("invalid manager scope")
     result = {"scope": scope, "unit": unit, "observation": "unknown", "properties": {}}
-    environment = {**os.environ, "LC_ALL": "C", "SYSTEMD_COLORS": "0"}
-    for name in ("DBUS_SYSTEM_BUS_ADDRESS", "SYSTEMD_BUS_ADDRESS"):
-        environment.pop(name, None)
+    environment = {"PATH": "/usr/bin:/bin", "LC_ALL": "C", "SYSTEMD_COLORS": "0"}
     if scope == "user":
         result["user_identity"] = {"expected_uid": expected_user_uid,
                                    "real_uid": os.getuid(), "effective_uid": os.geteuid()}
@@ -47,9 +46,15 @@ def observe(scope: str, unit: str, *, expected_user_uid: int | None = None) -> d
         for name in ("DBUS_STARTER_ADDRESS", "DBUS_STARTER_BUS_TYPE"):
             environment.pop(name, None)
     properties = PROPERTIES + (("MainPID", "Restart") if unit.endswith(".service") else ())
-    command = ["systemctl", f"--{scope}", "show", "--no-pager", "--all",
+    command = ["/usr/bin/systemctl", f"--{scope}", "show", "--no-pager", "--all",
                "--property=" + ",".join(properties), "--", unit]
     try:
+        executable = Path(command[0])
+        for path in (executable, *executable.parents):
+            info = path.lstat()
+            if (info.st_uid != 0 or info.st_mode & 0o022 or stat.S_ISLNK(info.st_mode)
+                    or (path == executable and (not stat.S_ISREG(info.st_mode) or not info.st_mode & 0o111))):
+                return {**result, "error": "untrusted_probe_executable"}
         completed = subprocess.run(
             command, capture_output=True, text=True, timeout=TIMEOUT_SECONDS,
             check=False, env=environment,

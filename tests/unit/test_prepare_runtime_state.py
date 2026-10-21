@@ -387,3 +387,71 @@ def test_native_cli_hidden_source_or_bare_destination_refuses(source_map, tmp_pa
                             capture_output=True, text=True, timeout=5)
     assert result.returncode == 1 and json.loads(result.stdout)['status'] == 'refused'
     assert not result.stderr and not report.exists() and not state.exists()
+
+
+
+def test_seed_report_is_reserved_before_copy_and_completed_on_same_stream(source_map, tmp_path, monkeypatch, capsys):
+    state, report = tmp_path / 'shared', tmp_path / 'seed-report.json'
+    record = transfer.plan(source_map, state)
+    initial = tmp_path / 'plan.json'
+    initial.write_text(json.dumps(record))
+    original = transfer.seed
+    def checked_seed(value):
+        assert not state.exists()
+        assert report.stat().st_mode & 0o777 == 0o600
+        with pytest.raises(FileExistsError), report.open('x'):
+            pass
+        return original(value)
+    monkeypatch.setattr(transfer, 'seed', checked_seed)
+    assert transfer.main(['seed', '--input', str(initial), '--report', str(report)]) == 0
+    assert json.loads(capsys.readouterr().out)['status'] == 'seed_only_requires_quiesced_reconciliation'
+    result = json.loads(report.read_text())
+    assert result['files'] == 7 and result['ready_for_activation'] is False
+    assert all(transfer.inventory(Path(source_map[name])) == transfer.inventory(state / 'data' / name)
+               for name in source_map)
+
+
+@pytest.mark.parametrize('operation', ['plan', 'seed', 'delta'])
+def test_native_data_reads_preserve_file_and_directory_access_times(source_map, tmp_path, operation):
+    from scripts import plan_runtime_state_delta as delta
+    state = tmp_path / 'shared'
+    record = transfer.plan(source_map, state)
+    if operation == 'delta':
+        record = transfer.seed(record)
+    roots = [Path(root) for root in source_map.values()]
+    if operation == 'delta':
+        roots += [state / 'data' / name for name in source_map]
+    paths = [path for root in roots for path in [root, *root.rglob('*')]]
+    old = 946684800000000000
+    for path in paths:
+        info = path.stat()
+        os.utime(path, ns=(old, info.st_mtime_ns))
+    before = {path: path.stat().st_atime_ns for path in paths}
+    if operation == 'plan':
+        transfer.plan(source_map, state)
+    elif operation == 'seed':
+        transfer.seed(record)
+    else:
+        delta.compare(record)
+    assert {path: path.stat().st_atime_ns for path in paths} == before
+
+
+def test_no_atime_support_is_required_before_read(tmp_path, monkeypatch):
+    path = tmp_path / 'data'
+    path.write_bytes(b'content')
+    monkeypatch.delattr(os, 'O_NOATIME')
+    with pytest.raises(ValueError, match='No-atime'):
+        transfer.fingerprint(path)
+
+
+def test_no_atime_permission_failure_is_not_retried(tmp_path, monkeypatch):
+    path = tmp_path / 'data'
+    path.write_bytes(b'content')
+    calls = []
+    def denied(*args):
+        calls.append(args)
+        raise PermissionError('no no-atime capability')
+    monkeypatch.setattr(os, 'open', denied)
+    with pytest.raises(PermissionError):
+        transfer.fingerprint(path)
+    assert len(calls) == 1 and calls[0][1] & os.O_NOATIME

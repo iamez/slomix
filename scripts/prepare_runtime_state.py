@@ -41,8 +41,17 @@ def new_outside_git(path: Path):
         raise ValueError('Destination must be new and outside Git or immutable releases')
 
 
+def readonly_descriptor(path: Path, *, directory=False):
+    """Linux no-atime reads; inability to preserve access metadata refuses."""
+    noatime = getattr(os, 'O_NOATIME', None)
+    if noatime is None:
+        raise ValueError('No-atime reads are required for data inventory and copy')
+    return os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+                   | noatime | (os.O_DIRECTORY if directory else 0))
+
+
 def fingerprint(path: Path) -> dict:
-    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), 'rb') as stream:
+    with os.fdopen(readonly_descriptor(path), 'rb') as stream:
         before = os.fstat(stream.fileno())
         if not stat.S_ISREG(before.st_mode):
             raise ValueError('Only regular files may be seeded')
@@ -63,10 +72,16 @@ def inventory(root: Path | None) -> dict:
     if any(part == ".git" or part.startswith(".env") for part in root.parts):
         raise ValueError("Configuration or Git source root is forbidden")
     directories, files = [], {}
-    def fail(error):
-        raise error
-    for parent, dirs, names in os.walk(root, followlinks=False, onerror=fail):
-        for name in sorted([*dirs, *names]):
+    pending = [root]
+    while pending:
+        parent = pending.pop()
+        descriptor = readonly_descriptor(parent, directory=True)
+        try:
+            with os.scandir(descriptor) as scan:
+                names = sorted(entry.name for entry in scan)
+        finally:
+            os.close(descriptor)
+        for name in names:
             path = Path(parent) / name
             relative_path = path.relative_to(root)
             if '.git' in relative_path.parts:
@@ -79,6 +94,7 @@ def inventory(root: Path | None) -> dict:
                 raise ValueError('Nested symlinks require explicit review before seeding')
             if stat.S_ISDIR(info.st_mode):
                 directories.append(relative)
+                pending.append(path)
             elif stat.S_ISREG(info.st_mode):
                 if (name.startswith('.env') or name.lower().endswith(('.db', '.sqlite', '.sqlite3', '-wal', '-shm', '-journal'))):
                     raise ValueError('Configuration, Git or database file found in data source')
@@ -108,11 +124,15 @@ def plan(sources: dict, state: Path) -> dict:
             'inventory': {name: inventory(root) for name, root in resolved.items()}}
 
 
-def seed(record: dict) -> dict:
-    # Private output must be usable by the fixed DEV service account. Refuse
-    # before creating anything; do not manufacture a root-owned partial seed.
+def require_seed_user():
     if os.geteuid() != pwd.getpwnam('samba').pw_uid:
         raise ValueError('State seed must run as the samba service account')
+
+
+def validated_seed_plan(record: dict):
+    # Private output must be usable by the fixed DEV service account. Refuse
+    # before creating anything; do not manufacture a root-owned partial seed.
+    require_seed_user()
     # Reconstruct the plan rather than trusting user-supplied relative filenames.
     state = Path(record['state'])
     fresh = plan(record['sources'], state)
@@ -121,6 +141,12 @@ def seed(record: dict) -> dict:
     needed = sum(item['size'] for group in fresh['inventory'].values() for item in group['files'].values())
     if shutil.disk_usage(state.parent).free < needed + 64 * 1024 * 1024:
         raise ValueError('Insufficient free space for seed plus safety margin')
+    return fresh, needed
+
+
+def seed(record: dict) -> dict:
+    fresh, needed = validated_seed_plan(record)
+    state = Path(fresh['state'])
     state.mkdir(mode=0o700)
     for name in NAMES:
         root = state / 'data' / name
@@ -131,7 +157,7 @@ def seed(record: dict) -> dict:
         for relative, expected in group['files'].items():
             origin = Path(fresh['sources'][name]) / relative
             target = root / relative
-            with os.fdopen(os.open(origin, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK), 'rb') as source:
+            with os.fdopen(readonly_descriptor(origin), 'rb') as source:
                 if not stat.S_ISREG(os.fstat(source.fileno()).st_mode):
                     raise ValueError('Source is no longer a regular file')
                 with target.open('xb') as output:
@@ -162,14 +188,24 @@ def seed(record: dict) -> dict:
             'files': sum(len(group['files']) for group in fresh['inventory'].values()), 'bytes': needed}
 
 
-def write_report(path: Path, record: dict):
+def create_report(path: Path, record: dict):
     new_outside_git(path)
     protected = [Path(record['state']), *(Path(value) for value in record['sources'].values() if value is not None)]
     if any(path.is_relative_to(root) for root in protected):
         raise ValueError('Evidence must stay outside source and destination data trees')
-    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w') as stream:
-        json.dump(record, stream, indent=2, sort_keys=True)
-        stream.write('\n')
+    return os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), 'w')
+
+
+def finish_report(stream, record):
+    json.dump(record, stream, indent=2, sort_keys=True)
+    stream.write('\n')
+    stream.flush()
+    os.fsync(stream.fileno())
+
+
+def write_report(path: Path, record: dict):
+    with create_report(path, record) as stream:
+        finish_report(stream, record)
 
 
 def main(argv=None):
@@ -195,8 +231,15 @@ def main(argv=None):
             raise ValueError('State sources must be an object')
         if any(args.report.is_relative_to(Path(root)) for root in [str(target), *sources.values()] if root is not None):
             raise ValueError('Report overlaps data')
-        result = plan(record, args.state) if args.command == 'plan' else seed(record)
-        write_report(args.report, result)
+        if args.command == 'seed':
+            validated_seed_plan(record)
+            # Reserve the exact external output before any copy can begin.
+            with create_report(args.report, record) as stream:
+                result = seed(record)
+                finish_report(stream, result)
+        else:
+            result = plan(record, args.state)
+            write_report(args.report, result)
         print(json.dumps({'status': result['status'], 'ready_for_activation': False,
                           'report': str(args.report)}, sort_keys=True))
         return 0

@@ -42,6 +42,35 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-21 — Trusted probe execution, early report reservation and no-atime reads
+
+Addressed #1097 reviews4332970087/4332970092/4332970097. Writer probes execute
+only /usr/bin/systemctl after checking root ownership, regular executable kind,
+no symlink and non-group/world-writable executable/ancestors. Child environment
+is a fixed minimal allowlist, plus the validated canonical user bus for user
+scope; inherited PATH/loader/system-bus overrides cannot select probe code.
+Native fake PATH binary demonstrably executes in an unguarded positive control,
+then never executes through CLI. Actual read-only UID1000 host proof: sanitized
+CLI and independent clean /usr/bin/systemctl agree bot456340active. Named unit
+metadata remains neither writer exclusion nor source freshness/activation proof.
+
+Seed CLI validates the saved plan/UID before output, exclusively reserves the
+private report stream before any seed copy, and completes/fsyncs the same stream.
+Existing output wins before copy; partial report/output are retained on failure.
+Native filesystem/main control attempts a competing exclusive report create
+during seed, observes refusal, then verifies complete report and copied content.
+Inventory fingerprints, directory scans and source copying use Linux O_NOATIME;
+unsupported/permission-denied no-atime access refuses without unsafe fallback.
+Actual old atime fixtures prove file AND directory access timestamps unchanged
+through plan, seed and delta scans; target-deleted ancestry fence remains intact.
+
+199targeted tests pass. Four observed failing guard mutations: no-atime3cases,
+early reservation1, clean environment1, trusted executable metadata3. All source
+restored and compared with cmp. Ruff/diff pass; no service/ET/live DB/state change.
+Fresh game audit redaction review fixed separately as f40ede2e before any merge.
+Owner-approved1095cycle previously completed failed0/threads1/behind0/head same,
+correctly leftPRopen. Refresh/publish all parents, answer these reviews and run
+new exact-head CI plus full420second cycles; preserve D4/D5 and original roadmap.
 ## 2026-10-21 — Preserve target-deleted directory ancestry
 
 Addressed #1097 review4328261007. A baseline directory missing from the target
