@@ -42,6 +42,15 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-21 — Proximity schema/admission slice, not activation
+
+Source base3551ca21; extracted existing candidate9c09267c schema096/100 and
+admission implementation.40passed/34PGskipped; fresh-process admission recovery
+and two observed guard failures/restored cmp. PostgreSQL acceptance remains
+pending an explicitly disposable target. Bootstrap adds only the two exact
+migration blocks; all prior bytes remain. Next identity/receipt, then queue.
+D4/D5 and exclusive writer handover remain open. No push/merge/service authority.
+
 ## 2026-10-21 — Preserve target-deleted directory ancestry
 
 Addressed #1097 review4328261007. A baseline directory missing from the target

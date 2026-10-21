@@ -1,3 +1,13 @@
+## 2026-10-21 — Publish proximity foundations without importing later lanes
+
+Admission tests include three later ingest-dependent cases; publishing the file
+unchanged before the ingest module exists breaks that boundary. Retain those
+cases in the full candidate until the ingestion slice. Keep schema096/100 bytes
+identical and append only their blocks to the current bootstrap, rather than
+copying the full candidate schema with unrelated pending migrations. Fresh-process
+admission recovery proves local persistence, not producer authentication or DB
+commit.40offline tests pass;34native PG cases remain explicitly pending.
+
 ## 2026-10-11 — Generated API prose and handoff preambles are contracts
 
 A router docstring changes the frozen OpenAPI description even if its schema

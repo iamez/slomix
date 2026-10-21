@@ -1,3 +1,13 @@
+## 2026-10-21 — Proximity publication checkpoint
+
+First existing-code slice contains schema096/100 and persistent admission only.
+40 offline tests pass;34 disposable-PG cases are pending, not runtime acceptance.
+Keep identity/parser parent linkage next, followed by ingest/commit/retry/queue.
+The three ingest-dependent admission cases remain in the full local candidate.
+Preserve later clock/pause, gametime, API/UI and all original D4/D5 obligations;
+do not copy mixed parser/test snapshots into this schema-only publication.
+No service, migration application, push or new PR approval accompanies this slice.
+
 ## 2026-10-21 — Repair newly failing Pillow security gate
 
 Fresh exact-head Security CI failed: pip-audit reports8new CVEs for pinned

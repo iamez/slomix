@@ -1,3 +1,24 @@
+## 2026-10-21 — Proximity schema and admission publication slice
+
+Prepared from reviewed local candidate 9c09267c onto state-handover base 3551ca21.
+Only migrations 096/100, their exact bootstrap blocks, persistent admission and
+focused tests enter this slice. Existing bootstrap bytes remain unchanged.
+This publishes existing implementation; it does not replace the original roadmap.
+Admission persists trusted caller input before capture, never an import ACK.
+
+Validation: 40 passed, 34 explicitly skipped without a disposable PostgreSQL
+configuration. Actual fresh processes recover identical source/generation/date/
+size/hash without payload, database or Discord imports. Source-binding and exact
+bootstrap mutations each failed, then files were restored and cmp verified.
+Ruff and whitespace checks pass. Native PostgreSQL constraints/ACL/replay proof
+is pending; textual bootstrap checks are not SQL execution. No service or DB use.
+
+Next: review this <=25-file slice, then identity/parent/receipt publication and
+bounded ingestion/queue publication. Three admission-to-ingest test cases stay
+in the full candidate for that later dependency. D4/D5, trusted producer admission,
+exclusive legacy/manual/remote writer handover and sustained consumer-off/recovery
+acceptance remain open. No merge approval, publication or activation is implied.
+
 ## 2026-10-21 — Repair newly failing Pillow security gate
 
 Fresh exact-head Security CI failed: pip-audit reports8new CVEs for pinned
