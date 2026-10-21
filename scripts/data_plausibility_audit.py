@@ -1460,6 +1460,19 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({"status": "refused", "reason": "Release audit source verification failed"}),
               file=sys.stderr)
         return 1
+    try:
+        return _execute_audit(args)
+    except Exception:
+        marker = _REPO_ROOT / ".slomix-release.json"
+        if not (marker.exists() or marker.is_symlink()):
+            raise
+        print(json.dumps({"status": "refused", "reason": "Release audit execution could not complete safely"}),
+              file=sys.stderr)
+        return 1
+
+
+def _execute_audit(args):
+    """Run admitted rules and reporting; the marked CLI owns error redaction."""
     validate_rules(RULES)
     validate_trend_rules(TREND_RULES)
 
@@ -1480,7 +1493,14 @@ def main(argv: list[str] | None = None) -> int:
         results = run_audit(conn, RULES, top_n=args.top)
         trends = run_trend_audit(conn, TREND_RULES)
     finally:
-        conn.close()
+        primary = sys.exc_info()[1]
+        try:
+            conn.close()
+        except Exception:
+            if (primary is not None and not isinstance(primary, Exception)
+                    and (marker.exists() or marker.is_symlink())):
+                raise primary from None
+            raise
 
     generated_at = datetime.now(timezone.utc).date().isoformat()
 
