@@ -18,6 +18,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.prepare_runtime_game_bundle import _write_new  # noqa: E402
 from scripts.runtime_game_startup import startup_recipe  # noqa: E402
