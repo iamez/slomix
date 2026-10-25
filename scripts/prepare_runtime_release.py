@@ -26,7 +26,7 @@ EXPLICIT = {
     'greatshot/contracts/schema/analysis.schema.json', 'greatshot/scanner/etl_demo_scan',
     'scripts/apply_migrations.py', 'scripts/dev_schema_preflight.py',
     'scripts/dev_verify_health.py', 'scripts/data_plausibility_audit.py',
-    'scripts/dev_runtime_contract.py',
+    'scripts/dev_runtime_contract.py', 'scripts/runtime_app_bootstrap.py',
 }
 PYTHON_ROOTS = ('bot/', 'shared/', 'greatshot/', 'proximity/parser/', 'website/backend/')
 ASSET_ROOTS = ('website/js/', 'website/css/', 'website/assets/')
@@ -91,6 +91,7 @@ def prepare(source: Path, destination: Path) -> dict:
         output = destination / OUTPUT / name
         output.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source / OUTPUT / name, output)
+        output.chmod(0o644)
     # Source must not have changed while copying. Verify copied bytes separately.
     validate(source, source / OUTPUT, target)
     for name in selected:
@@ -104,7 +105,9 @@ def prepare(source: Path, destination: Path) -> dict:
             raise ValueError('Copied SPA differs from verified artifact')
     verify_source_state(source, target)
     files = {name: file_hash(path) for name, path in sorted(payload_files(destination).items())}
-    record = {'version': 1, 'source_commit': target, 'files': files}
+    modes = {name: path.stat().st_mode & 0o7777
+             for name, path in sorted(payload_files(destination).items())}
+    record = {'version': 2, 'source_commit': target, 'files': files, 'modes': modes}
     with (destination / MANIFEST).open('x', encoding='utf-8') as stream:
         json.dump(record, stream, sort_keys=True, indent=2)
         stream.write('\n')

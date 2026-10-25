@@ -444,3 +444,17 @@ def test_unmarked_preflight_override_policy_keeps_legacy_compatibility():
     refuse_config_overrides({}, {'LEGACY_OPERATOR_OPTION': 'value'})
     with pytest.raises(ValueError, match='Unapproved'):
         refuse_config_overrides({}, {'LEGACY_OPERATOR_OPTION': 'value'}, strict=True)
+
+
+@pytest.mark.parametrize('extra', [
+    ' { path=/bin/false ; argv[]=/bin/false ; ignore_errors=no ; pid=0 }',
+    ' { path=/bin/true ; argv[]=/bin/true ; ignore_errors=no ; pid=0 }',
+])
+def test_additional_prestart_commands_refuse_contract(inputs, extra):
+    spec = contract.build_contract(**inputs)['services']['etlegacy-bot']
+    values = properties(spec, 123)
+    assert health.command_matches(values['ExecStartPre'], spec['pre_argv'])
+    values['ExecStartPre'] += extra
+    assert not health.command_matches(values['ExecStartPre'], spec['pre_argv'])
+    with pytest.raises(ValueError, match='configuration differs'):
+        health.release_unit_matches('etlegacy-bot', values, spec)

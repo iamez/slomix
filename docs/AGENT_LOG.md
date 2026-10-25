@@ -1790,3 +1790,23 @@ Original runtime/UI/Spiderweb plan remains preserved. Owner approval for
 #1095/#1096/#1097 remains unconsumed; final CI/reviews and prescribed merge cycle
 still apply, and bootstrap integration is required before considering the queue
 ready. No merge/deploy approval is inferred for any other PR.
+
+## 2026-10-25 — Package startup dependency, modes and unfiltered readiness
+
+PR1096 reviews4340716247/4340716262/4340716275/4340716286 addressed in source.
+The release allowlist now includes runtime_app_bootstrap. New prepared releases
+emit manifest v2 with exact0644/0755 modes for every payload file, and verification
+checks the full mode inventory including executable/set-ID drift. Historical v1
+manifests retain their previous byte-only contract; no existing artifact rewritten.
+Readiness writes/flushed stderr after startup checks, independent of LOG_LEVEL.
+Resolved command comparison refuses concatenated extra ExecStartPre structures.
+
+143 targeted tests pass, including actually prepared Git-free package tools
+--help in isolated native Python, all log-level cases and exact-mode drift.
+Four removed guards visibly fail (package inclusion/modes/extra commands/readiness)
+and original files are restored with cmp. Full package preparation remains offline;
+no service/DB/network listener started. Existing prepared units need regeneration
+from final reviewed source. Original runtime/proximity/UI/D4/D5 plan preserved.
+Initial overly broad v1 mode restriction rejected legacy fixtures under host
+umask0002; corrected to versioned v2 guarantees instead of silently changing the
+historical format. Two existing websockets deprecation warnings remain.
