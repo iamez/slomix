@@ -81,10 +81,7 @@ def load_environment(legacy_file: str | Path | None = None, *, root: Path = ROOT
     values = read_external_environment(selected, root=root,
                                        expected_digest=os.environ.get("SLOMIX_ENV_SHA256"))
     if (root / ".slomix-release.json").exists() or (root / ".slomix-release.json").is_symlink():
-        if any((key in values and value != values[key])
-               or (key.startswith(("POSTGRES_", "DB_", "PG", "DATABASE_")) and key not in values)
-               for key, value in os.environ.items()):
-            raise ValueError("Inherited environment overrides explicit application configuration")
+        refuse_unapproved_environment(values, os.environ, RELEASE_BOOTSTRAP_KEYS)
     for key, value in values.items():
         if value is not None:
             os.environ.setdefault(key, value)

@@ -54,11 +54,13 @@ def test_approved_configuration_reaches_external_write(release):
 
 
 @pytest.mark.parametrize('inherited', [{'POSTGRES_HOST': 'wrong-host'}, {'PGHOST': 'wrong-host'},
-                                      {'STATS_DIRECTORY': '/wrong-stats'}])
+                                      {'STATS_DIRECTORY': '/wrong-stats'},
+                                      {'BOT_NAME_REGEX': 'forbidden-pattern'},
+                                      {'SSH_ENABLED': 'true'}])
 def test_inherited_configuration_refused_before_write(release, inherited):
     result = run(release, inherited=inherited)
     assert result.returncode != 0
-    assert 'Inherited environment overrides' in result.stderr
+    assert 'Unapproved process environment' in result.stderr
     assert 'wrong-host' not in result.stderr
     assert not Path(release[1]['STATS_DIRECTORY']).exists()
 

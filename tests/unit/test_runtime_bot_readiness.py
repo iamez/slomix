@@ -1,5 +1,6 @@
 """Readiness requires completion of this bot process's on_ready callback."""
 import json
+import logging
 import os
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -40,7 +41,8 @@ def test_bot_readiness_is_scoped_to_current_invocation(monkeypatch, damage):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('failure', [None, 'security', 'voice'])
-async def test_actual_on_ready_emits_only_after_startup_checks(monkeypatch, failure):
+@pytest.mark.parametrize('level', [logging.INFO, logging.WARNING, logging.CRITICAL])
+async def test_actual_on_ready_emits_only_after_startup_checks(monkeypatch, capsys, failure, level):
     from bot import ultimate_bot
 
     bot = SimpleNamespace(user=SimpleNamespace(id=123), config=SimpleNamespace(database_type='postgresql',
@@ -53,14 +55,15 @@ async def test_actual_on_ready_emits_only_after_startup_checks(monkeypatch, fail
     if failure == 'voice':
         bot.voice_session_service.check_startup_voice_state.side_effect = RuntimeError('fixture startup rejection')
     monkeypatch.setenv('INVOCATION_ID', 'a' * 32)
-    logger = Mock()
+    logger = logging.getLogger("readiness-proof")
+    monkeypatch.setattr(logger, "level", level)
     monkeypatch.setattr(ultimate_bot, 'logger', logger)
     if failure == 'voice':
         with pytest.raises(RuntimeError):
             await ultimate_bot.UltimateETLegacyBot.on_ready(bot)
     else:
         await ultimate_bot.UltimateETLegacyBot.on_ready(bot)
-    signals = [call for call in logger.info.call_args_list if call.args[0].startswith('[RUNTIME-READY]')]
+    signals = [line for line in capsys.readouterr().err.splitlines() if line.startswith('[RUNTIME-READY]')]
     assert len(signals) == (0 if failure else 1)
     if signals:
-        assert signals[0].args == ('[RUNTIME-READY] pid=%s invocation=%s', os.getpid(), 'a' * 32)
+        assert signals == [f'[RUNTIME-READY] pid={os.getpid()} invocation=' + 'a' * 32]

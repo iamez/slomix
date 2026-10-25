@@ -21,7 +21,7 @@ from shared.runtime_environment import read_external_environment, refuse_unappro
 
 
 def command_matches(value, expected):
-    command = re.fullmatch(r'\{ path=([^;]+) ; argv\[\]=([^;]+) ; ignore_errors=no ; .* \}', value)
+    command = re.fullmatch(r'\{ path=([^;]+) ; argv\[\]=([^;]+) ; ignore_errors=no ; [^{}]* \}', value)
     return bool(command and command[1] == expected[0] and shlex.split(command[2]) == expected)
 
 

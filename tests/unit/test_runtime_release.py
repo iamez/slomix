@@ -195,3 +195,47 @@ def test_payload_executable_mode_comes_from_committed_tree(committed_runtime_sou
     package.prepare(source, destination)
     assert (destination / 'bot/runtime.py').stat().st_mode & 0o777 == 0o755
     assert runtime.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize('mode', [0o600, 0o755, 0o666, 0o4644])
+def test_version_two_refuses_changed_modes(release, mode):
+    marker = release / MANIFEST
+    record = json.loads(marker.read_text())
+    record.update(version=2, modes={'app.py': 0o644})
+    (release / 'app.py').chmod(0o644)
+    marker.write_text(json.dumps(record))
+    verify_release(release)
+    (release / 'app.py').chmod(mode)
+    with pytest.raises(ValueError):
+        verify_release(release)
+
+
+def test_packaged_tools_include_their_real_bootstrap_dependency(committed_runtime_source):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    source = committed_runtime_source
+    project = Path(__file__).resolve().parents[2]
+    actual = ['scripts/dev_runtime_contract.py', 'scripts/dev_verify_health.py',
+              'scripts/runtime_app_bootstrap.py', 'shared/release_manifest.py',
+              'shared/runtime_environment.py']
+    for name in actual:
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((project / name).read_bytes())
+    git(source, 'add', '--', *actual)
+    git(source, 'commit', '-m', 'fixture actual packaged tools')
+    build(source)
+    destination = source.parent / 'real-tools'
+    package.prepare(source, destination)
+    record = verify_release(destination)
+    assert record['version'] == 2
+    assert record['modes'].keys() == record['files'].keys()
+    assert (destination / 'scripts/runtime_app_bootstrap.py').is_file()
+    for tool in ('dev_runtime_contract.py', 'dev_verify_health.py'):
+        result = subprocess.run([sys.executable, '-I', '-B', str(destination / 'scripts' / tool), '--help'],
+                                cwd=destination, capture_output=True, text=True, timeout=15)
+        assert result.returncode == 0, result.stderr
+        assert 'usage:' in result.stdout
+    assert verify_release(destination) == record
