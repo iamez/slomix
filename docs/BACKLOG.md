@@ -1,3 +1,35 @@
+## 2026-10-25 — Close remaining inherited settings, audit path and CLI bytecode gaps
+
+Corrected #1095 review4340638914: marked environment loading now calls the full
+explicit allowlist already developed downstream in #1096. The same shared
+SYSTEM_ENVIRONMENT, RELEASE_BOOTSTRAP_KEYS and refusal helper are preserved,
+including strict preflight compatibility. Non-DB application settings absent
+from the approved file (for example BOT_NAME_REGEX or SSH_ENABLED) cannot enter
+through inherited environment. This supersedes the narrower Oct21 DB-only
+additional-key guard; identical approved repeated loads remain valid.
+
+Corrected review4340638928 by porting the identical downstream server_control
+BOT_LOG_DIR change: cog construction and audit writes use the external log root,
+while unmarked legacy fallback stays logs. Corrected review4340638938 by setting
+sys.dont_write_bytecode before any project import in prepare_runtime_game_service.
+An ordinary CLI invocation without -B cannot dirty source before verify_source.
+
+Final focused/shared regression suite:143 passed in23.33s, also independently
+collected. Native subprocess evidence includes inherited non-DB refusals, an
+actual ServerControl audit write to external logs with the payload directory
+remaining empty, and CLI --help without -B/PYTHONDONTWRITEBYTECODE, comparing
+complete before/after source file hashes and independently checking no pyc files.
+Three guard mutations fail5(environment),1(audit path),1(bytecode) tests; each
+source is restored and verified with cmp. Ruff/diff checks pass. Initial focused
+run had91passes/2fixture failures because pytest itself injected PYTEST_CURRENT_TEST;
+the two in-process fixtures now remove it. Production allowlist was not weakened.
+
+Only source, tests and these four existing ledgers changed. No service, production
+configuration, database, Discord connection, game process or deployment occurred.
+#1095/#1096/#1097 approvals remain subject to fresh reviews/CI and the prescribed
+merge cycle; no push or merge performed here. Continue trusted #1096 bootstrap
+integration and preserved runtime/state/proximity/UI/Spiderweb plan.
+
 ## 2026-10-25 — Package startup dependency, modes and unfiltered readiness
 
 PR1096 reviews4340716247/4340716262/4340716275/4340716286 addressed in source.
