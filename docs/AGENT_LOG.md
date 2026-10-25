@@ -1842,3 +1842,19 @@ configuration, database, Discord connection, game process or deployment occurred
 #1095/#1096/#1097 approvals remain subject to fresh reviews/CI and the prescribed
 merge cycle; no push or merge performed here. Continue trusted #1096 bootstrap
 integration and preserved runtime/state/proximity/UI/Spiderweb plan.
+
+## 2026-10-25 — Diagnostic tools preserve inventory and raw systemd argv
+
+Reviews4369811073/4369811077 addressed. Packaged contract/health tools set
+sys.dont_write_bytecode before project imports; preparation does the same.
+Native actual packaged --help now runs without -B and preserves the v2 inventory.
+Health command parsing compares systemctl's raw joined argv bytes, never shlex
+syntax; the known contract requires whitespace-free arguments and rejects
+ambiguous inputs. Literal quotes inside the hex bootstrap remain significant.
+The fixture now models actual raw systemctl output rather than shlex.join.
+
+103 focused tests pass. Contract-bytecode, health-bytecode and raw-argv mutants
+were observed failing, then restored with cmp. No manager mutation, application
+startup, service restart or deploy. The separate static/modern artifact omission
+review remains in progress in an isolated worktree.1095 owner-approved merge
+cycle is running with full420second pause; no merge asserted until verification.

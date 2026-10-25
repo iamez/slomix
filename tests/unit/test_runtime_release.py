@@ -234,7 +234,7 @@ def test_packaged_tools_include_their_real_bootstrap_dependency(committed_runtim
     assert record['modes'].keys() == record['files'].keys()
     assert (destination / 'scripts/runtime_app_bootstrap.py').is_file()
     for tool in ('dev_runtime_contract.py', 'dev_verify_health.py'):
-        result = subprocess.run([sys.executable, '-I', '-B', str(destination / 'scripts' / tool), '--help'],
+        result = subprocess.run([sys.executable, '-I', str(destination / 'scripts' / tool), '--help'],
                                 cwd=destination, capture_output=True, text=True, timeout=15)
         assert result.returncode == 0, result.stderr
         assert 'usage:' in result.stdout
