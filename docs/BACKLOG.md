@@ -1,3 +1,38 @@
+## 2026-10-25 — Patch Vitest mocker and Undici without broad dependency drift
+
+PR1100 continuation: official Vitest advisories GHSA-qxg6-89mg-rqv8 and
+GHSA-xp26-3454-mjgp identify @vitest/mocker4.1.12; official Undici advisory
+GHSA-xjj6-f33q-929c identifies7.30.1. Registry metadata confirms the exact Vitest
+family dependency closure and compatible Undici Node engine. Updated direct
+Vitest range to^4.1.12 and only its eight family package entries plus existing
+transitive Undici7.30.1. Other versions, root manifest/lock and Tailwind3.4.17
+remain unchanged. Existing Vite8.2.4 fixes are retained.
+
+Ordinary npm targeted resolution repeated its edgesOut TypeError. The legacy
+resolver supplied package metadata, but its unrelated version/peer changes were
+excluded; ordinary clean npm ci validates the final minimal lock with210packages
+installed. Typecheck passes;212tests across5route/live/Spiderweb files pass using
+one worker. Native Node verifies actual installed4.1.12/4.1.12/7.30.1 versions,
+jsdom DOM behavior and an Undici data-URL fetch without a listener. SPA npm audit
+changes3reported vulnerable packages to0. Restoring the baseline manifests makes
+the audit fail with the mocker/Undici findings; exact files restored using cmp,
+and patched audit returns0 again. No advisory suppression introduced.
+
+Correction to Oct21 remaining-braces note: unchanged root audit now returns0,
+also with explicit include=dev. GitHub advisory GHSA-vfj7-8cjw-p6xm was withdrawn
+on2026-10-23 as not practically exploitable. Verified by the public advisory and
+GitHub API withdrawn_at, not inferred from absence. Braces remains3.0.3 and no
+patch is claimed. Sources: github.com/vitest-dev/vitest/security/advisories/
+GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp; github.com/nodejs/undici/security/
+advisories/GHSA-xjj6-f33q-929c; github.com/advisories/GHSA-vfj7-8cjw-p6xm.
+
+An initial sandboxed npm ci failed EAI_AGAIN; its output was retained and the
+process finished before the attempted stop. Final ordinary ci ran with registry
+access. No service/browser/deployment/merge/push occurred. Clean committed SPA
+build and artifact verification follow this source commit. Existing runtime,
+state, proximity, UI and Spiderweb plan remains the parent workstream; this
+security PR still has no numbered owner merge approval.
+
 ## 2026-10-21 — Patched Vite exact-source SPA build verified
 
 Required npm run build:app completed successfully on clean committed source
