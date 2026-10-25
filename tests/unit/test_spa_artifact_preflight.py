@@ -353,3 +353,24 @@ def test_run_symlink_parent_is_rejected_without_mutation(fixture, relative):
     assert result.returncode != 0
     assert "symlinked run artifacts" in result.stderr
     assert (run / "website/static/app/app.html").read_text() == "previous active bundle"
+
+
+def test_spa_raw_git_identity_cannot_hide_drift_with_replacement_ref(tmp_path):
+    from scripts import spa_artifact
+    git(tmp_path, 'init', '-b', 'fixture')
+    git(tmp_path, 'config', 'user.name', 'Fixture')
+    git(tmp_path, 'config', 'user.email', 'fixture@example.invalid')
+    git(tmp_path, 'config', 'core.hooksPath', str(tmp_path / 'absent-hooks'))
+    (tmp_path / 'tracked.py').write_text('# approved\n')
+    git(tmp_path, 'add', '--', 'tracked.py')
+    git(tmp_path, 'commit', '-m', 'fixture approved')
+    approved = git(tmp_path, 'rev-parse', 'HEAD')
+    (tmp_path / 'tracked.py').write_text('# replacement\n')
+    git(tmp_path, 'add', '--', 'tracked.py')
+    git(tmp_path, 'commit', '-m', 'fixture alternate')
+    alternate = git(tmp_path, 'rev-parse', 'HEAD')
+    git(tmp_path, 'replace', approved, alternate)
+    git(tmp_path, 'update-ref', 'refs/heads/fixture', approved)
+    assert subprocess.check_output(['git', '-C', str(tmp_path), 'status', '--porcelain']) == b''
+    with pytest.raises(ValueError, match='tracked source is dirty'):
+        spa_artifact.identity(tmp_path)

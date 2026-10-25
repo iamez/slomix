@@ -28,13 +28,17 @@ async def test_build_embed_none_when_no_history():
 
 
 @pytest.mark.asyncio
-async def test_build_embed_renders_history_and_fragger():
+@pytest.mark.parametrize("mode,prefix", [("legacy", "/#"), ("app", "/app")])
+async def test_build_embed_renders_history_and_fragger(mode, prefix):
     db = AsyncMock()
     db.fetch_all = AsyncMock(return_value=[
         (datetime.date(2025, 6, 14), 2, "puran", "sWat", 1, 1),
     ])
     db.fetch_one = AsyncMock(return_value=("vid", 88, datetime.date(2025, 6, 14)))
-    svc = OnThisDayService(bot=None, db_adapter=db, config=_Cfg())
+    config = _Cfg()
+    config.website_ui_mode = mode
+    config.website_public_base = "https://dev.example"
+    svc = OnThisDayService(bot=None, db_adapter=db, config=config)
     embed = await svc.build_embed(datetime.date(2026, 6, 14))
     assert embed is not None
     assert "On this day" in embed.title
@@ -42,6 +46,7 @@ async def test_build_embed_renders_history_and_fragger():
     assert "1 year ago" in field_text
     assert "puran 1–1 sWat" in field_text  # team score line
     assert "vid" in field_text and "88 kills" in field_text
+    assert f"https://dev.example{prefix}/record-book" in field_text
 
 
 @pytest.mark.asyncio

@@ -16,6 +16,7 @@ import discord
 from bot.logging_config import get_logger
 from bot.services.session_data_service import SessionDataService
 from bot.services.stopwatch_scoring_service import StopwatchScoringService
+from bot.website_links import website_url
 
 logger = get_logger("bot.services.session_digest")
 
@@ -92,8 +93,7 @@ class SessionDigestService:
         except Exception:
             logger.debug("digest: team name mapping unavailable", exc_info=True)
 
-        web = self.config.website_public_base
-        session_url = f"{web}/#/session-detail/date/{latest_date}"
+        session_url = website_url(self.config, f"/session-detail/date/{latest_date}")
 
         embed = discord.Embed(
             title=f"📰 Morning Report — {latest_date}",
@@ -163,12 +163,12 @@ class SessionDigestService:
         if gsid is not None:
             embed.add_field(
                 name="🗳️ MVP vote open",
-                value=f"Who carried tonight? [Cast your vote]({web}/#/session-detail/{gsid})",
+                value=f"Who carried tonight? [Cast your vote]({website_url(self.config, f'/session-detail/{gsid}', legacy=True)})",
                 inline=False,
             )
 
         # Tonight's bet (S4-C): if an open parimutuel market exists, nudge to it.
-        bet_line = await self._fetch_open_market(web)
+        bet_line = await self._fetch_open_market()
         if bet_line:
             embed.add_field(name="🎲 Bet on tonight", value=bet_line, inline=False)
 
@@ -177,12 +177,14 @@ class SessionDigestService:
         if challenge:
             embed.add_field(name="🏆 Challenge of the week", value=challenge, inline=False)
 
+        story_route = (f"/session-detail/date/{latest_date}/story"
+                       if getattr(self.config, "website_ui_mode", "legacy") == "app" else "/story")
         embed.add_field(
             name="🔗 Deep dive",
             value=(
                 f"[Full session breakdown]({session_url}) · "
-                f"[Smart stats]({web}/#/story) · "
-                f"[Leaderboards]({web}/#/leaderboards)"
+                f"[Smart stats]({website_url(self.config, story_route)}) · "
+                f"[Leaderboards]({website_url(self.config, '/leaderboards')})"
             ),
             inline=False,
         )
@@ -220,7 +222,7 @@ class SessionDigestService:
             logger.debug("digest: weekly challenge lookup failed", exc_info=True)
             return None
 
-    async def _fetch_open_market(self, web: str) -> str | None:
+    async def _fetch_open_market(self) -> str | None:
         """Open parimutuel market straight from the DB (best-effort)."""
         try:
             row = await self.db_adapter.fetch_one(
@@ -230,7 +232,7 @@ class SessionDigestService:
             if not row:
                 return None
             a, b = row[1], row[2]
-            return f"**{a}** vs **{b}** — [place your bet]({web}/#/availability)"
+            return f"**{a}** vs **{b}** — [place your bet]({website_url(self.config, '/availability')})"
         except Exception:
             logger.debug("digest: open-market lookup failed", exc_info=True)
             return None
@@ -303,6 +305,6 @@ class SessionDigestService:
         name = top.get("name") or "?"
         guid = top.get("guid") or ""
         kis = top.get("total_kis")
-        profile = f"{self.config.website_public_base}/#/profile/{guid[:8]}" if guid else None
+        profile = website_url(self.config, f"/profile/{guid[:8]}") if guid else None
         text = f"{name} — {kis} impact" if kis is not None else name
         return f"[{text}]({profile})" if profile else text

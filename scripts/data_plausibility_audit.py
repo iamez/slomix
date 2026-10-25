@@ -13,6 +13,8 @@ live. An unchanged historical live finding can recur in every daily report.
 Source evidence is required before deciding whether data needs repair.
 
 Read-only. Never writes to the database.
+Marked releases require stdout --json or an explicit external --output; even
+an output ignored by --json must stay outside the immutable release.
 
 Usage:
     python scripts/data_plausibility_audit.py                # markdown, stdout + file
@@ -37,11 +39,22 @@ summary counts include acknowledged findings; exit-code suppression is separate.
 """
 from __future__ import annotations
 
+# ruff: noqa: E402 -- marked CLI admission precedes project/driver imports
+import os
+import sys
+
+if os.path.lexists(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
+                               ".slomix-release.json")):
+    # The sentinel imports this module too: marked imports must not add .pyc
+    # files before inventory admission. Its caller owns interpreter/import trust.
+    sys.dont_write_bytecode = True
+    if __name__ == "__main__" and not sys.flags.isolated:
+        sys.stderr.write('{"status": "refused", "reason": "Release audit requires isolated Python (-I)"}\n')
+        raise SystemExit(1)
+
 import argparse
 import json
-import os
 import statistics
-import sys
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,7 +64,36 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from shared.release_manifest import verify_release
+
+
+def verify_audit_source() -> None:
+    """Admit marked bytes before using rules, config or database entry points.
+
+    This is an integrity check under a trusted launcher/owner, not protection
+    from code already executed during interpreter/site/loader startup.
+    """
+    marker = _REPO_ROOT / ".slomix-release.json"
+    if marker.exists() or marker.is_symlink():
+        verify_release(_REPO_ROOT)
+
+
+try:
+    verify_audit_source()
+except (OSError, RuntimeError, ValueError):
+    if __name__ == "__main__":
+        sys.stderr.write('{"status": "refused", "reason": "Release audit source verification failed"}\n')
+        raise SystemExit(1) from None
+    raise ValueError("Release audit source verification failed") from None
+
+
 from shared.round_time import MMSS_SQL_REGEX, round_duration_sql  # noqa: E402 (needs the sys.path bootstrap above)
+from shared.runtime_environment import (
+    explicit_env_file,
+    load_environment,
+    read_external_environment,  # noqa: E402
+    refuse_config_overrides,
+)
 
 # The date the backfill import (supastats history) hands off to live capture.
 # Every historical row before this date came through the lossy backfill path;
@@ -90,6 +132,10 @@ def _load_dotenv(root: Path) -> None:
 
     Only sets vars not already in the environment (real env wins).
     """
+    verify_audit_source()
+    if explicit_env_file(root) is not None:
+        load_environment(root=root)
+        return
     env_path = root / ".env"
     if not env_path.exists():
         return
@@ -106,6 +152,7 @@ def _load_dotenv(root: Path) -> None:
 
 def get_connection():
     """Open a READ-ONLY connection to the PostgreSQL DB using POSTGRES_* env vars."""
+    verify_audit_source()
     import psycopg2  # imported lazily so --help works without the driver
 
     _load_dotenv(_REPO_ROOT)
@@ -836,6 +883,7 @@ TREND_RULES: list[TrendRule] = [
 
 def validate_trend_rules(rules: list[TrendRule]) -> None:
     """Structural sanity for the aggregate rules, mirroring validate_rules."""
+    verify_audit_source()
     names = [r.name for r in rules]
     dupes = {n for n in names if names.count(n) > 1}
     if dupes:
@@ -989,6 +1037,7 @@ def build_trend_sql(rule: TrendRule) -> str:
 
 
 def run_trend_audit(conn, rules: list[TrendRule]) -> list[TrendResult]:
+    verify_audit_source()
     results: list[TrendResult] = []
     with conn.cursor() as cur:
         for rule in rules:
@@ -1050,6 +1099,7 @@ def render_trend_markdown(results: list[TrendResult]) -> list[str]:
 
 def validate_rules(rules: list[Rule]) -> None:
     """Structural sanity — same check the unit test runs, exposed for reuse."""
+    verify_audit_source()
     names = [r.name for r in rules]
     dupes = {n for n in names if names.count(n) > 1}
     if dupes:
@@ -1209,6 +1259,7 @@ def unacknowledged_live_count(results: list[RuleResult]) -> int:
 
 
 def run_audit(conn, rules: list[Rule], top_n: int = 3) -> list[RuleResult]:
+    verify_audit_source()
     results: list[RuleResult] = []
     with conn.cursor() as cur:
         for rule in rules:
@@ -1365,6 +1416,20 @@ def render_json(results: list[RuleResult], generated_at: str,
 # ── CLI ─────────────────────────────────────────────────────────────────────
 
 
+def validate_report_destination(output: Path | None, *, json_stdout: bool) -> None:
+    """Marked releases never write reports into immutable payload state."""
+    marker = _REPO_ROOT / ".slomix-release.json"
+    if not (marker.exists() or marker.is_symlink()):
+        return
+    if output is None:
+        if not json_stdout:
+            raise ValueError("Release audit requires --json or an explicit external --output")
+        return
+    if (not output.is_absolute() or output.is_relative_to(_REPO_ROOT)
+            or output.resolve().is_relative_to(_REPO_ROOT.resolve())):
+        raise ValueError("Release audit output must be an absolute path outside the payload")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     def _non_negative(value: str) -> int:
@@ -1382,16 +1447,60 @@ def main(argv: list[str] | None = None) -> int:
         help="Markdown report file path (default: docs/research/DATA_PLAUSIBILITY_T1_<date>.md). Ignored with --json.",
     )
     args = parser.parse_args(argv)
+    try:
+        validate_report_destination(args.output, json_stdout=args.json)
+    except (OSError, RuntimeError, ValueError):
+        print(json.dumps({"status": "refused", "reason": "Release audit requires stdout JSON or external report output"}),
+              file=sys.stderr)
+        return 1
 
+    try:
+        verify_audit_source()
+    except (OSError, RuntimeError, ValueError):
+        print(json.dumps({"status": "refused", "reason": "Release audit source verification failed"}),
+              file=sys.stderr)
+        return 1
+    try:
+        return _execute_audit(args)
+    except Exception:
+        marker = _REPO_ROOT / ".slomix-release.json"
+        if not (marker.exists() or marker.is_symlink()):
+            raise
+        print(json.dumps({"status": "refused", "reason": "Release audit execution could not complete safely"}),
+              file=sys.stderr)
+        return 1
+
+
+def _execute_audit(args):
+    """Run admitted rules and reporting; the marked CLI owns error redaction."""
     validate_rules(RULES)
     validate_trend_rules(TREND_RULES)
 
-    conn = get_connection()
+    try:
+        # Library/sentinel callers already loaded their approved environment.
+        # Only the standalone marked CLI must reject inherited configuration.
+        marker = _REPO_ROOT / ".slomix-release.json"
+        if __name__ == "__main__" and (marker.exists() or marker.is_symlink()):
+            selected = explicit_env_file(_REPO_ROOT)
+            refuse_config_overrides(read_external_environment(selected, root=_REPO_ROOT,
+                expected_digest=os.getenv("SLOMIX_ENV_SHA256")), os.environ)
+        conn = get_connection()
+    except Exception:
+        print(json.dumps({"status": "refused", "reason": "Audit database configuration or connection failed"}),
+              file=sys.stderr)
+        return 1
     try:
         results = run_audit(conn, RULES, top_n=args.top)
         trends = run_trend_audit(conn, TREND_RULES)
     finally:
-        conn.close()
+        primary = sys.exc_info()[1]
+        try:
+            conn.close()
+        except Exception:
+            if (primary is not None and not isinstance(primary, Exception)
+                    and (marker.exists() or marker.is_symlink())):
+                raise primary from None
+            raise
 
     generated_at = datetime.now(timezone.utc).date().isoformat()
 

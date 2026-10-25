@@ -297,3 +297,42 @@ def test_summary_uptime_grows_over_time(logger_, monkeypatch):
     assert out["uptime_seconds"] == 120
     # Suppress unused import warning
     _ = real_dt
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('configured_db', ['default', 'explicit', 'legacy', 'empty', 'documented-relative', 'relative-default', 'none'])
+async def test_configured_metrics_store_and_exports_stay_outside_release(tmp_path, monkeypatch, configured_db):
+    import json
+    import sqlite3
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    release = tmp_path / 'release'
+    release.mkdir()
+    monkeypatch.chdir(release)
+    state = tmp_path / 'mutable-logs'
+    monkeypatch.setenv('BOT_LOG_DIR', str(state))
+    default_db = state / 'metrics' / 'metrics.db'
+    legacy = tmp_path / 'application.db'
+    explicit = tmp_path / 'custom-store' / 'automation.db'
+    configured = {'default': str(default_db), 'explicit': str(explicit),
+                  'legacy': str(legacy), 'empty': '', 'documented-relative': 'bot/logs/metrics/metrics.db',
+                  'relative-default': 'logs/metrics/metrics.db', 'none': None}[configured_db]
+    config = SimpleNamespace(database_type='postgresql', metrics_db_path=configured,
+                             sqlite_db_path=str(legacy))
+    metrics = MetricsLogger.from_config(config)
+    expected = explicit if configured_db == 'explicit' else default_db
+    try:
+        await metrics.initialize_metrics_db()
+        await metrics.log_event('external_state_proof', {'safe': True})
+        export = Path(await metrics.export_to_json())
+        assert export.parent == state / 'metrics'
+        assert json.loads(export.read_text())['events']['external_state_proof']['count'] == 1
+        assert Path(metrics.metrics_db_path) == expected
+        with sqlite3.connect(expected) as db:
+            assert db.execute('SELECT COUNT(*) FROM events WHERE event_type=?',
+                              ('external_state_proof',)).fetchone()[0] == 1
+        assert list(release.iterdir()) == []
+        assert not legacy.exists()
+    finally:
+        await metrics.close()
