@@ -3,13 +3,18 @@
 Both existing npm builds pass sequentially using authenticated isolated Node22.23.4
 from clean sourceb24a9eac38ded275c2a43cc7f8d467f1cd7ae4cb. App provenance verifier
 passes for that SHA; independent GNU hashes match all133app outputs. Native
-in-process Starlette StaticFiles responses for app index and modern route-host
+in-process Starlette StaticFiles responses for app.html and modern route-host
 JS/CSS return200and match exact file bytes, with no listener/browser/service.
 Modern output is built and served by this proof, but this branch lacks the
 separate modern source-provenance implementation; no modern manifest claim.
 Existing native-config and Tailwind sourcemap warnings remain visible. Source
 build revision is explicit because this documentation commit changes HEAD.
 No deployment or global runtime selection changed; owner review still required.
+Initial static-proof harness stalled inside the sandbox; its exact diagnostic
+process was stopped after collecting output. The first external retry exposed
+a missing ASGI lifespan wrapper, then an incorrect index.html assumption(404).
+Corrected harness mounts StaticFiles and requests the configured app.html; all
+three final responses now pass. No application code was changed to hide failures.
 
 ## 2026-10-27 — Select authenticated patched Node for DEV tooling
 
