@@ -233,8 +233,10 @@ class RoundCorrelationService:
                                           window_seconds: int = 30) -> str | None:
         """Find an existing correlation for the same map to merge into.
 
-        Two merge strategies:
-        1. Timestamp proximity (±30s): Lua R1 vs stats match_id differ by 2-3s.
+        Merge strategies:
+        1. Timestamp proximity: R1 end-output clocks differ by 2-3s, capped at
+           ±30s even for proximity imports and late sweeps. Import arrival delay
+           does not change those event timestamps. R2 retains the caller window.
         2. Semantic R2 match (round_number=2): Find the most recent correlation
            for this map that has R1 data but is missing R2 Lua data. This handles
            the R1→R2 gap (100-750s) which exceeds any safe timestamp window.
@@ -261,8 +263,9 @@ class RoundCorrelationService:
                    LIMIT 20""",
                 (map_name,),
             )
+            timestamp_window = min(window_seconds, 30) if round_number == 1 else window_seconds
             best_id = None
-            best_diff = timedelta(seconds=window_seconds + 1)
+            best_diff = timedelta(seconds=timestamp_window + 1)
             for row in (rows or []):
                 cid = row[0] if isinstance(row, (list, tuple)) else row.get('correlation_id')
                 mid = row[1] if isinstance(row, (list, tuple)) else row.get('match_id')
@@ -276,7 +279,7 @@ class RoundCorrelationService:
                 except (ValueError, IndexError):
                     continue
                 diff = abs(candidate_dt - target_dt)
-                if diff <= timedelta(seconds=window_seconds) and diff < best_diff:
+                if diff <= timedelta(seconds=timestamp_window) and diff < best_diff:
                     if has_round or best_id is None:
                         best_diff = diff
                         best_id = cid
@@ -472,10 +475,10 @@ class RoundCorrelationService:
                                     map_name: str):
         """Called after successful proximity engagement import in proximity_cog.py.
 
-        Note: proximity engagements files use round-START timestamp (per-round file),
-        kar je 5+ min po R1 match start za R2. Default 30s window ne zadošča —
-        razširimo na 600s za Strategy 1, plus Strategy 3 (round_id) pokriva
-        scenarij ko je gap večji od tega.
+        Proximity filenames carry the output event clock, not import arrival.
+        R2 can be far from its R1-anchored match_id, retaining the legacy 600s
+        search. R1 uses the normal 30s timestamp cap: a wider window can attach
+        a later reset/surrender to an earlier R1. Round-id linkage is separate.
         """
         if round_number not in (1, 2):
             return
