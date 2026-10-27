@@ -1879,7 +1879,7 @@ hooks and self-review the public diff, then wait for current-head CI and the
 owner's numbered merge decision. No global runtime, active environment, service,
 PROD, puran, database or generated tracked artifact is changed by this slice.
 
-## 2026-10-28 — Correct bounded Node engine contract after CI failure
+## 2026-10-27 — Correct bounded Node engine contract after CI failure
 
 PR1100 current-head CI exposed a stale Python test: its engine parser accepted
 only an unbounded >=x.y.z expression and rejected the intentional <23 ceiling.
