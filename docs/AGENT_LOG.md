@@ -1666,3 +1666,31 @@ configuration, database, Discord connection, game process or deployment occurred
 #1095/#1096/#1097 approvals remain subject to fresh reviews/CI and the prescribed
 merge cycle; no push or merge performed here. Continue trusted #1096 bootstrap
 integration and preserved runtime/state/proximity/UI/Spiderweb plan.
+
+## 2026-10-27 — Bound R1 timestamp correlation to its event-clock contract
+
+Supply RCA identified the precise writer: proximity notification requested a600s
+window and merged a distinct reset R1 into the prior R1 at88s. Ordinary stats/Lua
+notifications use30s; the late orphan sweep requests1800s. This was not an88s
+merge by the stats R1 handler. Both stats and proximity Lua writers name files
+with their end-output event clock; delayed import does not move that timestamp.
+The nine imported R1s in the incident session have exact matching physical-start
+proximity sources, each with a3s filename-clock difference from stats.
+
+Cap only R1 timestamp proximity to the existing30s contract, including wide
+proximity/sweep callers. Preserve R2 windows, semantic linkage, exact identity
+reuse and the separate existing90s round-id strategy. A reset outside that R1
+window remains independently unmatched instead of donating completeness flags.
+This bounded fix does not resolve sub30s legacy identity ambiguity or the separate
+proximity round-linker1055s attachment; those need physical/source identity proof.
+
+48focused tests pass; removing the R1 cap caused4expected failures, restored with
+cmp. Read-only native DEV queries preserve9/9normal R1 baseline decisions and
+exact reset identity/retry behavior. Today's DB already has an exact reset row,
+so the historical false merge is separately reproduced with the logged event's
+older candidate fixture and real round clocks: old code merges, fixed code does
+not. The adapter exposes no writes. Native/current-state and historical replay
+proofs remain distinct in the private Supply packet. Ruff/diff pass. No service,
+DB repair/reimport, production, game-server, push or merge action occurred.
+Continue owner-reviewed source publication and source-backed repair preparation,
+then return to the preserved full runtime/UI/Spiderweb plan.
