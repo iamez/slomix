@@ -2,7 +2,7 @@ name: CodeQL Security Scanning
 
 on:
   push:
-    branches: [ main, develop, feature/** ]
+    branches: [ main, develop, feature/**, 'feat/runtime-*' ]
   pull_request:
     branches: [ main, develop ]
   merge_group:          # required for the merge queue -- see tests.yml

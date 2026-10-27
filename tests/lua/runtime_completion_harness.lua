@@ -1,11 +1,19 @@
 -- Real temporary filesystem with ET-shaped bindings, never a running server.
 local module_path, directory, scenario, generation = arg[1], arg[2], arg[3], arg[4]
+local protocol = arg[5] or "stats"
+assert(protocol == "stats" or protocol == "proximity", "unknown harness protocol")
 if scenario == "unsafe-generation" then generation = "../" .. generation end
 if scenario == "uppercase-generation" then generation = string.upper(generation) end
 local writer = dofile(module_path)
 local name = "2026-09-20-120000-oasis-round-1.txt"
+local suffix = protocol == "proximity" and "_engagements.txt" or ".txt"
+name = name:gsub("%.txt$", suffix)
+local write = protocol == "proximity" and writer.write_proximity or writer.write
+if scenario == "wrong-protocol" then
+    name = "2026-09-20-120000-oasis-round-1" .. (protocol == "stats" and "_engagements.txt" or ".txt")
+end
 if scenario == "unsafe-name" then name = "../" .. name end
-if scenario == "round-zero" then name = "2026-09-20-120000-oasis-round-0.txt" end
+if scenario == "round-zero" then name = "2026-09-20-120000-oasis-round-0" .. suffix end
 local opened, closed, emitted, writes = false, false, false, 0
 local handle
 local api = {
@@ -40,15 +48,20 @@ local chunks = {"header\n", "player-row\n"}
 if scenario == "sparse" then chunks = {[1] = "x", [3] = "z"} end
 if scenario == "empty" then chunks = {} end
 if scenario == "oversize" then chunks = {string.rep("x", 8 * 1024 * 1024 + 1)} end
-local ok = pcall(writer.write, api, generation, name, chunks, function(receipt, receipt_generation)
+local ok = pcall(write, api, generation, name, chunks, function(receipt, receipt_generation)
     assert(receipt_generation == generation, "completion lost generation identity")
     assert(closed and writes == 2, "completion preceded payload close")
     if scenario == "notify-error" then error("fixture notification failure") end
     assert(receipt.version == 1 and receipt.filename == name and receipt.bytes == 18)
     assert(receipt.state == "writer_closed")
     emitted = true
+    -- Machine-readable synthetic callback delivery for the Python composition.
+    -- No filenames or payload originate from a real server in this harness.
+    print(string.format('receipt {"generation":"%s","completion":{"version":1,"filename":"%s","bytes":%d,"state":"writer_closed"}}',
+        receipt_generation, receipt.filename, receipt.bytes))
 end)
 assert(ok == (scenario == "ok"), "unexpected writer outcome: " .. scenario)
 assert(emitted == (scenario == "ok"), "unexpected completion: " .. scenario)
 if opened then assert(closed, "writer handle leaked") end
+if scenario == "wrong-protocol" then assert(not opened, "wrong protocol reached open") end
 print("completion-proof " .. scenario .. " emitted=" .. tostring(emitted))

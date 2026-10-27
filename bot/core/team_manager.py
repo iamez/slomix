@@ -18,6 +18,9 @@ import os
 from collections import defaultdict
 from typing import Any
 
+from shared.team_identity import UNRESOLVED_TEAM_IDENTITY_SQL, require_resolved_team_identity
+from shared.team_write_guard import team_write_transaction
+
 logger = logging.getLogger(__name__)
 
 
@@ -94,6 +97,20 @@ class TeamManager:
 
         return self._session_teams_columns
 
+    async def _require_team_identity(
+        self, columns: set[str], session_date: str, gaming_session_id: int | None,
+    ) -> None:
+        """Called under the writer guard before any ID-scoped roster operation.
+
+        Preserve legacy date-only/schema behavior; never infer or migrate IDs.
+        The adapter borrows the connection already pinned by the outer guard.
+        """
+        if 'gaming_session_id' in columns and gaming_session_id is not None:
+            unresolved = await self.db.fetch_val(
+                UNRESOLVED_TEAM_IDENTITY_SQL, (gaming_session_id, session_date),
+            )
+            require_resolved_team_identity(unresolved)
+
     @staticmethod
     def _session_scope_clause(
         columns: set[str],
@@ -115,7 +132,7 @@ class TeamManager:
         Return ON CONFLICT clause compatible with current session_teams schema.
         """
         if "session_identity" in columns:
-            return "ON CONFLICT ON CONSTRAINT session_teams_identity_unique"
+            return "ON CONFLICT (session_identity, map_name, team_name)"
         return "ON CONFLICT (session_start_date, map_name, team_name)"
 
     @staticmethod
@@ -161,6 +178,17 @@ class TeamManager:
     # =========================================================================
 
     async def create_initial_teams_from_round(
+        self, round_id: int, session_date: str, gaming_session_id: int,
+    ) -> bool:
+        """Guard the full operation; legacy failure results follow rollback."""
+        try:
+            async with self.db.transaction() as conn, team_write_transaction(conn):
+                return await self._create_initial_teams_from_round(round_id, session_date, gaming_session_id)
+        except Exception as e:
+            logger.error("Failed to create initial teams: %s", e, exc_info=True)
+            return False
+
+    async def _create_initial_teams_from_round(
         self,
         round_id: int,
         session_date: str,
@@ -181,77 +209,78 @@ class TeamManager:
         Returns:
             True if teams were created successfully
         """
-        try:
-            await self._ensure_session_teams_table()
-            columns = await self._get_session_teams_columns()
-            scope_clause, scope_params = self._session_scope_clause(
-                columns, session_date, gaming_session_id
+        await self._ensure_session_teams_table()
+        columns = await self._get_session_teams_columns()
+        await self._require_team_identity(columns, session_date, gaming_session_id)
+        scope_clause, scope_params = self._session_scope_clause(
+            columns, session_date, gaming_session_id
+        )
+
+        # Check if teams already exist for this session
+        existing = await self.db.fetch_one(
+            f"""
+            SELECT COUNT(*) FROM session_teams
+            WHERE {scope_clause} AND map_name = 'ALL'
+            """,
+            scope_params,
+        )
+
+        if existing and existing[0] > 0:
+            logger.debug(
+                f"Teams already exist for session {session_date} "
+                f"(gaming_session_id={gaming_session_id}), skipping creation"
             )
+            return True
 
-            # Check if teams already exist for this session
-            existing = await self.db.fetch_one(
-                f"""
-                SELECT COUNT(*) FROM session_teams
-                WHERE {scope_clause} AND map_name = 'ALL'
-                """,
-                scope_params,
-            )
+        # Get all players from this round with their sides
+        query = """
+            SELECT player_guid, player_name, team
+            FROM player_comprehensive_stats
+            WHERE round_id = $1
+        """
+        rows = await self.db.fetch_all(query, (round_id,))
 
-            if existing and existing[0] > 0:
-                logger.debug(
-                    f"Teams already exist for session {session_date} "
-                    f"(gaming_session_id={gaming_session_id}), skipping creation"
-                )
-                return True
+        if not rows:
+            logger.warning(f"No players found in round {round_id}")
+            return False
 
-            # Get all players from this round with their sides
-            query = """
-                SELECT player_guid, player_name, team
-                FROM player_comprehensive_stats
-                WHERE round_id = $1
-            """
-            rows = await self.db.fetch_all(query, (round_id,))
+        # Split by side - side 1 = Team A, side 2 = Team B
+        team_a_guids = []
+        team_a_names = []
+        team_b_guids = []
+        team_b_names = []
 
-            if not rows:
-                logger.warning(f"No players found in round {round_id}")
-                return False
+        for guid, name, side in rows:
+            if side in (1, '1', 'Axis', 'axis'):
+                team_a_guids.append(guid)
+                team_a_names.append(name)
+            elif side in (2, '2', 'Allies', 'allies'):
+                team_b_guids.append(guid)
+                team_b_names.append(name)
+            else:
+                logger.warning(f"Unknown side {side} for player {name}")
 
-            # Split by side - side 1 = Team A, side 2 = Team B
-            team_a_guids = []
-            team_a_names = []
-            team_b_guids = []
-            team_b_names = []
+        if not team_a_guids and not team_b_guids:
+            logger.warning(f"No players assigned to teams in round {round_id}")
+            return False
 
-            for guid, name, side in rows:
-                if side in (1, '1', 'Axis', 'axis'):
-                    team_a_guids.append(guid)
-                    team_a_names.append(name)
-                elif side in (2, '2', 'Allies', 'allies'):
-                    team_b_guids.append(guid)
-                    team_b_names.append(name)
-                else:
-                    logger.warning(f"Unknown side {side} for player {name}")
-
-            if not team_a_guids and not team_b_guids:
-                logger.warning(f"No players assigned to teams in round {round_id}")
-                return False
-
-            # Store teams with default names (will be randomly assigned later)
-            teams = {
-                'Team A': {
-                    'guids': sorted(team_a_guids),
-                    'names': sorted(team_a_names),
-                    'count': len(team_a_guids)
-                },
-                'Team B': {
-                    'guids': sorted(team_b_guids),
-                    'names': sorted(team_b_names),
-                    'count': len(team_b_guids)
-                }
+        # Store teams with default names (will be randomly assigned later)
+        teams = {
+            'Team A': {
+                'guids': sorted(team_a_guids),
+                'names': sorted(team_a_names),
+                'count': len(team_a_guids)
+            },
+            'Team B': {
+                'guids': sorted(team_b_guids),
+                'names': sorted(team_b_names),
+                'count': len(team_b_guids)
             }
+        }
 
-            # Store in database
-            conflict_clause = self._session_teams_conflict_clause(columns)
+        # Commit the initial pair together; a partial pair poisons retries.
+        conflict_clause = self._session_teams_conflict_clause(columns)
+        async with self.db.transaction():
             for team_name, team_data in teams.items():
                 if "gaming_session_id" in columns:
                     await self.db.execute(
@@ -292,27 +321,35 @@ class TeamManager:
                         ),
                     )
 
-            # Auto-assign random team names
-            try:
-                team_a_final, team_b_final = await self.assign_random_team_names(
-                    session_date,
-                    force=True,
-                    gaming_session_id=gaming_session_id,
-                )
-                logger.info(f"🎯 Created teams for session {session_date}: "
-                           f"{team_a_final} ({len(team_a_guids)}p) vs {team_b_final} ({len(team_b_guids)}p)")
-            except Exception as e:
-                logger.warning(f"Could not assign random team names: {e}")
-                logger.info(f"🎯 Created teams for session {session_date}: "
-                           f"Team A ({len(team_a_guids)}p) vs Team B ({len(team_b_guids)}p)")
-
-            return True
-
+        # Auto-assign random team names
+        try:
+            team_a_final, team_b_final = await self.assign_random_team_names(
+                session_date,
+                force=True,
+                gaming_session_id=gaming_session_id,
+            )
+            logger.info(f"🎯 Created teams for session {session_date}: "
+                       f"{team_a_final} ({len(team_a_guids)}p) vs {team_b_final} ({len(team_b_guids)}p)")
         except Exception as e:
-            logger.error(f"Failed to create initial teams: {e}", exc_info=True)
-            return False
+            logger.warning(f"Could not assign random team names: {e}")
+            logger.info(f"🎯 Created teams for session {session_date}: "
+                       f"Team A ({len(team_a_guids)}p) vs Team B ({len(team_b_guids)}p)")
+
+        return True
+
 
     async def update_teams_from_round(
+        self, round_id: int, session_date: str, gaming_session_id: int,
+    ) -> dict[str, list[str]]:
+        """Guard the full operation; legacy failure results follow rollback."""
+        try:
+            async with self.db.transaction() as conn, team_write_transaction(conn):
+                return await self._update_teams_from_round(round_id, session_date, gaming_session_id)
+        except Exception as e:
+            logger.error("Failed to update teams from round: %s", e, exc_info=True)
+            return {}
+
+    async def _update_teams_from_round(
         self,
         round_id: int,
         session_date: str,
@@ -336,119 +373,123 @@ class TeamManager:
         Returns:
             Dict of new players added: {'Team A': ['player1'], 'Team B': ['player2']}
         """
-        try:
-            await self._ensure_session_teams_table()
-            columns = await self._get_session_teams_columns()
-            scope_clause, scope_params = self._session_scope_clause(
-                columns, session_date, gaming_session_id
-            )
+        await self._ensure_session_teams_table()
+        columns = await self._get_session_teams_columns()
+        await self._require_team_identity(columns, session_date, gaming_session_id)
+        scope_clause, scope_params = self._session_scope_clause(
+            columns, session_date, gaming_session_id
+        )
 
-            # Get existing teams
-            teams_data = await self.get_session_teams(
-                session_date,
-                auto_detect=False,
-                gaming_session_id=gaming_session_id,
-            )
-            if not teams_data:
-                logger.debug(f"No teams found for {session_date}, cannot update")
-                return {}
-
-            # Get all GUIDs currently in teams
-            team_names = list(teams_data.keys())
-            all_known_guids = set()
-            team_guid_sets = {}
-
-            for team_name in team_names:
-                guids = set(teams_data[team_name].get('guids', []))
-                team_guid_sets[team_name] = guids
-                all_known_guids.update(guids)
-
-            # Get players from this round
-            query = """
-                SELECT player_guid, player_name, team
-                FROM player_comprehensive_stats
-                WHERE round_id = $1
-            """
-            rows = await self.db.fetch_all(query, (round_id,))
-
-            if not rows:
-                return {}
-
-            # Group round players by side
-            side_players = {1: [], 2: []}
-            for guid, name, side in rows:
-                if side in (1, '1', 'Axis', 'axis'):
-                    side_key = 1
-                elif side in (2, '2', 'Allies', 'allies'):
-                    side_key = 2
-                else:
-                    # Ignore spectators/unknown teams
-                    continue
-                side_players[side_key].append((guid, name))
-
-            # Find which team is currently on which side
-            # Look at overlap: which team's players are on which side in this round
-            team_to_side = {}
-            for side, players in side_players.items():
-                side_guids = {p[0] for p in players}
-                for team_name, team_guids in team_guid_sets.items():
-                    overlap = len(side_guids & team_guids)
-                    if overlap > 0:
-                        if team_name not in team_to_side or overlap > team_to_side[team_name][1]:
-                            team_to_side[team_name] = (side, overlap)
-
-            # Build side to team mapping
-            side_to_team = {}
-            for team_name, (side, _) in team_to_side.items():
-                if side not in side_to_team:
-                    side_to_team[side] = team_name
-
-            # Find new players and add them to appropriate teams
-            new_players = {'added': {}}
-
-            for side, players in side_players.items():
-                for guid, name in players:
-                    if guid not in all_known_guids:
-                        # New player! Add to the team on this side
-                        target_team = side_to_team.get(side)
-                        if target_team:
-                            # Update the team
-                            team_data = teams_data[target_team]
-                            guids = team_data.get('guids', [])
-                            names = team_data.get('names', [])
-
-                            if guid not in guids:
-                                guids.append(guid)
-                                names.append(name)
-
-                                # Update database
-                                await self.db.execute(
-                                    f"""
-                                    UPDATE session_teams
-                                    SET player_guids = ?, player_names = ?
-                                    WHERE {scope_clause}
-                                      AND map_name = 'ALL'
-                                      AND team_name = ?
-                                    """,
-                                    (
-                                        json.dumps(guids),
-                                        json.dumps(names),
-                                        *scope_params,
-                                        target_team
-                                    )
-                                )
-
-                                if target_team not in new_players['added']:
-                                    new_players['added'][target_team] = []
-                                new_players['added'][target_team].append(name)
-
-                                logger.info(f"➕ Added {name} to {target_team} (joined on side {side})")
-
-            return new_players
-
-        except Exception as e:
-            logger.error(f"Failed to update teams from round: {e}", exc_info=True)
+        # Get existing teams
+        teams_data = await self.get_session_teams(
+            session_date,
+            auto_detect=False,
+            gaming_session_id=gaming_session_id,
+        )
+        if not teams_data:
+            logger.debug(f"No teams found for {session_date}, cannot update")
             return {}
+
+        # Get all GUIDs currently in teams
+        team_names = list(teams_data.keys())
+        all_known_guids = set()
+        team_guid_sets = {}
+
+        for team_name in team_names:
+            guids = set(teams_data[team_name].get('guids', []))
+            team_guid_sets[team_name] = guids
+            all_known_guids.update(guids)
+
+        # Get players from this round
+        query = """
+            SELECT player_guid, player_name, team
+            FROM player_comprehensive_stats
+            WHERE round_id = $1
+        """
+        rows = await self.db.fetch_all(query, (round_id,))
+
+        if not rows:
+            return {}
+
+        # Group round players by side
+        side_players = {1: [], 2: []}
+        for guid, name, side in rows:
+            if side in (1, '1', 'Axis', 'axis'):
+                side_key = 1
+            elif side in (2, '2', 'Allies', 'allies'):
+                side_key = 2
+            else:
+                # Ignore spectators/unknown teams
+                continue
+            side_players[side_key].append((guid, name))
+
+        # Find which team is currently on which side
+        # Look at overlap: which team's players are on which side in this round
+        team_to_side = {}
+        for side, players in side_players.items():
+            side_guids = {p[0] for p in players}
+            for team_name, team_guids in team_guid_sets.items():
+                overlap = len(side_guids & team_guids)
+                if overlap > 0:
+                    if team_name not in team_to_side or overlap > team_to_side[team_name][1]:
+                        team_to_side[team_name] = (side, overlap)
+
+        # Build side to team mapping
+        side_to_team = {}
+        for team_name, (side, _) in team_to_side.items():
+            if side not in side_to_team:
+                side_to_team[side] = team_name
+
+        # Find new players and add them to appropriate teams
+        new_players = {'added': {}}
+        pending_updates = []
+
+        for side, players in side_players.items():
+            for guid, name in players:
+                if guid not in all_known_guids:
+                    # New player! Add to the team on this side
+                    target_team = side_to_team.get(side)
+                    if target_team:
+                        # Update the team
+                        team_data = teams_data[target_team]
+                        guids = team_data.get('guids', [])
+                        names = team_data.get('names', [])
+
+                        if guid not in guids:
+                            guids.append(guid)
+                            names.append(name)
+
+                            # Prepare the complete round before publishing it.
+                            pending_updates.append(
+                                (
+                                    json.dumps(guids),
+                                    json.dumps(names),
+                                    *scope_params,
+                                    target_team
+                                )
+                            )
+
+                            if target_team not in new_players['added']:
+                                new_players['added'][target_team] = []
+                            new_players['added'][target_team].append(name)
+
+        if pending_updates:
+            async with self.db.transaction():
+                for params in pending_updates:
+                    await self.db.execute(
+                        f"""
+                        UPDATE session_teams
+                        SET player_guids = ?, player_names = ?
+                        WHERE {scope_clause}
+                          AND map_name = 'ALL'
+                          AND team_name = ?
+                        """,
+                        params,
+                    )
+            for team_name, added_names in new_players['added'].items():
+                logger.info("Added %s player(s) to %s", len(added_names), team_name)
+
+        return new_players
 
     async def detect_session_teams(
         self,
@@ -702,6 +743,23 @@ class TeamManager:
         auto_assign_names: bool = True,
         gaming_session_id: int | None = None,
     ) -> bool:
+        """Serialize replacement and optional naming on the adapter connection.
+
+        Callers computing teams from database reads must guard those reads too;
+        acquiring here cannot validate already-stale caller-provided rosters.
+        """
+        async with self.db.transaction() as conn, team_write_transaction(conn):
+            return await self._store_session_teams(
+                session_date, teams, auto_assign_names, gaming_session_id,
+            )
+
+    async def _store_session_teams(
+        self,
+        session_date: str,
+        teams: dict[str, dict],
+        auto_assign_names: bool = True,
+        gaming_session_id: int | None = None,
+    ) -> bool:
         """
         Store detected teams in the session_teams table.
 
@@ -715,55 +773,56 @@ class TeamManager:
         """
         await self._ensure_session_teams_table()
         columns = await self._get_session_teams_columns()
+        await self._require_team_identity(columns, session_date, gaming_session_id)
         _, scope_params = self._session_scope_clause(
             columns, session_date, gaming_session_id
         )
         conflict_clause = self._session_teams_conflict_clause(columns)
 
-        # Delete existing entries for this session
-        await self.db.execute(
-            self._session_delete_query(columns, gaming_session_id, map_all_only=True),
-            scope_params,
-        )
+        # Replace the complete roster atomically, including the initial DELETE.
+        async with self.db.transaction():
+            await self.db.execute(
+                self._session_delete_query(columns, gaming_session_id, map_all_only=True),
+                scope_params,
+            )
 
-        # Insert new team data
-        for team_name, team_data in teams.items():
-            if "gaming_session_id" in columns:
-                await self.db.execute(
-                    f"""
-                    INSERT INTO session_teams
-                    (session_start_date, map_name, team_name, player_guids, player_names, gaming_session_id)
-                    VALUES (?, 'ALL', ?, ?, ?, ?)
-                    {conflict_clause} DO UPDATE SET
-                        player_guids = EXCLUDED.player_guids,
-                        player_names = EXCLUDED.player_names,
-                        gaming_session_id = EXCLUDED.gaming_session_id
-                    """,
-                    (
-                        session_date,
-                        team_name,
-                        json.dumps(team_data["guids"]),
-                        json.dumps(team_data["names"]),
-                        gaming_session_id,
-                    ),
-                )
-            else:
-                await self.db.execute(
-                    f"""
-                    INSERT INTO session_teams
-                    (session_start_date, map_name, team_name, player_guids, player_names)
-                    VALUES (?, 'ALL', ?, ?, ?)
-                    {conflict_clause} DO UPDATE SET
-                        player_guids = EXCLUDED.player_guids,
-                        player_names = EXCLUDED.player_names
-                    """,
-                    (
-                        session_date,
-                        team_name,
-                        json.dumps(team_data["guids"]),
-                        json.dumps(team_data["names"]),
-                    ),
-                )
+            for team_name, team_data in teams.items():
+                if "gaming_session_id" in columns:
+                    await self.db.execute(
+                        f"""
+                        INSERT INTO session_teams
+                        (session_start_date, map_name, team_name, player_guids, player_names, gaming_session_id)
+                        VALUES (?, 'ALL', ?, ?, ?, ?)
+                        {conflict_clause} DO UPDATE SET
+                            player_guids = EXCLUDED.player_guids,
+                            player_names = EXCLUDED.player_names,
+                            gaming_session_id = EXCLUDED.gaming_session_id
+                        """,
+                        (
+                            session_date,
+                            team_name,
+                            json.dumps(team_data["guids"]),
+                            json.dumps(team_data["names"]),
+                            gaming_session_id,
+                        ),
+                    )
+                else:
+                    await self.db.execute(
+                        f"""
+                        INSERT INTO session_teams
+                        (session_start_date, map_name, team_name, player_guids, player_names)
+                        VALUES (?, 'ALL', ?, ?, ?)
+                        {conflict_clause} DO UPDATE SET
+                            player_guids = EXCLUDED.player_guids,
+                            player_names = EXCLUDED.player_names
+                        """,
+                        (
+                            session_date,
+                            team_name,
+                            json.dumps(team_data["guids"]),
+                            json.dumps(team_data["names"]),
+                        ),
+                    )
 
         logger.info(f"✅ Stored teams for session {session_date}")
 
@@ -788,6 +847,18 @@ class TeamManager:
         auto_detect: bool = True,
         gaming_session_id: int | None = None,
     ) -> dict[str, dict]:
+        """Guard possible repair from its first read; plain lookup stays unlocked."""
+        if not auto_detect:
+            return await self._get_session_teams(session_date, False, gaming_session_id)
+        async with self.db.transaction() as conn, team_write_transaction(conn):
+            return await self._get_session_teams(session_date, True, gaming_session_id)
+
+    async def _get_session_teams(
+        self,
+        session_date: str,
+        auto_detect: bool = True,
+        gaming_session_id: int | None = None,
+    ) -> dict[str, dict]:
         """
         Get teams for a session (from DB or auto-detect).
 
@@ -800,6 +871,8 @@ class TeamManager:
         """
         await self._ensure_session_teams_table()
         columns = await self._get_session_teams_columns()
+        if auto_detect:
+            await self._require_team_identity(columns, session_date, gaming_session_id)
         scope_clause, scope_params = self._session_scope_clause(
             columns, session_date, gaming_session_id
         )
@@ -833,12 +906,10 @@ class TeamManager:
                 guids_b = set(teams[team_keys[1]].get('guids', []))
                 if guids_a == guids_b and len(guids_a) > 0:
                     logger.warning(f"⚠️ Corrupted team data for {session_date}: "
-                                 f"both teams have identical {len(guids_a)} players. Re-detecting...")
-                    # Delete corrupted data and re-detect
-                    await self.db.execute(
-                        self._session_delete_query(columns, gaming_session_id, map_all_only=False),
-                        scope_params,
-                    )
+                                 f"both teams have identical {len(guids_a)} players.")
+                    # Keep stored evidence until a replacement is available.
+                    # store_session_teams atomically replaces only ALL rosters;
+                    # failed detection must not delete these or per-map rows.
                     if auto_detect:
                         teams = await self.detect_session_teams(
                             session_date,
@@ -1006,30 +1077,31 @@ class TeamManager:
         Returns:
             True if successful
         """
-        columns = await self._get_session_teams_columns()
-        scope_clause, scope_params = self._session_scope_clause(
-            columns, session_date, gaming_session_id
-        )
+        # Share the import writer guard before schema/scope reads as well as writes.
+        # Unconverted writers still need to participate before exclusion is global.
+        async with self.db.transaction() as conn, team_write_transaction(conn):
+            columns = await self._get_session_teams_columns()
+            await self._require_team_identity(columns, session_date, gaming_session_id)
+            scope_clause, scope_params = self._session_scope_clause(
+                columns, session_date, gaming_session_id
+            )
+            await self.db.execute(
+                f"""
+                UPDATE session_teams
+                SET team_name = ?
+                WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team A'
+                """,
+                (team_a_name, *scope_params)
+            )
 
-        # Update Team A
-        await self.db.execute(
-            f"""
-            UPDATE session_teams
-            SET team_name = ?
-            WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team A'
-            """,
-            (team_a_name, *scope_params)
-        )
-
-        # Update Team B
-        await self.db.execute(
-            f"""
-            UPDATE session_teams
-            SET team_name = ?
-            WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team B'
-            """,
-            (team_b_name, *scope_params)
-        )
+            await self.db.execute(
+                f"""
+                UPDATE session_teams
+                SET team_name = ?
+                WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team B'
+                """,
+                (team_b_name, *scope_params)
+            )
 
         logger.info(f"✅ Set custom team names for {session_date}: "
                    f"{team_a_name} vs {team_b_name}")
@@ -1204,6 +1276,16 @@ class TeamManager:
         force: bool = False,
         gaming_session_id: int | None = None,
     ) -> tuple[str, str]:
+        """Guard reads, any nested auto-detection and the complete naming effect."""
+        async with self.db.transaction() as conn, team_write_transaction(conn):
+            return await self._assign_random_team_names(session_date, force, gaming_session_id)
+
+    async def _assign_random_team_names(
+        self,
+        session_date: str,
+        force: bool = False,
+        gaming_session_id: int | None = None,
+    ) -> tuple[str, str]:
         """
         Randomly assign team names from the pool to a session.
 
@@ -1221,6 +1303,7 @@ class TeamManager:
         import random
         await self._ensure_session_teams_table()
         columns = await self._get_session_teams_columns()
+        await self._require_team_identity(columns, session_date, gaming_session_id)
         scope_clause, scope_params = self._session_scope_clause(
             columns, session_date, gaming_session_id
         )
@@ -1273,15 +1356,6 @@ class TeamManager:
             params_a.append(team_a_color)
         params_a.extend(scope_params)
 
-        await self.db.execute(
-            f"""
-            UPDATE session_teams
-            SET {", ".join(set_fields_a)}
-            WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team A'
-            """,
-            tuple(params_a)
-        )
-
         set_fields_b = ["team_name = ?"]
         params_b = [team_b_name]
         if "color" in columns:
@@ -1289,14 +1363,24 @@ class TeamManager:
             params_b.append(team_b_color)
         params_b.extend(scope_params)
 
-        await self.db.execute(
-            f"""
-            UPDATE session_teams
-            SET {", ".join(set_fields_b)}
-            WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team B'
-            """,
-            tuple(params_b)
-        )
+        # Names and colors are one effect; do not publish only half the pair.
+        async with self.db.transaction():
+            await self.db.execute(
+                f"""
+                UPDATE session_teams
+                SET {", ".join(set_fields_a)}
+                WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team A'
+                """,
+                tuple(params_a)
+            )
+            await self.db.execute(
+                f"""
+                UPDATE session_teams
+                SET {", ".join(set_fields_b)}
+                WHERE {scope_clause} AND map_name = 'ALL' AND team_name = 'Team B'
+                """,
+                tuple(params_b)
+            )
 
         logger.info(f"✅ Assigned random teams: {team_a_name} vs {team_b_name}")
         return (team_a_name, team_b_name)

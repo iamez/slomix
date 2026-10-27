@@ -25,7 +25,8 @@ INPUTS = [str(FRONTEND), "docs/api/openapi.json", ".nvmrc", "scripts/spa_artifac
 
 
 def git(root, *args):
-    return subprocess.check_output(["git", "-C", str(root), *args])
+    return subprocess.check_output(["git", "-C", str(root), *args],
+                                   env=dict(os.environ, GIT_NO_REPLACE_OBJECTS="1"))
 
 
 def reject_symlink_path(root, relative):

@@ -213,6 +213,7 @@ async def test_canonical_import_retries_after_journal_failure(journal_db):
     await writer.execute("CREATE TABLE processed_files (filename TEXT PRIMARY KEY, success BOOLEAN)")
     manager = object.__new__(PostgreSQLDatabaseManager)
     manager.event_stream_enabled = True
+    manager.defer_team_assignment = False  # Fixture bypasses the legacy-mode constructor.
     manager.stats = dict.fromkeys([
         "files_processed", "files_skipped", "files_failed", "rounds_created",
         "players_inserted", "weapons_inserted",

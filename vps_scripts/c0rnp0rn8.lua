@@ -124,6 +124,18 @@ local intermission   = false
 local stats          = {}
 local wstats       = {}
 
+-- Explicit opt-in only. A Lua-only reload has no InitGame observation and must
+-- not inherit a ticket from a reusable VM slot or the post-exit round counter.
+local runtime_init_context, runtime_bound_ticket
+local runtime_stats_attempted = false
+local runtime_binding_invalidated = false
+local runtime_ipc
+local runtime_ipc_configured = false
+local runtime_binding_required = false
+local legacy_stats_attempted = false
+local runtime_init_lease_required, runtime_init_lease_claimed = false, false
+local bind_runtime_stats
+
 -- global variables
 killing_sprees = {}
 death_sprees = {}
@@ -233,6 +245,15 @@ end
 ensure_bit_compat()
 
 function et_InitGame(levelTime, randomSeed, restart)
+    runtime_init_lease_claimed = false
+    runtime_ipc = nil -- Never carry a receiver into a new qagame lifecycle.
+    if runtime_bound_ticket ~= nil then runtime_binding_invalidated = true end
+    -- A fresh observation may obtain a NEW lease; no old ticket/receiver or
+    -- consumed attempt may cross map_restart in a persistent Lua VM.
+    runtime_bound_ticket = nil
+    runtime_stats_attempted = false
+    runtime_ipc_configured = false
+    runtime_init_context = nil
     fh_init()
 	et.RegisterModname(modname .. " " .. version)
 
@@ -251,7 +272,7 @@ function et_InitGame(levelTime, randomSeed, restart)
 
 	max_clients = tonumber(et.trap_Cvar_Get("sv_maxClients"))
 	if gamestate == 0 or gamestate == et.WARMUP or gamestate == et.GS_WARMUP_COUNTDOWN then
-		round = tonumber(et.trap_Cvar_Get("g_currentRound")) --if 1 then round 2
+		round = tonumber(et.trap_Cvar_Get("g_currentRound")) -- Active-start counter: 1 is R1, 0 is R2.
 	end
 
 	local i = 0
@@ -268,6 +289,13 @@ function et_InitGame(levelTime, randomSeed, restart)
 		death_time[i] = 0
         death_time_total[i] = 0
 	end
+    runtime_init_context = {
+        init_time = levelTime,
+        gamestate = tonumber(et.trap_Cvar_Get("gamestate")),
+        counter = tonumber(et.trap_Cvar_Get("g_currentRound")),
+        exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION),
+        map_name = et.Info_ValueForKey(et.trap_GetConfigstring(et.CS_SERVERINFO), "mapname"),
+    }
 end
 
 function parseReinforcementTimes()
@@ -448,9 +476,144 @@ function StoreStats()
 	end
 end
 
-function SaveStats()
+local function copy_runtime_stats_ticket(ticket)
+	assert(type(ticket) == "table", "invalid runtime stats ticket")
+	for key in pairs(ticket) do
+		assert(key == "identity" or key == "generation" or key == "completed" or key == "map_name",
+			"unknown runtime stats ticket field")
+	end
+	require("runtime_round_identity").encode(ticket.identity)
+	assert(type(ticket.generation) == "string" and #ticket.generation == 32
+		and ticket.generation:match("^[0-9a-f]+$"), "invalid source generation")
+	assert(type(ticket.completed) == "function", "invalid completion inputs")
+	assert(type(ticket.map_name) == "string" and #ticket.map_name >= 1 and #ticket.map_name <= 64
+		and ticket.map_name:match("^[A-Za-z0-9_.+%-]+$") and not ticket.map_name:find("..", 1, true),
+		"invalid runtime stats map")
+	local identity = {}
+	for key, value in pairs(ticket.identity) do identity[key] = value end
+	return {identity=identity, generation=ticket.generation, map_name=ticket.map_name, completed=ticket.completed}
+end
+
+function RequireRuntimeStatsBinding()
+	-- Trusted bootstrap calls this immediately after module load, before any
+	-- hooks. Intent is sticky even when later configuration or validation fails.
+	runtime_binding_required = true
+	assert(not legacy_stats_attempted, "cannot enable runtime after legacy stats attempt")
+end
+
+local function configure_runtime_stats_ipc(options, completed)
+	-- Explicit trusted bootstrap only. No cvar/discovery auto-enable. Caller pins
+	-- process/lifecycle epochs and the expected authority before accepting IPC.
+	RequireRuntimeStatsBinding()
+	assert(not runtime_ipc_configured and runtime_bound_ticket == nil
+		and not runtime_stats_attempted, "runtime IPC already configured or consumed")
+	assert(runtime_init_context ~= nil and type(options) == "table"
+		and options.init_time == runtime_init_context.init_time, "runtime IPC InitGame mismatch")
+	runtime_ipc = require("runtime_stats_delivery").receiver(et, options,
+		function(ticket) return bind_runtime_stats(ticket) end, completed)
+	runtime_ipc_configured = true
+end
+
+function RequireRuntimeStatsInitLease()
+	RequireRuntimeStatsBinding()
+	assert(not runtime_ipc_configured and runtime_bound_ticket == nil,
+		"cannot require InitGame lease after configuration")
+	runtime_init_lease_required = true
+end
+
+function ConfigureRuntimeStatsIPC(options, completed)
+	RequireRuntimeStatsBinding()
+	assert(not runtime_init_lease_required, "runtime IPC requires captured InitGame lease")
+	return configure_runtime_stats_ipc(options, completed)
+end
+
+local function capture_runtime_stats_init(apply)
+	RequireRuntimeStatsBinding()
+	assert(not runtime_init_lease_claimed and not runtime_ipc_configured
+		and runtime_bound_ticket == nil and not runtime_stats_attempted,
+		"InitGame lease already claimed or configured")
+	local wire, configure = require("runtime_init_lease").capture(et,
+		function() return runtime_init_context end, apply)
+	runtime_init_lease_claimed = true
+	return wire, configure -- Keep closure in THIS VM; the wire cannot recreate it.
+end
+
+function CaptureRuntimeStatsInit()
+	return capture_runtime_stats_init(configure_runtime_stats_ipc)
+end
+
+function CaptureRuntimeStatsHostInit()
+	-- Only the authenticated local host bootstrap uses this one-shot closure.
+	-- Host and IPC leases share the claim; neither can bypass strict direct bind.
+	return capture_runtime_stats_init(function(value, completed)
+		return bind_runtime_stats({identity=value.identity, generation=value.generation,
+			map_name=value.map_name, completed=completed})
+	end)
+end
+
+function et_IPCReceive(sender, message)
+	if runtime_ipc == nil then return false end
+	return runtime_ipc.receive(sender, message)
+end
+
+bind_runtime_stats = function(ticket)
+	-- Trusted in-process adapter API, NOT an IPC/authentication endpoint. Host
+	-- claims before delivery; caller must associate the ticket with this game
+	-- process/epoch. Observed context is necessary, not proof of physical start.
+	RequireRuntimeStatsBinding()
+	assert(runtime_bound_ticket == nil and not runtime_stats_attempted, "runtime stats already bound or attempted")
+	assert(not legacy_stats_attempted, "cannot bind runtime after legacy stats attempt")
+	assert(runtime_init_context ~= nil, "runtime stats require observed InitGame")
+	local frozen = copy_runtime_stats_ticket(ticket)
+	local mapname = et.Info_ValueForKey(et.trap_GetConfigstring(et.CS_SERVERINFO), "mapname")
+	local counter = tonumber(et.trap_Cvar_Get("g_currentRound"))
+	local exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION)
+	assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
+		and runtime_init_context.gamestate == 0 and tonumber(et.trap_Cvar_Get("gamestate")) == 0
+		and (exit_flag == "" or exit_flag == "0" or exit_flag == "1")
+		and exit_flag == runtime_init_context.exit_flag, "runtime stats require active stopwatch context")
+	assert((counter == 0 or counter == 1) and runtime_init_context.counter == counter
+		and frozen.identity.round_number == 2 - counter, "runtime stats start half mismatch")
+	assert(runtime_init_context.map_name == mapname and frozen.map_name == mapname,
+		"runtime stats ticket map mismatch")
+	runtime_binding_invalidated = false -- Only a newly validated binding clears the old fence.
+	runtime_bound_ticket = frozen
+	return frozen.identity.round_id, frozen.generation -- Local acceptance, not durable host acknowledgement.
+end
+
+function BindRuntimeStats(ticket)
+	RequireRuntimeStatsBinding()
+	assert(not runtime_init_lease_required, "direct binding bypasses required InitGame lease")
+	return bind_runtime_stats(ticket)
+end
+
+function SaveStats(runtime_ticket)
+	-- Unbound calls remain legacy ONLY when runtime was not explicitly required.
+	-- Bound callbacks use their private
+	-- frozen ticket; no frame-time allocation, transport or callback retry here.
+	assert(not runtime_binding_required or runtime_bound_ticket ~= nil, "runtime IPC binding unavailable")
+	if runtime_bound_ticket ~= nil then
+		assert(runtime_ticket == nil, "cannot replace bound runtime stats ticket")
+		assert(not runtime_binding_invalidated, "runtime stats binding invalidated by InitGame")
+		runtime_ticket = runtime_bound_ticket
+	end
+	assert(not runtime_stats_attempted, "runtime stats write already attempted")
+	local runtime_identity, runtime_writer
+	if runtime_ticket ~= nil then
+		assert(not legacy_stats_attempted, "cannot write runtime after legacy stats attempt")
+		runtime_ticket = copy_runtime_stats_ticket(runtime_ticket)
+		runtime_identity = require("runtime_round_identity")
+		runtime_writer = require("runtime_completed_stats")
+	end
 	local mapname      = et.Info_ValueForKey(et.trap_GetConfigstring(et.CS_SERVERINFO), "mapname")
+	if runtime_ticket ~= nil then
+		assert(type(runtime_ticket.map_name) == "string" and runtime_ticket.map_name == mapname,
+			"runtime stats ticket map mismatch")
+	end
 	local file_round   = tonumber(et.trap_Cvar_Get("g_currentRound")) == 0 and 2 or 1
+	-- End-phase cvar is inverted and can be stale during shutdown fallback.
+	-- Opt-in writes use the trusted frozen start identity, never recompute it.
+	if runtime_ticket ~= nil then file_round = runtime_ticket.identity.round_number end
 	local fileName     = string.format("gamestats/%s%s-round-%d.txt", os.date('%Y-%m-%d-%H%M%S-'), mapname, file_round)
 	local fileName2     = string.format("gamestats/%s%s-round-%d_ws.txt", os.date('%Y-%m-%d-%H%M%S-'), mapname, file_round)
 	
@@ -517,7 +680,21 @@ function SaveStats()
 
 	local header        = string.format("%s\\%s\\%s\\%d\\%d\\%d\\%s\\%s\\%s\n", servername, mapname, config, file_round, defenderteam, winnerteam, timelimit, nextTimeLimit, roundEnd-roundStart-(pausedTime[3] or 0))
 
+	if runtime_ticket ~= nil then
+		header = runtime_identity.append_stats_header(header, runtime_ticket.identity)
+		local chunks = {header}
+		for _, value in pairs(stats) do chunks[#chunks + 1] = value end
+		-- Consume BEFORE file I/O or notification, including failed attempts. The
+		-- host claim supplies the cross-process fence; this gate prevents a second
+		-- callback from truncating the same generation within this Lua VM.
+		runtime_stats_attempted = true
+		local receipt, generation = runtime_writer.write(et, runtime_ticket.generation,
+			fileName:sub(#"gamestats/" + 1), chunks, runtime_ticket.completed)
+		et.G_LogPrint("LUA event: Runtime stats writer closed; import acknowledgement pending.\n")
+		return receipt, generation
+	end
 
+	legacy_stats_attempted = true -- An open/write failure also forbids late opt-in.
 	local fileHandle = et.trap_FS_FOpenFile(fileName, et.FS_WRITE)
 	et.trap_FS_Write(header, string.len(header), fileHandle);
 
@@ -537,8 +714,10 @@ function SaveStats()
 end
 
 function et_ShutdownGame(restart) -- store and save stats for when 2nd round changes to different map before intermission
+    runtime_init_context, runtime_ipc = nil, nil -- Invalidate even if final writer raises.
     if restart == 0 then
-   	if saved_stats == false and round_started == true then
+	if saved_stats == false and round_started == true and not runtime_stats_attempted
+		and not runtime_binding_invalidated and (not runtime_binding_required or runtime_bound_ticket ~= nil) then
        	StoreStats()
        	SaveStats()
        end
@@ -546,6 +725,7 @@ function et_ShutdownGame(restart) -- store and save stats for when 2nd round cha
 end
 
 function et_RunFrame(levelTime)
+	if runtime_ipc ~= nil then runtime_ipc.flush() end
 	gamestate = tonumber(et.trap_Cvar_Get("gamestate"))
 	gameFrameLevelTime = levelTime
 	
@@ -592,7 +772,8 @@ function et_RunFrame(levelTime)
 			saveDelay = levelTime + 3000
 			et.G_LogPrint("LUA event: Round ended!\n")
 		else
-			if levelTime >= saveDelay and saved_stats == false then
+			if levelTime >= saveDelay and saved_stats == false and not runtime_stats_attempted
+				and not runtime_binding_invalidated and (not runtime_binding_required or runtime_bound_ticket ~= nil) then
 				SaveStats()
 				saved_stats = true
 			end

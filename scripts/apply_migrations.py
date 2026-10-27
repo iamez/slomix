@@ -25,15 +25,35 @@ Environment variables (or .env file):
     DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD are accepted as
     fallbacks — production .env files in this repo historically used
     DB_* names. POSTGRES_* takes precedence when both are present.
+
+    MIGRATION_{CONNECT,COMMAND,STATEMENT,LOCK}_TIMEOUT_SECONDS accept positive
+    integer seconds (at most 3600). Defaults: 10, 600, 300, 5 respectively.
+    LOCK <= STATEMENT < COMMAND is required. These limits affect this runner
+    only; a long migration must be deliberately given a larger finite budget.
+
+Marked Git-free payloads require Python -I and explicit SLOMIX_ENV_FILE. Their
+database identity comes from that file; inherited database/config overrides
+are refused before connecting. The launcher owns interpreter/loader isolation.
+Timeouts use file values or built-in defaults; inherited timeout settings are ignored.
 """
+
+# ruff: noqa: E402 -- marked CLI isolation precedes third-party imports
+import os
+import sys
+
+if (__name__ == "__main__"
+        and os.path.lexists(os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(__file__))),
+                                       ".slomix-release.json"))):
+    sys.dont_write_bytecode = True
+    if not sys.flags.isolated:
+        sys.stderr.write('{"status": "refused", "reason": "Release migrations require isolated Python (-I)"}\n')
+        raise SystemExit(1)
 
 import argparse
 import asyncio
 import hashlib
 import json
-import os
 import re
-import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -45,6 +65,15 @@ except ImportError:
     sys.exit(1)
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_REPO_ROOT))
+
+from shared.release_manifest import verify_release  # noqa: E402
+from shared.runtime_environment import (  # noqa: E402
+    explicit_env_file,
+    load_environment,
+    read_external_environment,
+    refuse_config_overrides,
+)
 
 
 def resolve_env_file(repo_root: Path) -> Path:
@@ -55,18 +84,30 @@ def resolve_env_file(repo_root: Path) -> Path:
     PX-DB-001). This script previously loaded ONLY the root .env
     unconditionally, silently diverging from main.py whenever website/.env
     existed with different POSTGRES_* values."""
+    selected = explicit_env_file(repo_root)
+    if selected is not None:
+        return selected
     website_env = repo_root / "website" / ".env"
     return website_env if website_env.exists() else repo_root / ".env"
 
 
-# Load .env if python-dotenv is available.
-try:
-    from dotenv import load_dotenv
-    load_dotenv(resolve_env_file(_REPO_ROOT))
-except ImportError:
-    pass  # python-dotenv is optional
+# Releases require an operator-selected explicit env; verify admin identity
+# separately; marked releases reject inherited configuration overrides.
+def verify_migration_source() -> None:
+    """Marked payloads must remain intact before config, SQL inventory or DB I/O."""
+    marker = _REPO_ROOT / ".slomix-release.json"
+    if marker.exists() or marker.is_symlink():
+        verify_release(_REPO_ROOT)
+        if MIGRATIONS_DIR != _REPO_ROOT / "migrations":
+            raise ValueError("Release migrations must use the verified payload directory")
+
 
 MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
+# Preserve legacy import-time configuration for existing repair-tool callers.
+# Marked payloads defer all configuration until their integrity is admitted.
+_release_marker = _REPO_ROOT / ".slomix-release.json"
+if not (_release_marker.exists() or _release_marker.is_symlink()):
+    load_environment(resolve_env_file(_REPO_ROOT))
 
 # Session-level advisory lock key so two runners (or a runner racing a deploy)
 # can never interleave migration writes. Value is the ASCII of 'SLOMIX_M'.
@@ -277,35 +318,100 @@ def _env(*names: str, default: str = "") -> str:
     return default
 
 
-def get_target_dsn_parts() -> dict[str, str]:
-    """The resolved (non-secret) connection target this runner will use.
+def migration_settings():
+    """Resolve release settings without publishing approved values into env.
 
-    Split out from get_connection() so the fingerprint can be computed and
-    printed even when the connection itself later fails (a mismatch is most
-    useful to see BEFORE debugging a connection error, not after).
+    Release tools reject inherited database/config overrides before connecting.
+    A trusted -I launcher and interpreter environment remain prerequisites; this
+    cannot undo Python/site/LD startup effects or authenticate the payload owner.
     """
+    verify_migration_source()
+    marker = _REPO_ROOT / ".slomix-release.json"
+    if marker.exists() or marker.is_symlink():
+        selected = resolve_env_file(_REPO_ROOT)
+        values = read_external_environment(selected, root=_REPO_ROOT,
+            expected_digest=os.getenv("SLOMIX_ENV_SHA256"))
+        refuse_config_overrides(values, os.environ)
+        for names in (("POSTGRES_HOST", "DB_HOST"), ("POSTGRES_PORT", "DB_PORT"),
+                      ("POSTGRES_DATABASE", "DB_NAME"), ("POSTGRES_USER", "DB_USER"),
+                      ("POSTGRES_PASSWORD", "DB_PASSWORD")):
+            if not any(values.get(name) is not None for name in names):
+                raise ValueError("Release migrations require an explicit complete database identity")
+            if names[0] != "POSTGRES_PASSWORD" and not _setting(values, *names).strip():
+                raise ValueError("Release migrations require a nonempty explicit database identity")
+        return values
+    load_environment(resolve_env_file(_REPO_ROOT))
+    return os.environ
+
+
+def _setting(values, *names, default=""):
+    return next((values[name] for name in names if values.get(name) is not None), default)
+
+
+def _target_dsn_parts(values):
     return {
-        "host": _env("POSTGRES_HOST", "DB_HOST", default="localhost"),
-        "port": _env("POSTGRES_PORT", "DB_PORT", default="5432"),
-        "database": _env("POSTGRES_DATABASE", "DB_NAME", default="etlegacy"),
-        "user": _env("POSTGRES_USER", "DB_USER", default="etlegacy_user"),
+        "host": _setting(values, "POSTGRES_HOST", "DB_HOST", default="localhost"),
+        "port": _setting(values, "POSTGRES_PORT", "DB_PORT", default="5432"),
+        "database": _setting(values, "POSTGRES_DATABASE", "DB_NAME", default="etlegacy"),
+        "user": _setting(values, "POSTGRES_USER", "DB_USER", default="etlegacy_user"),
     }
+
+
+def get_target_dsn_parts() -> dict[str, str]:
+    """Resolved non-secret target, admitted against the explicit release file."""
+    return _target_dsn_parts(migration_settings())
 
 
 def get_connection_kwargs() -> dict[str, Any]:
     """Resolved connection settings shared by migration-adjacent tools."""
-    target = get_target_dsn_parts()
+    values = migration_settings()
+    target = _target_dsn_parts(values)
+    port = int(target["port"])
+    if not 1 <= port <= 65535:
+        raise ValueError("Database port must be between 1 and 65535")
     return {
         "host": target["host"],
-        "port": int(target["port"]),
+        "port": port,
         "database": target["database"],
         "user": target["user"],
-        "password": _env("POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
+        "password": _setting(values, "POSTGRES_PASSWORD", "DB_PASSWORD", default=""),
     }
 
 
 async def get_connection() -> asyncpg.Connection:
-    return await asyncpg.connect(**get_connection_kwargs())
+    # Keep get_connection_kwargs DSN-only: synchronous repair tools also use it.
+    # Startup settings bound even the first ledger query/DDL lock wait, rather
+    # than relying on a test wrapper or a SET issued after unbounded setup.
+    return await asyncpg.connect(**get_connection_kwargs(), **get_timeout_kwargs())
+
+
+def get_timeout_kwargs() -> dict[str, Any]:
+    """Finite, validated runner-only budgets; never echo an invalid env value."""
+    values = migration_settings()
+    budgets = {}
+    for name, default in (("CONNECT", 10), ("COMMAND", 600),
+                          ("STATEMENT", 300), ("LOCK", 5)):
+        key = f"MIGRATION_{name}_TIMEOUT_SECONDS"
+        value = _setting(values, key, default=str(default))
+        if not re.fullmatch(r"[0-9]{1,4}", value) or not 1 <= int(value) <= 3600:
+            raise ValueError(f"{key} must be an integer between 1 and 3600 seconds")
+        budgets[name] = int(value)
+    if not budgets["LOCK"] <= budgets["STATEMENT"] < budgets["COMMAND"]:
+        raise ValueError("Migration timeouts require LOCK <= STATEMENT < COMMAND")
+    return {
+        "timeout": budgets["CONNECT"],
+        "command_timeout": budgets["COMMAND"],
+        "server_settings": {
+            "application_name": "slomix-migrations",
+            "lock_timeout": f"{budgets['LOCK']}s",
+            "statement_timeout": f"{budgets['STATEMENT']}s",
+        },
+    }
+
+
+async def close_connection(conn: asyncpg.Connection) -> None:
+    """Connection draining cannot keep an otherwise completed runner alive."""
+    await asyncio.wait_for(conn.close(), timeout=10)
 
 
 async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:
@@ -316,7 +422,8 @@ async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:
     same output as the drift it reports, not just discoverable by manually
     cross-checking two .env files. Never includes a password.
     """
-    target = get_target_dsn_parts()
+    values = migration_settings()
+    target = _target_dsn_parts(values)
     row = await conn.fetchrow(
         "SELECT current_database() AS db, current_user AS role, "
         "inet_server_addr()::text AS server_addr, inet_server_port() AS server_port"
@@ -327,7 +434,7 @@ async def get_db_fingerprint(conn: asyncpg.Connection) -> dict[str, Any]:
         # SLOMIX_ENV lets a deploy pin an explicit label (e.g. "prod",
         # "staging"); falls back to the resolved host so a fingerprint is
         # never blank.
-        "environment": os.getenv("SLOMIX_ENV") or target["host"],
+        "environment": _setting(values, "SLOMIX_ENV", default=os.getenv("SLOMIX_ENV") or target["host"]),
         "database_name": row["db"] if row else target["database"],
         "database_role": row["role"] if row else target["user"],
         "host_fingerprint": f"{target['host']}:{target['port']}",
@@ -407,6 +514,7 @@ async def get_checksum_mismatches(conn: asyncpg.Connection) -> list[str]:
 
 def discover_migrations() -> list[tuple[str, Path]]:
     """Return sorted list of (filename, path) for all .sql migration files."""
+    verify_migration_source()
     files = sorted(
         [f.name for f in MIGRATIONS_DIR.glob("*.sql")],
         key=_sort_key,
@@ -489,7 +597,7 @@ async def cmd_status(json_out: bool = False):
                   "manually via psql, reconcile with --mark.")
         print()
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
@@ -516,7 +624,7 @@ async def cmd_validate(json_out: bool = False, tolerate_missing: bool = False):
         state = await collect_state(conn)
         state["db_fingerprint"] = await get_db_fingerprint(conn)
     finally:
-        await conn.close()
+        await close_connection(conn)
 
     clean = (
         not state["pending"]
@@ -586,7 +694,7 @@ async def cmd_baseline():
         else:
             print(f"\n  Recorded {count} migration(s) as baseline.\n")
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def _record_failure(conn, version, filename, checksum, elapsed_ms):
@@ -750,6 +858,9 @@ async def cmd_apply(only: list[str] | None = None):
                         "record it with --mark."
                     )
             except MigrationRejected as e:
+                if ((_REPO_ROOT / ".slomix-release.json").exists()
+                        or (_REPO_ROOT / ".slomix-release.json").is_symlink()):
+                    raise
                 print("REJECTED")
                 print(f"    Error: {e}")
                 sys.exit(1)
@@ -763,6 +874,9 @@ async def cmd_apply(only: list[str] | None = None):
             except Exception as e:
                 elapsed_ms = int((time.monotonic() - start) * 1000)
                 await _record_failure(conn, version, filename, checksum, elapsed_ms)
+                if ((_REPO_ROOT / ".slomix-release.json").exists()
+                        or (_REPO_ROOT / ".slomix-release.json").is_symlink()):
+                    raise
                 print(f"FAILED ({elapsed_ms}ms)")
                 print(f"    Error: {e}")
                 print("  Stopping at first failure.\n")
@@ -770,7 +884,7 @@ async def cmd_apply(only: list[str] | None = None):
 
         print(f"\n  All {len(pending)} migration(s) applied successfully.\n")
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 async def cmd_mark(filenames: list[str]):
@@ -867,7 +981,7 @@ async def cmd_mark(filenames: list[str]):
             f"Skipped: {skipped}, Raced: {raced}\n"
         )
     finally:
-        await conn.close()
+        await close_connection(conn)
 
 
 # ── Main ──────────────────────────────────────────────────────────────
@@ -899,21 +1013,48 @@ def main():
     if args.tolerate_missing and not args.validate:
         parser.error("--tolerate-missing requires --validate")
 
-    if args.status:
-        asyncio.run(cmd_status(json_out=args.json))
-    elif args.validate:
-        asyncio.run(cmd_validate(json_out=args.json,
-                                 tolerate_missing=args.tolerate_missing))
-    elif args.baseline:
-        asyncio.run(cmd_baseline())
-    elif args.mark:
-        # Strip leading paths if the user pasted them.
-        asyncio.run(cmd_mark([Path(a).name for a in args.mark]))
-    elif args.only:
-        asyncio.run(cmd_apply(only=[Path(a).name for a in args.only]))
-    else:
-        asyncio.run(cmd_apply())
+    try:
+        verify_migration_source()
+    except (OSError, ValueError):
+        print(json.dumps({"status": "refused", "reason": "Release migration source verification failed"}),
+              file=sys.stderr)
+        return 1
+
+    release_mode = ((_REPO_ROOT / ".slomix-release.json").exists()
+                    or (_REPO_ROOT / ".slomix-release.json").is_symlink())
+    if release_mode:
+        try:
+            get_connection_kwargs()
+            get_timeout_kwargs()
+        except (OSError, ValueError, TypeError):
+            print(json.dumps({"status": "refused", "reason": "Release migration configuration verification failed"}),
+                  file=sys.stderr)
+            return 1
+
+    try:
+        if args.status:
+            asyncio.run(cmd_status(json_out=args.json))
+        elif args.validate:
+            asyncio.run(cmd_validate(json_out=args.json,
+                                     tolerate_missing=args.tolerate_missing))
+        elif args.baseline:
+            asyncio.run(cmd_baseline())
+        elif args.mark:
+            # Strip leading paths if the user pasted them.
+            asyncio.run(cmd_mark([Path(a).name for a in args.mark]))
+        elif args.only:
+            asyncio.run(cmd_apply(only=[Path(a).name for a in args.only]))
+        else:
+            asyncio.run(cmd_apply())
+    except Exception:
+        if not release_mode:
+            raise
+        # A command may have committed earlier work. Refusal is not rollback.
+        print(json.dumps({"status": "refused_or_failed",
+                          "reason": "Release migration command could not complete safely",
+                          "partial_commits_possible": True}), file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

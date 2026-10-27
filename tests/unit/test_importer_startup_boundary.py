@@ -12,7 +12,8 @@ import pytest
 from shared import importer_startup
 
 
-def test_neutral_import_and_constructor_in_fresh_process(tmp_path):
+@pytest.mark.parametrize('round_number', [1, 2])
+def test_neutral_import_and_constructor_in_fresh_process(tmp_path, round_number):
     """Run canonical validation/parsing with presentation and setup forbidden."""
     script = r'''
 import importlib.abc
@@ -22,6 +23,9 @@ from pathlib import Path
 import sys
 from types import SimpleNamespace
 import asyncpg
+import asyncio
+import hashlib
+from unittest.mock import AsyncMock
 
 class BlockSetup(importlib.abc.MetaPathFinder):
     def find_spec(self, fullname, path=None, target=None):
@@ -44,18 +48,77 @@ assert not Path(os.environ['BOT_LOG_DIR']).exists()
 assert not Path('postgresql_manager.log').exists()
 player, issues = manager.validate_player_stats({'kills':3, 'objective_stats':{'headshot_kills':5}})
 assert player['objective_stats']['headshot_kills'] == 3 and issues
+player, issues = manager.validate_player_stats({'kills':0, 'objective_stats':{'team_kills':3}})
+assert player == {'kills':0, 'objective_stats':{'team_kills':3}} and not issues
+player, issues = manager.validate_player_stats({
+    'kills':-5, 'objective_stats':{'team_kills':7, 'headshot_kills':2},
+})
+assert player == {'kills':0, 'objective_stats':{'team_kills':7, 'headshot_kills':0}}
+assert 'kills (-5) is negative' in issues
+print('Counter proof: kills=0, team_kills=3 retained; negative base normalized before headshot cap')
 parsed = manager.parser.parse_player_line(chr(92).join(['a'*32, 'Fixture', '1', '1', '1 10 20 3 2 1']))
 assert parsed['kills'] == 3
-print('Neutral importer proof: parsed player, validated stats, no setup or connections')
+from bot.runtime_completed_import import CompletedRoundInput, import_completed_round
+from bot.runtime_import_session import open_import_session
+from shared.runtime_completion_manifest import record_completion_once
+from shared.runtime_source_reservation import reserve_source_generation
+from shared.runtime_spool import publish_stats_file
+
+spool = Path.cwd() / 'spool'
+spool.mkdir(mode=0o700)
+inputs = []
+for number in (1, 2):
+    name = f'2026-09-25-120000-supply-round-{number}.txt'
+    raw = (f'x\\supply\\x\\{number}\\2\\1\\20:00\\10:00\n'
+           f'12345678\\Player\\1\\1\\1 {number} {number} {number} {number} {number}\n').encode()
+    digest = hashlib.sha256(raw).hexdigest()
+    generation = str(number) * 32
+    directory = reserve_source_generation(spool, generation)
+    publish_stats_file(directory, name, [raw], expected_size=len(raw), expected_sha256=digest)
+    record_completion_once(directory, {
+        'version': 1, 'filename': name, 'bytes': len(raw), 'state': 'writer_closed',
+    }, expected_sha256=digest)
+    inputs.append(CompletedRoundInput(spool, generation, name, len(raw), digest))
+number = int(sys.argv[1])
+class OwnedPool:
+    closed = 0
+    async def close(self):
+        self.closed += 1
+    def terminate(self):
+        raise AssertionError('Normal session must close gracefully')
+owned = OwnedPool()
+async def factory():
+    return owned
+async def run():
+    async with open_import_session(
+        SimpleNamespace(database_type='postgresql'), pool_factory=factory, journal_enabled=True,
+    ) as session_manager:
+        session_manager.is_file_processed = AsyncMock(return_value=True)
+        result = await import_completed_round(
+            session_manager, inputs[number - 1], first=inputs[0] if number == 2 else None,
+        )
+        assert result == (True, 'Already processed')
+        session_manager.is_file_processed.assert_awaited_once_with(inputs[number - 1].filename)
+        assert session_manager.pool is owned and owned.closed == 0
+    assert session_manager.pool is None and owned.closed == 1
+asyncio.run(run())
+assert manager.pool is None
+assert before == (dict(os.environ), list(sys.path), os.getcwd(), tuple(root.handlers), root.level)
+assert not Path(os.environ['BOT_LOG_DIR']).exists()
+assert not Path('postgresql_manager.log').exists()
+assert 'discord' not in sys.modules and 'bot.config' not in sys.modules
+print(f'Neutral importer proof: R{number} owned session/receipt/seal/parser/preflight; DB stubbed, pool closed')
 '''
     root = Path(__file__).resolve().parents[2]
     result = subprocess.run(
-        [sys.executable, '-c', script], cwd=tmp_path,
+        [sys.executable, '-c', script, str(round_number)], cwd=tmp_path,
         env={**os.environ, 'PYTHONPATH': str(root), 'BOT_LOG_DIR': str(tmp_path / 'logs')},
         capture_output=True, text=True, timeout=15,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert 'Neutral importer proof:' in result.stdout
+    assert 'Counter proof:' in result.stdout
+    print(result.stdout, end='')
 
 
 @pytest.mark.parametrize('failure', [None, PermissionError('fixture logging error')])
