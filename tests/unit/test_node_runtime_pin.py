@@ -1,4 +1,4 @@
-"""Local and CI Node versions share one exact pin above the frontend floor."""
+"""Local and CI Node versions share a bounded, patched Node 22 interval."""
 import json
 import re
 from pathlib import Path
@@ -16,14 +16,23 @@ def test_yaml_parser_is_a_declared_development_dependency():
     )
 
 
-def test_node_pin_satisfies_frontend_engine_floor():
+@pytest.mark.parametrize("directory", [Path("."), Path("website/frontend")])
+def test_node_pin_satisfies_frontend_engine_floor(directory):
     pin = (ROOT / ".nvmrc").read_text().strip()
     assert re.fullmatch(r"22\.\d+\.\d+", pin), "Pin an exact supported Node 22 patch"
-    engine = json.loads((ROOT / "website/frontend/package.json").read_text())["engines"]["node"]
-    floor = re.fullmatch(r">=(\d+)\.(\d+)\.(\d+)", engine)
-    assert floor, "Update this contract explicitly if the engine range changes shape"
-    assert tuple(map(int, pin.split("."))) >= tuple(map(int, floor.groups())), (
-        f"Node pin {pin} is below frontend engine {engine}"
+    manifest = json.loads((ROOT / directory / "package.json").read_text())
+    lock = json.loads((ROOT / directory / "package-lock.json").read_text())
+    engine = manifest["engines"]["node"]
+    bounds = re.fullmatch(r">=(\d+)\.(\d+)\.(\d+) <(\d+)", engine)
+    assert bounds, "Declare an inclusive patch floor and exclusive major ceiling"
+    floor = tuple(map(int, bounds.groups()[:3]))
+    ceiling = int(bounds.group(4))
+    selected = tuple(map(int, pin.split(".")))
+    assert floor == selected, "Engine floor must match the reviewed patched Node pin"
+    assert floor[0] == 22 and ceiling == 23, "Keep the supported Node 22 major interval"
+    assert floor <= selected < (ceiling, 0, 0), f"Node pin {pin} is outside engine {engine}"
+    assert lock["packages"][""]["engines"]["node"] == engine, (
+        "Manifest and lockfile must declare the same Node engine interval"
     )
 
 

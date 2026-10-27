@@ -1,3 +1,67 @@
+## 2026-10-27 — Correct bounded Node engine contract after CI failure
+
+PR1100 current-head CI exposed a stale Python test: its engine parser accepted
+only an unbounded >=x.y.z expression and rejected the intentional <23 ceiling.
+Both Python jobs failed only that contract (Python3.13:10643passed/157skipped).
+Production engine declarations remain unchanged. Updated the existing contract
+to validate both npm projects' inclusive reviewed patch floor, exclusive Node23
+ceiling, selected Node22 pin membership and manifest/lock engine consistency.
+The floor must equal the reviewed pin, so widening support to vulnerable older
+patches cannot silently pass. No production frontend source changed or asset
+rebuild was necessary; prior exact-source build proofs remain explicitly pinned.
+
+All five contract cases pass; Ruff and diff hygiene pass. Changing both manifests
+to <24 made the major-boundary assertion fail in both projects; lowering both
+floors to22.23.2 made the patched-floor assertion fail. Exact restoration of all
+four manifest/lock files was independently checked by cmp; restored tests pass.
+Native npm semver independently validates both actual engine strings:22.23.2,
+23.0.0,24.0.0 and a prerelease are rejected;22.23.4 and22.24.0 are admitted.
+No service, active environment, global Node, database, PROD or puran change.
+Push the bounded test correction normally and inspect new-head CI; PR1100 still
+requires the owner's explicit numbered merge approval. Original runtime plan,
+separate modern packaging work and other development lanes remain retained.
+
+## 2026-10-27 — PR1100 refreshed and prepared for publication
+
+Merged current origin/main bfc8f27d into the existing security branch, retaining
+both sides of all four ledger conflicts. Source changes inherited cleanly; the
+review diff remains nine deliberately selected files. No production frontend
+source change was added by this refresh. Existing role/runtime work and original
+plan history remain present; no merge approval is inferred for PR1100.
+
+Authenticated isolated Node22.23.4 refreshed typecheck and212tests/5files pass.
+A clean app build at1a9ec7acab3aa8dec40d43c14461acb52edfaefd passes exact-source
+provenance verification and independent GNU hashes for all133output files.
+In-process StaticFiles HTTP responses return200with exact bytes for app.html,
+one real page JavaScript chunk and app CSS. Existing modern build/static proof
+remains explicitly pinned tob24a9eac; no modern provenance claim. Fresh root and
+SPA audits including dev dependencies both report zero findings. Prior engine
+mutation/control and signed Node archive authentication proofs remain valid.
+Native-config and Tailwind sourcemap warnings remain visible and are not errors.
+
+PR1100 had no review threads at the pre-publication query. Publish through normal
+hooks and self-review the public diff, then wait for current-head CI and the
+owner's numbered merge decision. No global runtime, active environment, service,
+PROD, puran, database or generated tracked artifact is changed by this slice.
+
+## 2026-10-27 — Patched Node app and modern artifacts verified
+
+Both existing npm builds pass sequentially using authenticated isolated Node22.23.4
+from clean sourceb24a9eac38ded275c2a43cc7f8d467f1cd7ae4cb. App provenance verifier
+passes for that SHA; independent GNU hashes match all133app outputs. Native
+in-process Starlette StaticFiles responses for app.html and modern route-host
+JS/CSS return200and match exact file bytes, with no listener/browser/service.
+Modern output is built and served by this proof, but this branch lacks the
+separate modern source-provenance implementation; no modern manifest claim.
+Existing native-config and Tailwind sourcemap warnings remain visible. Source
+build revision is explicit because this documentation commit changes HEAD.
+No deployment or global runtime selection changed; owner review still required.
+Initial static-proof harness stalled inside the sandbox; its exact diagnostic
+process was stopped after collecting output. The first external retry exposed
+a missing ASGI lifespan wrapper, then an incorrect index.html assumption(404).
+Corrected harness mounts StaticFiles and requests the configured app.html; all
+three final responses now pass. No application code was changed to hide failures.
+
 ## 2026-10-25 — Close remaining inherited settings, audit path and CLI bytecode gaps
 
 Corrected #1095 review4340638914: marked environment loading now calls the full
@@ -792,6 +856,177 @@ continue immutable application delivery, source admission/exclusive writer
 handover and observation. Retain pending proximity/gametime migrations, API,
 live mode, Spiderweb geometry/UI and all original roadmap items. Original plan
 bytes from 0261b076 remain intact. No activation follows from preparation.
+
+## 2026-10-27 — Select authenticated patched Node for DEV tooling
+
+Owner narrowed remediation to DEV/tools; PROD and puran game remain unchanged.
+PR1100 now selects Node22.23.4 in .nvmrc; both npm manifests and lock root metadata
+require >=22.23.4 <23, keeping the tested supported22.x line. Both existing CI
+setup-node steps already read .nvmrc. Prior Vite8.2.4, Vitest4.1.12, Undici7.30.1
+and parser patches remain; legacy Tailwind3.4.17 and all dependency versions are
+unchanged by this step. No global Node binary or service was replaced.
+
+Isolated official archive authenticated before extraction: Node release key
+5BE8A3F6C8A5C01D106C0AD820B1A390B168D356 verified the signed SHA256 list;
+Python hashlib and independent sha256sum match archive hash
+1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce.
+Tool exists only at /tmp/slx-node-oct27/node-v22.23.4-linux-x64/bin.
+Trust anchors: nodejs.org/en/blog/release/v22.23.4 and official
+nodejs/release-keys public key inventory. No signatures or TLS checks bypassed.
+
+Actual runtime reports Node22.23.4, bundled Undici6.29.1 and OpenSSL3.5.9.
+Brotli still reports1.1.0 because Node cherry-picks its decoder security fix;
+version alone is misleading. New BLOCK_SWITCH error constant is-17 and native
+valid Brotli roundtrip passes. A synthetic TLS rejection control rejects on both
+old/new binaries, so it is not claimed as differential vulnerability proof.
+
+Ordinary root+SPA npm ci and including-dev audits pass with0findings; typecheck
+and212tests/5files pass with one worker. Offline engine-strict dry-runs reject
+22.23.2 and admit22.23.4. Weakening the engine minimum admits22.23.2; restoring
+both manifest bytes with cmp makes rejection return. Engine declarations are
+advisory under npm defaults; CI explicitly selects the pinned patched runtime.
+Existing native-config __dirname warning retained. Clean committed app and
+modern builds follow this source commit; modern provenance integration remains
+in its separate already-developed slice, not copied into this security branch.
+
+No deploy, service, browser, PROD, puran, push or merge action. Runtime/UI plan
+preserved; PR1100 still needs its own owner merge approval.
+
+## 2026-10-25 — Patch Vitest mocker and Undici without broad dependency drift
+
+PR1100 continuation: official Vitest advisories GHSA-qxg6-89mg-rqv8 and
+GHSA-xp26-3454-mjgp identify @vitest/mocker4.1.12; official Undici advisory
+GHSA-xjj6-f33q-929c identifies7.30.1. Registry metadata confirms the exact Vitest
+family dependency closure and compatible Undici Node engine. Updated direct
+Vitest range to^4.1.12 and only its eight family package entries plus existing
+transitive Undici7.30.1. Other versions, root manifest/lock and Tailwind3.4.17
+remain unchanged. Existing Vite8.2.4 fixes are retained.
+
+Ordinary npm targeted resolution repeated its edgesOut TypeError. The legacy
+resolver supplied package metadata, but its unrelated version/peer changes were
+excluded; ordinary clean npm ci validates the final minimal lock with210packages
+installed. Typecheck passes;212tests across5route/live/Spiderweb files pass using
+one worker. Native Node verifies actual installed4.1.12/4.1.12/7.30.1 versions,
+jsdom DOM behavior and an Undici data-URL fetch without a listener. SPA npm audit
+changes3reported vulnerable packages to0. Restoring the baseline manifests makes
+the audit fail with the mocker/Undici findings; exact files restored using cmp,
+and patched audit returns0 again. No advisory suppression introduced.
+
+Correction to Oct21 remaining-braces note: unchanged root audit now returns0,
+also with explicit include=dev. GitHub advisory GHSA-vfj7-8cjw-p6xm was withdrawn
+on2026-10-23 as not practically exploitable. Verified by the public advisory and
+GitHub API withdrawn_at, not inferred from absence. Braces remains3.0.3 and no
+patch is claimed. Sources: github.com/vitest-dev/vitest/security/advisories/
+GHSA-qxg6-89mg-rqv8 and GHSA-xp26-3454-mjgp; github.com/nodejs/undici/security/
+advisories/GHSA-xjj6-f33q-929c; github.com/advisories/GHSA-vfj7-8cjw-p6xm.
+
+An initial sandboxed npm ci failed EAI_AGAIN; its output was retained and the
+process finished before the attempted stop. Final ordinary ci ran with registry
+access. No service/browser/deployment/merge/push occurred. Clean committed SPA
+build and artifact verification follow this source commit. Existing runtime,
+state, proximity, UI and Spiderweb plan remains the parent workstream; this
+security PR still has no numbered owner merge approval.
+
+## 2026-10-21 — Patched Vite exact-source SPA build verified
+
+Required npm run build:app completed successfully on clean committed source
+be890e18b78a50b66f6af36692e883dc0699aa59 using installed Vite8.2.4 and
+Node22.23.2. The provenance helper recorded that exact source commit. Its actual
+verify command accepts the resulting SPA artifact for that revision; independent
+GNU sha256sum agrees with every recorded output hash. This is a local built
+artifact, not a live page/browser/deployment certificate. This follow-up changes
+only continuity documentation and does not relabel the artifact as another SHA.
+
+Existing build warnings remain: __dirname/native config compatibility warning and
+Tailwind Vite plugin SOURCEMAP_BROKEN. Neither was hidden or expanded into an
+unrelated framework/source-map migration. Typecheck and117targeted tests passed,
+ordinary clean npm ci passed, actual patched SPA audit0 and vulnerable baseline
+negative audit1/allthreeGHSA remain recorded. Root braces advisory still unresolved
+with5high propagated entries and no official patched release. No processes or
+monitors were left running; no browser/server/service/DB/provider was activated.
+
+PR#1100 remains unapproved for merge. Next: root publishes these two security
+commits for review, preserves all prior Tailwind3/parser/source-map fixes, and
+continues the owner's approved runtime merge queue and original D4/D5/exclusive
+writer development plan. No additional activation authority is implied.
+
+## 2026-10-21 — Patch newly disclosed bundled Vite editor vulnerabilities
+
+Security detour remains in PR#1100, which is not merge-approved. Official GitHub
+advisories GHSA-r825-w8mm-5pxw, GHSA-587h-7wmj-h5pm and GHSA-698v-4r3x-3vcv all
+identify Vite8.2.0–8.2.3 as affected and8.2.4 as patched. Registry metadata confirms
+that release and its integrity/Node engines. SPA manifest minimum is now^8.2.4;
+lock pins8.2.4. Its required PostCSS/Rolldown/nanoid/native-binding dependency
+closure is updated; unrelated peer dependencies are retained. Root Tailwind3,
+source-map-js1.2.2 and postcss-selector-parser7.1.6 fixes remain unchanged.
+
+Node22.23.2/npm10.9.8 ordinary clean npm ci --ignore-scripts --no-audit passes.
+Initial targeted npm resolver crashed with "Cannot read properties of null
+(reading 'edgesOut')". Legacy peer resolver was used only to calculate the narrow
+update, after which unrelated peer entries were restored and ordinary npm ci
+validated it without that flag. An attempted nanoid minimization correctly failed
+clean-install validation because patched PostCSS requires^3.3.20; it was corrected
+to registry nanoid3.3.20 before successful install.
+
+Actual SPA audit changed from1high Vite entry containing all three GHSA to0.
+Restoring vulnerable manifest/lock as a deliberate negative control reproduces
+exit1/all three advisories; patched files restored with cmp, audit again exit0.
+Native installed Vite reports8.2.4. API-regenerated typecheck passes;117tests in
+five relevant SPA files pass with one worker. Existing __dirname/native-config
+warning remains. No browser/server/provider ran. Provenance-certified npm run
+build:app follows immediately after this committed checkpoint, because the build
+contract requires a clean committed tree; its result is not yet claimed here.
+
+Root npm audit still reports5high propagated package entries for the existing
+braces GHSA-vfj7-8cjw-p6xm; official advisory has no patched version and registry
+latest remains3.0.3. This is unresolved and unsuppressed. No Tailwind major migration
+or unrelated dependency update is introduced. References:
+https://github.com/advisories/GHSA-r825-w8mm-5pxw
+https://github.com/advisories/GHSA-587h-7wmj-h5pm
+https://github.com/advisories/GHSA-698v-4r3x-3vcv
+https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
+Next: finish exact-source SPA build, publish for review only when requested, then
+resume original runtime D4/D5/exclusive writer plan. No service/config/DB change,
+deployment, merge or production activation occurred.
+
+## 2026-10-20 — Narrow npm security fixes without a legacy Tailwind migration
+
+Security detour from the runtime v2 #1093–#1097 review/CI/handover queue. All
+three open GitHub alerts are addressed in source: source-map-js 1.2.1 -> 1.2.2
+in both lockfiles (GHSA-68fv-2mgg-jv7q; alerts43/44), and root
+postcss-selector-parser 6.1.4 -> 7.1.6 through an exact transitive override
+(GHSA-rj75-hqrm-r3gf; alert45). Root Tailwind remains 3.4.17 and the existing
+build:css command is unchanged. Existing Dependabot1098 instead upgrades legacy
+Tailwind to4, removes its CLI without adding @tailwindcss/cli, and is not the
+compatible fix represented here;1099 only covers the root source-map alert.
+
+Node22.23.2/npm10.9.8 performed sequential npm ci --ignore-scripts resolution.
+Actual npm ls confirms both parser consumers use7.1.6 and both source-map trees
+use1.2.2. Native legacy build:css with a temporary output is byte-identical to
+an independent existing Tailwind3 build over the same content/config:342828bytes,
+SHA256 caa17a12dc38ca7fc2fbfd51df2f58a9118646097ca6b8df0c2ec933f1982722.
+Shell sha256sum and Node crypto independently agree; cmp passes. SPA production
+Vite build succeeds into a temporary directory after API generation; it reports
+its existing plugin warning: "Sourcemap is likely to be incorrect: a plugin
+(@tailwindcss/vite:generate:build) was used to transform files, but didn't
+generate a sourcemap for the transformation." This is compatibility evidence,
+not a deployed or provenance-certified SPA artifact. No browser or server ran.
+
+Actual npm advisory negative controls reject untouched baseline locks for the
+original package vulnerabilities. Patched SPA audit has0vulnerabilities; patched
+root audit no longer includes source-map-js/postcss-selector-parser but still
+exits1 for pre-existing GHSA-vfj7-8cjw-p6xm (braces<=3.0.3), propagated through
+chokidar/fast-glob/micromatch/Tailwind as5high package entries. Official advisory
+https://github.com/advisories/GHSA-vfj7-8cjw-p6xm lists no patched version;
+registry latest remains3.0.3. This residual is explicitly unresolved, not
+suppressed or claimed fixed. No major framework migration or fake substitute.
+
+Only package manifest/lock files and existing four ledgers changed. Source is
+not deployed; GitHub alerts remain open until reviewed fixes reach default
+branch and are rescanned. Next: publish a separately reviewed security slice,
+then return to exact-head runtime CI, review closure and owner-approved handover.
+Every PR still needs its own explicit owner merge permission; production remains
+frozen and no service/config/database/state activation was performed.
 
 ## 2026-10-13 — Live delivery incorporates merged Spiderweb
 
