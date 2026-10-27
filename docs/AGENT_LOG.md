@@ -1878,3 +1878,26 @@ PR1100 had no review threads at the pre-publication query. Publish through norma
 hooks and self-review the public diff, then wait for current-head CI and the
 owner's numbered merge decision. No global runtime, active environment, service,
 PROD, puran, database or generated tracked artifact is changed by this slice.
+
+## 2026-10-28 — Correct bounded Node engine contract after CI failure
+
+PR1100 current-head CI exposed a stale Python test: its engine parser accepted
+only an unbounded >=x.y.z expression and rejected the intentional <23 ceiling.
+Both Python jobs failed only that contract (Python3.13:10643passed/157skipped).
+Production engine declarations remain unchanged. Updated the existing contract
+to validate both npm projects' inclusive reviewed patch floor, exclusive Node23
+ceiling, selected Node22 pin membership and manifest/lock engine consistency.
+The floor must equal the reviewed pin, so widening support to vulnerable older
+patches cannot silently pass. No production frontend source changed or asset
+rebuild was necessary; prior exact-source build proofs remain explicitly pinned.
+
+All five contract cases pass; Ruff and diff hygiene pass. Changing both manifests
+to <24 made the major-boundary assertion fail in both projects; lowering both
+floors to22.23.2 made the patched-floor assertion fail. Exact restoration of all
+four manifest/lock files was independently checked by cmp; restored tests pass.
+Native npm semver independently validates both actual engine strings:22.23.2,
+23.0.0,24.0.0 and a prerelease are rejected;22.23.4 and22.24.0 are admitted.
+No service, active environment, global Node, database, PROD or puran change.
+Push the bounded test correction normally and inspect new-head CI; PR1100 still
+requires the owner's explicit numbered merge approval. Original runtime plan,
+separate modern packaging work and other development lanes remain retained.
