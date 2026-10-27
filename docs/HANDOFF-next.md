@@ -41,6 +41,19 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-27 — Patched Node app and modern artifacts verified
+
+Both existing npm builds pass sequentially using authenticated isolated Node22.23.4
+from clean sourceb24a9eac38ded275c2a43cc7f8d467f1cd7ae4cb. App provenance verifier
+passes for that SHA; independent GNU hashes match all133app outputs. Native
+in-process Starlette StaticFiles responses for app index and modern route-host
+JS/CSS return200and match exact file bytes, with no listener/browser/service.
+Modern output is built and served by this proof, but this branch lacks the
+separate modern source-provenance implementation; no modern manifest claim.
+Existing native-config and Tailwind sourcemap warnings remain visible. Source
+build revision is explicit because this documentation commit changes HEAD.
+No deployment or global runtime selection changed; owner review still required.
+
 ## 2026-10-27 — Select authenticated patched Node for DEV tooling
 
 Owner narrowed remediation to DEV/tools; PROD and puran game remain unchanged.

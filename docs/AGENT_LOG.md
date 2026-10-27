@@ -1165,3 +1165,16 @@ in its separate already-developed slice, not copied into this security branch.
 
 No deploy, service, browser, PROD, puran, push or merge action. Runtime/UI plan
 preserved; PR1100 still needs its own owner merge approval.
+
+## 2026-10-27 — Patched Node app and modern artifacts verified
+
+Both existing npm builds pass sequentially using authenticated isolated Node22.23.4
+from clean sourceb24a9eac38ded275c2a43cc7f8d467f1cd7ae4cb. App provenance verifier
+passes for that SHA; independent GNU hashes match all133app outputs. Native
+in-process Starlette StaticFiles responses for app index and modern route-host
+JS/CSS return200and match exact file bytes, with no listener/browser/service.
+Modern output is built and served by this proof, but this branch lacks the
+separate modern source-provenance implementation; no modern manifest claim.
+Existing native-config and Tailwind sourcemap warnings remain visible. Source
+build revision is explicit because this documentation commit changes HEAD.
+No deployment or global runtime selection changed; owner review still required.
