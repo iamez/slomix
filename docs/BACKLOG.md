@@ -1,3 +1,38 @@
+## 2026-10-27 — Select authenticated patched Node for DEV tooling
+
+Owner narrowed remediation to DEV/tools; PROD and puran game remain unchanged.
+PR1100 now selects Node22.23.4 in .nvmrc; both npm manifests and lock root metadata
+require >=22.23.4 <23, keeping the tested supported22.x line. Both existing CI
+setup-node steps already read .nvmrc. Prior Vite8.2.4, Vitest4.1.12, Undici7.30.1
+and parser patches remain; legacy Tailwind3.4.17 and all dependency versions are
+unchanged by this step. No global Node binary or service was replaced.
+
+Isolated official archive authenticated before extraction: Node release key
+5BE8A3F6C8A5C01D106C0AD820B1A390B168D356 verified the signed SHA256 list;
+Python hashlib and independent sha256sum match archive hash
+1805bcd35e6815559bd2eb97db438d3fdb0eb3a5e6a977b7c1badca76337e9ce.
+Tool exists only at /tmp/slx-node-oct27/node-v22.23.4-linux-x64/bin.
+Trust anchors: nodejs.org/en/blog/release/v22.23.4 and official
+nodejs/release-keys public key inventory. No signatures or TLS checks bypassed.
+
+Actual runtime reports Node22.23.4, bundled Undici6.29.1 and OpenSSL3.5.9.
+Brotli still reports1.1.0 because Node cherry-picks its decoder security fix;
+version alone is misleading. New BLOCK_SWITCH error constant is-17 and native
+valid Brotli roundtrip passes. A synthetic TLS rejection control rejects on both
+old/new binaries, so it is not claimed as differential vulnerability proof.
+
+Ordinary root+SPA npm ci and including-dev audits pass with0findings; typecheck
+and212tests/5files pass with one worker. Offline engine-strict dry-runs reject
+22.23.2 and admit22.23.4. Weakening the engine minimum admits22.23.2; restoring
+both manifest bytes with cmp makes rejection return. Engine declarations are
+advisory under npm defaults; CI explicitly selects the pinned patched runtime.
+Existing native-config __dirname warning retained. Clean committed app and
+modern builds follow this source commit; modern provenance integration remains
+in its separate already-developed slice, not copied into this security branch.
+
+No deploy, service, browser, PROD, puran, push or merge action. Runtime/UI plan
+preserved; PR1100 still needs its own owner merge approval.
+
 ## 2026-10-25 — Patch Vitest mocker and Undici without broad dependency drift
 
 PR1100 continuation: official Vitest advisories GHSA-qxg6-89mg-rqv8 and
