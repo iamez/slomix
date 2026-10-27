@@ -1666,3 +1666,42 @@ configuration, database, Discord connection, game process or deployment occurred
 #1095/#1096/#1097 approvals remain subject to fresh reviews/CI and the prescribed
 merge cycle; no push or merge performed here. Continue trusted #1096 bootstrap
 integration and preserved runtime/state/proximity/UI/Spiderweb plan.
+
+## 2026-10-27 — Preserve a header-only reset boundary during R2 parsing
+
+DEV retained sources exposed a valid nearest R1 header with no player rows after
+reset/surrender. R2 previously failed permanently because that selected R1 could
+not parse. The parser now classifies only intact header-only rounds; a valid R2
+is retained raw with is_orphan_r2 and header_only_r1 reason, preserving the selected
+R1 filename and creating no R0 match summary. Existing shared validity marks it
+invalid for aggregate statistics. It never falls back across the reset to an
+older R1 and never replaces missing counters with zeroes. Malformed/nonempty R1,
+wrong-map/wrong-round headers and invalid R2 remain failures. The sealed runtime
+pair adapter uses the same classification without reopening logical paths.
+
+Functional proof: actual retained Supply R2 now parses with all six player rows
+byte-for-value equal to regular raw parsing; all three source hashes remain
+unchanged. This is offline parser evidence, not an activated service or DB repair.
+Final focused suite133passed; disabling the retention branch made2targeted tests
+fail, then parser restoration passed cmp. Ruff and diff checks pass. Private
+incident evidence remains outside Git in the owner-accessible Supply packet.
+
+Read-only incident scope:17imported R1/R2 rounds and102player rows match retained
+sources;14rounds after Supply show no propagated four-minute loss. The prior R1
+counters/time were already reduced in source, including endstats; recovery of
+that missing segment is not proven. Reset correlation coalescing is a separate
+finding still requiring review. No data edit/reimport, service action, production
+or game-server change occurred. Original runtime consolidation and UI/Spiderweb
+plans remain preserved; this branch is not approved for merge. Next: review the
+bounded source fix, then prepare source-backed repair scope/backup/dry-run before
+any authorized database action; continue the saved runtime queue afterward.
+
+## 2026-10-27 — Preserve the one-line malformed-header error contract
+
+Integration found an existing fullcandidate regression: a one-line malformed
+header must report insufficient lines, not invalid header format. Preserve that
+historical message while still classifying intact header-only reset boundaries.
+Two new cases distinguish one-line and multiline malformed input. Focused suite
+135passed; removing the compatibility branch caused1expected failure, restored
+with cmp. Native parsing confirms both the historical error and six retained
+Supply orphan records with no R0. Ruff/diff pass. No service or DB change.
