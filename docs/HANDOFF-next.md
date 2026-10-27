@@ -42,6 +42,16 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-27 — Preserve the one-line malformed-header error contract
+
+Integration found an existing fullcandidate regression: a one-line malformed
+header must report insufficient lines, not invalid header format. Preserve that
+historical message while still classifying intact header-only reset boundaries.
+Two new cases distinguish one-line and multiline malformed input. Focused suite
+135passed; removing the compatibility branch caused1expected failure, restored
+with cmp. Native parsing confirms both the historical error and six retained
+Supply orphan records with no R0. Ruff/diff pass. No service or DB change.
+
 ## 2026-10-27 — Preserve a header-only reset boundary during R2 parsing
 
 DEV retained sources exposed a valid nearest R1 header with no player rows after

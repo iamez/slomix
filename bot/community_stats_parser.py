@@ -1070,7 +1070,9 @@ class C0RNP0RN3StatsParser:
             header_parts = header_line.split('\\')
 
             if len(header_parts) < 8:
-                return self._get_error_result("invalid header format")
+                return self._get_error_result(
+                    "insufficient lines" if len(lines) < 2 else "invalid header format"
+                )
 
             header_parts[0]
             map_name = header_parts[1]

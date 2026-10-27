@@ -77,6 +77,20 @@ def test_header_only_r2_cannot_succeed(reset_files):
     assert not result.get('is_orphan_r2')
 
 
+@pytest.mark.parametrize('payload,error', [
+    ('header only\n', 'insufficient lines'),
+    ('header only\nnot a player\n', 'invalid header format'),
+])
+def test_malformed_header_keeps_historical_error_contract(tmp_path, payload, error):
+    """Classifying intact empty headers must preserve existing failure messages."""
+    path = tmp_path / '2026-10-26-210130-supply-round-1.txt'
+    path.write_text(payload)
+    result = C0RNP0RN3StatsParser().parse_stats_file(str(path))
+    assert result['success'] is False
+    assert result['error'] == error
+    assert 'header_only_round' not in result
+
+
 def test_sealed_reset_pair_keeps_same_orphan_contract(reset_files):
     """The immutable runtime adapter must not reopen mutable logical paths."""
     _, first, second = reset_files

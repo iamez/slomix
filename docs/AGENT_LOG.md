@@ -1695,3 +1695,13 @@ or game-server change occurred. Original runtime consolidation and UI/Spiderweb
 plans remain preserved; this branch is not approved for merge. Next: review the
 bounded source fix, then prepare source-backed repair scope/backup/dry-run before
 any authorized database action; continue the saved runtime queue afterward.
+
+## 2026-10-27 — Preserve the one-line malformed-header error contract
+
+Integration found an existing fullcandidate regression: a one-line malformed
+header must report insufficient lines, not invalid header format. Preserve that
+historical message while still classifying intact header-only reset boundaries.
+Two new cases distinguish one-line and multiline malformed input. Focused suite
+135passed; removing the compatibility branch caused1expected failure, restored
+with cmp. Native parsing confirms both the historical error and six retained
+Supply orphan records with no R0. Ruff/diff pass. No service or DB change.
