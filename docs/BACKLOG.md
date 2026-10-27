@@ -1,3 +1,26 @@
+## 2026-10-27 — PR1100 refreshed and prepared for publication
+
+Merged current origin/main bfc8f27d into the existing security branch, retaining
+both sides of all four ledger conflicts. Source changes inherited cleanly; the
+review diff remains nine deliberately selected files. No production frontend
+source change was added by this refresh. Existing role/runtime work and original
+plan history remain present; no merge approval is inferred for PR1100.
+
+Authenticated isolated Node22.23.4 refreshed typecheck and212tests/5files pass.
+A clean app build at1a9ec7acab3aa8dec40d43c14461acb52edfaefd passes exact-source
+provenance verification and independent GNU hashes for all133output files.
+In-process StaticFiles HTTP responses return200with exact bytes for app.html,
+one real page JavaScript chunk and app CSS. Existing modern build/static proof
+remains explicitly pinned tob24a9eac; no modern provenance claim. Fresh root and
+SPA audits including dev dependencies both report zero findings. Prior engine
+mutation/control and signed Node archive authentication proofs remain valid.
+Native-config and Tailwind sourcemap warnings remain visible and are not errors.
+
+PR1100 had no review threads at the pre-publication query. Publish through normal
+hooks and self-review the public diff, then wait for current-head CI and the
+owner's numbered merge decision. No global runtime, active environment, service,
+PROD, puran, database or generated tracked artifact is changed by this slice.
+
 ## 2026-10-27 — Patched Node app and modern artifacts verified
 
 Both existing npm builds pass sequentially using authenticated isolated Node22.23.4
