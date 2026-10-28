@@ -42,6 +42,14 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-28 — Keep complete update preimages private
+
+Full code/state backups contain private configuration and logs. Reviewedupdater
+now requires0700onbackup root beforecollectingthem, without changing the global
+umask(andthereforewithoutmakingnewPK3unreadabletolegitimatefastDL). Fullworkflow
+fixturestartsat0755andproves0700; disablingtheguardwasobservedfailing, restoredcmp.
+18focusedtests remain green. Noactualbackup/controlbranchhasbeenrunonPuran.
+
 ## 2026-10-28 — Require current empty-server evidence before update controls
 
 Follow-up to PR1106: a short console-tail warning cannot prove emptiness. Updater

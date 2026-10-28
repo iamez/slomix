@@ -91,6 +91,7 @@ case "$MODE" in stable|snapshot) ;; *)
 [[ "$EXPECTED_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "Explicit archive SHA256 third argument required" >&2; exit 2; }
 
 mkdir -p "$BACKUP_ROOT"
+chmod 0700 "$BACKUP_ROOT" || abort "backup directory cannot be made private"
 log "ET:Legacy updater — mode=$MODE"
 log "URL: $URL"
 case "$URL" in

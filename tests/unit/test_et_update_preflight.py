@@ -3,6 +3,7 @@ import hashlib
 import io
 import os
 import shlex
+import stat
 import struct
 import subprocess
 import sys
@@ -116,6 +117,8 @@ def test_owner_flow_with_stubbed_controls_preserves_state_or_refuses(tmp_path, f
     game, state, backups, commands = [tmp_path / x for x in ['game', 'state', 'backups', 'commands']]
     for directory in [game / 'legacy', game / 'etmain', state, commands]:
         directory.mkdir(parents=True, exist_ok=True)
+    backups.mkdir(mode=0o755)
+    backups.chmod(0o755)
     (game / 'etlded.x86_64').write_bytes(b'old engine')
     (game / 'legacy/qagame.mp.x86_64.so').write_bytes(b'old module')
     (game / 'legacy/legacy_v2.84.0.pk3').write_bytes(b'old package')
@@ -182,6 +185,7 @@ elif name=='cp':
         assert stopped.exists() and started.exists()
         assert (game / 'etmain/legacy.cfg').read_bytes() == b'owner configuration'
         assert names.read_bytes() == b'owner bot names'
+        assert stat.S_IMODE(backups.stat().st_mode) == 0o700
         backup = next(backups.glob('pre-update-*'))
         with tarfile.open(backup / 'game-base.tar') as tar:
             assert tar.extractfile('./etlded.x86_64').read() == b'old engine'

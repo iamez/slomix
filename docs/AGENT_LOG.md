@@ -1721,3 +1721,11 @@ and the existing fullworkflow with controls/networkstubbed. Disabled occupiedgua
 was seenfailing, restored withcmp. ExistingSHAguardfailure/restoration proofretained.
 No actualgame/serverwas started/stopped or archivecodeexecuted. The readiness
 queryitselfisread-only; reviewedfilesarestaged separately, not installed live.
+
+## 2026-10-28 — Keep complete update preimages private
+
+Full code/state backups contain private configuration and logs. Reviewedupdater
+now requires0700onbackup root beforecollectingthem, without changing the global
+umask(andthereforewithoutmakingnewPK3unreadabletolegitimatefastDL). Fullworkflow
+fixturestartsat0755andproves0700; disablingtheguardwasobservedfailing, restoredcmp.
+18focusedtests remain green. Noactualbackup/controlbranchhasbeenrunonPuran.
