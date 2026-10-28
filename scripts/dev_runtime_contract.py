@@ -14,6 +14,7 @@ import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.runtime_app_bootstrap import APP_BOOTSTRAP, launch_argv  # noqa: E402
 from shared.release_manifest import MANIFEST, file_hash, verify_release  # noqa: E402

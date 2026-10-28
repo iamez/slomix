@@ -1,3 +1,40 @@
+## 2026-10-28 — Refresh state handover after final app preparation
+
+Owner deferred Puran updates and requested autonomous runtime continuation.
+Merge reviewed app source71589a60 into the existing #1097 branch, preserving all
+state-only tools/tests and both ledger histories. The only conflict was an empty
+state side versus the diagnostic-tool handoff insertion; retain the insertion.
+App proof: 1037 Git-free payload files, native static responses, hash/mode tamper
+refusals, 285 Python cases and 985 frontend tests. #1096 current-head CI and its
+approved merge cycle remain separate; no merged state is asserted here.
+Next: focused state seed/delta/writer tests and fresh native CLI proof, then
+refresh #1097 after #1096 actually lands. No new data seed from live roots,
+service action, migration, Puran change or production deployment.
+
+## 2026-10-28 — Final app source integration verified locally
+
+222 focused Python cases pass using a new outside-Git basetemp. The first
+attempt under the default /tmp fixture path correctly refused this host's
+existing /tmp/.git fence; the marker was preserved and no guard weakened.
+Modern-output integrity guard mutation was observed failing at the assertion
+that refusal precedes destination creation; source restored with cmp and the
+restored case passes. Both npm lock audits report zero vulnerabilities;
+frontend typecheck passes with isolated Node22.23.4. Frontend tests and final
+exact-source builds/package proof follow. No live service or data change.
+
+## 2026-10-28 — Resume runtime app delivery; defer Puran update
+
+Owner explicitly deferred the Puran engine update until a future instruction.
+Retain its reviewed packet without executing the updater. Resume original runtime
+queue at #1096 application packaging, then #1097 state handover and D4/D5.
+Integrate the previously verified modern route-host provenance/copy guards into
+#1096 while retaining its newer no-bytecode bootstrap and raw systemctl argument
+fixes. Inherit the already developed Node22.23.4 and frontend lockfile security
+floor so this application preparation does not rebuild superseded dependencies.
+Next: focused regression/mutation checks, both exact-source builds, new Git-free
+package and native static-response proof. Source readiness, merge and service
+activation remain separate. Production, Puran and live DEV services unchanged.
+
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
 > **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
@@ -41,6 +78,21 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-25 — Diagnostic tools preserve inventory and raw systemd argv
+
+Reviews4369811073/4369811077 addressed. Packaged contract/health tools set
+sys.dont_write_bytecode before project imports; preparation does the same.
+Native actual packaged --help now runs without -B and preserves the v2 inventory.
+Health command parsing compares systemctl's raw joined argv bytes, never shlex
+syntax; the known contract requires whitespace-free arguments and rejects
+ambiguous inputs. Literal quotes inside the hex bootstrap remain significant.
+The fixture now models actual raw systemctl output rather than shlex.join.
+
+103 focused tests pass. Contract-bytecode, health-bytecode and raw-argv mutants
+were observed failing, then restored with cmp. No manager mutation, application
+startup, service restart or deploy. The separate static/modern artifact omission
+review remains in progress in an isolated worktree.1095 owner-approved merge
+cycle is running with full420second pause; no merge asserted until verification.
 
 ## 2026-10-25 — Package startup dependency, modes and unfiltered readiness
 

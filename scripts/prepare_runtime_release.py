@@ -1,6 +1,7 @@
 """Prepare a NEW Git-free release; never deploy, start services or copy state.
 
-Source must be committed/clean with exact-source verified SPA output. Failure
+Source must be committed/clean with exact-source verified SPA and modern route-host outputs.
+Build both using npm run build:app and npm run build before preparation. Failure
 retains its incomplete destination for inspection; never overwrite or delete.
 """
 from __future__ import annotations
@@ -13,10 +14,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(ROOT))
 
 from scripts.spa_artifact import MANIFEST as SPA_MANIFEST  # noqa: E402
-from scripts.spa_artifact import OUTPUT, git, reject_symlink_path, validate  # noqa: E402
+from scripts.spa_artifact import TARGETS, git, reject_symlink_path, validate  # noqa: E402
 from shared.release_manifest import MANIFEST, file_hash, payload_files, verify_release  # noqa: E402
 
 EXPLICIT = {
@@ -62,7 +64,8 @@ def prepare(source: Path, destination: Path) -> dict:
         raise ValueError('Release destination must be outside every Git checkout')
     target = git(source, 'rev-parse', 'HEAD').decode().strip()
     verify_source_state(source, target)
-    artifact = validate(source, source / OUTPUT, target)
+    artifacts = {kind: validate(source, source / output, target, kind)
+                 for kind, (output, _) in TARGETS.items()}
     paths = [os.fsdecode(p) for p in git(source, 'ls-files', '-z').split(b'\0') if p]
     selected = sorted(name for name in paths if included(name))
     if not set(selected) >= EXPLICIT:
@@ -87,22 +90,26 @@ def prepare(source: Path, destination: Path) -> dict:
         output.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(origin, output)
         output.chmod(0o755 if committed[name][0] == b'100755' else 0o644)
-    for name in [*artifact['outputs'], SPA_MANIFEST]:
-        output = destination / OUTPUT / name
-        output.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source / OUTPUT / name, output)
-        output.chmod(0o644)
+    for kind, artifact in artifacts.items():
+        directory = TARGETS[kind][0]
+        for name in [*artifact['outputs'], SPA_MANIFEST]:
+            output = destination / directory / name
+            output.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source / directory / name, output)
+            output.chmod(0o644)
     # Source must not have changed while copying. Verify copied bytes separately.
-    validate(source, source / OUTPUT, target)
+    for kind, (directory, _) in TARGETS.items():
+        validate(source, source / directory, target, kind)
     for name in selected:
         if file_hash(destination / name) != file_hash(source / name):
             raise ValueError('Source changed during release preparation')
         actual = git(source, 'hash-object', '--no-filters', '--', str(destination / name)).strip()
         if actual != committed[name][2]:
             raise ValueError('Copied runtime differs from its committed source blob')
-    for name, digest in artifact['outputs'].items():
-        if file_hash(destination / OUTPUT / name) != digest:
-            raise ValueError('Copied SPA differs from verified artifact')
+    for kind, artifact in artifacts.items():
+        for name, digest in artifact['outputs'].items():
+            if file_hash(destination / TARGETS[kind][0] / name) != digest:
+                raise ValueError('Copied frontend differs from verified artifact')
     verify_source_state(source, target)
     files = {name: file_hash(path) for name, path in sorted(payload_files(destination).items())}
     modes = {name: path.stat().st_mode & 0o7777

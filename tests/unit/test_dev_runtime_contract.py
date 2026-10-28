@@ -181,7 +181,7 @@ def test_release_prestart_cli_refuses_before_database(inputs, monkeypatch, capsy
 
 def properties(spec, pid):
     def command(argv):
-        return f"{{ path={argv[0]} ; argv[]={shlex.join(argv)} ; ignore_errors=no ; pid=0 }}"
+        return f"{{ path={argv[0]} ; argv[]={' '.join(argv)} ; ignore_errors=no ; pid=0 }}"
     return dict(Requires=" ".join(spec["requires"]), Wants=" ".join(spec["wants"]),
                 After=" ".join(spec["after"]), LoadState="loaded", ActiveState="active", MainPID=str(pid),
                 WorkingDirectory=spec["cwd"], User="samba", Group="samba",
