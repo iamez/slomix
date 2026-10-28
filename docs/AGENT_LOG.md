@@ -1707,3 +1707,17 @@ Originalruntime roadmap remains in fullcandidate; sourcebranch's shorterPLANmust
 not replace it duringintegration. Supplyrecovery,frame-healthanalysisfixes and
 runtime1096/1097/D4/D5 remain. Owneractivation andpost-startnativeverification
 are distinct outstanding steps; productionSlomix is untouched.
+
+## 2026-10-28 — Require current empty-server evidence before update controls
+
+Follow-up to PR1106: a short console-tail warning cannot prove emptiness. Updater
+now requires a current localhost UDPgetstatusresponse, including spectator slots,
+beforeconfirmationandagainimmediatelybeforestop. Occupied, malformed, missing or
+timedoutstatusrefuses; noauto-kick or game-state command. This is a bounded current
+check, not an atomic join lock; owner still selects an emptymaintenancewindow.
+
+18focusedtests pass, including occupied/spectator, unknown and malformed status,
+and the existing fullworkflow with controls/networkstubbed. Disabled occupiedguard
+was seenfailing, restored withcmp. ExistingSHAguardfailure/restoration proofretained.
+No actualgame/serverwas started/stopped or archivecodeexecuted. The readiness
+queryitselfisread-only; reviewedfilesarestaged separately, not installed live.

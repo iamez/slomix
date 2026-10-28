@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import socket
 import stat
 import struct
 import tarfile
@@ -97,16 +98,36 @@ def verify_lua_log(path: Path) -> dict:
     return {'status': 'lua_load_set_verified', 'modules': sorted(loaded)}
 
 
+def require_empty_server() -> dict:
+    """Query all connected slots, including spectators, without authentication."""
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as client:
+        client.settimeout(2)
+        client.sendto(b'\xff\xff\xff\xffgetstatus\n', ('127.0.0.1', 27960))
+        payload, origin = client.recvfrom(32768)
+    if origin != ('127.0.0.1', 27960) or not payload.startswith(b'\xff\xff\xff\xffstatusResponse\n'):
+        raise ValueError('Game status unavailable or malformed')
+    lines = payload.split(b'\n')
+    if len(lines) < 2 or not lines[1].startswith(b'\\'):
+        raise ValueError('Game status information missing')
+    players = [line for line in lines[2:] if line.strip()]
+    if any(not re.fullmatch(rb'\s*-?\d+\s+-?\d+\s+".*"\s*', line) for line in players):
+        raise ValueError('Game status slot list malformed')
+    if players:
+        raise ValueError('Connected clients present; owner must wait for an empty server')
+    return {'status': 'empty_server_verified', 'connected_slots': 0}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--archive', type=Path)
     group.add_argument('--lua-log', type=Path)
+    group.add_argument('--require-empty', action='store_true')
     parser.add_argument('--sha256', default='')
     args = parser.parse_args()
     try:
         result = (inspect_archive(args.archive, args.sha256) if args.archive
-                  else verify_lua_log(args.lua_log))
+                  else verify_lua_log(args.lua_log) if args.lua_log else require_empty_server())
         print(json.dumps(result, sort_keys=True))
         return 0
     except (OSError, ValueError, tarfile.TarError) as error:

@@ -118,6 +118,9 @@ if [ -f "$ETCONSOLE" ]; then
   [ "${RECENT_CONN:-0}" -gt 0 ] && warn "Recent ClientBegin in console — make sure server is EMPTY."
 fi
 
+# Refuse unknown or occupied status instead of inferring emptiness from a log tail.
+python3 "$(dirname "$0")/etl_update_preflight.py" --require-empty || abort "server empty-status gate refused"
+
 # ----------------------------- 3) confirm ------------------------------------
 echo
 echo "  About to update the game server:"
@@ -180,6 +183,7 @@ done
 ok "Backed up to $BACKUP_DIR"
 
 # ----------------------------- 7) stop (watchdog FIRST!) ---------------------
+python3 "$(dirname "$0")/etl_update_preflight.py" --require-empty || abort "server no longer proven empty before stop"
 log "Stopping server (watchdog first)…"
 pkill -f "$WATCHDOG_PAT" 2>/dev/null; sleep 2
 screen -S "$SCREEN_NAME" -X quit 2>/dev/null; sleep 2

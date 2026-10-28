@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.etl_update_preflight import EXPECTED_LUA, inspect_archive, verify_lua_log
+from scripts.etl_update_preflight import EXPECTED_LUA, inspect_archive, require_empty_server, verify_lua_log
 
 ROOT = 'etlegacy-v2.86.2-17-g74fdd6a-x86_64'
 
@@ -154,12 +154,15 @@ elif name=='pgrep': sys.exit(0 if flag.exists() else 1)
 elif name=='nohup':
  Path(os.environ['ET_TEST_CONSOLE']).write_text(os.environ['ET_TEST_LUA_LINES'])
  flag.write_text('stubbed startup only')
+elif name=='python3':
+ if '--require-empty' in args: print('{{"status":"empty_server_verified","connected_slots":0}}')
+ else: sys.exit(subprocess.call([sys.executable,*args]))
 elif name=='cp':
  if os.environ['ET_TEST_FAIL_BACKUP']=='1' and any('pre-update-' in a for a in args): sys.exit(1)
  sys.exit(subprocess.call(['/usr/bin/cp',*args]))
 ''')
     stub.chmod(0o700)
-    for name in ['wget', 'strings', 'sleep', 'pkill', 'screen', 'pgrep', 'nohup', 'cp']:
+    for name in ['wget', 'strings', 'sleep', 'pkill', 'screen', 'pgrep', 'nohup', 'cp', 'python3']:
         (commands / name).symlink_to(stub)
     stopped, started = tmp_path / 'stopped', tmp_path / 'started'
     lines = ''.join(f"0 file '{name}' loaded into Lua VM\n" for name in sorted(EXPECTED_LUA))
@@ -184,3 +187,28 @@ elif name=='cp':
             assert tar.extractfile('./etlded.x86_64').read() == b'old engine'
         with tarfile.open(backup / 'home-state.tar') as tar:
             assert tar.extractfile('./client01.json').read() == b'{"fixture": true}'
+
+
+@pytest.mark.parametrize('status', ['empty', 'occupied', 'malformed', 'timeout'])
+def test_current_server_status_must_prove_emptiness(monkeypatch, status):
+    class Query:
+        def __enter__(self): return self
+        def __exit__(self, *args): return None
+        def settimeout(self, value): pass
+        def sendto(self, payload, address):
+            assert payload.endswith(b'getstatus\n') and address == ('127.0.0.1', 27960)
+        def recvfrom(self, limit):
+            if status == 'timeout':
+                raise TimeoutError('fixture unavailable')
+            body = b'\xff\xff\xff\xffstatusResponse\n\\mapname\\supply\n'
+            if status == 'occupied':
+                body += b'0 20 "spectator"\n'
+            if status == 'malformed':
+                body += b'invalid slot record\n'
+            return body, ('127.0.0.1', 27960)
+    monkeypatch.setattr('scripts.etl_update_preflight.socket.socket', lambda *args: Query())
+    if status == 'empty':
+        assert require_empty_server()['connected_slots'] == 0
+    else:
+        with pytest.raises((ValueError, OSError)):
+            require_empty_server()
