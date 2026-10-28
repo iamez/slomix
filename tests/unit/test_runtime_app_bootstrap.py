@@ -113,6 +113,7 @@ def test_launch_refuses_oversized_inline_code(monkeypatch):
 
 def test_native_systemd_accepts_inline_startup_argument(tmp_path):
     import shutil
+
     from scripts.dev_runtime_contract import render_argv
 
     executable = shutil.which('systemd-analyze')

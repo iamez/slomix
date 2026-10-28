@@ -7,7 +7,6 @@ checking under stable trusted ownership, not isolation from a malicious owner.
 
 from base64 import b64encode
 
-
 BOOTSTRAP_SOURCE = r'''import hashlib, os, stat, sys
 from pathlib import Path
 
