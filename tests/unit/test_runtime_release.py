@@ -5,9 +5,15 @@ import pytest
 
 from scripts import prepare_runtime_release as package
 from shared.release_manifest import MANIFEST, file_hash, verify_release
-from tests.unit.test_spa_artifact_preflight import build, git
+from tests.unit.test_spa_artifact_preflight import build as build_frontend
 from tests.unit.test_spa_artifact_preflight import fixture as source_fixture  # noqa: F401 - pytest fixture
+from tests.unit.test_spa_artifact_preflight import git
 from website.backend import build_info
+
+
+def build(source):
+    build_frontend(source)
+    build_frontend(source, kind='modern')
 
 
 @pytest.fixture
@@ -82,6 +88,8 @@ def test_package_prepares_only_allowed_runtime_files_and_never_overwrites(source
     for excluded in ['.git', '.env', 'tests', 'docs', 'greatshot/tests', 'website/frontend']:
         assert not (destination / excluded).exists()
     assert (destination / 'website/static/app/app.html').is_file()
+    for name in ('route-host.js', 'route-host.css', '.slomix-build.json'):
+        assert (destination / 'website/static/modern' / name).is_file()
     assert (destination / 'website/assets/game/map.png').is_file()
     with pytest.raises(ValueError, match='NEW'):
         package.prepare(source, destination)
@@ -239,3 +247,24 @@ def test_packaged_tools_include_their_real_bootstrap_dependency(committed_runtim
         assert result.returncode == 0, result.stderr
         assert 'usage:' in result.stdout
     assert verify_release(destination) == record
+
+
+@pytest.mark.parametrize('damage', ['missing', 'stale', 'extra', 'changed', 'wrong_kind'])
+def test_modern_artifact_must_have_exact_source_provenance(committed_runtime_source, damage):
+    source = committed_runtime_source
+    directory = source / 'website/static/modern'
+    marker = directory / '.slomix-build.json'
+    if damage == 'missing':
+        marker.unlink()
+    elif damage == 'extra':
+        (directory / 'untracked-old.js').write_text('stale bytes')
+    elif damage == 'changed':
+        (directory / 'route-host.js').write_text('stale bytes')
+    else:
+        record = json.loads(marker.read_text())
+        record['source_commit' if damage == 'stale' else 'kind'] = '0' * 40 if damage == 'stale' else 'app'
+        marker.write_text(json.dumps(record))
+    destination = source.parent / 'refused-modern'
+    with pytest.raises((ValueError, OSError)):
+        package.prepare(source, destination)
+    assert not destination.exists()
