@@ -1,27 +1,3 @@
-## 2026-10-28 — Final app source integration verified locally
-
-222 focused Python cases pass using a new outside-Git basetemp. The first
-attempt under the default /tmp fixture path correctly refused this host's
-existing /tmp/.git fence; the marker was preserved and no guard weakened.
-Modern-output integrity guard mutation was observed failing at the assertion
-that refusal precedes destination creation; source restored with cmp and the
-restored case passes. Both npm lock audits report zero vulnerabilities;
-frontend typecheck passes with isolated Node22.23.4. Frontend tests and final
-exact-source builds/package proof follow. No live service or data change.
-
-## 2026-10-28 — Resume runtime app delivery; defer Puran update
-
-Owner explicitly deferred the Puran engine update until a future instruction.
-Retain its reviewed packet without executing the updater. Resume original runtime
-queue at #1096 application packaging, then #1097 state handover and D4/D5.
-Integrate the previously verified modern route-host provenance/copy guards into
-#1096 while retaining its newer no-bytecode bootstrap and raw systemctl argument
-fixes. Inherit the already developed Node22.23.4 and frontend lockfile security
-floor so this application preparation does not rebuild superseded dependencies.
-Next: focused regression/mutation checks, both exact-source builds, new Git-free
-package and native static-response proof. Source readiness, merge and service
-activation remain separate. Production, Puran and live DEV services unchanged.
-
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
 > **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`
@@ -64,6 +40,30 @@ pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
 KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
+
+## 2026-10-28 — Final app source integration verified locally
+
+222 focused Python cases pass using a new outside-Git basetemp. The first
+attempt under the default /tmp fixture path correctly refused this host's
+existing /tmp/.git fence; the marker was preserved and no guard weakened.
+Modern-output integrity guard mutation was observed failing at the assertion
+that refusal precedes destination creation; source restored with cmp and the
+restored case passes. Both npm lock audits report zero vulnerabilities;
+frontend typecheck passes with isolated Node22.23.4. Frontend tests and final
+exact-source builds/package proof follow. No live service or data change.
+
+## 2026-10-28 — Resume runtime app delivery; defer Puran update
+
+Owner explicitly deferred the Puran engine update until a future instruction.
+Retain its reviewed packet without executing the updater. Resume original runtime
+queue at #1096 application packaging, then #1097 state handover and D4/D5.
+Integrate the previously verified modern route-host provenance/copy guards into
+#1096 while retaining its newer no-bytecode bootstrap and raw systemctl argument
+fixes. Inherit the already developed Node22.23.4 and frontend lockfile security
+floor so this application preparation does not rebuild superseded dependencies.
+Next: focused regression/mutation checks, both exact-source builds, new Git-free
+package and native static-response proof. Source readiness, merge and service
+activation remain separate. Production, Puran and live DEV services unchanged.
 
 ## 2026-10-25 — Diagnostic tools preserve inventory and raw systemd argv
 
