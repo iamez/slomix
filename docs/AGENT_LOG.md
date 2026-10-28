@@ -1666,3 +1666,66 @@ configuration, database, Discord connection, game process or deployment occurred
 #1095/#1096/#1097 approvals remain subject to fresh reviews/CI and the prescribed
 merge cycle; no push or merge performed here. Continue trusted #1096 bootstrap
 integration and preserved runtime/state/proximity/UI/Spiderweb plan.
+
+## 2026-10-28 — Selected snapshot17 and reviewed existing Puran updater
+
+Owner selected the officialx86_64fullarchivev2.86.2-17-g74fdd6a, supersedingCOMP13
+as the current update target. Owner then required discovery/review of the existing
+Claude updater and actual environment before activation. No game/service action
+has been executed by this preparation.
+
+Actual /home/et/etl_update.sh is byte-identical to repo scripts/etl_update.sh,
+10381bytes,SHA256fd8ced43ce1fa6f32c269b156874bf512670fe985e8c832d6875809b93ff10b3.
+Olderetlupdate3copies/logs are historical. Activecwd/base is/home/et/etlegacy-v2.83.1-x86_64;
+homepath/home/et/.etlegacy,fs_gamelegacy, loadedqagamefrombaselegacy. Read-only
+RCONlua_status proves sixLua5.4VMs with the knownSep26incident hashes. lua_modules
+is sourced through etmain/configs/*.config profiles, not merely etmain/legacy.cfg.
+The compatibility versioncvar is spoofedET2.60b, so useactualELF/buildidentity.
+Puran is managedbycron/screen/etdaemon, not a dedicated game systemdunit.
+
+Officialarchive92529765bytes verified by streaming and independentGNUhash:
+e669d26b8b33212422cf6d483155fa014535d2a18e52205f5ef017202736506c.
+Private localstage3369members/192897448expandedbytes, no links/path escapes.
+Engine/qagame areELF64x86_64, exacttargetstrings andLua5.4present; requiredglibc/
+libstdc++symbolversions areavailable onPuran(glibc2.35). This is staticproof,
+not a newengine gameplay/round-transition certificate. Archiveoverlaywouldchange
+custometmain/legacy.cfg andbotnames; six customVMfiles are not overwritten.
+
+Reviewed existing updater adds read-only--inspect before anymutation, explicit
+SHA256gate andboundedtar/ELF/packagechecks, preserveslegacy.cfg andbotnames,
+refuses failedcriticalbackups/restores, snapshots completecodeandquiescedhome
+state beforeoverlay, and requires the exactsixmodule startupset instead of old
+five-module successheuristic. Operator remains responsible for game control;
+this source change is not permission to invokeitslegacycontrolbranch.
+14focusedtests pass, including fullshellflowwithstubbedcontrols/network and
+backupfailurebeforestop, ShellCheck/Ruff/bashsyntax/diffclean. Actualtargetarchive
+passesnativeinspection andactualboot6modulelogpasses. DisablingSHAguardwas seen
+failing, restored withcmp. Noactualnewbinary wasloaded, no service/game started.
+
+Private packet:/home/samba/share/slomix-et286-snapshot17-prep-20261028.
+Originalruntime roadmap remains in fullcandidate; sourcebranch's shorterPLANmust
+not replace it duringintegration. Supplyrecovery,frame-healthanalysisfixes and
+runtime1096/1097/D4/D5 remain. Owneractivation andpost-startnativeverification
+are distinct outstanding steps; productionSlomix is untouched.
+
+## 2026-10-28 — Require current empty-server evidence before update controls
+
+Follow-up to PR1106: a short console-tail warning cannot prove emptiness. Updater
+now requires a current localhost UDPgetstatusresponse, including spectator slots,
+beforeconfirmationandagainimmediatelybeforestop. Occupied, malformed, missing or
+timedoutstatusrefuses; noauto-kick or game-state command. This is a bounded current
+check, not an atomic join lock; owner still selects an emptymaintenancewindow.
+
+18focusedtests pass, including occupied/spectator, unknown and malformed status,
+and the existing fullworkflow with controls/networkstubbed. Disabled occupiedguard
+was seenfailing, restored withcmp. ExistingSHAguardfailure/restoration proofretained.
+No actualgame/serverwas started/stopped or archivecodeexecuted. The readiness
+queryitselfisread-only; reviewedfilesarestaged separately, not installed live.
+
+## 2026-10-28 — Keep complete update preimages private
+
+Full code/state backups contain private configuration and logs. Reviewedupdater
+now requires0700onbackup root beforecollectingthem, without changing the global
+umask(andthereforewithoutmakingnewPK3unreadabletolegitimatefastDL). Fullworkflow
+fixturestartsat0755andproves0700; disablingtheguardwasobservedfailing, restoredcmp.
+18focusedtests remain green. Noactualbackup/controlbranchhasbeenrunonPuran.
