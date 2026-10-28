@@ -97,3 +97,32 @@ def test_native_web_cli_reaches_dependency_without_starting_server(release):
     assert result.returncode == 0, result.stderr
     assert 'Running uvicorn' in result.stdout
     assert not list(release.rglob('*.pyc'))
+
+
+def test_inline_bootstrap_fits_systemd_249_argument_limit():
+    assert len(APP_BOOTSTRAP.encode('utf-8')) < 4096
+
+
+def test_launch_refuses_oversized_inline_code(monkeypatch):
+    from scripts import runtime_app_bootstrap as bootstrap
+
+    monkeypatch.setattr(bootstrap, 'APP_BOOTSTRAP', 'x' * 4096)
+    with pytest.raises(ValueError, match='systemd argument limit'):
+        bootstrap.launch_argv('/python', '/release', 'a' * 64, 'b' * 64, 'web')
+
+
+def test_native_systemd_accepts_inline_startup_argument(tmp_path):
+    import shutil
+    from scripts.dev_runtime_contract import render_argv
+
+    executable = shutil.which('systemd-analyze')
+    if executable is None:
+        pytest.skip('systemd-analyze is unavailable')
+    unit = tmp_path / 'inline-proof.service'
+    argv = launch_argv('/usr/bin/true', '/not-executed', 'a' * 64, 'b' * 64, 'web')
+    unit.write_text('[Unit]\nDefaultDependencies=no\n[Service]\nType=oneshot\nExecStart='
+                    + render_argv(argv) + '\n')
+    result = subprocess.run([executable, 'verify', '--man=no', str(unit)],
+                            env={'PATH': '/usr/bin:/bin', 'SYSTEMD_UNIT_PATH': str(tmp_path)},
+                            capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr

@@ -41,6 +41,28 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-28 — Fix native systemd 249 inline argument rejection
+
+Actual final-path unit verification exposed a previously untested host limit:
+4411byte hex bootstrap argument exceeds systemd249's4095byte argument budget.
+A native isolated unit fixture independently reproduces rejection at4096bytes
+but accepts4095 with default dependencies disabled. Encode the same trusted
+stdlib verifier using strict Base64, preserving all integrity pins, source
+buffers, namespace admission and raw-argv matching. Refuse oversized startup
+arguments during preparation rather than emitting unusable unit text.
+Three new cases failed before the change;201focused bootstrap/contract/health/
+package/ledger cases pass afterwards. Disabling the size guard fails visibly;
+source restored with cmp. Repeat exact-source builds/package/native unit proof
+from this final commit before considering the approved merge cycle ready.
+
+Correction: an earlier ad-hoc shell sequence masked systemd-analyze's returncode
+with a subsequent successful Python command. Explicit returncode capture showed
+failure; do not claim old generated units passed. Separate read-only actual-role
+schema gates refuse the old package's missing applied-source files and pending104;
+fullcandidate additionally exposes096/100source-vs-ledger checksum differences.
+Do not rewrite DB ledger checksums or apply migrations automatically. Puran stays
+deferred; no service/unit installation, restart or live DB write occurred.
+
 ## 2026-10-28 — Final app source integration verified locally
 
 222 focused Python cases pass using a new outside-Git basetemp. The first
