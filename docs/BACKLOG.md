@@ -1,3 +1,23 @@
+## 2026-10-28 — Refuse bare Git metadata in state sources
+
+Review4370885447 is confirmed: the prior inventory admitted bare repositories
+at a selected source root or nested directory. Reuse the existing git_boundary
+recognizer before scanning every directory; plan, seed revalidation and delta
+source/target inventories now reject metadata before copying it.
+Eight new cases were observed failing before the fix, including actual native
+CLI acceptance, and all207state cases pass after it. Disabling the new guard
+again makes both root/nested cases fail; restore is cmp-checked and restored
+native refusal cases pass. Target-preservation classification mutation also
+fails as expected and restores with cmp. No live state/data or service change.
+
+Actual synthetic seven-scope plan/seed/delta workflow preserves a divergent new
+target. Read-only actual manager observations show DEV bot/webactive and both
+watchdogunitsinactive; no claim of exhaustive writer exclusion or readiness.
+Keep the routing header before dated handoff entries (11ledger cases pass in
+app after its first full-CI documentation ordering failure). App final source
+isecb812b9, actual final1037filepackage rebuilt and statically served; app CI and
+its420second approved merge gate are still pending. Puran update stays deferred.
+
 ## 2026-10-28 — Refresh state handover after final app preparation
 
 Owner deferred Puran updates and requested autonomous runtime continuation.
