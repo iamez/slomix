@@ -794,6 +794,29 @@ function drawMapAtTime(timeMs, eventIdx) {
     }
 }
 
+// Offline replay only: unlike causal Spiderweb beliefs, this reader can use a
+// later capture marker to withhold an unknown interval. Inspect boundaries
+// before dropping points with missing coordinates. Never infer pause duration.
+function captureBoundaryContext(path, timeMs) {
+    const boundaryTimes = new Set();
+    for (const pt of path) {
+        if ((pt.event ?? pt[9]) !== 'capture_resume') continue;
+        const time = pt.time ?? pt.t ?? pt[0];
+        if (!Number.isInteger(time)) return { gap: true, boundaryTimes };
+        boundaryTimes.add(time);
+    }
+    let previousTime = null;
+    for (const pt of path) {
+        const time = pt.time ?? pt.t ?? pt[0] ?? 0;
+        if (boundaryTimes.has(time) && timeMs < time &&
+            (previousTime === null || previousTime < timeMs)) {
+            return { gap: true, boundaryTimes };
+        }
+        previousTime = time;
+    }
+    return { gap: false, boundaryTimes };
+}
+
 function drawTracks(ctx, tracks, timeMs, transform) {
     // Group tracks by player GUID — pick best track per player at this time
     const byGuid = {};
@@ -823,6 +846,8 @@ function drawTracks(ctx, tracks, timeMs, transform) {
 
     for (const { track, isAlive } of Object.values(byGuid)) {
         const path = track.path;
+        const capture = captureBoundaryContext(path, timeMs);
+        if (capture.gap) continue;
 
         // Find closest point in path to current time
         let closestPt = null;
@@ -833,6 +858,9 @@ function drawTracks(ctx, tracks, timeMs, transform) {
             const ptTime = pt.time ?? pt.t ?? pt[0] ?? 0;
             const ptX = pt.x ?? pt[1];
             const ptY = pt.y ?? pt[2];
+            // Every coincident boundary point is isolated. The final one is
+            // the baseline for the outgoing trail, never a bridge to the past.
+            if (ptTime <= timeMs && capture.boundaryTimes.has(ptTime)) trailPoints.length = 0;
             if (ptX == null || ptY == null) continue;
 
             if (ptTime <= timeMs) {
@@ -939,6 +967,7 @@ function _findPlayerPos(playerName, timeMs) {
         const spawnT = track.spawn_time || 0;
         const deathT = track.death_time || Infinity;
         if (timeMs < spawnT - 2000 || timeMs > deathT + 2000) continue;
+        if (captureBoundaryContext(path, timeMs).gap) return null;
 
         let best = null, bestDelta = Infinity;
         for (const pt of path) {

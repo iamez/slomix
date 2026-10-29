@@ -1,3 +1,8 @@
+## 2026-10-29 — Close direct legacy replay capture-boundary dependency
+
+See matching PLAN: ninth review fixes direct legacy replay gaps; fresh CI and
+numbered #1108 permission remain. Original roadmap remains retained.
+
 ## 2026-10-29 — Complete journey renderers and sanitized timing admission
 
 See the matching PLAN checkpoint; third-review rendering/timing closure is in progress.

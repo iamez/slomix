@@ -1,3 +1,26 @@
+## 2026-10-29 — Close direct legacy replay capture-boundary dependency
+
+Priorheadbeb8b295 completes26checks:25SUCCESS/1SKIPPED(CodeRabbit), zero failures;
+fullPG14=11991passed/163skipped, PG17=11995passed/159skipped, React990cases pass.
+A ninth review finding then reopens the actual legacy replay UI: it consumes raw
+tracks directly, bypassing the corrected backend replay positions/paths readers.
+Do not treat earlier green CI/eight resolved findings as this new fix's proof.
+
+Carry the existing canonical replay.js capture-boundary context into both Canvas
+track drawing and event-position lookup. Withhold the explicit unobserved gap,
+reset trails before every coincident resume group, preserve coordinate-less and
+legacy tuple markers, and retain unmarked legacy nearest-position behavior.
+Execute the whole shipped module in a Node VM/recording Canvas, not a reimplemented
+position model. Actual Lua file -> parser -> Canvas proof is included. Pin the
+review's200ms/x10 ->10600ms/x50 case at8000/10600/10800ms with a life spanning it.
+
+Before restoration19cases fail/2pass; afterwards21pass. Removing the new actual
+Canvas gap guard yields one observed failure, then cmp verifies full restoration.
+Generated datapoint ledger remains current. Fresh exact-head PG14/17 and complete
+CI are still required. No numbered #1108 merge permission, live data write,
+service/game/deploy/migration action. Original plan/history and all broader
+runtime/D4/D5, Supply, frame-health, live/Spiderweb/UI/Stats/security lanes remain.
+
 ## 2026-10-29 — Complete journey renderers and sanitized timing admission
 
 173d8c59 passes all checks, including both native PostgreSQL suites. Two new
