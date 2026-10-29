@@ -1,3 +1,26 @@
+## 2026-10-29 — Refuse selected subtrees of bare Git repositories
+
+The approved #1097 merge cycle refused safely: failed=0, threads=1, behind=0,
+sha=yes; the PR stayed OPEN. Review 4407550761 is confirmed: selecting a child
+of a bare repository bypassed the root/nested metadata guard. Nine new cases
+failed before the fix, covering initial plan, late seed arrival, source/target
+delta scans and an actual plan CLI subprocess.
+
+Inventory now inspects every selected-root ancestor for bare metadata, using a
+separate bare-layout predicate. Ordinary data inside a normal Git worktree
+remains supported. The existing selected-root/nested .git and bare checks stay
+in force. All 217 state tests pass; removing the ancestor guard produces two
+observed failures, then cmp confirms restoration. Native CLI refuses before
+report/destination creation. No live state is copied or service controlled.
+
+Publish the corrected head, answer/resolve the confirmed review, and repeat fresh
+CI plus the complete prescribed 420-second merge cycle under existing numbered
+#1097 approval. Do not reuse the earlier completed wait or claim it merged.
+#1096 remains merged; #1101 and new #1107 (preserved timing/lifecycle schema)
+have no numbered merge permission. Original full runtime plan, D4/D5 and
+Supply/frame-health/Spiderweb/UI/Stats obligations remain. Production and
+owner-upgraded Puran are unchanged.
+
 ## 2026-10-29 — Protect release directories and publication from permissive umask
 
 Review4403859169 is confirmed: umask000/002 allowed writable payload directories,
@@ -43,6 +66,39 @@ schema gates refuse the old package's missing applied-source files and pending10
 fullcandidate additionally exposes096/100source-vs-ledger checksum differences.
 Do not rewrite DB ledger checksums or apply migrations automatically. Puran stays
 deferred; no service/unit installation, restart or live DB write occurred.
+
+## 2026-10-28 — Refuse bare Git metadata in state sources
+
+Review4370885447 is confirmed: the prior inventory admitted bare repositories
+at a selected source root or nested directory. Reuse the existing git_boundary
+recognizer before scanning every directory; plan, seed revalidation and delta
+source/target inventories now reject metadata before copying it.
+Eight new cases were observed failing before the fix, including actual native
+CLI acceptance, and all207state cases pass after it. Disabling the new guard
+again makes both root/nested cases fail; restore is cmp-checked and restored
+native refusal cases pass. Target-preservation classification mutation also
+fails as expected and restores with cmp. No live state/data or service change.
+
+Actual synthetic seven-scope plan/seed/delta workflow preserves a divergent new
+target. Read-only actual manager observations show DEV bot/webactive and both
+watchdogunitsinactive; no claim of exhaustive writer exclusion or readiness.
+Keep the routing header before dated handoff entries (11ledger cases pass in
+app after its first full-CI documentation ordering failure). App final source
+isecb812b9, actual final1037filepackage rebuilt and statically served; app CI and
+its420second approved merge gate are still pending. Puran update stays deferred.
+
+## 2026-10-28 — Refresh state handover after final app preparation
+
+Owner deferred Puran updates and requested autonomous runtime continuation.
+Merge reviewed app source71589a60 into the existing #1097 branch, preserving all
+state-only tools/tests and both ledger histories. The only conflict was an empty
+state side versus the diagnostic-tool handoff insertion; retain the insertion.
+App proof: 1037 Git-free payload files, native static responses, hash/mode tamper
+refusals, 285 Python cases and 985 frontend tests. #1096 current-head CI and its
+approved merge cycle remain separate; no merged state is asserted here.
+Next: focused state seed/delta/writer tests and fresh native CLI proof, then
+refresh #1097 after #1096 actually lands. No new data seed from live roots,
+service action, migration, Puran change or production deployment.
 
 ## 2026-10-28 — Final app source integration verified locally
 
@@ -1309,6 +1365,44 @@ unchanged. All five native timeout/path variants pass locally; the earlier full
 branches normally and check new exact-head CI; do not hide the prior failure.
 Original plan, owner-specific approvals and frozen production remain unchanged.
 
+## 2026-10-16 — External state preparation advances without merge activation
+
+Continuation request was interpreted as permission for the previously proposed
+#1093 merge, but automatic approval review rejected it: no unambiguous owner
+approval specifically for #1093. The cycle script was not executed. Do not retry
+through a wrapper or alternative merge command; request explicit permission.
+#1093 remains green atc40537ba; each later PR still needs its own approval.
+
+Unblocked development continued with the next saved candidate cohort: three
+existing tools and their tests, extracted onto a new feature branch after1096.
+Source preflight and its tests already exist upstream and are not copied again.
+State preparation supports a dry-run inventory and copy-only seed into a new
+external shared directory. Delta planning classifies three-way differences and
+never replaces files. Named system/user unit inventory explicitly leaves writer
+absence, schema authority, handover and activation unmeasured/not ready.
+
+Found and fixed a boundary gap before publication: the seed/report gate accepted
+a new destination under a Git-free marked immutable payload. It now rejects
+ancestors carrying .slomix-release.json as well as .git, including dangling
+boundary markers. Writer report output applies the same dangling-marker rule.
+A synthetic before-probe admitted such a path without writing; the restored
+new gate refuses it before data copying. Source/state data were never real apps.
+
+100 tests pass; configured Ruff/Bandit pass. Removing immutable-release checks
+causes4 observed failures/2passes; removing dangling-marker checks causes2failures.
+Each file restored withcmp, then100 tests pass. Actual CLI proof copies7 synthetic
+files, compares Python and sha256sum hashes, preserves source trees, classifies
+3 independently changed paths and proves delta writes neither data tree. All
+reports are private and activation_ready remains false. Actual named-unit CLI
+read bot/web metadata only; active observations do not certify writer absence.
+
+The existing #1095 React CI also failed one availability form test (983passed).
+Its isolated follow-up is under review: do not claim an application bug until
+reproduced. Continue CI/review closure on1094–1096, publish the state cohort for
+review and preserve original source admission, exclusive handover, D5,
+proximity/gametime/storage/API/live/Spiderweb/UI roadmap. No services or DB writes,
+no migration, live state copy, game activation or production operation occurred.
+
 ## 2026-10-16 — Availability test controls the market transition explicitly
 
 #1095 bd6782ad React CI failed1 test/983passed: missing the bet-placed15 message
@@ -1332,6 +1426,33 @@ fresh exact-head CI. #1093 remains13 checks successful/zero threads/behindmain0,
 but its merge was rejected by automatic approval review for missing explicit
 permission for that PR. No merge occurred. Continue authorized development,
 retain the full original plan and request specific merge permission separately.
+
+## 2026-10-16 — SQLite rollback journals stay outside data seeds
+
+The existing state-source filter excluded SQLite databases, WAL and SHM but
+missed rollback-journal filenames. Added-journal to that same refusal boundary:
+auxiliary database state requires its separate consistent-backup contract, not
+a normal data-file seed. A synthetic metrics.db-journal input now refuses before
+copy; removing the new suffix produces one observed failure. Restored withcmp;
+101 state seed/delta/writer-inventory tests pass. This does not make the tool a
+generic secret scanner or a consistent snapshot of active writers.
+
+## 2026-10-16 — Independent state review fixes malformed CLI input
+
+PR #1097 is published, depending on1096; owner approval is still needed before
+any merge. Independent read-only review found no new critical immutable/report
+boundary, delta-content or false-quiescence issue. It reproduced a real CLI bug:
+JSON[] reached sources.values() and raised AttributeError with a traceback.
+The CLI now requires an object for both the input and selected source mapping
+before placement checks. Invalid structures return structured refused JSON,
+empty stderr and no state/report output. No raw input path is echoed.
+
+113 selected state tests pass. Removing the new checks produced6 failures/6passes;
+original restored withcmp. The actual previously failing child CLI now returns
+refused with no traceback or created files. This extends the earlier101 tests
+and retains the7-file CLI copy/hash proof and nonmutating delta proof. It does
+not certify quiescence, arbitrary-source confidentiality or activation. Live
+state, services, game, databases and production remain untouched.
 
 ## 2026-10-16 — Six further game-delivery review findings addressed
 
@@ -1371,6 +1492,26 @@ No merge occurred; request unambiguous owner permission for#1093 before retry.
 Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
 all six review threads with evidence. Original runtime, Spiderweb and UI work
 remain preserved; merge approval and owner-run DEV activation are separate gates.
+
+## 2026-10-18 — State path kinds and service ownership review closure
+
+Addressed#1097 path-kind and ownership findings. Three-way comparison now covers
+files, directories and absence together; change entries carry explicit kind.
+An independently changed empty directory cannot become an agreed file deletion.
+State seed requires the effective samba service UID before creating any output;
+wrong-owner private directories are refused rather than producing an unusable
+seed. Portable CI substitutes only the account lookup, not filesystem access.
+The malformed-JSON review finding was already fixed in1c1c727a; its12cases were
+verified unchanged, not implemented twice.
+
+Combined seed/delta/writer/ledger cohort136passed. Agent-focused78passed. Removing
+the two guards caused12observed failures; restored withcmp. Actual CLI fixture
+plan→seed→delta verified samba ownership, empty-directory preservation and
+unchanged source/target inventories during comparison. Ruff/diff-check pass.
+This is not a quiescence certificate, consistent database backup or activation
+approval. No live state, database or services were modified. Next:refresh app
+parent, publish source corrections, check CI and answer all three state threads.
+Production notification silence remains owner-pending; original roadmap retained.
 
 ## 2026-10-18 — Effective DEV health and consumer protection review closure
 
@@ -1430,6 +1571,22 @@ Bandit/diff-check pass. These are source/fixture results, not deployed proof.
 Next:publish, refresh child branches, inspect exact-head CI and answer the three
 comments. Per-PR merge authority and owner-run activation remain separate gates.
 Original runtime/D4/D5/exclusive handover/Spiderweb/UI plans remain preserved.
+
+## 2026-10-19 — State metadata and reserved report path review corrections
+
+Addressed all three new1097findings. content() now uses fixed-length3tuples for
+both directory and file tokens. Negative integer POSIX mtime_ns is accepted,
+matching the inventory/seed producer, while boolean/noninteger metadata remains
+invalid. Both state/report boundary helpers reject basename.git and
+.slomix-release.json before creating reserved markers or state output.
+
+138dedicated tests pass, Ruff/diff-check clean. Restored old behavior caused8
+observed failures; all three scripts restored withcmp. Actual CLI fixture retained
+mtime_ns=-1000000000 through seed/delta, refused both marker names and preserved
+source/target inventories. No local CodeQL engine run is claimed: public scanning
+must recheck the fixed tuple shape. No live data, database or services touched.
+Next:refresh app parent, publish and answer the three review threads; inspect CI.
+Original runtime/D4/D5/handover/Spiderweb/UI plans remain preserved.
 
 ## 2026-10-19 — Reproduce and fix runner loader fixture contamination
 
@@ -1515,6 +1672,24 @@ mount, DB migration or deployed payload change occurred. Next:publish, refresh
 state child, answer three review threads and inspect exact-head CI. First merge
 candidate1093remains clean/green atc40537ba,behindmain0,owner approval required.
 
+## 2026-10-20 — Reject Git directory markers before state inventory dispatch
+
+PR1097 review4322041171 confirmed an empty .git directory could be inventoried
+and seeded because only regular files checked Git components. Inventory now
+rejects every relative .git component before lstat/type dispatch, including empty
+and nested directories, files and symlinks. Existing source-drift and report
+fences remain intact; no live data, service or deployment was touched.
+
+Targeted state suites:105passed with synthetic external fixtures. Six type/depth
+regressions plus two native child CLI cases cover plan/seed refusal without
+report/destination creation and byte-for-byte source preservation. Guard removal
+produced7observed failures; the independent seed drift guard still refused its
+case. Source restored andcmp verified. Ruff anddiff checks pass. The initial
+standard/tmp fixture run correctly hit this host's existing/tmp/.git fence;
+rerunning in a fresh/var/tmp fixture root avoided that unrelated Git ancestor.
+Next:coordinate parent refresh, publish and answer the review with exact-head
+CI. Original plan and per-PR merge/owner activation requirements remain intact.
+
 ## 2026-10-20 — Admit exact GNU locale metadata without weakening configuration guards
 
 Review1096 found six missing GNU libc locale categories. Add only LC_PAPER,
@@ -1564,6 +1739,35 @@ private /var/tmp run resolved those without weakening guards. No service, engine
 real database or deployed payload was touched. Next: refresh dependent PR parents,
 answer the five review comments, and inspect exact-head CI; per-PR merge and owner
 activation gates remain unchanged. Existing original runtime plan is retained.
+
+## 2026-10-20 — Bind writer observations to user identity and reject credential trees
+
+Validated three new1097reviews. State inventory rejects every relative .env*
+component before type dispatch/traversal, including directories with innocuously
+named children. Explicitly selected .env* and .git roots also refuse. Git and
+other data/DB exclusions stay intact. No state copy or source deletion occurred.
+
+User-scope writer probes require --expected-user-uid; library probes without it
+return unknown. Expected UID must equal real and effective UID before systemctl
+runs. Reports record all three UIDs; user-bus/runtime paths are derived from the
+validated UID instead of inherited bus overrides. System probes remain unchanged.
+Empty-instance templates and multiple-at names refuse before probing; concrete
+instances remain accepted. Existing prepared invocation snippets need the UID
+argument. Named observations never certify exclusion, handover or activation.
+
+181targeted state/writer/delta/path tests passed. Native CLI systemctl doubles
+prove matching/wrong UID and template handling, plus .env directory refusal
+without destination/report or content disclosure. Removed directory/identity/
+template guards cause7/4/3observed failures; all restored andcmp verified. Ruff
+and diff checks pass. Actual read-only host probe, independently compared with
+systemctl: DEV bot456340/web3549798active, watchdog service/timer inactive.
+Named team/cache user units are unknown in inventory; direct UID1000 manager
+LoadState=not-found confirms neither installed unit. This is point-in-time named
+metadata, not all-writer exclusion or operational runtime acceptance.
+
+Next:refresh reviewed app parent, publish/answer three threads and inspect exact
+CI.1093is merged;1094requires its own owner approval. Original D4/D5/exclusive
+writer handover, consumer-off proof and preserved roadmap remain open.
 
 ## 2026-10-20 — Correct relative metrics defaults and bounded preflight startup
 
@@ -1617,6 +1821,32 @@ security review; its documented unpatched braces residual remains unresolved.
 Original full plan, D4/D5/exclusive writer handover and all remaining roadmap
 items are retained. Production remains frozen; no DB/state or service change.
 
+## 2026-10-20 — Propagate type conflicts and close metadata ancestry boundaries
+
+Validated three new1097reviews. An ancestor's baseline/source/target type conflict
+now makes descendants path_type_conflict even when the target independently
+removed the parent. No descendant copy_new can recreate that unresolved parent;
+existing classifications and nonmutating/manual reconciliation remain intact.
+
+Selected source checks inspect all absolute path components for .git/.env*, not
+only the leaf. State/report output boundaries share writer inventory's stdlib
+Git-layout helper: worktree markers and bare repository-shaped HEAD/objects/
+refs (also packed-refs/reftable) layouts refuse. No Git subprocess/config executes
+in admission; conservative metadata-shaped paths fail closed. Legacy dangling
+marker and immutable-release fences remain. No live data was copied or changed.
+
+192targeted state/delta/writer/path tests passed. Actual Git-init bare fixtures,
+native CLI refusal and native nonmutating delta output cover all three mechanisms.
+Kind/ancestor/bare mutations cause3/3/5observed failures; sources restored/cmp.
+Initial one source-ancestor fixture triggered the independent output Git fence;
+placing that source under a separate parent exercises the intended source guard.
+Ruff/diff pass. No service, real database or deployment was touched.
+
+1094owner-approved cycle is in progress at30775c84, later PRs not authorized.
+Next: coordinate reviewed game/app parent refresh, publish/answer three comments
+and inspect exact-head CI. Original plan/D4/D5/exclusive handover remains open;
+source safeguards do not certify all writers absent or activate a new lane.
+
 ## 2026-10-20 — Bind rehearsal revision and disable executable Git fsmonitor
 
 Validated two additional #1095 P1 review findings. Every supervisor source Git
@@ -1666,6 +1896,28 @@ parents and answer all five reviews before new exact-head CI. Original D4/D5,
 writer exclusion, trusted-source admission, future observed DEV handover and
 all preserved proximity/gametime/API/UI/Spiderweb/Stats work remain required.
 
+## 2026-10-20 — Keep system writer observations on the local system bus
+
+Validated review4325190528: inherited DBUS_SYSTEM_BUS_ADDRESS selected another
+bus for non-root systemctl probes. Both scopes now drop that variable and
+SYSTEMD_BUS_ADDRESS before querying; user scope keeps its existing validated UID
+and explicit user-bus path. Unknown metadata/exclusion/activation semantics stay
+unchanged. No bus proxy, manager or service is started by this change.
+
+71writer tests pass. Native child fake-systemctl records absent override keys;
+removing the new guard causes3observed failures, restored/cmp. Actual UID1000
+read-only proof: direct systemctl with poisoned bus exits1; sanitized CLI and an
+independent clean systemctl agree on etlegacy-bot active/PID456340. This is one
+named-unit point-in-time metadata observation, not all-writer exclusion, freshness
+of application code or activation. Official sd_bus_default docs confirm the env
+variable selects the system bus. Ruff/diff pass; no live data/config changed.
+
+1093/1094already merged under their own owner approvals.1095has two further P1
+source-admission/entrypoint findings being corrected; no1095–1097merge approval
+is inferred from generic continue. Next:coordinate reviewed parent refresh,
+publish/reply and verify exact-head CI. Original D4/D5/exclusive handover and
+all preserved proximity/gametime/API/UI/Spiderweb/Stats lanes remain open.
+
 ## 2026-10-20 — External supervisor bootstrap and raw source comparison
 
 Addressed #1095 P1 reviews4325182407/4325182418. Source admission no longer runs
@@ -1700,6 +1952,20 @@ observed failing test; every file restored and compared with cmp. Restored targe
 suite166passed; Ruff and diff checks pass. Counts overlap earlier runs.
 Next:publish and answer both reviews, refresh dependent parents and inspect exact
 head CI; preserve original D4/D5/exclusive writer handover and owner merge gates.
+
+## 2026-10-21 — Preserve target-deleted directory ancestry
+
+Addressed #1097 review4328261007. A baseline directory missing from the target
+now fences every descendant as target_changed_preserve, including newly added
+source files and empty directories; none can be proposed as copy_new and undo
+the independent deletion. Genuinely new siblings remain copy candidates.
+Native CLI and direct library results agree for shallow/nested deleted parents,
+empty dirs, zero-byte and nested files. Both source/target inventories remain
+unchanged and activation stays false.50targeted tests pass; disabling ancestry
+propagation produces2observed failures, then exact cmp restoration. Ruff/diff
+pass. No state application, DB write, service or deployment performed.
+Owner explicitly approved1095/1096/1097 on Oct21; fresh review findings are fixed
+before the ordered prescribed merge cycles. Preserve full original roadmap.
 
 ## 2026-10-21 — Marked migration execution redaction and nonempty identities
 
@@ -1772,6 +2038,36 @@ no source merge had happened. Restart full420-second cycle only on corrected
 head and fresh checks. Owner approval1095–1097remains valid; no service/deploy.
 Sources: https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html
 https://pillow.readthedocs.io/en/stable/installation/python-support.html
+
+## 2026-10-21 — Trusted probe execution, early report reservation and no-atime reads
+
+Addressed #1097 reviews4332970087/4332970092/4332970097. Writer probes execute
+only /usr/bin/systemctl after checking root ownership, regular executable kind,
+no symlink and non-group/world-writable executable/ancestors. Child environment
+is a fixed minimal allowlist, plus the validated canonical user bus for user
+scope; inherited PATH/loader/system-bus overrides cannot select probe code.
+Native fake PATH binary demonstrably executes in an unguarded positive control,
+then never executes through CLI. Actual read-only UID1000 host proof: sanitized
+CLI and independent clean /usr/bin/systemctl agree bot456340active. Named unit
+metadata remains neither writer exclusion nor source freshness/activation proof.
+
+Seed CLI validates the saved plan/UID before output, exclusively reserves the
+private report stream before any seed copy, and completes/fsyncs the same stream.
+Existing output wins before copy; partial report/output are retained on failure.
+Native filesystem/main control attempts a competing exclusive report create
+during seed, observes refusal, then verifies complete report and copied content.
+Inventory fingerprints, directory scans and source copying use Linux O_NOATIME;
+unsupported/permission-denied no-atime access refuses without unsafe fallback.
+Actual old atime fixtures prove file AND directory access timestamps unchanged
+through plan, seed and delta scans; target-deleted ancestry fence remains intact.
+
+199targeted tests pass. Four observed failing guard mutations: no-atime3cases,
+early reservation1, clean environment1, trusted executable metadata3. All source
+restored and compared with cmp. Ruff/diff pass; no service/ET/live DB/state change.
+Fresh game audit redaction review fixed separately as f40ede2e before any merge.
+Owner-approved1095cycle previously completed failed0/threads1/behind0/head same,
+correctly leftPRopen. Refresh/publish all parents, answer these reviews and run
+new exact-head CI plus full420second cycles; preserve D4/D5 and original roadmap.
 
 ## 2026-10-21 — Redact marked audit failures after successful connection
 
