@@ -80,6 +80,55 @@ have no numbered merge permission. Original full runtime plan, D4/D5 and
 Supply/frame-health/Spiderweb/UI/Stats obligations remain. Production and
 owner-upgraded Puran are unchanged.
 
+## 2026-10-29 — Preserve the timing declaration coverage exemption
+
+Initial #1107 PostgreSQL 17 CI executed all 65 new timing/lifecycle schema cases
+successfully, with zero skips, but the whole job failed two round-id coverage
+contract cases. Publication omitted an existing full-candidate dependency:
+runtime_gametime_identities.round_id is a producer-issued 32-hex TEXT identity,
+not canonical rounds.id. Restore its documented detection exemption; generic
+clock-based relinking must never rewrite these immutable declarations.
+
+Only the existing six-line exemption is ported. Relinker queries/writers and
+coverage/canary tests remain unchanged. The focused local contract/schema suite
+passes 19 cases and explicitly skips 53 PostgreSQL cases. Removing the exemption
+causes both observed failures again; cmp confirms restoration. Re-run full CI at
+the corrected published head before claiming green. No services, database writes
+or historical source adoption. #1107 still has no numbered owner merge approval.
+Original runtime plan, D4/D5 and retained incident/UI/Spiderweb work remain.
+
+## 2026-10-29 — Publish preserved timing schema before identity ingestion
+
+Runtime app #1096 is merged at 5c4ad123; the separately approved state #1097
+is still in its final merge cycle. Proximity #1101 at 428a0ee4 passed all 67
+actual schema cases on PostgreSQL 14 and 17, with zero skips. Its applied
+096/100 bytes are preserved; stricter provenance is forward migration 105.
+Neither #1101 nor this follow-up has numbered owner merge permission.
+
+Publish the five existing, already-applied timing/lifecycle SQL sources
+097/098/101/102/103 byte-for-byte from the preserved release. Register them in
+dependency order and retain exact timing bootstrap blocks plus the nullable
+player_track.death_type column. No timing consumer, Lua change, historical
+adoption, backfill, service action or migration execution accompanies this slice.
+Identity/receipt linking follows after source publication, then bounded ingestion.
+
+Ten source/registration/bootstrap cases failed before restoration. Afterwards,
+26 focused static cases pass, with 106 PostgreSQL cases explicitly skipped
+locally (including the inherited proximity suite); actual CI PostgreSQL proof is
+still required. Checksum and omitted-bootstrap mutants each produce one observed
+failure, then source restoration passes cmp. New SQL fixtures exercise legacy
+source preservation, private ACL replay/reachable-role refusal and nullable
+lifecycle cause preservation. Existing link/application schema fixtures are reused.
+
+Native read-only checks against BOTH actual DEV roles independently count 105
+applied ledger entries and verify every restored file checksum. Missing files,
+checksum differences and invalid required columns are all zero; only 104/105
+remain pending. This proves source completeness, not activation readiness.
+Preserve D4/D5 trusted-source admission/exclusive writer handover, the original
+full runtime plan and Supply/frame-health/Spiderweb/UI/Stats work. Production
+Slomix and owner-upgraded Puran stay unchanged. Private proof packet:
+/home/samba/share/slomix-runtime-app-final-20261029-9nixuxrr.
+
 ## 2026-10-29 — Protect release directories and publication from permissive umask
 
 Review4403859169 is confirmed: umask000/002 allowed writable payload directories,
