@@ -41,6 +41,57 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Complete proximity integration prepared for disposable-PG CI
+
+Existing #1108 now carries one cohesive source path: real Lua producer IDs and
+capture-quality headers, verified timing decoder, canonical parser, manifest-
+gated ingestion, independent commit observation, durable retry/queue/cursor and
+bounded worker/spawn supervisor. Explicit declaration policy remains default-off.
+No extra branch or worktree was created. Existing main migrations/bootstrap are
+preserved; unrelated website/config/community-parser changes are excluded.
+
+Local selected suite: 595 passed, 110 PostgreSQL cases explicitly skipped; XML
+and console counts agree. Sixteen frame-health compatibility cases also pass.
+The first composition exposed24failures from a missing decode_gametime_document
+prerequisite; carrying its existing stateless decoder resolves them. The changed
+subset then passes160cases and the final selected suite has zero failures.
+Three actual Lua/file/parser/receipt capture scenarios execute. Removing the gap
+distance guard causes two observed failures (1010units instead of20); restore
+is verified by cmp and all three runtime capture cases pass again. Selected
+Python sources lint clean apart from the same two pre-existing parser datetime
+warnings independently reproduced on main; no suppression or clock change.
+
+Four new opted-in PG cases exercise actual DEV configuration through an async
+worker or a freshly spawned native batch, with default-off and explicit-on policy,
+owned DB resources, independent exact canonical links and retained inputs. These
+and the two checkpoint-policy cases have not yet executed locally; actual PG14/17
+CI is required. The old green46b5cabb foundation proof cannot certify this update.
+#1108 has no numbered merge approval. No deployment, migration, live DB write,
+service action, Puran/production change or source deletion. Retain the complete
+original runtime/D4/D5, Supply/frame-health/Spiderweb/UI/Stats and README B+C plan.
+
+## 2026-10-29 — Publish the complete proximity ingestion path in existing #1108
+
+Fresh checks on46b5cabb completed without failures. Preserve that exact foundation
+checkpoint and extend the same review worktree/PR with the canonical parser,
+bounded ingest/commit/queue/batch/cursor/worker and explicit default-off policy.
+Carry actual Lua producer/harness and timing-admission prerequisites needed by
+the full stats + proximity identity proof. Keep existing migrations/bootstrap
+from main; the full candidate contains an older schema ordering and must not
+replace the already-published104/105 definitions. Do not copy unrelated config,
+community parser or website/UI changes merely because static imports reach them.
+
+Run selected local contracts and actual opted-in disposable PG14/17 CI, including
+the two new policy-through-batch canonical import cases. Check exact source and
+fixture dependencies, fresh processes, observer visibility, rollback/replay and
+mutation failures before a complete-ingestion claim. No deployment/activation
+claim follows. Preserve sticky reconciliation holds, source files and default-off.
+#1108 still requires its own numbered owner merge permission after fresh proof.
+
+All original runtime/D4/D5, Supply, frame-health, Spiderweb/UI/Stats work and
+README B+C remain retained. No live DB write, migration, service/Puran action,
+production change, new branch/worktree, source deletion or archival pruning.
+
 ## 2026-10-29 — Extend existing proximity PR with retry and resource foundations
 
 Continue from the consolidated workspace; no new branch or worktree. #1107 at

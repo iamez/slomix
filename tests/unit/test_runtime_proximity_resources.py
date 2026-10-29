@@ -1,6 +1,7 @@
 """Real adapter acquisition lifecycle with controlled native connection doubles."""
 
 import asyncio
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -146,3 +147,24 @@ async def test_cancellation_unwinds_all_owned_resources(phase):
         with pytest.raises(asyncio.CancelledError):
             await task
     assert released == list(reversed(borrowed))
+
+
+async def test_real_worker_accepts_factory_and_uses_real_cursor(tmp_path, monkeypatch):
+    from shared.runtime_proximity_worker import RuntimeProximityWorker
+    tmp_path.chmod(0o700)
+    adapter, _, borrowed, released = setup_resources()
+    stop = asyncio.Event()
+    worker = RuntimeProximityWorker(tmp_path, source_id='fixture', gametimes_dir=tmp_path, enabled=True)
+
+    @asynccontextmanager
+    async def acquire():
+        async with proximity_database_resources(adapter) as pair:
+            yield pair
+        stop.set()
+
+    await asyncio.wait_for(worker.run(acquire, stop), 1)
+    assert released == list(reversed(borrowed))
+    assert (tmp_path / '.proximity-cursor.json').is_file()
+    assert worker.state.status == 'stopped'
+    assert sum(dict(worker.state.last_batch_counts).values()) == 0
+    print('Resource smoke: real worker/cursor, distinct backend doubles, writer released before body, observer after')
