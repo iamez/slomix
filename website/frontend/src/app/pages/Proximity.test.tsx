@@ -1,9 +1,12 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { Proximity } from './Proximity';
+import { ProximityRoundCanvases } from './ProximityRoundCanvases';
 import type { ProximityLeaderboard } from '../lib/types';
 import boardJson from './__fixtures__/api_proximity_leaderboards.json';
 import scopes from './__fixtures__/api_proximity_scopes.json';
@@ -195,6 +198,48 @@ afterEach(() => {
 });
 
 describe('Proximity', () => {
+  it('does not place journey events inside capture gaps', async () => {
+    const life = { ...journey.lives[0],
+      kills: [{ time: 100 }, { time: 300 }], death: { time: 100 },
+      path: [
+        { t: 0, x: 0, y: 0 },
+        { t: 200, x: 10, y: 10, break_before: true, event: 'capture_resume' },
+        { t: 400, x: 20, y: 20 },
+      ] };
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/player-journey', { ...journey, lives: [life] }]]))));
+    render(<QueryClientProvider client={makeQueryClient()}><MemoryRouter>
+      <ProximityRoundCanvases sessionDate="2099-01-01" mapName="supply" roundNumber={1} roundStartUnix={null} />
+    </MemoryRouter></QueryClientProvider>);
+    const svg = await screen.findByRole('img', { name: 'paths of every life this round' });
+    expect(svg.querySelectorAll('circle')).toHaveLength(2); // spawn + covered kill only
+  });
+
+  it.each([false, true])('qualifies journey timing and preserves SVG gaps (new wire=%s)', async (qualified) => {
+    const life = { ...journey.lives[0], death_time_ms: null, duration_ms: 99999000,
+      raw_duration_ms: qualified ? 0 : undefined, kills: [], death: null,
+      narrative: qualified ? 'raw track span 0s (may include pauses)' : 'lived 99999s',
+      path: [
+        { ...journey.lives[0].path[0], t: 0, x: 0, y: 0 },
+        { ...journey.lives[0].path[0], t: 200, x: 10, y: 10, break_before: true, event: 'capture_resume' },
+        { ...journey.lives[0].path[0], t: 400, x: 20, y: 20 },
+      ] };
+    const payload = { ...journey, lives: [life],
+      elapsed_time_quality: qualified ? { active_time_verified: false } : undefined,
+      summary: { ...journey.summary, avg_life_s: 99999,
+        avg_raw_span_s: qualified ? 0 : undefined, raw_span_samples: qualified ? 1 : undefined } };
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/player-journey', payload]]))));
+    render(<QueryClientProvider client={makeQueryClient()}><MemoryRouter>
+      <ProximityRoundCanvases sessionDate="2099-01-01" mapName="supply" roundNumber={1} roundStartUnix={null} />
+    </MemoryRouter></QueryClientProvider>);
+    const svg = await screen.findByRole('img', { name: 'paths of every life this round' });
+    expect(svg.querySelector('path')?.getAttribute('d')?.match(/M/g)).toHaveLength(2);
+    expect(screen.queryByText(/s per life/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/lived 99999/)).not.toBeInTheDocument();
+    expect(screen.getByText(/end unknown/)).toBeInTheDocument();
+    if (qualified) expect(screen.getByText(/0 s average raw span/)).toBeInTheDocument();
+    else expect(screen.getByText(/active life time unverified/)).toBeInTheDocument();
+  });
+
   it('opens on the power board with the attribution the wire sent', async () => {
     vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
     renderPage();
@@ -403,6 +448,39 @@ describe('Proximity', () => {
     expect(screen.getByText(/session-wide metric; map\/round filters are not applied/)).toBeInTheDocument();
   });
 
+  it('renders the raw-clock explanation and exclusion rules from the movers response', async () => {
+    const qualified = {
+      ...moversChecked,
+      elapsed_time_quality: {
+        basis: 'raw_source_timestamps', active_time_verified: false,
+        reason: 'Raw elapsed times may include pauses; not active life time or return-fire reaction.',
+        reaction_excludes: 'Synthetic missing or reversed first movement.',
+        survival_excludes: 'Synthetic missing or zero end.',
+      },
+    };
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map<string, unknown>([
+      ['/api/proximity/leaderboards', board], ['/api/proximity/movers', qualified],
+    ]))));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole('button', { name: 'braundorf_b4' })[0]);
+    await waitFor(() => expect(screen.getByText(qualified.elapsed_time_quality.reason)).toBeInTheDocument());
+    expect(screen.getByText(/Synthetic missing or reversed first movement/)).toBeInTheDocument();
+    expect(screen.getByText(/Synthetic missing or zero end/)).toBeInTheDocument();
+    expect(screen.queryByText(/Legacy elapsed values/)).not.toBeInTheDocument();
+  });
+
+  it('qualifies the shipped legacy HTML movers labels, not just the new SPA', () => {
+    const html = readFileSync(resolve(process.cwd(), '../index.html'), 'utf8');
+    const page = new DOMParser().parseFromString(html, 'text/html');
+    for (const id of ['proximity-survival-leaders', 'proximity-reaction-leaders']) {
+      const label = page.getElementById(id)?.previousElementSibling;
+      expect(label?.textContent).toContain('Raw');
+      expect(label?.getAttribute('title')).toContain('may include pauses');
+      expect(label?.getAttribute('title')).toMatch(/excluded/i);
+    }
+  });
+
   // the overlays draw a canvas over the recorded geometry; a loaded runner passed 5 s once (2026-09-09)
   it('renders the map overlays once a map is picked, and the player pair once a player is', { timeout: 20000 }, async () => {
     vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
@@ -427,8 +505,10 @@ describe('Proximity', () => {
     await waitFor(() => expect(screen.getByText(/22 samples · mode kills_from/)).toBeInTheDocument());
     await waitFor(() => expect(screen.getByLabelText('pitch histogram')).toBeInTheDocument());
     // the movers' other two boards and the timestamp (ledger 2026-09-09)
-    expect(screen.getByText('first move after a spawn')).toBeInTheDocument();
-    expect(screen.getByText('average life')).toBeInTheDocument();
+    expect(screen.getByText('raw time to first movement')).toBeInTheDocument();
+    expect(screen.getByText('average raw track span')).toBeInTheDocument();
+    expect(screen.getByText(/Legacy elapsed values may include pauses/)).toBeInTheDocument();
+    expect(screen.queryByText('average life')).not.toBeInTheDocument();
     expect(screen.getAllByText(/computed 2026-09-02 09:42 UTC/).length).toBeGreaterThan(0);
     // the circular statistics, the busiest zone's rose and the narrative (2026-09-09)
     await waitFor(() => expect(screen.getByText(/direction: mean yaw 31° · r 0\.28 · circular std ±91°/)).toBeInTheDocument());

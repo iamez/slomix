@@ -105,13 +105,19 @@ def _decode_timing(payload, expected_identity, source_id, expected_round):
         fields[key] = entry.get('value')
     meta = document['meta']
     map_name = meta.get('map')
+    if (not isinstance(map_name, str) or re.fullmatch(r'[A-Za-z0-9_.+-]{1,64}', map_name, re.ASCII) is None
+            or '..' in map_name):
+        raise ValueError('Invalid original gametime map name')
+    # The producer sanitizes only the filename. Original metadata/embed names
+    # must agree exactly; the lossy filename never establishes original identity.
+    filename_map = re.sub(r'[^A-Za-z0-9_-]', '_', map_name, flags=re.ASCII)
     half = _integer(meta.get('round'), 'round', minimum=1, maximum=2)
     start = _integer(meta.get('round_start_unix'), 'start', minimum=1, maximum=9_223_372_036_854_775_807)
     end = _integer(meta.get('round_end_unix'), 'end', minimum=1, maximum=9_223_372_036_854_775_807)
     duration = _integer(meta.get('actual_duration_seconds'), 'duration')
     pauses = _integer(meta.get('pause_seconds'), 'pause seconds')
     count = _integer(meta.get('pause_count'), 'pause count')
-    if ((map_name, half, end) != expected_identity or fields.get('map') != map_name
+    if ((filename_map, half, end) != expected_identity or fields.get('map') != map_name
             or _decimal(fields, 'round') != (half,)
             or _decimal(fields, 'lua_roundstart') != (start,)
             or _decimal(fields, 'lua_roundend') != (end,)

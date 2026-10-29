@@ -77,7 +77,7 @@ io.open = function(path, flags)
     end
     opens = opens + 1
     if mode == 'transport' or mode == 'sweep' then error('forbidden queue file access') end
-    assert(path == directory .. '/gametime-supply-R' .. half .. '-1700000610.json', 'unexpected file path')
+    assert(path == directory .. (binding_fault == 'map-output' and '/gametime-supply_te_test-R' or '/gametime-supply-R') .. half .. '-1700000610.json', 'unexpected file path')
     if mode == 'write-fail' then return nil, 'fixture open failure' end
     return real_open(path, flags)
 end
@@ -90,7 +90,7 @@ end
 io.popen = function() error('forbidden pending scan') end
 
 if identity_wire then
-    if binding_fault == 'map-alphabet' then values.mapname = 'supply.te+test' end
+    if binding_fault == 'map-alphabet' or binding_fault == 'map-output' then values.mapname = 'supply.te+test' end
     values.gamestate, values.g_currentRound = '0', tostring(2 - half)
     if binding_fault ~= 'noinit' then et_InitGame(100, 0, 0) end
     local observed = {init_time=100, map_name=values.mapname, counter=tonumber(values.g_currentRound),

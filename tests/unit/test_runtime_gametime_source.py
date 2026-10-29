@@ -233,6 +233,10 @@ def test_sanitized_filename_is_not_assumed_to_prove_original_map(tmp_path):
     source = document()
     source['meta']['map'] = 'supply.extra'
     source['payload']['embeds'][0]['fields'][0]['value'] = 'supply.extra'
+    timing = parse(tmp_path, json.dumps(source).encode(), filename=NAME.replace('supply', 'supply_extra'))
+    assert timing.map_name == 'supply.extra'
+    # These two originals share a filename but are not interchangeable identities.
+    source['payload']['embeds'][0]['fields'][0]['value'] = 'supply+extra'
     with pytest.raises(ValueError, match='conflict'):
         parse(tmp_path, json.dumps(source).encode(), filename=NAME.replace('supply', 'supply_extra'))
 

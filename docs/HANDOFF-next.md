@@ -41,6 +41,30 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Complete journey renderers and sanitized timing admission
+
+173d8c59 passes all checks, including both native PostgreSQL suites. Two new
+review findings remain actionable: old Canvas/SVG journey rendering connects
+across capture gaps, and timing admission compares sanitized filenames with
+unsanitized original map names. Carry the existing canonical segmented journey
+UI/shared marker helper and raw-clock labels, including nullable boundary types.
+Markers require a unique observed segment; unavailable coverage is not solitude.
+The actual legacy Canvas/HTTP harness exercises the shipped code without a browser.
+
+Timing admission now validates original metadata/embed map agreement, derives the
+producer filename sanitization separately, and keeps raw-byte/source identity
+checks. Actual whole-producer output for supply.te+test is admitted for both
+halves; conflicting original names that sanitize identically remain rejected.
+151 focused cases pass. Reverting filename normalization fails both whole-producer
+cases; removing the Canvas boundary guard fails its rendering case. Both guards
+are restored byte-for-byte. Changed-file Bandit is clean. Fresh exact-head CI,
+including Node22 React typecheck/tests and both PostgreSQL versions, is required.
+
+No live DB write, migration, service/game action or deployment. No numbered #1108
+merge permission exists. Full original PLAN, broader runtime/D4/D5, Supply,
+frame-health, Spiderweb/geometry and security work remain retained; README B+C
+presentation stays deferred and DPM attribution belongs to Superboyy.
+
 ## 2026-10-29 — Complete producer/reader contract after second review
 
 81883578 passes all26checks, but three new review findings block merge: new timing/

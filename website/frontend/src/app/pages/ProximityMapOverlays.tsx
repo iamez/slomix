@@ -128,7 +128,7 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
       </div>
 
       <div data-parity="proximity.movers">
-        <ProxPanel label="movers" aside="distance · sprint · reaction · survival" q={movers} empty={NO_ROWS}
+        <ProxPanel label="movers" aside="distance · sprint · raw elapsed times" q={movers} empty={NO_ROWS}
           isEmpty={(d) => d.distance.length === 0 && d.sprint.length === 0}>
           {(d) => (
             <Stack gap={2}>
@@ -150,22 +150,22 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                 </Stack>
                 {/* The other two boards the endpoint answers and the page never drew (ledger 2026-09-09). */}
                 <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
-                  {/* AVG(time_to_first_move_ms): spawn → first move, not a reaction to a hit (proximity_movement.py) */}
-                  <Lbl>first move after a spawn</Lbl>
+                  <Lbl>raw time to first movement</Lbl>
                   {d.reaction.slice(0, 5).map((r) => (
                     <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
                       val={`avg ${figure(r.reaction_ms)} ms`} />
                   ))}
                 </Stack>
                 <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
-                  {/* AVG(duration_ms) over the player's tracks (proximity_movement.py), not a single longest life */}
-                  <Lbl>average life</Lbl>
+                  <Lbl>average raw track span</Lbl>
                   {d.survival.slice(0, 5).map((r) => (
                     <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
                       val={`avg ${figure(Math.round(r.duration_ms / 1000))} s`} />
                   ))}
                 </Stack>
               </Cluster>
+              <Meta>{d.elapsed_time_quality?.reason ?? 'Legacy elapsed values may include pauses — not verified active time or return-fire reaction.'}</Meta>
+              {d.elapsed_time_quality && <Meta>First movement excludes: {d.elapsed_time_quality.reaction_excludes} Track span excludes: {d.elapsed_time_quality.survival_excludes}</Meta>}
               {d.generated_at && <Meta>computed {utcStamp(d.generated_at)}</Meta>}
             </Stack>
           )}

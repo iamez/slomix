@@ -177,3 +177,15 @@ def test_producer_map_alphabet_matches_actual_stats_lease(tmp_path, half):
     )
     assert 'MAP_BIND_ACCEPTED' in run(proximity, half, scenario='map-alphabet', declared=declared)
     assert not list(timing.iterdir()) and not list(proximity.iterdir())
+
+
+@pytest.mark.parametrize('half', [1, 2])
+def test_whole_timing_producer_sanitized_filename_preserves_original_map(tmp_path, half):
+    declared = identity(half)
+    output = run_timing(tmp_path, enabled=False, target=False, mode='frame', identity=declared,
+                        binding_fault='map-output')
+    filename = f'gametime-supply_te_test-R{half}-1700000610.json'
+    timing = parse_timing(tmp_path, (tmp_path / filename).read_bytes(), filename=filename,
+                         source_id=declared.source_id, expected_identity=declared)
+    assert timing.map_name == 'supply.te+test' and timing.round_number == half
+    assert timing.declared_identity == declared and 'STATS_LEASE_PROFILE' in output

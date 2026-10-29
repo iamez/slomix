@@ -1,3 +1,8 @@
+## 2026-10-29 — Complete journey renderers and sanitized timing admission
+
+See the matching PLAN checkpoint; third-review rendering/timing closure is in progress.
+All original lanes and numbered merge boundaries remain unchanged.
+
 ## 2026-10-29 — Complete producer/reader contract after second review
 
 81883578 passes all26checks, but three new review findings block merge: new timing/
