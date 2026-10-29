@@ -88,8 +88,10 @@ async def test_failed_receipt_read_prevents_all_import_writes(monkeypatch, tmp_p
         call = AsyncMock()
         monkeypatch.setattr(parser, method, call)
         writes.append(call)
-    if cancelled and transactional:
-        with pytest.raises(asyncio.CancelledError):
+    if transactional:
+        # Both cancellation and transient connection loss propagate after rollback.
+        # Returning False would let the runtime persist a permanent reconciliation hold.
+        with pytest.raises(asyncio.CancelledError if cancelled else ConnectionError):
             await parser.import_file(str(source), date(2026, 10, 4))
     else:
         assert await parser.import_file(str(source), date(2026, 10, 4)) is False
