@@ -5,9 +5,15 @@ import pytest
 
 from scripts import prepare_runtime_release as package
 from shared.release_manifest import MANIFEST, file_hash, verify_release
-from tests.unit.test_spa_artifact_preflight import build, git
+from tests.unit.test_spa_artifact_preflight import build as build_frontend
 from tests.unit.test_spa_artifact_preflight import fixture as source_fixture  # noqa: F401 - pytest fixture
+from tests.unit.test_spa_artifact_preflight import git
 from website.backend import build_info
+
+
+def build(source):
+    build_frontend(source)
+    build_frontend(source, kind='modern')
 
 
 @pytest.fixture
@@ -82,6 +88,8 @@ def test_package_prepares_only_allowed_runtime_files_and_never_overwrites(source
     for excluded in ['.git', '.env', 'tests', 'docs', 'greatshot/tests', 'website/frontend']:
         assert not (destination / excluded).exists()
     assert (destination / 'website/static/app/app.html').is_file()
+    for name in ('route-host.js', 'route-host.css', '.slomix-build.json'):
+        assert (destination / 'website/static/modern' / name).is_file()
     assert (destination / 'website/assets/game/map.png').is_file()
     with pytest.raises(ValueError, match='NEW'):
         package.prepare(source, destination)
@@ -195,3 +203,132 @@ def test_payload_executable_mode_comes_from_committed_tree(committed_runtime_sou
     package.prepare(source, destination)
     assert (destination / 'bot/runtime.py').stat().st_mode & 0o777 == 0o755
     assert runtime.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize('mode', [0o600, 0o755, 0o666, 0o4644])
+def test_version_two_refuses_changed_modes(release, mode):
+    marker = release / MANIFEST
+    record = json.loads(marker.read_text())
+    record.update(version=2, modes={'app.py': 0o644})
+    (release / 'app.py').chmod(0o644)
+    marker.write_text(json.dumps(record))
+    marker.chmod(0o644)
+    release.chmod(0o755)
+    verify_release(release)
+    (release / 'app.py').chmod(mode)
+    with pytest.raises(ValueError):
+        verify_release(release)
+
+
+def test_packaged_tools_include_their_real_bootstrap_dependency(committed_runtime_source):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    source = committed_runtime_source
+    project = Path(__file__).resolve().parents[2]
+    actual = ['scripts/dev_runtime_contract.py', 'scripts/dev_verify_health.py',
+              'scripts/runtime_app_bootstrap.py', 'shared/release_manifest.py',
+              'shared/runtime_environment.py']
+    for name in actual:
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes((project / name).read_bytes())
+    git(source, 'add', '--', *actual)
+    git(source, 'commit', '-m', 'fixture actual packaged tools')
+    build(source)
+    destination = source.parent / 'real-tools'
+    package.prepare(source, destination)
+    record = verify_release(destination)
+    assert record['version'] == 2
+    assert record['modes'].keys() == record['files'].keys()
+    assert (destination / 'scripts/runtime_app_bootstrap.py').is_file()
+    for tool in ('dev_runtime_contract.py', 'dev_verify_health.py'):
+        result = subprocess.run([sys.executable, '-I', str(destination / 'scripts' / tool), '--help'],
+                                cwd=destination, capture_output=True, text=True, timeout=15)
+        assert result.returncode == 0, result.stderr
+        assert 'usage:' in result.stdout
+    assert verify_release(destination) == record
+
+
+@pytest.mark.parametrize('damage', ['missing', 'stale', 'extra', 'changed', 'wrong_kind'])
+def test_modern_artifact_must_have_exact_source_provenance(committed_runtime_source, damage):
+    source = committed_runtime_source
+    directory = source / 'website/static/modern'
+    marker = directory / '.slomix-build.json'
+    if damage == 'missing':
+        marker.unlink()
+    elif damage == 'extra':
+        (directory / 'untracked-old.js').write_text('stale bytes')
+    elif damage == 'changed':
+        (directory / 'route-host.js').write_text('stale bytes')
+    else:
+        record = json.loads(marker.read_text())
+        record['source_commit' if damage == 'stale' else 'kind'] = '0' * 40 if damage == 'stale' else 'app'
+        marker.write_text(json.dumps(record))
+    destination = source.parent / 'refused-modern'
+    with pytest.raises((ValueError, OSError)):
+        package.prepare(source, destination)
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize('mask', [0o000, 0o002, 0o077])
+def test_package_directory_and_manifest_modes_ignore_umask(committed_runtime_source, mask):
+    import os
+
+    destination = committed_runtime_source.parent / 'safe-modes'
+    previous = os.umask(mask)
+    try:
+        package.prepare(committed_runtime_source, destination)
+    finally:
+        os.umask(previous)
+    directories = [destination, *(p for p in destination.rglob('*') if p.is_dir())]
+    assert all(path.stat().st_mode & 0o7777 == 0o755 for path in directories)
+    assert (destination / MANIFEST).stat().st_mode & 0o7777 == 0o644
+    verify_release(destination)
+
+
+@pytest.mark.parametrize('directory', ['.', 'bot', 'website/static/modern'])
+@pytest.mark.parametrize('mode', [0o775, 0o777, 0o2775])
+def test_version_two_refuses_writable_payload_directories(committed_runtime_source, directory, mode):
+    destination = committed_runtime_source.parent / 'directory-drift'
+    package.prepare(committed_runtime_source, destination)
+    (destination / directory).chmod(mode)
+    with pytest.raises(ValueError, match='directory mode'):
+        verify_release(destination)
+
+
+@pytest.mark.parametrize('mode', [0o664, 0o666])
+def test_version_two_refuses_writable_manifest(committed_runtime_source, mode):
+    destination = committed_runtime_source.parent / 'manifest-drift'
+    package.prepare(committed_runtime_source, destination)
+    (destination / MANIFEST).chmod(mode)
+    with pytest.raises(ValueError, match='manifest mode'):
+        verify_release(destination)
+
+
+def test_copy_starts_with_private_file_and_safe_ancestors(committed_runtime_source, monkeypatch):
+    import os
+
+    destination = committed_runtime_source.parent / 'safe-copy'
+    original = package.shutil.copyfile
+    observations = []
+
+    def copy(source, target):
+        assert target.is_file(), 'Reserve a private file before copying any bytes'
+        assert target.stat().st_mode & 0o077 == 0
+        for directory in (target.parent, *target.parent.parents):
+            if directory == destination.parent:
+                break
+            assert directory.stat().st_mode & 0o7777 == 0o755
+        observations.append(str(target))
+        return original(source, target)
+
+    monkeypatch.setattr(package.shutil, 'copyfile', copy)
+    previous = os.umask(0o000)
+    try:
+        package.prepare(committed_runtime_source, destination)
+    finally:
+        os.umask(previous)
+    assert observations
+    verify_release(destination)

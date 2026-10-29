@@ -1,6 +1,7 @@
 """Prepare a NEW Git-free release; never deploy, start services or copy state.
 
-Source must be committed/clean with exact-source verified SPA output. Failure
+Source must be committed/clean with exact-source verified SPA and modern route-host outputs.
+Build both using npm run build:app and npm run build before preparation. Failure
 retains its incomplete destination for inspection; never overwrite or delete.
 """
 from __future__ import annotations
@@ -13,10 +14,11 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(ROOT))
 
 from scripts.spa_artifact import MANIFEST as SPA_MANIFEST  # noqa: E402
-from scripts.spa_artifact import OUTPUT, git, reject_symlink_path, validate  # noqa: E402
+from scripts.spa_artifact import TARGETS, git, reject_symlink_path, validate  # noqa: E402
 from shared.release_manifest import MANIFEST, file_hash, payload_files, verify_release  # noqa: E402
 
 EXPLICIT = {
@@ -26,7 +28,7 @@ EXPLICIT = {
     'greatshot/contracts/schema/analysis.schema.json', 'greatshot/scanner/etl_demo_scan',
     'scripts/apply_migrations.py', 'scripts/dev_schema_preflight.py',
     'scripts/dev_verify_health.py', 'scripts/data_plausibility_audit.py',
-    'scripts/dev_runtime_contract.py',
+    'scripts/dev_runtime_contract.py', 'scripts/runtime_app_bootstrap.py',
 }
 PYTHON_ROOTS = ('bot/', 'shared/', 'greatshot/', 'proximity/parser/', 'website/backend/')
 ASSET_ROOTS = ('website/js/', 'website/css/', 'website/assets/')
@@ -52,6 +54,26 @@ def verify_source_state(source: Path, target: str) -> None:
         raise ValueError('Source has hidden index flags')
 
 
+
+def payload_parent(destination: Path, relative: Path) -> None:
+    """Create every component safely even when the caller uses umask 000."""
+    current = destination
+    for part in relative.parts:
+        current = current / part
+        current.mkdir(mode=0o755, exist_ok=True)
+        if current.is_symlink() or not current.is_dir():
+            raise ValueError('Payload parent must be a regular directory')
+        current.chmod(0o755)
+
+
+def copy_payload(origin: Path, output: Path, mode: int) -> None:
+    """Reserve owner-only bytes before copyfile opens its existing destination."""
+    descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    os.close(descriptor)
+    shutil.copyfile(origin, output)
+    output.chmod(mode)
+
+
 def prepare(source: Path, destination: Path) -> dict:
     source = source.resolve(strict=True)
     destination = destination.absolute()
@@ -62,7 +84,8 @@ def prepare(source: Path, destination: Path) -> dict:
         raise ValueError('Release destination must be outside every Git checkout')
     target = git(source, 'rev-parse', 'HEAD').decode().strip()
     verify_source_state(source, target)
-    artifact = validate(source, source / OUTPUT, target)
+    artifacts = {kind: validate(source, source / output, target, kind)
+                 for kind, (output, _) in TARGETS.items()}
     paths = [os.fsdecode(p) for p in git(source, 'ls-files', '-z').split(b'\0') if p]
     selected = sorted(name for name in paths if included(name))
     if not set(selected) >= EXPLICIT:
@@ -78,36 +101,45 @@ def prepare(source: Path, destination: Path) -> dict:
                 or metadata[1] != b'blob'):
             raise ValueError('Runtime input must be a committed regular blob')
     destination.mkdir(mode=0o755)  # exclusive; all failures preserve this directory
+    destination.chmod(0o755)
     for name in selected:
         reject_symlink_path(source, Path(name))
         origin = source / name
         if not origin.is_file():
             raise ValueError('Runtime input is not a regular file')
         output = destination / name
-        output.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(origin, output)
-        output.chmod(0o755 if committed[name][0] == b'100755' else 0o644)
-    for name in [*artifact['outputs'], SPA_MANIFEST]:
-        output = destination / OUTPUT / name
-        output.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(source / OUTPUT / name, output)
+        payload_parent(destination, output.parent.relative_to(destination))
+        copy_payload(origin, output, 0o755 if committed[name][0] == b'100755' else 0o644)
+    for kind, artifact in artifacts.items():
+        directory = TARGETS[kind][0]
+        for name in [*artifact['outputs'], SPA_MANIFEST]:
+            output = destination / directory / name
+            payload_parent(destination, output.parent.relative_to(destination))
+            copy_payload(source / directory / name, output, 0o644)
     # Source must not have changed while copying. Verify copied bytes separately.
-    validate(source, source / OUTPUT, target)
+    for kind, (directory, _) in TARGETS.items():
+        validate(source, source / directory, target, kind)
     for name in selected:
         if file_hash(destination / name) != file_hash(source / name):
             raise ValueError('Source changed during release preparation')
         actual = git(source, 'hash-object', '--no-filters', '--', str(destination / name)).strip()
         if actual != committed[name][2]:
             raise ValueError('Copied runtime differs from its committed source blob')
-    for name, digest in artifact['outputs'].items():
-        if file_hash(destination / OUTPUT / name) != digest:
-            raise ValueError('Copied SPA differs from verified artifact')
+    for kind, artifact in artifacts.items():
+        for name, digest in artifact['outputs'].items():
+            if file_hash(destination / TARGETS[kind][0] / name) != digest:
+                raise ValueError('Copied frontend differs from verified artifact')
     verify_source_state(source, target)
     files = {name: file_hash(path) for name, path in sorted(payload_files(destination).items())}
-    record = {'version': 1, 'source_commit': target, 'files': files}
-    with (destination / MANIFEST).open('x', encoding='utf-8') as stream:
+    modes = {name: path.stat().st_mode & 0o7777
+             for name, path in sorted(payload_files(destination).items())}
+    record = {'version': 2, 'source_commit': target, 'files': files, 'modes': modes}
+    marker = destination / MANIFEST
+    descriptor = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
         json.dump(record, stream, sort_keys=True, indent=2)
         stream.write('\n')
+    marker.chmod(0o644)
     verify_release(destination)
     return {'status': 'prepared_not_activated', 'path': str(destination),
             'source_commit': target, 'files': len(files)}

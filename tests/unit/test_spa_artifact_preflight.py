@@ -51,6 +51,11 @@ def fixture(tmp_path):
     vite.write_text("const fs = require('fs'); fs.mkdirSync('../static/app/assets', {recursive:true}); "
                     "fs.writeFileSync('../static/app/app.html', '<script src=assets/a.js></script>'); "
                     "fs.writeFileSync('../static/app/assets/a.js', 'console.log(1);');\n")
+    with vite.open('a') as stream:
+        stream.write("if (process.argv.includes('vite.config.ts')) { "
+                     "fs.mkdirSync('../static/modern', {recursive:true}); "
+                     "fs.writeFileSync('../static/modern/route-host.js', 'export const fixture=1;'); "
+                     "fs.writeFileSync('../static/modern/route-host.css', 'body {color:white}'); }\n")
     run = tmp_path / "run"
     git(source, "clone", "--quiet", str(source), str(run))
     existing = run / "website/static/app/app.html"
@@ -59,9 +64,9 @@ def fixture(tmp_path):
     return source, run
 
 
-def build(source, check=True):
+def build(source, check=True, kind="app"):
     result = subprocess.run([sys.executable, str(source / "scripts/spa_artifact.py"),
-                             "build", "--source", str(source)], text=True, capture_output=True)
+                             "build", "--source", str(source), "--kind", kind], text=True, capture_output=True)
     if check:
         assert result.returncode == 0, result.stderr
     return result

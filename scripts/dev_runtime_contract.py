@@ -14,8 +14,10 @@ import re
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from shared.release_manifest import file_hash, verify_release  # noqa: E402
+from scripts.runtime_app_bootstrap import APP_BOOTSTRAP, launch_argv  # noqa: E402
+from shared.release_manifest import MANIFEST, file_hash, verify_release  # noqa: E402
 from shared.runtime_environment import read_external_environment  # noqa: E402
 
 IDENTITIES = {
@@ -80,7 +82,7 @@ def build_contract(release: Path, state: Path, bot_python: Path, web_python: Pat
     release, state = canonical(release), canonical(state)
     record = verify_release(release)
     required = {"scripts/dev_runtime_contract.py", "scripts/dev_schema_preflight.py",
-                "bot/ultimate_bot.py", "website/backend/main.py"}
+                "bot/ultimate_bot.py", "website/backend/main.py", "shared/release_manifest.py"}
     if not required <= record["files"].keys():
         raise ValueError("Release is missing clean-startup entrypoints")
     if (release.parent.name != "releases" or release.name != record["source_commit"]
@@ -128,15 +130,16 @@ def build_contract(release: Path, state: Path, bot_python: Path, web_python: Pat
         # mutable; archived backups and old installations must stay outside it.
         writable = [str(state / "data"), str(state / "logs" / role), str(state / "cache" / role)]
         cwd = release if role == "bot" else release / "website"
-        # -E ignores PYTHON*; -s/-B preserve no-user-site/no-bytecode explicitly.
+        # Isolated startup verifies pinned release bytes before project imports.
         # Preserve the existing DEV bind in offline unit text; no socket is opened.
-        argv = ([str(python), "-E", "-B", "-s", "bot/ultimate_bot.py"] if role == "bot" else
-                [str(python), "-E", "-B", "-s", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"])  # noqa: S104  # nosec B104
-        pre = [str(python), "-I", "-B", str(release / "scripts/dev_schema_preflight.py"), "--release-mode",
-               "--env-file", str(env), "--expected-env-sha256", env_digest,
-               "--expected-host", identity[0], "--expected-port", identity[1],
-               "--expected-database", identity[2], "--expected-user", identity[3],
-               "--migrations-dir", str(release / "migrations")]
+        pins = (file_hash(release / MANIFEST), file_hash(release / "shared/release_manifest.py"))
+        argv = (launch_argv(python, release, *pins, "bot/ultimate_bot.py") if role == "bot" else
+                launch_argv(python, release, *pins, "web", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"))  # noqa: S104  # nosec B104
+        pre = launch_argv(python, release, *pins, "scripts/dev_schema_preflight.py", "--release-mode",
+                          "--env-file", str(env), "--expected-env-sha256", env_digest,
+                          "--expected-host", identity[0], "--expected-port", identity[1],
+                          "--expected-database", identity[2], "--expected-user", identity[3],
+                          "--migrations-dir", str(release / "migrations"))
         services[f"etlegacy-{role}"] = {
             "requires": ["postgresql.service"], "wants": ["network-online.target"],
             "after": ["network-online.target", "postgresql.service"],
@@ -169,6 +172,10 @@ def load_contract(path: Path) -> dict:
     return fresh
 
 
+def render_argv(argv):
+    return " ".join(json.dumps(value) if value == APP_BOOTSTRAP else value for value in argv)
+
+
 def render_unit(name: str, service: dict) -> str:
     environment = "\n".join(f'Environment="{key}={value}"'
                             for key, value in service["environment"].items())
@@ -186,8 +193,8 @@ Group={service['group']}
 WorkingDirectory={service['cwd']}
 {environment}
 UnsetEnvironment={' '.join(service['unset_environment'])}
-ExecStartPre={' '.join(service['pre_argv'])}
-ExecStart={' '.join(service['argv'])}
+ExecStartPre={render_argv(service['pre_argv'])}
+ExecStart={render_argv(service['argv'])}
 Restart={service['restart']}
 RestartSec={service['restart_usec']}
 MemoryMax={service['memory_max']}

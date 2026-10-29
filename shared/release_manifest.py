@@ -43,7 +43,7 @@ def verify_release(root: Path) -> dict:
     if marker.stat().st_size > 4 * 1024 * 1024:
         raise ValueError('Oversized release manifest')
     record = json.loads(marker.read_text(encoding='utf-8'))
-    if (not isinstance(record, dict) or record.get('version') != 1
+    if (not isinstance(record, dict) or record.get('version') not in (1, 2)
             or not isinstance(record.get('source_commit'), str)
             or not re.fullmatch(r'[0-9a-f]{40}', record['source_commit'])):
         raise ValueError('Invalid release identity')
@@ -58,6 +58,19 @@ def verify_release(root: Path) -> dict:
     actual = payload_files(root)
     if set(actual) != set(files):
         raise ValueError('Release file inventory differs from manifest')
+    if record['version'] == 2:
+        if marker.stat().st_mode & 0o7777 != 0o644:
+            raise ValueError('Release manifest mode mismatch')
+        directories = [root, *(path for path in root.rglob('*') if path.is_dir())]
+        if any(path.stat().st_mode & 0o7777 != 0o755 for path in directories):
+            raise ValueError('Release payload directory mode mismatch')
+        modes = record.get('modes')
+        if (not isinstance(modes, dict) or set(modes) != set(files)
+                or any(type(mode) is not int or mode not in (0o644, 0o755)
+                       for mode in modes.values())):
+            raise ValueError('Invalid release mode inventory')
+        if any(actual[name].stat().st_mode & 0o7777 != mode for name, mode in modes.items()):
+            raise ValueError('Release payload mode mismatch')
     if any(file_hash(actual[name]) != digest for name, digest in files.items()):
         raise ValueError('Release payload checksum mismatch')
     return record

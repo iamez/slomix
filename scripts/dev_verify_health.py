@@ -14,6 +14,7 @@ import urllib.request
 from datetime import datetime
 from pathlib import Path
 
+sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.dev_runtime_contract import load_contract  # noqa: E402
 from shared.release_manifest import file_hash  # noqa: E402
@@ -21,8 +22,13 @@ from shared.runtime_environment import read_external_environment, refuse_unappro
 
 
 def command_matches(value, expected):
-    command = re.fullmatch(r'\{ path=([^;]+) ; argv\[\]=([^;]+) ; ignore_errors=no ; .* \}', value)
-    return bool(command and command[1] == expected[0] and shlex.split(command[2]) == expected)
+    command = re.fullmatch(r'\{ path=([^;]+) ; argv\[\]=([^;]+) ; ignore_errors=no ; [^{}]* \}', value)
+    # systemctl joins argv with literal spaces, not shell quoting. Prepared
+    # arguments are whitespace-free; reject ambiguous contracts instead of
+    # stripping literal quotes in the inline Python bootstrap argument.
+    return bool(expected and all(isinstance(arg, str) and arg and not any(c.isspace() for c in arg)
+                                 for arg in expected)
+                and command and command[1] == expected[0] and command[2] == ' '.join(expected))
 
 
 def release_unit_matches(name, values, specification):

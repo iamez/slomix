@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Build and validate deployable SPA provenance; timestamps are not evidence.
+"""Build and validate deployable frontend provenance; timestamps are not evidence.
 
-Run through npm run build:app (its pre-hook generates API types). Deployable
+Run through npm run build:app or npm run build (their pre-hooks generate API types).
+Deployable
 builds require a committed clean tree and no local frontend env overrides.
 This is integrity/provenance bookkeeping, not a cryptographic signer or a
 claim that node_modules was reproduced from the lockfile.
@@ -20,6 +21,9 @@ from pathlib import Path
 MANIFEST = ".slomix-build.json"
 FRONTEND = Path("website/frontend")
 OUTPUT = Path("website/static/app")
+MODERN_OUTPUT = Path("website/static/modern")
+TARGETS = {"app": (OUTPUT, "vite.app.config.ts"),
+           "modern": (MODERN_OUTPUT, "vite.config.ts")}
 GENERATED = FRONTEND / "src/api/generated/openapi.d.ts"
 INPUTS = [str(FRONTEND), "docs/api/openapi.json", ".nvmrc", "scripts/spa_artifact.py"]
 
@@ -44,8 +48,8 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def identity(root):
-    reject_symlink_path(root, OUTPUT)
+def identity(root, kind="app"):
+    reject_symlink_path(root, TARGETS[kind][0])
     reject_symlink_path(root, GENERATED)
     commit = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
     if git(root, "status", "--porcelain", "--untracked-files=no"):
@@ -77,7 +81,7 @@ def identity(root):
     return {"source_commit": commit, "inputs": hashes}
 
 
-def output_hashes(directory):
+def output_hashes(directory, kind="app"):
     if directory.is_symlink() or not directory.is_dir():
         raise ValueError("missing or symlinked SPA artifact directory")
     hashes = {}
@@ -89,59 +93,65 @@ def output_hashes(directory):
         relative = path.relative_to(directory).as_posix()
         if relative != MANIFEST:
             hashes[relative] = digest(path)
-    if "app.html" not in hashes or not any(p.endswith(".js") for p in hashes):
+    if kind == "modern" and not {"route-host.js", "route-host.css"} <= hashes.keys():
+        raise ValueError("incomplete modern artifact: route-host.js and route-host.css are required")
+    if kind == "app" and ("app.html" not in hashes or not any(p.endswith(".js") for p in hashes)):
         raise ValueError("incomplete SPA artifact: app.html and JavaScript are required")
     return hashes
 
 
-def validate(root, directory, target):
-    expected = identity(root)
+def validate(root, directory, target, kind="app"):
+    expected = identity(root, kind)
     record = json.loads((directory / MANIFEST).read_text())
+    if record.get("kind", "app") != kind:
+        raise ValueError("artifact build target differs; rebuild the requested frontend")
     if record.get("version") != 1:
         raise ValueError("unsupported SPA provenance version; rebuild")
     if record.get("source_commit") != target or expected["source_commit"] != target:
         raise ValueError("SPA artifact/source does not match exact deployment target; check out target and rebuild")
     if record.get("inputs") != expected["inputs"]:
         raise ValueError("SPA build inputs changed; regenerate API types and rebuild")
-    if record.get("outputs") != output_hashes(directory):
+    if record.get("outputs") != output_hashes(directory, kind):
         raise ValueError("SPA artifact integrity check failed; rebuild")
     return record
 
 
-def build(root):
-    reject_symlink_path(root, OUTPUT)
+def build(root, kind="app"):
+    output, config = TARGETS[kind]
+    reject_symlink_path(root, output)
     reject_symlink_path(root, FRONTEND)
-    marker = root / OUTPUT / MANIFEST
+    marker = root / output / MANIFEST
     # Invalidate previous proof before any build attempt, including failed preflight.
     marker.unlink(missing_ok=True)
-    before = identity(root)
-    subprocess.run(["node", "node_modules/vite/bin/vite.js", "build", "--config", "vite.app.config.ts"],
+    before = identity(root, kind)
+    subprocess.run(["node", "node_modules/vite/bin/vite.js", "build", "--config", config],
                    cwd=root / FRONTEND, check=True)
-    if identity(root) != before:
+    if identity(root, kind) != before:
         raise ValueError("source changed during build; no deployable provenance written")
-    record = {"version": 1, **before, "outputs": output_hashes(root / OUTPUT),
+    record = {"version": 1, "kind": kind, **before, "outputs": output_hashes(root / output, kind),
               "node": subprocess.check_output(["node", "--version"], text=True).strip()}
     marker.write_text(json.dumps(record, sort_keys=True, indent=2) + "\n")
-    print(f"SPA provenance recorded for {before['source_commit']}")
+    print(f"{kind} provenance recorded for {before['source_commit']}")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["build", "stage", "verify"])
+    parser.add_argument("--kind", choices=TARGETS, default="app")
     parser.add_argument("--source", type=Path, default=Path(__file__).resolve().parents[1])
     parser.add_argument("--target")
     parser.add_argument("--stage", type=Path)
     args = parser.parse_args()
     root = args.source.resolve()
     if args.command == "build":
-        build(root)
+        build(root, args.kind)
         return
     if not args.target or not args.stage:
         parser.error("stage/verify require --target and --stage")
     if args.command == "stage":
-        validate(root, root / OUTPUT, args.target)
-        shutil.copytree(root / OUTPUT, args.stage, symlinks=True)
-    validate(root, args.stage, args.target)
+        validate(root, root / TARGETS[args.kind][0], args.target, args.kind)
+        shutil.copytree(root / TARGETS[args.kind][0], args.stage, symlinks=True)
+    validate(root, args.stage, args.target, args.kind)
     print(f"SPA artifact verified for {args.target}")
 
 

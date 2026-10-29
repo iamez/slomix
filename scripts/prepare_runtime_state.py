@@ -75,6 +75,8 @@ def inventory(root: Path | None) -> dict:
     pending = [root]
     while pending:
         parent = pending.pop()
+        if git_boundary(parent):
+            raise ValueError('Git metadata found in data source')
         descriptor = readonly_descriptor(parent, directory=True)
         try:
             with os.scandir(descriptor) as scan:

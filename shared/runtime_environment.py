@@ -1,7 +1,8 @@
 """Explicit external configuration for Git-free releases; legacy stays opt-in.
 
 SLOMIX_ENV_FILE uses literal dotenv values (no ${...} interpolation); existing
-process environment still wins. Deployment must verify inherited overrides.
+process environment wins only in unmarked legacy checkouts. Marked releases
+refuse shadowed or additional database settings before changing any environment.
 This module never prints values or searches ancestor directories in release mode.
 """
 from __future__ import annotations
@@ -79,6 +80,8 @@ def load_environment(legacy_file: str | Path | None = None, *, root: Path = ROOT
         return
     values = read_external_environment(selected, root=root,
                                        expected_digest=os.environ.get("SLOMIX_ENV_SHA256"))
+    if (root / ".slomix-release.json").exists() or (root / ".slomix-release.json").is_symlink():
+        refuse_unapproved_environment(values, os.environ, RELEASE_BOOTSTRAP_KEYS)
     for key, value in values.items():
         if value is not None:
             os.environ.setdefault(key, value)
@@ -111,3 +114,27 @@ def refuse_config_overrides(values: dict, environment: dict, *, strict=False) ->
         raise ValueError("Inherited environment overrides explicit application configuration")
     if strict:
         refuse_unapproved_environment({}, environment, RELEASE_BOOTSTRAP_KEYS)
+
+
+
+def validate_bot_state_paths(*, root: Path = ROOT) -> None:
+    """Refuse implicit or payload-local writes before importing bot services."""
+    marker = root / ".slomix-release.json"
+    if not (marker.exists() or marker.is_symlink()):
+        return
+    names = {"STATS_DIRECTORY", "LOCAL_STATS_PATH", "BACKUP_DIRECTORY", "BOT_LOG_DIR"}
+    for enabled, name in (("GAMETIMES_ENABLED", "LOCAL_GAMETIMES_PATH"),
+                          ("PROXIMITY_ENABLED", "PROXIMITY_LOCAL_PATH")):
+        if os.environ.get(enabled, "false").lower() == "true":
+            names.add(name)
+    # Explicit optional paths must also be safe even when their feature is off.
+    names.update(name for name in ("LOCAL_GAMETIMES_PATH", "PROXIMITY_LOCAL_PATH",
+                                   "METRICS_DB_PATH", "XDG_CACHE_HOME", "MPLCONFIGDIR",
+                                   "GREATSHOT_STORAGE_ROOT", "UPLOAD_STORAGE_ROOT")
+                 if name in os.environ)
+    for name in names:
+        value = os.environ.get(name, "")
+        path = Path(value)
+        if (not value or not path.is_absolute() or path.resolve() != path
+                or path.is_relative_to(root.resolve())):
+            raise ValueError("Marked bot requires canonical external mutable paths")

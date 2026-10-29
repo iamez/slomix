@@ -455,3 +455,67 @@ def test_no_atime_permission_failure_is_not_retried(tmp_path, monkeypatch):
     with pytest.raises(PermissionError):
         transfer.fingerprint(path)
     assert len(calls) == 1 and calls[0][1] & os.O_NOATIME
+
+
+def create_bare_repository(path):
+    import subprocess
+
+    path.mkdir(parents=True, exist_ok=True)
+    subprocess.run(['git', 'init', '--bare', '--template=', str(path)],
+                   check=True, capture_output=True, text=True)
+    assert (path / 'HEAD').is_file() and (path / 'objects').is_dir()
+    assert not (path / '.git').exists()
+
+
+@pytest.mark.parametrize('nested', [False, True])
+def test_bare_git_source_is_not_data(source_map, tmp_path, nested):
+    root = Path(source_map['stats'])
+    create_bare_repository(root / 'nested/repository' if nested else root)
+    with pytest.raises(ValueError, match='Git metadata'):
+        transfer.plan(source_map, tmp_path / 'shared')
+    assert not (tmp_path / 'shared').exists()
+
+
+@pytest.mark.parametrize('nested', [False, True])
+def test_bare_git_arriving_after_plan_refuses_before_seed(source_map, tmp_path, nested):
+    record = transfer.plan(source_map, tmp_path / 'shared')
+    root = Path(source_map['stats'])
+    create_bare_repository(root / 'nested/repository' if nested else root)
+    with pytest.raises(ValueError, match='Git metadata'):
+        transfer.seed(record)
+    assert not (tmp_path / 'shared').exists()
+
+
+@pytest.mark.parametrize('nested', [False, True])
+def test_native_plan_cli_refuses_bare_git_before_copy(source_map, tmp_path, nested):
+    import subprocess
+    import sys
+
+    root = Path(source_map['stats'])
+    create_bare_repository(root / 'nested/repository' if nested else root)
+    source_file = tmp_path / 'sources.json'
+    source_file.write_text(json.dumps(source_map))
+    report = tmp_path / 'bare-refusal.json'
+    result = subprocess.run(
+        [sys.executable, str(Path(transfer.__file__)), 'plan', '--input', str(source_file),
+         '--state', str(tmp_path / 'shared'), '--report', str(report)],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert json.loads(result.stdout)['status'] == 'refused'
+    assert json.loads(result.stdout)['ready_for_activation'] is False
+    assert not report.exists() and not (tmp_path / 'shared').exists()
+
+
+@pytest.mark.parametrize('side', ['source', 'target'])
+def test_delta_refuses_bare_git_metadata_in_either_tree(source_map, tmp_path, side):
+    from scripts.plan_runtime_state_delta import compare
+
+    record = transfer.seed(transfer.plan(source_map, tmp_path / 'shared'))
+    root = (Path(source_map['stats']) if side == 'source'
+            else tmp_path / 'shared/data/stats')
+    original = (root / 'nested/payload.txt').read_bytes()
+    create_bare_repository(root / 'nested/repository')
+    with pytest.raises(ValueError, match='Git metadata'):
+        compare(record)
+    assert (root / 'nested/payload.txt').read_bytes() == original
