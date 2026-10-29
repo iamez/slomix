@@ -41,6 +41,26 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Preserve full Lua CI contracts during ingestion publication
+
+#1108 expanded head346f75a0 is published,67paths, within the recorded75-file
+review target. Self-review confirms default-off policy and retained main schema;
+CodeQL Python/JS and security checks pass. Fresh full CI exposed an old Lua
+harness assertion: "a frozen levelTime for > 1 s must read paused=1". Pinned
+COMP13 upstream39c75a3 g_main.c4614+ proves timeCurrent freezes during pause while
+level.time advances; etmain/ui/menudef.h403 defines CV_SVS_PAUSE=16.
+
+Carry the existing corrected frame-health harness and fix the vehicle fixture's
+engine stubs: numeric unpaused CS_SERVERTOGGLES and an accepted-byte count from
+FS_Write. Movement/escort/destruction assertions remain intact. All four actual
+Lua CI harness commands now pass locally; all35tracked Lua files parse. Removing
+the real pause-bit guard causes the updated harness to fail; cmp restores source.
+This is a fixture/contract integration fix, not a reason to restore the incorrect
+clock inference. Actual engine source references stay in private evidence.
+
+Full original plan/features/history remain retained. PostgreSQL CI execution is
+still pending; no1108merge approval, activation, migration or service/game action.
+
 ## 2026-10-29 — Complete proximity integration prepared for disposable-PG CI
 
 Existing #1108 now carries one cohesive source path: real Lua producer IDs and

@@ -12,9 +12,16 @@ local writes = {}       -- lines written to frame_health.log
 local now_ms = 100000   -- simulated wall clock (engine already up)
 local burn_in_body = 0  -- ms the frame body consumes (charged at the gamestate read)
 local gamestate = "0"
+local server_toggles = 0
+local diagnostic_errors = {}
 local throw_on_maxclients = false
 et = setmetatable({
     FS_APPEND = 2, FS_WRITE = 1,
+    CS_SERVERTOGGLES = 32,
+    trap_GetConfigstring = function(index)
+        if index == 32 then return tostring(server_toggles) end
+        return ""
+    end,
     trap_Milliseconds = function() return now_ms end,
     trap_Cvar_Get = function(name)
         if name == "sv_maxclients" and throw_on_maxclients then
@@ -38,9 +45,14 @@ et = setmetatable({
     end,
     trap_FS_Write = function(data, len, fd)
         if fd == 99 then writes[#writes + 1] = data end
+        return len
     end,
     trap_FS_FCloseFile = function(fd) end,
-    G_Print = function(msg) end,
+    G_Print = function(msg)
+        if msg:find("frame_health error:", 1, true) then
+            diagnostic_errors[#diagnostic_errors + 1] = msg
+        end
+    end,
     RegisterModname = function() end,
 }, { __index = function(t, k) return function() return 0 end end })
 
@@ -79,12 +91,12 @@ assert(#writes == 0, "FAIL(1): wrote during normal frames: " .. tostring(writes[
 
 -- 2) a host-style stall: 300 ms BETWEEN frames, tracker itself cheap.
 --    The line must carry the previous frame's (zero) self, not garbage,
---    and it is not paused: levelTime moved with the clock.
+--    and it is not paused: the engine pause bit is clear.
 frame(300)
 assert(#writes == 1, "FAIL(2): expected 1 line, got " .. #writes)
 assert(writes[1]:find("gap=300 self=0 "), "FAIL(2): wrong pairing: " .. writes[1])
 assert(writes[1]:find("players=6"), "FAIL(2): players: " .. writes[1])
-assert(writes[1]:find("paused=0"), "FAIL(2): a moving levelTime is not a pause: " .. writes[1])
+assert(writes[1]:find("paused=0"), "FAIL(2): engine pause bit is clear: " .. writes[1])
 writes = {}
 
 -- 3) a slow TRACKER frame: the body burns 1500 ms. The NEXT frame's gap
@@ -118,17 +130,47 @@ gap_line = last_of("FH wall")
 assert(gap_line and gap_line:find("self=%-1 "), "FAIL(4): aborted frame must report self=-1: " .. tostring(gap_line))
 writes = {}
 
--- 5) a pause: levelTime holds while the wall clock runs. After a second
---    the gap line says paused=1; when levelTime moves again it says 0.
+-- 5) ET v2.85 G_RunFrame advances levelTime during match pause; only
+-- timeCurrent freezes. The client also reads CV_SVS_PAUSE (16) from
+-- CS_SERVERTOGGLES. Test the engine contract, not a frozen-clock surrogate.
 frame(1200)
 writes = {}
-frame(1200, true)    -- 1.2 s of wall time, levelTime unchanged
-frame(1200, true)
-gap_line = last_of("FH wall")
-assert(gap_line and gap_line:find("paused=1"), "FAIL(5): a frozen levelTime for > 1 s must read paused=1: " .. tostring(gap_line))
+server_toggles = 16 + 2  -- unrelated setting must not hide pause
+frame(1200)
 frame(1200)
 gap_line = last_of("FH wall")
-assert(gap_line and gap_line:find("paused=0"), "FAIL(5b): a moving levelTime must read paused=0: " .. tostring(gap_line))
+assert(gap_line and gap_line:find("paused=1"), "FAIL(5): engine pause bit with advancing levelTime must read paused=1: " .. tostring(gap_line))
+print("PAUSE PROOF: " .. gap_line:gsub("\n", ""))
+server_toggles = 2
+frame(1200)
+gap_line = last_of("FH wall")
+assert(gap_line and gap_line:find("paused=0"), "FAIL(5b): cleared pause bit must read paused=0: " .. tostring(gap_line))
+frame(1200, true)
+frame(1200, true)
+gap_line = last_of("FH wall")
+assert(gap_line and gap_line:find("paused=0"), "FAIL(5c): frozen levelTime alone is not a match pause: " .. tostring(gap_line))
+print("NO-PAUSE PROOF: " .. gap_line:gsub("\n", ""))
+writes = {}
+
+-- Missing engine metadata is not a fabricated all-clear. The watcher
+-- reports once, the frame body completes, and valid metadata recovers.
+-- Isolate from scenario 4, which already exercised the one-error latch.
+dofile("proximity/lua/proximity_tracker.lua")
+et_InitGame(level, 0, 0)
+frame(25)
+writes = {}
+diagnostic_errors = {}
+server_toggles = ""
+frame(1200)
+frame(1200)
+assert(not last_of("FH wall"), "FAIL(5d): missing toggles fabricated a gap status")
+assert(#diagnostic_errors == 1 and diagnostic_errors[1]:find("invalid server toggles", 1, true),
+    "FAIL(5d): missing metadata must produce one visible diagnostic")
+server_toggles = 0
+frame(1200)
+gap_line = last_of("FH wall")
+assert(gap_line and gap_line:find("self=0 ") and gap_line:find("paused=0"),
+    "FAIL(5e): previous frame must complete and reporting must recover")
 writes = {}
 
 -- 6) the per-state cap bounds the file but does not truncate a two-hour
@@ -143,9 +185,8 @@ for _, w in ipairs(writes) do if w:find("^FH wall") then gap_lines = gap_lines +
 assert(gap_lines == 3000, "FAIL(6): cap should be 3000 gap lines per state, wrote " .. gap_lines)
 writes = {}
 
--- 7) map_restart keeps the lua VM alive; et_InitGame must reset the
---    cadence so the INIT proofs fire on restarts too (review on #876),
---    and the cap starts over.
+-- 7) Defensive same-instance InitGame reset: cadence and write cap start over.
+--    This is NOT official ET 2.85 map_restart (which reloads Lua VMs).
 et_InitGame(0, 0, 1)
 assert(#writes >= 1 and writes[1]:find("FH init "), "FAIL(7): no block INIT line after map_restart: " .. tostring(writes[1]))
 writes = {}

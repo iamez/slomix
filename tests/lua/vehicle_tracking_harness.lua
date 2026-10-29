@@ -67,13 +67,20 @@ et = setmetatable({
         return 0
     end,
     trap_GetUserinfo = function(cn) return "\\cl_guid\\GUID" .. cn .. "ABCDEF" end,
-    trap_GetConfigstring = function() return "\\mapname\\supply\\g_gametype\\3" end,
+    CS_SERVERTOGGLES = 32,
+    trap_GetConfigstring = function(index)
+        if index == 32 then return "0" end  -- Explicit unpaused engine signal.
+        return "\\mapname\\supply\\g_gametype\\3"
+    end,
     Info_ValueForKey = function(info, key)
         if type(info) ~= "string" then return "" end
         return info:match("\\" .. key .. "\\([^\\]*)") or ""
     end,
     trap_FS_FOpenFile = function() return 7, 0 end,
-    trap_FS_Write = function(data, len, fd) written[#written + 1] = data end,
+    trap_FS_Write = function(data, len, fd)
+        written[#written + 1] = data
+        return len  -- ET reports the number of accepted bytes.
+    end,
     trap_FS_FCloseFile = function() end,
     G_Print = function(msg) prints[#prints + 1] = msg end,
     RegisterModname = function() end,
