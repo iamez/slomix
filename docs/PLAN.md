@@ -1,3 +1,49 @@
+## 2026-10-29 — Protect release directories and publication from permissive umask
+
+Review4403859169 is confirmed: umask000/002 allowed writable payload directories,
+and restrictive umask077 also prevented normalized directory modes. Fifteen new
+cases failed before the fix. Create every directory component with0755 and
+normalize it, including root and both frontend output trees. Reserve each file
+owner-only0600 before copyfile writes any bytes, then set its committed0644/0755
+mode. Reserve the manifest privately and publish it as0644. This closes the
+related open-file race under umask000, not just final directory permissions.
+
+Version2verification now requires0755directories and0644manifest in addition to
+its existing complete file-mode/hash inventory. Legacy version1retains its prior
+byte-only contract.243focused packaging/bootstrap/contract/health/consumer tests
+pass. Directory-admission and private-copy mutants are observed failing, then
+restored with cmp. Fresh exact-source actual-package/native unit proof follows;
+old local version2artifacts are retained and never silently rewritten.
+
+Native9db712c4artifact proof completed before this follow-up: both frontends,
+1037fileGit-free package, exact HTTP200bytes, operator tools without-B, actual
+external config/role interpreters and systemd249parse passed. No native schema
+readiness is claimed: applied096/100source hashes still require immutable source
+restoration and a new forward hardening migration, plus pending104. No live DB,
+service, game or production change. Owner's completed Puran upgrade is preserved.
+
+## 2026-10-28 — Fix native systemd 249 inline argument rejection
+
+Actual final-path unit verification exposed a previously untested host limit:
+4411byte hex bootstrap argument exceeds systemd249's4095byte argument budget.
+A native isolated unit fixture independently reproduces rejection at4096bytes
+but accepts4095 with default dependencies disabled. Encode the same trusted
+stdlib verifier using strict Base64, preserving all integrity pins, source
+buffers, namespace admission and raw-argv matching. Refuse oversized startup
+arguments during preparation rather than emitting unusable unit text.
+Three new cases failed before the change;201focused bootstrap/contract/health/
+package/ledger cases pass afterwards. Disabling the size guard fails visibly;
+source restored with cmp. Repeat exact-source builds/package/native unit proof
+from this final commit before considering the approved merge cycle ready.
+
+Correction: an earlier ad-hoc shell sequence masked systemd-analyze's returncode
+with a subsequent successful Python command. Explicit returncode capture showed
+failure; do not claim old generated units passed. Separate read-only actual-role
+schema gates refuse the old package's missing applied-source files and pending104;
+fullcandidate additionally exposes096/100source-vs-ledger checksum differences.
+Do not rewrite DB ledger checksums or apply migrations automatically. Puran stays
+deferred; no service/unit installation, restart or live DB write occurred.
+
 ## 2026-10-28 — Refuse bare Git metadata in state sources
 
 Review4370885447 is confirmed: the prior inventory admitted bare repositories

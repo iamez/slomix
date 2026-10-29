@@ -5,6 +5,8 @@ The unit and external Python environment are trust anchors; this is integrity
 checking under stable trusted ownership, not isolation from a malicious owner.
 """
 
+from base64 import b64encode
+
 BOOTSTRAP_SOURCE = r'''import hashlib, os, stat, sys
 from pathlib import Path
 
@@ -63,11 +65,17 @@ else:
     })
 '''
 
-# Hex has no whitespace, quotes or systemd expansion characters. The command is
-# independent of mutable payload code until both external unit pins pass.
-APP_BOOTSTRAP = "exec(bytes.fromhex('" + BOOTSTRAP_SOURCE.encode().hex() + "'))"
+# Base64 keeps the inline verifier below systemd 249's 4096-byte argument limit.
+# Its alphabet has no whitespace or systemd expansion characters. Only trusted
+# stdlib code runs until both external unit pins and the full payload pass.
+APP_BOOTSTRAP = ("exec(__import__('base64').b64decode('"
+                 + b64encode(BOOTSTRAP_SOURCE.encode()).decode('ascii') + "',validate=True))")
+MAX_SYSTEMD_ARGUMENT_BYTES = 4095
 
 
 def launch_argv(python, release, manifest_pin, verifier_pin, entry, *arguments):
-    return [str(python), "-I", "-B", "-c", APP_BOOTSTRAP, str(release),
+    argv = [str(python), "-I", "-B", "-c", APP_BOOTSTRAP, str(release),
             manifest_pin, verifier_pin, entry, *arguments]
+    if any(len(value.encode('utf-8')) > MAX_SYSTEMD_ARGUMENT_BYTES for value in argv):
+        raise ValueError('Startup command exceeds the supported systemd argument limit')
+    return argv
