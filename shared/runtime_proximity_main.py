@@ -3,7 +3,7 @@
 import os
 import time
 
-from shared.runtime_cache_main import emit_status, serve  # noqa: F401 -- compatibility for lifecycle proofs.
+from shared.runtime_cache_main import emit_status
 from shared.runtime_proximity_config import ProximityProcessConfig
 from shared.runtime_proximity_supervisor import supervise_with_signals
 from shared.runtime_proximity_worker import ProximityWorkerState

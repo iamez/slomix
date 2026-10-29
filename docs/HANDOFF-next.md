@@ -41,6 +41,35 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Resolve final review lifecycle and transient-error findings
+
+Exact expanded heada5e2a8aa passes all26checks. Full PG14/Python3.11 reports11869
+passed/163skipped; PG17/Python3.13 reports11873passed/159skipped. Every six new
+configured-policy case passes on both. Review then identifies two real P2 bugs:
+capture_resume can hide terminal type from old readers, and parser False after
+a transient DB cancellation can persist a sticky reconciliation hold.
+
+Carry the existing authoritative lifecycle SQL helper and NARROW lifecycle changes
+in clock/competitive/journey/information-state readers; explicit unknown prevents
+legacy fallback. Do not copy the full pending UI/geometry/replay features or lose
+them from canonical current. The complete candidate already includes those reader
+semantics; preserve its larger files and append only new regression coverage.
+
+Recognized timeout/connection/serialization/deadlock/capacity failures now propagate
+through parser import/optional-column probes and enter the worker's bounded
+backoff. Programming/identity conflicts remain visible/reconciliation cases. Add
+actual PG statement-timeout -> rollback/no hold/cooldown -> committed recovery,
+and whole Lua paused/resume death -> native lifecycle SQL -> normal spawn tests.
+These three native cases still require fresh exact-head PG14/17 CI. Local parser/
+worker/UI tests and observed7/3failure guard mutations pass after cmp restoration.
+Remove unused serve re-export; cleanup test now exercises actual child _batch.
+
+Publication grows to79files because review proves reader dependency is required,
+above the75target but within the existing225hard ceiling; retain one cohesive PR
+and normal hooks, never bypass them. All original plans/features and deferred
+README B+C remain. #1108 still needs numbered merge permission. No live DB write,
+migration, service, Puran/production action, new worktree or source deletion.
+
 ## 2026-10-29 — Native ingestion succeeds; repair remaining historical fixture closure
 
 First expanded CI346f75a0/PG14 proves all six new checkpoint/configured-entrypoint

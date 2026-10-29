@@ -450,3 +450,94 @@ async def test_concurrent_exact_import_and_parent_lock_lifetime(pipeline):
     assert await p.reader.fetchval('SELECT count(*) FROM player_track') == 1
     assert await p.reader.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 1
     assert (await observe(p)).status == 'committed'
+
+
+async def test_actual_statement_timeout_unwinds_without_sticky_hold(pipeline, monkeypatch):
+    """Cancel a real parser receipt statement, then recover through the actual queue."""
+    import json
+
+    import asyncpg
+
+    p = pipeline
+    original = p.adapter.fetch_one
+    injected = False
+
+    async def timeout_receipt_query(query, params=()):
+        nonlocal injected
+        if query.startswith('SELECT aggregates_applied FROM proximity_processed_files') and not injected:
+            injected = True
+            await p.writer.execute("SET LOCAL statement_timeout = '1ms'")
+            await p.writer.fetchval('SELECT pg_sleep(0.05)')
+        return await original(query, params)
+
+    monkeypatch.setattr(p.adapter, 'fetch_one', timeout_receipt_query)
+    binding = p.bindings[0]
+    directory = p.paths[0].parent
+    options = dict(source_id=binding.source_id, generation=binding.generation, adapter=p.adapter,
+                   observer=p.reader, gametimes_dir=p.root, allow_declared_mapping=True)
+    before = await snapshot(p.reader)
+    with pytest.raises(asyncpg.QueryCanceledError):
+        await process_proximity_once(directory, now=1000, **options)
+    assert injected and not p.writer.is_in_transaction()
+    assert await snapshot(p.reader) == before
+    assert not list(directory.glob('.proximity-outcome-*.json'))
+    attempt = json.loads((directory / '.proximity-attempt-001.json').read_text())
+    assert (await process_proximity_once(directory, now=1001, **options)).action == 'deferred'
+    recovered = await process_proximity_once(directory, now=attempt['retry_at'], **options)
+    assert recovered.action == 'committed', recovered
+    assert await p.reader.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 1
+    assert p.paths[0].is_file()
+    print('ACTUAL STATEMENT TIMEOUT: full rollback, charged cooldown retained, no sticky hold, later commit visible')
+
+
+@pytest.mark.parametrize('scenario', ['paused_death', 'resume_death'])
+async def test_whole_lua_terminal_type_reaches_native_clock_qualification(full_import_db, tmp_path, scenario):
+    """Producer -> real file/parser -> actual lifecycle SQL -> normal-spawn qualification."""
+    import json
+    import shutil
+    import subprocess
+    from dataclasses import asdict, replace
+    from pathlib import Path
+
+    from website.backend.services.clock_inputs import fetch_clock_lives_and_revives
+    from website.backend.services.reinforcement_clock import qualify_normal_spawns
+    from website.backend.services.track_lifecycle import track_end_sql
+
+    _, reader = full_import_db
+    lua = shutil.which('lua5.4')
+    assert lua, 'Actual Lua producer required'
+    result = subprocess.run([lua, 'tests/lua/engine_clock_contract_harness.lua', str(tmp_path), scenario],
+                            cwd=Path(__file__).resolve().parents[2], capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stdout + result.stderr
+    source, = tmp_path.glob('*_engagements.txt')
+    parser = ProximityParserV4(gametimes_dir=str(tmp_path))
+    assert parser.parse_file(str(source))
+    track, = parser.player_tracks
+    assert track.death_type == 'world'
+    assert track.path[-1].event == ('sample' if scenario == 'paused_death' else 'capture_resume')
+    await reader.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name) VALUES (777,1,20,'supply')")
+    row_id = await reader.fetchval('''INSERT INTO player_track
+        (session_date,round_number,round_start_unix,map_name,player_guid,player_name,team,player_class,
+         spawn_time_ms,death_time_ms,path,death_type,round_id,sample_count)
+        VALUES ($1,1,1000,'supply',$2,$3,$4,$5,$6,$7,$8::jsonb,$9,777,$10) RETURNING id''',
+        DAY, track.guid, track.name, track.team, track.player_class, track.spawn_time, track.death_time,
+        json.dumps([asdict(point) for point in track.path]), track.death_type, len(track.path))
+
+    async def fetch_all(query, params=()):
+        return await reader.fetch(query, *params)
+
+    lives, revives, _ = await fetch_clock_lives_and_revives(SimpleNamespace(fetch_all=fetch_all), 777)
+    assert len(lives) == 1 and lives[0].death_type == 'world'
+    next_life = replace(lives[0], row_id=row_id + 1, spawn_time_ms=lives[0].death_time_ms + 1000,
+                        death_time_ms=lives[0].death_time_ms + 2000, death_type='round_end')
+    assert len(qualify_normal_spawns([*lives, next_life], revives).spawns) == 1
+    for prefix in ('', 'pt.'):
+        assert await reader.fetchval(f'SELECT {track_end_sql(prefix)} FROM player_track pt WHERE id=$1', row_id) == 'world'
+    # Legacy fallback requires an explicit terminal event. Explicit unknown parent
+    # is authoritative even if a path appears to imply a death.
+    legacy_path = json.dumps([{'time': track.death_time, 'event': 'world'}])
+    await reader.execute('UPDATE player_track SET death_type=NULL,path=$2::jsonb WHERE id=$1', row_id, legacy_path)
+    assert await reader.fetchval(f'SELECT {track_end_sql()} FROM player_track WHERE id=$1', row_id) == 'world'
+    await reader.execute("UPDATE player_track SET death_type='unknown' WHERE id=$1", row_id)
+    assert await reader.fetchval(f'SELECT {track_end_sql()} FROM player_track WHERE id=$1', row_id) == 'unknown'
+    print(f'ACTUAL LIFECYCLE SQL: {scenario}, authoritative world qualifies next spawn; explicit unknown blocks fallback')

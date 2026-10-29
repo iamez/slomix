@@ -52,6 +52,7 @@ from website.backend.services.reinforcement_clock import (
     validate_round_clocks,
     validated_clock_tuple,
 )
+from website.backend.services.track_lifecycle import track_end_sql
 from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
@@ -705,7 +706,7 @@ async def _fetch_round_lives_and_kills(
         clock_track_rows = await db.fetch_all(
             f"""
             SELECT round_id, id, player_guid, player_name, team, spawn_time_ms,
-                   death_time_ms, path -> -1 ->> 'event' AS death_type
+                   death_time_ms, {track_end_sql()} AS death_type
             FROM player_track
             {where_sql} AND round_id IS NOT NULL
               AND {_strict_clock_round_gate_sql()}

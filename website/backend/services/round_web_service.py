@@ -111,6 +111,7 @@ from website.backend.services.replay_service import (
     _ensure_path_list,
     _safe_float,
 )
+from website.backend.services.track_lifecycle import track_end_sql
 from website.backend.utils.et_constants import strip_et_colors
 
 logger = get_app_logger("service.round_web")
@@ -1106,11 +1107,11 @@ async def load_round_information_state(
         for p in snapshot.players.values() if _has_position(p)
     }
 
-    deaths = await db.fetch_all("""
+    deaths = await db.fetch_all(f"""
         SELECT player_guid, team, death_time_ms
         FROM player_track
         WHERE round_id = $1 AND death_time_ms IS NOT NULL AND death_time_ms <= $2
-          AND path -> -1 ->> 'event' IN
+          AND {track_end_sql()} IN
               ('killed', 'selfkill', 'fallen', 'world', 'teamkill')
     """, (round_id, t_ms))
     engagements = await db.fetch_all("""

@@ -39,6 +39,7 @@ from proximity.parser.capability_manifest import (
 from proximity.parser.capture_pauses import observe_capture_pauses
 from proximity.parser.import_receipt import claim_import_receipt
 from proximity.parser.time_basis import observe_basis, receipt_basis_sql
+from shared.proximity_errors import TRANSIENT_PROXIMITY_ERRORS
 from shared.runtime_proximity_identity import proximity_header_identity
 from shared.runtime_proximity_mapping import DeclaredProximityBinding, import_declared_proximity
 
@@ -1198,7 +1199,7 @@ class ProximityParserV4:
             self.logger.warning(
                 f"_table_has_column DB query failed for {table}.{column}: {e}"
             )
-            if getattr(self, '_declared_import', False):
+            if isinstance(e, TRANSIENT_PROXIMITY_ERRORS) or getattr(self, '_declared_import', False):
                 raise
             return False
 
@@ -1765,6 +1766,10 @@ class ProximityParserV4:
             self.logger.info(f"Successfully imported {filepath}")
             return True
 
+        except TRANSIENT_PROXIMITY_ERRORS:
+            # Rollback completes before propagation; the queue must not persist
+            # a reconciliation hold for a retryable database/transport failure.
+            raise
         except Exception as e:
             self.logger.error(f"Import error: {e}", exc_info=True)
             return False

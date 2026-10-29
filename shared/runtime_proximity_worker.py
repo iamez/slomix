@@ -7,8 +7,7 @@ import time
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-import asyncpg
-
+from shared.proximity_errors import TRANSIENT_PROXIMITY_ERRORS
 from shared.runtime_proximity_admission import _scope
 from shared.runtime_proximity_cursor import process_proximity_checkpointed_batch
 
@@ -99,7 +98,7 @@ class RuntimeProximityWorker:
                                 batch_size=self.batch_size, max_entries=self.max_entries,
                                 **mapping_options,
                             )
-                except (OSError, TimeoutError, asyncpg.PostgresConnectionError) as error:
+                except TRANSIENT_PROXIMITY_ERRORS as error:
                     failures = min(self.state.consecutive_failures + 1, 64)
                     delay = min(self.retry_seconds * 2 ** (failures - 1), self.max_retry_seconds)
                     self.state = replace(self.state, status='unavailable', error_type=type(error).__name__,

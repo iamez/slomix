@@ -20,6 +20,7 @@ from website.backend.routers.proximity_helpers import (
     _parse_json_field,
     logger,
 )
+from website.backend.services.track_lifecycle import track_end_sql
 from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
@@ -28,15 +29,6 @@ router = APIRouter()
 # journey's solo segments line up with the session-wide solo_pct metric.
 SERIES_BUCKET_MS = 1000
 SOLO_RADIUS = 500  # units from nearest teammate = "solo" (lurker convention)
-
-
-def _last_event(path: list) -> str | None:
-    """The `event` of the last path point, when the tracker wrote one."""
-    if not path:
-        return None
-    last = path[-1]
-    ev = last.get("event") if isinstance(last, dict) else None
-    return str(ev) if ev else None
 
 
 def _downsample_path(path: list, step_ms: int) -> list[dict]:
@@ -161,7 +153,7 @@ async def get_player_journey(
         f"""
         SELECT player_guid, player_name, team, player_class,
                spawn_time_ms, death_time_ms, duration_ms, path,
-               total_distance, sprint_percentage
+               total_distance, sprint_percentage, {track_end_sql()} AS death_type
         FROM player_track
         {where_sql}
         ORDER BY spawn_time_ms
@@ -365,10 +357,8 @@ async def get_player_journey(
             "duration_ms": int(r[6] or 0),
             "total_distance": float(r[8] or 0),
             "sprint_pct": float(r[9] or 0),
-            # The tracker's last path event names how the life ended
-            # (killed / selfkill / fallen / world / teamkill / disconnect …);
-            # a life without a death time ended with the round.
-            "death_type": "round_end" if death_ms is None else _last_event(path),
+            # Parent lifecycle is authoritative; SQL permits only explicit legacy fallback.
+            "death_type": r[10],
             "path": _downsample_path(path, downsample_ms),
             "kills": kills,
             "death": death,

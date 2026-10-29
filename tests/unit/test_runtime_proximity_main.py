@@ -1,6 +1,5 @@
 """Fail-closed DEV configuration, safe default subprocess and shared lifecycle."""
 
-import asyncio
 import json
 import os
 import subprocess
@@ -83,7 +82,7 @@ def test_report_distinguishes_unmeasured_and_empty(capsys):
     assert json.loads(capsys.readouterr().out)['last_batch_counts'] == {'committed': 0}
 
 
-async def test_resource_factory_failure_still_closes_owned_pool(settings):
+async def test_resource_factory_failure_still_closes_owned_pool(settings, monkeypatch):
     config = module.ProximityProcessConfig.from_environment()
     pool = type('Pool', (), {})()
     pool.close = AsyncMock()
@@ -92,7 +91,10 @@ async def test_resource_factory_failure_still_closes_owned_pool(settings):
     def fail(_pool):
         raise RuntimeError('factory failure')
 
+    from shared import runtime_proximity_isolation
+
+    monkeypatch.setattr(runtime_proximity_isolation.asyncpg, 'create_pool', AsyncMock(return_value=pool))
+    monkeypatch.setattr(module.ProximityProcessConfig, 'resource_factory', lambda _self, value: fail(value))
     with pytest.raises(RuntimeError, match='factory failure'):
-        await module.serve(config, asyncio.Event(), pool_factory=AsyncMock(return_value=pool),
-                           resource_factory=fail, reporter=lambda state: None)
+        await runtime_proximity_isolation._batch(config)  # noqa: SLF001 -- actual child entry cleanup
     pool.close.assert_awaited_once()
