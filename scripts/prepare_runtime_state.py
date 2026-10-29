@@ -20,7 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from scripts.dev_runtime_contract import state_paths  # noqa: E402
-from scripts.runtime_writer_inventory import git_boundary  # noqa: E402
+from scripts.runtime_writer_inventory import bare_git_boundary, git_boundary  # noqa: E402
 
 NAMES = frozenset({'stats', 'gametimes', 'proximity', 'processed', 'greatshot', 'uploads', 'retro-viz'})
 
@@ -71,6 +71,8 @@ def inventory(root: Path | None) -> dict:
     canonical(root)
     if any(part == ".git" or part.startswith(".env") for part in root.parts):
         raise ValueError("Configuration or Git source root is forbidden")
+    if any(bare_git_boundary(ancestor) for ancestor in root.parents):
+        raise ValueError('Git metadata ancestor found in data source')
     directories, files = [], {}
     pending = [root]
     while pending:

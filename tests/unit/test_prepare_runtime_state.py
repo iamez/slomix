@@ -519,3 +519,75 @@ def test_delta_refuses_bare_git_metadata_in_either_tree(source_map, tmp_path, si
     with pytest.raises(ValueError, match='Git metadata'):
         compare(record)
     assert (root / 'nested/payload.txt').read_bytes() == original
+
+
+@pytest.mark.parametrize('selected', ['objects', 'archive/data'])
+@pytest.mark.parametrize('operation', ['plan', 'seed', 'delta-source', 'delta-target'])
+def test_selected_bare_repository_descendants_are_not_data(source_map, tmp_path, selected, operation):
+    from scripts.plan_runtime_state_delta import compare
+
+    state = tmp_path / 'shared'
+    if operation == 'plan':
+        bare = tmp_path / 'archive-repository'
+        create_bare_repository(bare)
+        root = bare / selected
+        root.mkdir(parents=True, exist_ok=True)
+        (root / 'payload').write_bytes(b'synthetic git archive')
+        source_map['stats'] = str(root)
+        def call():
+            return transfer.plan(source_map, state)
+    else:
+        # Put the selected data tree below a bare layout AFTER the recorded
+        # plan/seed, so revalidation must inspect ancestors too.
+        bare = tmp_path / 'archive-repository'
+        root = bare / selected
+        root.mkdir(parents=True)
+        (root / 'payload').write_bytes(b'synthetic git archive')
+        source_map['stats'] = str(root)
+        record = transfer.plan(source_map, state)
+        if operation.startswith('delta'):
+            record = transfer.seed(record)
+        if operation == 'delta-target':
+            bare = state / 'data'
+        create_bare_repository(bare)
+        def call():
+            return transfer.seed(record) if operation == 'seed' else compare(record)
+    with pytest.raises(ValueError, match='Git metadata'):
+        call()
+    assert (root / 'payload').read_bytes() == b'synthetic git archive'
+    if operation in {'plan', 'seed'}:
+        assert not state.exists()
+
+
+def test_native_plan_cli_refuses_selected_bare_objects_subtree(source_map, tmp_path):
+    import subprocess
+    import sys
+
+    bare = tmp_path / 'archive-repository'
+    create_bare_repository(bare)
+    source_map['stats'] = str(bare / 'objects')
+    (bare / 'objects/payload').write_bytes(b'synthetic git object')
+    source_file, report = tmp_path / 'sources.json', tmp_path / 'report.json'
+    source_file.write_text(json.dumps(source_map))
+    result = subprocess.run(
+        [sys.executable, transfer.__file__, 'plan', '--input', str(source_file),
+         '--state', str(tmp_path / 'shared'), '--report', str(report)],
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert json.loads(result.stdout)['status'] == 'refused'
+    assert not report.exists() and not (tmp_path / 'shared').exists()
+
+
+def test_selected_data_inside_normal_git_worktree_remains_supported(source_map, tmp_path):
+    import subprocess
+
+    worktree = tmp_path / 'worktree'
+    subprocess.run(['git', 'init', '--template=', str(worktree)], check=True, capture_output=True)
+    root = worktree / 'data'
+    root.mkdir()
+    (root / 'payload').write_bytes(b'application data, not metadata')
+    source_map['stats'] = str(root)
+    result = transfer.seed(transfer.plan(source_map, tmp_path / 'shared'))
+    assert result['ready_for_activation'] is False
+    assert (tmp_path / 'shared/data/stats/payload').read_bytes() == b'application data, not metadata'
