@@ -212,6 +212,8 @@ def test_version_two_refuses_changed_modes(release, mode):
     record.update(version=2, modes={'app.py': 0o644})
     (release / 'app.py').chmod(0o644)
     marker.write_text(json.dumps(record))
+    marker.chmod(0o644)
+    release.chmod(0o755)
     verify_release(release)
     (release / 'app.py').chmod(mode)
     with pytest.raises(ValueError):
@@ -268,3 +270,65 @@ def test_modern_artifact_must_have_exact_source_provenance(committed_runtime_sou
     with pytest.raises((ValueError, OSError)):
         package.prepare(source, destination)
     assert not destination.exists()
+
+
+@pytest.mark.parametrize('mask', [0o000, 0o002, 0o077])
+def test_package_directory_and_manifest_modes_ignore_umask(committed_runtime_source, mask):
+    import os
+
+    destination = committed_runtime_source.parent / 'safe-modes'
+    previous = os.umask(mask)
+    try:
+        package.prepare(committed_runtime_source, destination)
+    finally:
+        os.umask(previous)
+    directories = [destination, *(p for p in destination.rglob('*') if p.is_dir())]
+    assert all(path.stat().st_mode & 0o7777 == 0o755 for path in directories)
+    assert (destination / MANIFEST).stat().st_mode & 0o7777 == 0o644
+    verify_release(destination)
+
+
+@pytest.mark.parametrize('directory', ['.', 'bot', 'website/static/modern'])
+@pytest.mark.parametrize('mode', [0o775, 0o777, 0o2775])
+def test_version_two_refuses_writable_payload_directories(committed_runtime_source, directory, mode):
+    destination = committed_runtime_source.parent / 'directory-drift'
+    package.prepare(committed_runtime_source, destination)
+    (destination / directory).chmod(mode)
+    with pytest.raises(ValueError, match='directory mode'):
+        verify_release(destination)
+
+
+@pytest.mark.parametrize('mode', [0o664, 0o666])
+def test_version_two_refuses_writable_manifest(committed_runtime_source, mode):
+    destination = committed_runtime_source.parent / 'manifest-drift'
+    package.prepare(committed_runtime_source, destination)
+    (destination / MANIFEST).chmod(mode)
+    with pytest.raises(ValueError, match='manifest mode'):
+        verify_release(destination)
+
+
+def test_copy_starts_with_private_file_and_safe_ancestors(committed_runtime_source, monkeypatch):
+    import os
+
+    destination = committed_runtime_source.parent / 'safe-copy'
+    original = package.shutil.copyfile
+    observations = []
+
+    def copy(source, target):
+        assert target.is_file(), 'Reserve a private file before copying any bytes'
+        assert target.stat().st_mode & 0o077 == 0
+        for directory in (target.parent, *target.parent.parents):
+            if directory == destination.parent:
+                break
+            assert directory.stat().st_mode & 0o7777 == 0o755
+        observations.append(str(target))
+        return original(source, target)
+
+    monkeypatch.setattr(package.shutil, 'copyfile', copy)
+    previous = os.umask(0o000)
+    try:
+        package.prepare(committed_runtime_source, destination)
+    finally:
+        os.umask(previous)
+    assert observations
+    verify_release(destination)

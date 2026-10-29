@@ -41,6 +41,30 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Protect release directories and publication from permissive umask
+
+Review4403859169 is confirmed: umask000/002 allowed writable payload directories,
+and restrictive umask077 also prevented normalized directory modes. Fifteen new
+cases failed before the fix. Create every directory component with0755 and
+normalize it, including root and both frontend output trees. Reserve each file
+owner-only0600 before copyfile writes any bytes, then set its committed0644/0755
+mode. Reserve the manifest privately and publish it as0644. This closes the
+related open-file race under umask000, not just final directory permissions.
+
+Version2verification now requires0755directories and0644manifest in addition to
+its existing complete file-mode/hash inventory. Legacy version1retains its prior
+byte-only contract.243focused packaging/bootstrap/contract/health/consumer tests
+pass. Directory-admission and private-copy mutants are observed failing, then
+restored with cmp. Fresh exact-source actual-package/native unit proof follows;
+old local version2artifacts are retained and never silently rewritten.
+
+Native9db712c4artifact proof completed before this follow-up: both frontends,
+1037fileGit-free package, exact HTTP200bytes, operator tools without-B, actual
+external config/role interpreters and systemd249parse passed. No native schema
+readiness is claimed: applied096/100source hashes still require immutable source
+restoration and a new forward hardening migration, plus pending104. No live DB,
+service, game or production change. Owner's completed Puran upgrade is preserved.
+
 ## 2026-10-28 — Fix native systemd 249 inline argument rejection
 
 Actual final-path unit verification exposed a previously untested host limit:

@@ -59,6 +59,11 @@ def verify_release(root: Path) -> dict:
     if set(actual) != set(files):
         raise ValueError('Release file inventory differs from manifest')
     if record['version'] == 2:
+        if marker.stat().st_mode & 0o7777 != 0o644:
+            raise ValueError('Release manifest mode mismatch')
+        directories = [root, *(path for path in root.rglob('*') if path.is_dir())]
+        if any(path.stat().st_mode & 0o7777 != 0o755 for path in directories):
+            raise ValueError('Release payload directory mode mismatch')
         modes = record.get('modes')
         if (not isinstance(modes, dict) or set(modes) != set(files)
                 or any(type(mode) is not int or mode not in (0o644, 0o755)

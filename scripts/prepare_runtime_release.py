@@ -54,6 +54,26 @@ def verify_source_state(source: Path, target: str) -> None:
         raise ValueError('Source has hidden index flags')
 
 
+
+def payload_parent(destination: Path, relative: Path) -> None:
+    """Create every component safely even when the caller uses umask 000."""
+    current = destination
+    for part in relative.parts:
+        current = current / part
+        current.mkdir(mode=0o755, exist_ok=True)
+        if current.is_symlink() or not current.is_dir():
+            raise ValueError('Payload parent must be a regular directory')
+        current.chmod(0o755)
+
+
+def copy_payload(origin: Path, output: Path, mode: int) -> None:
+    """Reserve owner-only bytes before copyfile opens its existing destination."""
+    descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    os.close(descriptor)
+    shutil.copyfile(origin, output)
+    output.chmod(mode)
+
+
 def prepare(source: Path, destination: Path) -> dict:
     source = source.resolve(strict=True)
     destination = destination.absolute()
@@ -81,22 +101,21 @@ def prepare(source: Path, destination: Path) -> dict:
                 or metadata[1] != b'blob'):
             raise ValueError('Runtime input must be a committed regular blob')
     destination.mkdir(mode=0o755)  # exclusive; all failures preserve this directory
+    destination.chmod(0o755)
     for name in selected:
         reject_symlink_path(source, Path(name))
         origin = source / name
         if not origin.is_file():
             raise ValueError('Runtime input is not a regular file')
         output = destination / name
-        output.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(origin, output)
-        output.chmod(0o755 if committed[name][0] == b'100755' else 0o644)
+        payload_parent(destination, output.parent.relative_to(destination))
+        copy_payload(origin, output, 0o755 if committed[name][0] == b'100755' else 0o644)
     for kind, artifact in artifacts.items():
         directory = TARGETS[kind][0]
         for name in [*artifact['outputs'], SPA_MANIFEST]:
             output = destination / directory / name
-            output.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source / directory / name, output)
-            output.chmod(0o644)
+            payload_parent(destination, output.parent.relative_to(destination))
+            copy_payload(source / directory / name, output, 0o644)
     # Source must not have changed while copying. Verify copied bytes separately.
     for kind, (directory, _) in TARGETS.items():
         validate(source, source / directory, target, kind)
@@ -115,9 +134,12 @@ def prepare(source: Path, destination: Path) -> dict:
     modes = {name: path.stat().st_mode & 0o7777
              for name, path in sorted(payload_files(destination).items())}
     record = {'version': 2, 'source_commit': target, 'files': files, 'modes': modes}
-    with (destination / MANIFEST).open('x', encoding='utf-8') as stream:
+    marker = destination / MANIFEST
+    descriptor = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, 'w', encoding='utf-8') as stream:
         json.dump(record, stream, sort_keys=True, indent=2)
         stream.write('\n')
+    marker.chmod(0o644)
     verify_release(destination)
     return {'status': 'prepared_not_activated', 'path': str(destination),
             'source_commit': target, 'files': len(files)}
