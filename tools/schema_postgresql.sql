@@ -1981,7 +1981,8 @@ CREATE TABLE public.player_track (
     stance_crouching_sec real,
     stance_prone_sec real,
     sprint_sec real,
-    post_spawn_distance real
+    post_spawn_distance real,
+    death_type text
 );
 
 
@@ -9420,6 +9421,110 @@ BEGIN
     END IF;
 END $$;
 
+-- Raw-artifact provenance for timing-only retention, not whole-file import or ACK.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_lua_correction_inputs_id_source
+    ON lua_correction_inputs(id, source_key);
+CREATE TABLE IF NOT EXISTS runtime_gametime_sources (
+    source_key TEXT NOT NULL CHECK (source_key ~ '^[a-z0-9][a-z0-9_.-]{0,63}$'),
+    generation TEXT NOT NULL CHECK (generation ~ '^[a-f0-9]{32}$'),
+    filename TEXT NOT NULL CHECK (
+        filename ~ '^gametime-[A-Za-z0-9_-]{1,128}-R[12]-[0-9]{1,19}[.]json$'),
+    source_size INTEGER NOT NULL CHECK (source_size BETWEEN 1 AND 1048576),
+    source_sha256 TEXT NOT NULL CHECK (source_sha256 ~ '^[a-f0-9]{64}$'),
+    input_id BIGINT NOT NULL,
+    retained_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (source_key, generation),
+    FOREIGN KEY (input_id, source_key)
+        REFERENCES lua_correction_inputs(id, source_key) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS idx_runtime_gametime_sources_input
+    ON runtime_gametime_sources(input_id);
+COMMENT ON TABLE runtime_gametime_sources IS
+    'Timing-only source provenance. No whole-file completion, producer authentication or canonical round linkage.';
+
+-- Do not inherit broad website defaults for a new runtime table.
+REVOKE ALL ON runtime_gametime_sources FROM PUBLIC;
+DO $$
+DECLARE
+    forbidden TEXT := 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER';
+    access_role RECORD;
+    role_capability TEXT := CASE WHEN current_setting('server_version_num')::integer >= 160000
+                                THEN 'SET' ELSE 'MEMBER' END;
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'website_app') THEN
+        REVOKE ALL ON runtime_gametime_sources FROM website_app;
+        IF current_setting('server_version_num')::integer >= 170000 THEN
+            forbidden := forbidden || ',MAINTAIN';
+        END IF;
+        -- NOINHERIT does not prevent SET ROLE; ownership can restore revoked ACLs.
+        FOR access_role IN
+            SELECT r.oid, r.rolname FROM pg_roles r
+            WHERE r.rolname = 'website_app'
+                OR pg_has_role('website_app', r.oid, role_capability)
+        LOOP
+            IF has_table_privilege(access_role.oid, 'runtime_gametime_sources', forbidden)
+                OR has_any_column_privilege(access_role.oid, 'runtime_gametime_sources',
+                    'SELECT,INSERT,UPDATE,REFERENCES')
+                OR pg_has_role(access_role.oid,
+                    (SELECT relowner FROM pg_class
+                     WHERE oid = 'runtime_gametime_sources'::regclass), 'USAGE')
+            THEN
+                RAISE EXCEPTION 'website_app retains inherited gametime source access through %',
+                    access_role.rolname;
+            END IF;
+        END LOOP;
+    END IF;
+END $$;
+
+-- Declared identity from a sealed timing artifact; NOT a canonical round link.
+-- Legacy rows remain unassigned. Multiple artifacts may declare the same half.
+CREATE TABLE IF NOT EXISTS runtime_gametime_identities (
+    source_key TEXT NOT NULL,
+    generation TEXT NOT NULL,
+    match_id TEXT NOT NULL CHECK (match_id ~ '^[a-f0-9]{32}$'),
+    round_id TEXT NOT NULL CHECK (round_id ~ '^[a-f0-9]{32}$'),
+    round_number SMALLINT NOT NULL CHECK (round_number IN (1, 2)),
+    first_round_id TEXT NOT NULL CHECK (first_round_id ~ '^[a-f0-9]{32}$'),
+    retained_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (source_key, generation),
+    FOREIGN KEY (source_key, generation)
+        REFERENCES runtime_gametime_sources(source_key, generation) ON DELETE RESTRICT,
+    CHECK ((round_id = first_round_id) = (round_number = 1))
+);
+COMMENT ON TABLE runtime_gametime_identities IS
+    'Sealed artifact declarations only. Not authenticated physical identity, canonical linkage or timing repair.';
+REVOKE ALL ON runtime_gametime_identities FROM PUBLIC;
+DO $$
+DECLARE
+    forbidden TEXT := 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER';
+    access_role RECORD;
+    role_capability TEXT := CASE WHEN current_setting('server_version_num')::integer >= 160000
+                                THEN 'SET' ELSE 'MEMBER' END;
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'website_app') THEN
+        REVOKE ALL ON runtime_gametime_identities FROM website_app;
+        IF current_setting('server_version_num')::integer >= 170000 THEN
+            forbidden := forbidden || ',MAINTAIN';
+        END IF;
+        FOR access_role IN
+            SELECT r.oid, r.rolname FROM pg_roles r
+            WHERE r.rolname = 'website_app'
+                OR pg_has_role('website_app', r.oid, role_capability)
+        LOOP
+            IF has_table_privilege(access_role.oid, 'runtime_gametime_identities', forbidden)
+                OR has_any_column_privilege(access_role.oid, 'runtime_gametime_identities',
+                    'SELECT,INSERT,UPDATE,REFERENCES')
+                OR pg_has_role(access_role.oid,
+                    (SELECT relowner FROM pg_class
+                     WHERE oid = 'runtime_gametime_identities'::regclass), 'USAGE')
+            THEN
+                RAISE EXCEPTION 'website_app retains inherited gametime identity access through %',
+                    access_role.rolname;
+            END IF;
+        END LOOP;
+    END IF;
+END $$;
+
 -- Runtime source mapping: migration 099 (no historical backfill).
 -- Forward-only sealed stats mappings, written atomically with canonical import.
 -- No backfill. Trusted expected identity provisioning remains caller-owned.
@@ -9580,3 +9685,123 @@ ALTER TABLE proximity_processed_files
     ADD CONSTRAINT proximity_receipt_linked_provenance_check
     CHECK (linked_round_id IS NULL OR
         (runtime_parent_gate IS TRUE AND aggregates_applied IS TRUE AND file_hash IS NOT NULL));
+
+-- Forward-only durable declared timing links, not timing application receipts.
+-- No backfill; one authoritative artifact per canonical round, never overwrite.
+CREATE TABLE IF NOT EXISTS runtime_gametime_links (
+    source_key TEXT NOT NULL CHECK (source_key ~ '^[a-z0-9][a-z0-9_.-]{0,63}$'),
+    generation TEXT NOT NULL CHECK (generation ~ '^[a-f0-9]{32}$'),
+    round_key TEXT NOT NULL CHECK (round_key ~ '^[a-f0-9]{32}$'),
+    canonical_round_id INTEGER NOT NULL UNIQUE REFERENCES rounds(id) ON DELETE RESTRICT,
+    input_id BIGINT NOT NULL,
+    filename TEXT NOT NULL CHECK (
+        filename ~ '^gametime-[A-Za-z0-9_-]{1,128}-R[12]-[0-9]{1,19}[.]json$'),
+    source_size INTEGER NOT NULL CHECK (source_size BETWEEN 1 AND 1048576),
+    source_sha256 TEXT NOT NULL CHECK (source_sha256 ~ '^[a-f0-9]{64}$'),
+    projection_sha256 TEXT NOT NULL CHECK (projection_sha256 ~ '^[a-f0-9]{64}$'),
+    linked_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (source_key, generation),
+    FOREIGN KEY (source_key, generation)
+        REFERENCES runtime_gametime_identities(source_key, generation) ON DELETE RESTRICT,
+    FOREIGN KEY (source_key, round_key)
+        REFERENCES runtime_round_mappings(source_key, round_key) ON DELETE RESTRICT,
+    FOREIGN KEY (input_id, source_key)
+        REFERENCES lua_correction_inputs(id, source_key) ON DELETE RESTRICT
+);
+COMMENT ON TABLE runtime_gametime_links IS
+    'Declared artifact canonical linkage only. No timing application, correction completion, engine authentication or source acknowledgement.';
+REVOKE ALL ON runtime_gametime_links FROM PUBLIC;
+DO $$
+DECLARE
+    forbidden TEXT := 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER';
+    access_role RECORD;
+    role_capability TEXT := CASE WHEN current_setting('server_version_num')::integer >= 160000
+                                THEN 'SET' ELSE 'MEMBER' END;
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'website_app') THEN
+        REVOKE ALL ON runtime_gametime_links FROM website_app;
+        IF current_setting('server_version_num')::integer >= 170000 THEN
+            forbidden := forbidden || ',MAINTAIN';
+        END IF;
+        FOR access_role IN
+            SELECT r.oid, r.rolname FROM pg_roles r
+            WHERE r.rolname = 'website_app'
+                OR pg_has_role('website_app', r.oid, role_capability)
+        LOOP
+            IF has_table_privilege(access_role.oid, 'runtime_gametime_links', forbidden)
+                OR has_any_column_privilege(access_role.oid, 'runtime_gametime_links',
+                    'SELECT,INSERT,UPDATE,REFERENCES')
+                OR pg_has_role(access_role.oid,
+                    (SELECT relowner FROM pg_class
+                     WHERE oid = 'runtime_gametime_links'::regclass), 'USAGE')
+            THEN
+                RAISE EXCEPTION 'website_app retains inherited gametime link access through %',
+                    access_role.rolname;
+            END IF;
+        END LOOP;
+    END IF;
+END $$;
+
+-- Scoped declared timing application receipts; no legacy adoption or backfill.
+CREATE TABLE IF NOT EXISTS runtime_gametime_applications (
+    source_key TEXT NOT NULL,
+    generation TEXT NOT NULL,
+    canonical_round_id INTEGER NOT NULL UNIQUE REFERENCES rounds(id) ON DELETE RESTRICT,
+    event_id BIGINT NOT NULL UNIQUE REFERENCES runtime_events(id) ON DELETE RESTRICT,
+    link_snapshot JSONB NOT NULL CHECK (jsonb_typeof(link_snapshot) = 'object'),
+    before_round JSONB NOT NULL CHECK (
+        jsonb_typeof(before_round) = 'object'
+        AND before_round ?& ARRAY['actual_duration_seconds','total_pause_seconds','pause_count']
+        AND before_round->'actual_duration_seconds' = 'null'::jsonb
+        AND before_round->'total_pause_seconds' IN ('null'::jsonb, '0'::jsonb)
+        AND before_round->'pause_count' IN ('null'::jsonb, '0'::jsonb)
+    ),
+    after_values JSONB NOT NULL CHECK (
+        jsonb_typeof(after_values) = 'object'
+        AND after_values ?& ARRAY['actual_duration_seconds','total_pause_seconds','pause_count']
+        AND after_values - ARRAY['actual_duration_seconds','total_pause_seconds','pause_count'] = '{}'::jsonb
+        AND jsonb_typeof(after_values->'actual_duration_seconds') = 'number'
+        AND jsonb_typeof(after_values->'total_pause_seconds') = 'number'
+        AND jsonb_typeof(after_values->'pause_count') = 'number'
+        AND (after_values->>'actual_duration_seconds')::bigint BETWEEN 1 AND 2147483647
+        AND (after_values->>'total_pause_seconds')::bigint BETWEEN 0 AND 2147483647
+        AND (after_values->>'pause_count')::bigint BETWEEN 0 AND 2147483647
+    ),
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (source_key, generation),
+    FOREIGN KEY (source_key, generation)
+        REFERENCES runtime_gametime_links(source_key, generation) ON DELETE RESTRICT
+);
+COMMENT ON TABLE runtime_gametime_applications IS
+    'Atomic three-field timing fill with preimage and provenance. Not whole-file completion, engine authentication or source acknowledgement.';
+REVOKE ALL ON runtime_gametime_applications FROM PUBLIC;
+DO $$
+DECLARE
+    forbidden TEXT := 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER';
+    access_role RECORD;
+    role_capability TEXT := CASE WHEN current_setting('server_version_num')::integer >= 160000
+                                THEN 'SET' ELSE 'MEMBER' END;
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'website_app') THEN
+        REVOKE ALL ON runtime_gametime_applications FROM website_app;
+        IF current_setting('server_version_num')::integer >= 170000 THEN
+            forbidden := forbidden || ',MAINTAIN';
+        END IF;
+        FOR access_role IN
+            SELECT r.oid, r.rolname FROM pg_roles r
+            WHERE r.rolname = 'website_app'
+                OR pg_has_role('website_app', r.oid, role_capability)
+        LOOP
+            IF has_table_privilege(access_role.oid, 'runtime_gametime_applications', forbidden)
+                OR has_any_column_privilege(access_role.oid, 'runtime_gametime_applications',
+                    'SELECT,INSERT,UPDATE,REFERENCES')
+                OR pg_has_role(access_role.oid,
+                    (SELECT relowner FROM pg_class
+                     WHERE oid = 'runtime_gametime_applications'::regclass), 'USAGE')
+            THEN
+                RAISE EXCEPTION 'website_app retains inherited gametime application access through %',
+                    access_role.rolname;
+            END IF;
+        END LOOP;
+    END IF;
+END $$;
