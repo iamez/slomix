@@ -1,3 +1,38 @@
+## 2026-10-29 — Extend existing proximity PR with retry and resource foundations
+
+Continue from the consolidated workspace; no new branch or worktree. #1107 at
+b46b3bae and #1108 at e12acdc8 both have green CI and no unresolved review threads.
+Neither has numbered merge permission. Extend #1108's existing caller-owned
+identity/receipt primitives with the existing durable retry and database-resource
+primitives instead of opening another PR for this closely related foundation.
+
+Retry charges before work, serializes cooperating processes with flock, retains
+backoff across restarts/cancellation/crashes, caps delay at 1800s and attempts at
+64, and never acknowledges or deletes a source. Resource borrowing uses distinct
+primary writer/observer backends, rejects database/schema mismatch and inherited
+transactions, and unwinds borrowed connections on cancellation. No new pool or
+service is implicitly started. Legacy writer exclusion remains the owner gate.
+
+Combined local contracts pass132cases;16real-PostgreSQL cases explicitly skip
+without a disposable DB. Native fresh-process retry/locking/crash tests execute;
+removing backoff causes one observed failure, dropping resource identity guard
+causes two; cmp verifies restoration. Actual PG resource fixture checks commit
+visibility and rollback through the real adapter; fresh CI execution is required.
+Its cleanup explicitly handles Exception and CancelledError. The worker/cursor
+integration test remains in the full candidate for its later dependency slice.
+An unused test import exposed by extracting that case was removed before publish.
+
+Keep new test output and temporary directories inside the existing evidence
+packet (workspace evidence link). Existing conftest unconditionally creates a
+slomix-test-logs directory per run, even when log variables are configured;
+set TMPDIR to the packet's test-tmp for these local runs instead of scattering
+new directories in /tmp. No cleanup/deletion of previous outputs is performed.
+
+Next remains parser integration and bounded ingest/commit/retry/dispatch/queue/
+batch, then D4/D5 trusted-source/exclusive-writer acceptance. Original full PLAN,
+Supply/frame-health/Spiderweb/UI/Stats and deferred README/About B+C survive.
+No migration, live DB write, deployment, service/Puran action or merge occurs.
+
 ## 2026-10-29 — Publish declared proximity parent and receipt primitives
 
 App #1096 and state #1097 are merged (5c4ad123 and 70a94d35). Independent
