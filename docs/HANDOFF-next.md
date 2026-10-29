@@ -41,6 +41,23 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Preserve the timing declaration coverage exemption
+
+Initial #1107 PostgreSQL 17 CI executed all 65 new timing/lifecycle schema cases
+successfully, with zero skips, but the whole job failed two round-id coverage
+contract cases. Publication omitted an existing full-candidate dependency:
+runtime_gametime_identities.round_id is a producer-issued 32-hex TEXT identity,
+not canonical rounds.id. Restore its documented detection exemption; generic
+clock-based relinking must never rewrite these immutable declarations.
+
+Only the existing six-line exemption is ported. Relinker queries/writers and
+coverage/canary tests remain unchanged. The focused local contract/schema suite
+passes 19 cases and explicitly skips 53 PostgreSQL cases. Removing the exemption
+causes both observed failures again; cmp confirms restoration. Re-run full CI at
+the corrected published head before claiming green. No services, database writes
+or historical source adoption. #1107 still has no numbered owner merge approval.
+Original runtime plan, D4/D5 and retained incident/UI/Spiderweb work remain.
+
 ## 2026-10-29 — Publish preserved timing schema before identity ingestion
 
 Runtime app #1096 is merged at 5c4ad123; the separately approved state #1097

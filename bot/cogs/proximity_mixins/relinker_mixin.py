@@ -107,6 +107,12 @@ _DETECTION_EXEMPT_TABLES: dict[str, str] = {
         "accepted in the receipt transaction, not a link to repair; no full "
         "source identity for generic relinking, which must not rewrite history"
     ),
+    "runtime_gametime_identities": (
+        "sealed timing declaration: round_id is a producer-issued 32-hex TEXT "
+        "identity, not the canonical rounds.id integer; retention owns these "
+        "immutable declarations, while runtime_gametime_links records the "
+        "separate canonical_round_id; generic relinking must not rewrite them"
+    ),
     "runtime_events": (
         "immutable import journal: round_id is assigned in the canonical "
         "round transaction and is non-null historical provenance; no full "
