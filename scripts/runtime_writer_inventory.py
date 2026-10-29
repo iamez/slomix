@@ -107,13 +107,19 @@ def inventory(system_units: list[str], user_units: list[str], *, expected_user_u
 
 
 
-def git_boundary(directory: Path) -> bool:
-    """Recognize worktree markers and bare Git layouts without running Git."""
+def bare_git_boundary(directory: Path) -> bool:
+    """Recognize bare metadata without treating ordinary worktree data as Git."""
     def present(name):
         entry = directory / name
         return entry.exists() or entry.is_symlink()
-    return (present('.git') or (present('HEAD') and present('objects')
-            and any(present(name) for name in ('refs', 'packed-refs', 'reftable'))))
+    return (present('HEAD') and present('objects')
+            and any(present(name) for name in ('refs', 'packed-refs', 'reftable')))
+
+
+def git_boundary(directory: Path) -> bool:
+    """Recognize worktree markers and bare Git layouts without running Git."""
+    marker = directory / '.git'
+    return marker.exists() or marker.is_symlink() or bare_git_boundary(directory)
 
 def write_report(path: Path, report: str) -> None:
     if path.name in {".git", ".slomix-release.json"}:

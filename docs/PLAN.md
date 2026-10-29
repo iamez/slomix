@@ -1,3 +1,42 @@
+## 2026-10-29 — Verified forward schema and inherited state admission fix
+
+All 67 proximity schema cases at 428a0ee4 passed on both actual CI PostgreSQL 14
+and 17, with zero skips. These include valid-row preservation, atomic refusal of
+invalid preexisting lineage and three executable SQL guard mutants. This closes
+that head's SQL proof gap; fresh CI is still required after inheriting #1097's
+new bare-ancestor admission correction. No applied migration bytes changed.
+
+#1096 is merged. #1097's prior merge cycle correctly refused a new unresolved
+review; its corrected source is inherited here before the replacement cycle.
+#1107 separately publishes all five preserved timing/lifecycle SQL sources and
+currently awaits its own PostgreSQL CI. Neither #1101 nor #1107 has numbered
+owner merge permission. They do not authorize database execution or activation.
+Identity/receipt linking and bounded ingestion remain next, with D4/D5 and the
+complete Supply/frame-health/Spiderweb/UI/Stats roadmap preserved.
+
+## 2026-10-29 — Refuse selected subtrees of bare Git repositories
+
+The approved #1097 merge cycle refused safely: failed=0, threads=1, behind=0,
+sha=yes; the PR stayed OPEN. Review 4407550761 is confirmed: selecting a child
+of a bare repository bypassed the root/nested metadata guard. Nine new cases
+failed before the fix, covering initial plan, late seed arrival, source/target
+delta scans and an actual plan CLI subprocess.
+
+Inventory now inspects every selected-root ancestor for bare metadata, using a
+separate bare-layout predicate. Ordinary data inside a normal Git worktree
+remains supported. The existing selected-root/nested .git and bare checks stay
+in force. All 217 state tests pass; removing the ancestor guard produces two
+observed failures, then cmp confirms restoration. Native CLI refuses before
+report/destination creation. No live state is copied or service controlled.
+
+Publish the corrected head, answer/resolve the confirmed review, and repeat fresh
+CI plus the complete prescribed 420-second merge cycle under existing numbered
+#1097 approval. Do not reuse the earlier completed wait or claim it merged.
+#1096 remains merged; #1101 and new #1107 (preserved timing/lifecycle schema)
+have no numbered merge permission. Original full runtime plan, D4/D5 and
+Supply/frame-health/Spiderweb/UI/Stats obligations remain. Production and
+owner-upgraded Puran are unchanged.
+
 ## 2026-10-29 — Preserve applied migrations and move lineage guards forward
 
 Actual DEV role preflights exposed checksum differences for096/100. Independently
