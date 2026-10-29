@@ -5,16 +5,19 @@ local wire, scenario = arg[4], arg[5] or 'normal'
 package.path = 'vps_scripts/?.lua;' .. package.path
 local identity = wire and require('runtime_round_identity').decode(wire) or nil
 local half = identity and identity.round_number or 1
-counter = tostring(half - 1)
-local map_name, gametype = 'supply', '3'
+counter = tostring(identity and 2 - half or half - 1)
+local map_name, gametype = scenario == 'map-alphabet' and 'supply.te+test' or 'supply', '3'
+local exit_flag = scenario == 'stale-intermission' and '1' or ''
 local opens, writes, closes, bytes = 0, 0, 0, 0
 local logs, file = {}, nil
 local noop = function() end
 local name = '2026-10-08-120000-supply-round-' .. half .. '_engagements.txt'
 et = {
-    FS_APPEND=2, FS_WRITE=1, CS_SERVERTOGGLES=32, CS_INTERMISSION=22,
+    FS_APPEND=2, FS_WRITE=1, CS_SERVERTOGGLES=32, CS_INTERMISSION=22, CS_SERVERINFO=0,
     trap_Milliseconds=function() return 610000 end,
     trap_GetConfigstring=function(index)
+        if index == 0 then return '\\mapname\\' .. map_name end
+        if index == 22 then return exit_flag end
         if index == 31 then return '0 0 0 0 0 0 0 0 0 0' end
         return ''
     end,
@@ -25,7 +28,7 @@ et = {
     end,
     gentity_get=function() return nil end,
     trap_GetUserinfo=function() return '' end,
-    Info_ValueForKey=function() return '' end,
+    Info_ValueForKey=function(_, key) return key == 'mapname' and map_name or '' end,
     RegisterModname=noop, G_Printf=noop,
     G_Print=function(message) logs[#logs+1] = message end,
     trap_FS_FOpenFile=function(path, mode)
@@ -98,16 +101,24 @@ end
 if scenario == 'warmup' then state = '1' end
 et_InitGame(0, 0, 0)
 if identity then
+    local observed = {init_time=0, map_name=map_name, counter=tonumber(counter),
+        gamestate=tonumber(state), exit_flag=exit_flag}
+    if scenario ~= 'warmup' then
+        local lease = require('runtime_init_lease').capture(et, function() return observed end, noop)
+        assert(lease:match('|(%d+)$') == tostring(half), 'producer profile disagrees with actual stats lease')
+        print('STATS_LEASE_PROFILE half=' .. half .. ' counter=' .. counter)
+    end
     if scenario == 'wrong-map' then map_name = 'oasis' end
-    if scenario == 'wrong-half' then counter = tostring(half % 2) end
+    if scenario == 'wrong-half' then counter = tostring(half - 1) end
     if scenario == 'wrong-gametype' then gametype = '2' end
-    local accepted = pcall(BindRuntimeProximity, identity, 'supply')
+    local accepted = pcall(BindRuntimeProximity, identity, observed.map_name)
     if scenario == 'warmup' or scenario:find('wrong-', 1, true) then
         assert(not accepted, 'invalid binding accepted')
         print('BIND_REJECTED')
         return
     end
     assert(accepted, 'valid binding rejected')
+    if scenario == 'map-alphabet' then print('MAP_BIND_ACCEPTED'); return end
     assert(not pcall(BindRuntimeProximity, identity, 'supply'), 'binding replaced')
     if scenario == 'mutate' then identity.round_id = string.rep('e', 32) end
     if scenario == 'reset' then et_InitGame(0, 0, 1) end
@@ -124,16 +135,16 @@ if scenario == 'aggregates' then
     tracker.kill_heatmap = {['1,2']={axis=3, allies=2}}
     tracker.movement_heatmap = {['1,2']={traversal=7, combat=4, escape=1}}
 end
-state, counter, now = '3', tostring(half == 1 and 1 or 0), 1700000610
+state, counter, now = '3', tostring(identity and half - 1 or 2 - half), 1700000610
 if scenario == 'end-map' then map_name = 'oasis' end
-if scenario == 'end-half' then counter = tostring(half - 1) end
+if scenario == 'end-half' then counter = tostring(2 - half) end
 if scenario == 'end-gametype' then gametype = '2' end
 et_RunFrame(610000)
 local first_opens, first_writes, first_closes = opens, writes, closes
 if scenario == 'second-live' then
-    state, counter = '0', tostring(half - 1)
+    state, counter = '0', tostring(2 - half)
     et_RunFrame(620000)
-    state, counter = '3', tostring(half == 1 and 1 or 0)
+    state, counter = '3', tostring(half - 1)
     et_RunFrame(630000)
 end
 et_ShutdownGame(0)

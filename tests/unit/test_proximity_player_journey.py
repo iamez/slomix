@@ -36,7 +36,7 @@ def _path(points: list[tuple[int, float, float]]) -> str:
 def _track(guid, name, team, cls, spawn, death, path_points):
     duration = (death - spawn) if death else None
     return (guid, name, team, cls, spawn, death, duration,
-            _path(path_points), 100.0, 10.0, "round_end" if death is None else None)
+            _path(path_points), 100.0, 10.0, None)
 
 
 async def _call(db, **overrides):
@@ -86,7 +86,7 @@ async def test_kills_bucket_into_correct_life() -> None:
 
     assert res["summary"] == {
         "lives": 2, "kills": 1, "deaths": 1,
-        "avg_life_s": 12.5, "objective_events": 0,
+        "avg_life_s": None, "avg_raw_span_s": 12.5, "raw_span_samples": 2, "objective_events": 0,
         "objective_events_unavailable": None,
     }
     life1, life2 = res["lives"]

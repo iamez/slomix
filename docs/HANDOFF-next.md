@@ -41,6 +41,36 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Complete producer/reader contract after second review
+
+81883578 passes all26checks, but three new review findings block merge: new timing/
+proximity bindings inverted the existing active-start counter contract; replay
+lookahead crosses suppressed capture gaps; legacy receipt inspection decodes names
+more strictly than the canonical parser. All three require fixes, not closure by
+old green CI. No numbered1108merge permission exists.
+
+Align BOTH producers with actual runtime_init_lease/c0rnp0rn8: active counter1=R1,
+0=R2; G_LogExit flips it before Lua end callbacks (pinned COMP13g_main.c3116).
+Freeze half labels from the binding, require the complementary end counter and
+fresh InitGame exit-flag agreement, including retained CS_INTERMISSION=1. Align
+map alphabet with the existing lease. The two producer fixtures now invoke the
+actual stats lease module and cross-check its requested half. Full dispatched
+stats/timing/proximity outputs agree for normal and retained-intermission profiles.
+
+Carry the already-developed complete capture-aware reader slice from the canonical
+candidate: segmented replay/trails, unavailable gap positions, conservative pressure,
+journey/time-quality and receipt-linked capture policy. This is required telemetry
+compatibility; all broader frontend/geometry plans remain preserved. Match canonical
+replacement decoding in legacy observation and declared-binding header inspection;
+keep hashes over unchanged raw bytes and ASCII identity/map validation strict.
+
+371related local cases pass; actual ASGI/Lua/file/parser paths execute. Reverting
+either producer counter causes2failures; reverting legacy decoding causes1; removing
+replay gap guard causes1. cmp restores all. Prepared actual PG legacy/declared
+non-UTF8 canonical import/replay cases still require fresh exact-head CI. Bandit,
+selected Ruff and tracked Lua parsing pass. No live DB write, migration, deployment,
+service, game or production action. Original PLAN and older features stay intact.
+
 ## 2026-10-29 — Resolve final review lifecycle and transient-error findings
 
 Exact expanded heada5e2a8aa passes all26checks. Full PG14/Python3.11 reports11869

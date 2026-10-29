@@ -970,15 +970,17 @@ local function getMapName()
     return mapname
 end
 
+local runtime_proximity_context, runtime_proximity_binding
+local runtime_proximity_invalidated = false
+
 local function refreshRoundInfo()
     tracker.round.map_name = getMapName()
     local round_str = et.trap_Cvar_Get("g_currentRound")
-    local round_num = (tonumber(round_str) or 0) + 1
+    local round_num = runtime_proximity_binding and runtime_proximity_binding.half
+        or (tonumber(round_str) or 0) + 1
     tracker.round.round_num = round_num
 end
 
-local runtime_proximity_context, runtime_proximity_binding
-local runtime_proximity_invalidated = false
 
 function BindRuntimeProximity(identity, map_name)
     -- Explicit trusted adapter only. This API neither allocates nor authenticates IDs.
@@ -993,14 +995,16 @@ function BindRuntimeProximity(identity, map_name)
     assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
         and runtime_proximity_context.gamestate == 0
         and tonumber(et.trap_Cvar_Get("gamestate")) == 0
-        and (exit_flag == "" or exit_flag == "0"), "runtime proximity requires active stopwatch context")
+        and (exit_flag == "" or exit_flag == "0" or exit_flag == "1")
+        and exit_flag == runtime_proximity_context.exit_flag, "runtime proximity requires active stopwatch context")
     assert((counter == 0 or counter == 1) and counter == runtime_proximity_context.counter
-        and frozen.round_number == counter + 1, "runtime proximity start half mismatch")
+        and frozen.round_number == 2 - counter, "runtime proximity start half mismatch")
     assert(type(map_name) == "string" and #map_name >= 1 and #map_name <= 64
-        and map_name:match("^[A-Za-z0-9_%-]+$")
+        and map_name:match("^[A-Za-z0-9_.+%-]+$") and not map_name:find("..", 1, true)
         and map_name == runtime_proximity_context.map_name
         and map_name == getMapName(), "runtime proximity ticket map mismatch")
     runtime_proximity_binding = {wire=wire, map_name=map_name, half=frozen.round_number}
+    tracker.round.round_num = frozen.round_number
     return wire -- Acceptance is not a completion receipt or canonical DB mapping.
 end
 
@@ -3408,7 +3412,7 @@ local function outputDataInner()
         assert(not runtime_proximity_invalidated, "runtime proximity binding invalidated")
         assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
             and tonumber(et.trap_Cvar_Get("gamestate")) == 3
-            and tonumber(et.trap_Cvar_Get("g_currentRound")) == (binding.half == 1 and 1 or 0)
+            and tonumber(et.trap_Cvar_Get("g_currentRound")) == (binding.half - 1)
             and getMapName() == binding.map_name
             and tracker.round.map_name == binding.map_name
             and tracker.round.round_num == binding.half, "runtime proximity end context mismatch")
@@ -4364,6 +4368,7 @@ function et_InitGame(levelTime, randomSeed, restart)
     runtime_proximity_context = {
         gamestate=tonumber(et.trap_Cvar_Get("gamestate")),
         counter=tonumber(et.trap_Cvar_Get("g_currentRound")), map_name=getMapName(),
+        exit_flag=et.trap_GetConfigstring(et.CS_INTERMISSION),
     }
     tracker.round.start_time = levelTime
     -- Set fallback unix timestamp now; et_RunFrame will overwrite on warmup→live transition

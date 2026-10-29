@@ -44,7 +44,8 @@ def run(tmp_path, half=1, scenario='normal', declared=None):
     return result.stdout
 
 
-def test_dispatched_stats_timing_and_proximity_share_both_halves(tmp_path):
+@pytest.mark.parametrize("stale_intermission", [False, True])
+def test_dispatched_stats_timing_and_proximity_share_both_halves(tmp_path, stale_intermission):
     artifacts = dispatched_pair(tmp_path / 'stats', ipc=True)
     assert len(artifacts) == 2
     for half, artifact in enumerate(artifacts, 1):
@@ -53,11 +54,13 @@ def test_dispatched_stats_timing_and_proximity_share_both_halves(tmp_path):
         timing, proximity = tmp_path / f'timing{half}', tmp_path / f'proximity{half}'
         timing.mkdir()
         proximity.mkdir()
-        run_timing(timing, enabled=False, target=False, mode='frame', identity=declared)
+        run_timing(timing, enabled=False, target=False, mode='frame', identity=declared,
+                   binding_fault='stale-intermission' if stale_intermission else 'none')
         timing_name = TIMING_NAME.replace('R1', f'R{half}')
         admitted = parse_timing(timing, (timing / timing_name).read_bytes(),
                                 filename=timing_name, expected_identity=declared)
-        run(proximity, half, declared=declared)
+        run(proximity, half, declared=declared,
+            scenario='stale-intermission' if stale_intermission else 'normal')
         observed = proximity_header_identity((proximity / name(half)).read_text().splitlines(), name(half))
         assert observed == admitted.declared_identity == declared
     print('HOST DISPATCH -> FULL STATS IPC + TIMING + PROXIMITY: 6 real files, matching R1/R2 IDs')
@@ -160,3 +163,17 @@ def test_unbound_legacy_and_parser_reuse_do_not_invent_identity(tmp_path):
     assert parser.parse_file(name(), source_bytes=legacy)
     assert parser.metadata['runtime_identity'] is None
     assert proximity_header_identity(legacy.decode().splitlines(), name()) is None
+
+
+@pytest.mark.parametrize('half', [1, 2])
+def test_producer_map_alphabet_matches_actual_stats_lease(tmp_path, half):
+    timing, proximity = tmp_path / 'timing', tmp_path / 'proximity'
+    timing.mkdir()
+    proximity.mkdir()
+    declared = identity(half)
+    assert 'MAP_BIND_ACCEPTED' in run_timing(
+        timing, enabled=False, target=False, mode='frame', identity=declared,
+        binding_fault='map-alphabet',
+    )
+    assert 'MAP_BIND_ACCEPTED' in run(proximity, half, scenario='map-alphabet', declared=declared)
+    assert not list(timing.iterdir()) and not list(proximity.iterdir())

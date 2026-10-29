@@ -8,6 +8,7 @@ local values = {mapname='supply', g_currentRound='1', timelimit='20',
 local identity_wire, binding_fault = arg[8], arg[9]
 local half = 1
 local identity
+local exit_flag = binding_fault == 'stale-intermission' and '1' or ''
 if identity_wire then
     package.path = assert(source:match('^(.*)/')) .. '/?.lua;' .. package.path
     identity = require('runtime_round_identity').decode(identity_wire)
@@ -17,7 +18,13 @@ et = {
     trap_Cvar_Get = function(key)
         return values[key] or ''
     end,
-    trap_GetConfigstring = function() return '' end,
+    CS_INTERMISSION=22, CS_SERVERINFO=0,
+    trap_GetConfigstring = function(index)
+        if index == 22 then return exit_flag end
+        if index == 0 then return '\\mapname\\' .. values.mapname end
+        return ''
+    end,
+    Info_ValueForKey = function(_, key) return key == 'mapname' and values.mapname or '' end,
     RegisterModname = function() end,
     trap_FS_FOpenFile = function() return -1, -1 end,
     gentity_get = function() return 0 end,
@@ -83,23 +90,30 @@ end
 io.popen = function() error('forbidden pending scan') end
 
 if identity_wire then
-    values.gamestate, values.g_currentRound = '0', tostring(half - 1)
+    if binding_fault == 'map-alphabet' then values.mapname = 'supply.te+test' end
+    values.gamestate, values.g_currentRound = '0', tostring(2 - half)
     if binding_fault ~= 'noinit' then et_InitGame(100, 0, 0) end
-    if binding_fault == 'wrong-half' then values.g_currentRound = tostring(2 - half) end
+    local observed = {init_time=100, map_name=values.mapname, counter=tonumber(values.g_currentRound),
+        gamestate=0, exit_flag=exit_flag}
+    local lease = require('runtime_init_lease').capture(et, function() return observed end, function() end)
+    assert(lease:match('|(%d+)$') == tostring(half), 'timing profile disagrees with actual stats lease')
+    print('STATS_LEASE_PROFILE half=' .. half .. ' counter=' .. values.g_currentRound)
+    if binding_fault == 'wrong-half' then values.g_currentRound = tostring(half - 1) end
     if binding_fault == 'warmup' then values.gamestate = '2' end
     if binding_fault == 'wrong-map' then values.mapname = 'oasis' end
-    local accepted, reason = pcall(BindRuntimeGametime, identity, 'supply')
+    local accepted, reason = pcall(BindRuntimeGametime, identity, observed.map_name)
     print('BIND=' .. tostring(accepted) .. ':' .. tostring(reason))
     if not accepted then
         print(string.format('COUNTS launches=%d opens=%d shell=%d', launches, opens, shell_calls))
         return
     end
     assert(reason == identity_wire)
+    if binding_fault == 'map-alphabet' then print('MAP_BIND_ACCEPTED'); return end
     identity.round_id = string.rep('f', 32) -- Caller mutation must not change frozen wire.
     if binding_fault == 'reset' then et_InitGame(200, 0, 0) end
     if binding_fault == 'replace' then assert(not pcall(BindRuntimeGametime, identity, 'supply')) end
-    values.gamestate, values.g_currentRound = '3', tostring(2 - half)
-    if binding_fault == 'end-half' then values.g_currentRound = tostring(half - 1) end
+    values.gamestate, values.g_currentRound = '3', tostring(half - 1)
+    if binding_fault == 'end-half' then values.g_currentRound = tostring(2 - half) end
     if binding_fault == 'end-map' then values.mapname = 'oasis' end
     if binding_fault == 'end-counter' then values.g_currentRound = '2' end
     if binding_fault == 'end-state' then values.gamestate = '0' end

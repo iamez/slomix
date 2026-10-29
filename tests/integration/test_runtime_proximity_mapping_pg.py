@@ -541,3 +541,61 @@ async def test_whole_lua_terminal_type_reaches_native_clock_qualification(full_i
     await reader.execute("UPDATE player_track SET death_type='unknown' WHERE id=$1", row_id)
     assert await reader.fetchval(f'SELECT {track_end_sql()} FROM player_track WHERE id=$1', row_id) == 'unknown'
     print(f'ACTUAL LIFECYCLE SQL: {scenario}, authoritative world qualifies next spawn; explicit unknown blocks fallback')
+
+
+async def test_declared_non_utf8_name_import_and_observer_agree(pipeline):
+    p = pipeline
+    directory = reserve_source_generation(p.root, '6' * 32)
+    run_proximity(directory, declared=p.pair.first)
+    path = directory / name()
+    raw = path.read_bytes()
+    assert b';Fixture;' in raw
+    payload = raw.replace(b';Fixture;', b';Player\xff;', 1)
+    path.write_bytes(payload)  # Mutation precedes admission of this controlled source.
+    path.chmod(0o600)
+    binding = replace(p.bindings[0], generation=directory.name, size=len(payload),
+                      sha256=hashlib.sha256(payload).hexdigest())
+    completion = dict(version=1, filename=path.name, bytes=len(payload), state='writer_closed')
+    publish_proximity_admission(directory, source_id=binding.source_id, generation=binding.generation,
+        completion=completion, expected_sha256=binding.sha256, session_date=DAY)
+    record_proximity_completion_once(directory, completion, expected_sha256=binding.sha256)
+    options = dict(source_id=binding.source_id, generation=binding.generation, adapter=p.adapter,
+                   observer=p.reader, gametimes_dir=p.root, allow_declared_mapping=True)
+    assert (await process_proximity_once(directory, now=1000, **options)).action == 'committed'
+    assert (await process_proximity_once(directory, now=1001, **options)).action == 'committed'
+    assert await p.reader.fetchval('SELECT player_name FROM player_track') == 'Player\ufffd'
+    assert await p.reader.fetchval('SELECT count(*) FROM player_track') == 1
+    assert path.read_bytes() == payload
+    print('DECLARED NON-UTF8: real Lua source, unchanged raw hash, canonical replacement display, commit/replay recognized')
+
+
+async def test_legacy_non_utf8_import_then_independent_commit_replay(full_import_db, tmp_path):
+    from shared.runtime_spool import publish_proximity_file
+
+    manager, reader = full_import_db
+    day = date(2023, 11, 14)
+    filename = '2023-11-14-221320-supply-round-1_engagements.txt'
+    payload = (b'# PROXIMITY_TRACKER_V4\n# map=supply\n# round=1\n'
+               b'# round_start_unix=1700000000\n# round_end_unix=1700000610\n'
+               b'# PLAYER_TRACKS\n' + b'a' * 32 +
+               b';Player\xff;AXIS;MEDIC;0;1000;100;world;2;'
+               b'0,0,0,0,100,0,8,0,0,spawn|1000,10,0,0,0,0,8,0,0,world\n')
+    digest = hashlib.sha256(payload).hexdigest()
+    directory = reserve_source_generation(tmp_path, '7' * 32)
+    completion = dict(version=1, filename=filename, bytes=len(payload), state='writer_closed')
+    publish_proximity_admission(directory, source_id='fixture', generation=directory.name,
+        completion=completion, expected_sha256=digest, session_date=day)
+    publish_proximity_file(directory, filename, [payload], expected_size=len(payload), expected_sha256=digest)
+    record_proximity_completion_once(directory, completion, expected_sha256=digest)
+    await reader.execute("INSERT INTO rounds (id,round_number,gaming_session_id,map_name,round_start_unix) "
+                         "VALUES (810,1,20,'supply',1700000000)")
+    async with manager.pool.acquire() as writer:
+        options = dict(source_id='fixture', generation=directory.name, adapter=adapter_for(writer),
+                       observer=reader, gametimes_dir=tmp_path)
+        first = await process_proximity_once(directory, now=1000, **options)
+        assert first.action == 'committed', first
+        assert (await process_proximity_once(directory, now=1001, **options)).action == 'committed'
+    assert await reader.fetchval('SELECT player_name FROM player_track') == 'Player\ufffd'
+    assert await reader.fetchval('SELECT count(*) FROM player_track') == 1
+    assert (directory / filename).read_bytes() == payload
+    print('LEGACY NON-UTF8: actual canonical import, independent committed receipt, exact replay, raw bytes retained')

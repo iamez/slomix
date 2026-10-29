@@ -167,11 +167,12 @@ function BindRuntimeGametime(identity, map_name)
     local exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION)
     assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
         and runtime_timing_context.gamestate == 0 and tonumber(et.trap_Cvar_Get("gamestate")) == 0
-        and (exit_flag == "" or exit_flag == "0"), "runtime timing requires active stopwatch context")
+        and (exit_flag == "" or exit_flag == "0" or exit_flag == "1")
+        and exit_flag == runtime_timing_context.exit_flag, "runtime timing requires active stopwatch context")
     assert((counter == 0 or counter == 1) and runtime_timing_context.counter == counter
-        and frozen.round_number == counter + 1, "runtime timing start half mismatch")
+        and frozen.round_number == 2 - counter, "runtime timing start half mismatch")
     assert(type(map_name) == "string" and #map_name >= 1 and #map_name <= 64
-        and map_name:match("^[A-Za-z0-9_%-]+$")
+        and map_name:match("^[A-Za-z0-9_.+%-]+$") and not map_name:find("..", 1, true)
         and runtime_timing_context.map_name == map_name
         and et.trap_Cvar_Get("mapname") == map_name, "runtime timing ticket map mismatch")
     runtime_timing_binding = {wire=wire, map_name=map_name, half=frozen.round_number}
@@ -1450,13 +1451,13 @@ local function send_webhook()
 
     local ok_send, err = pcall(function()
         local mapname = get_mapname()
-        local round = get_current_round()
+        local round = runtime_timing_binding and runtime_timing_binding.half or get_current_round()
         if runtime_timing_binding ~= nil then
             assert(not runtime_timing_invalidated, "runtime timing binding invalidated by InitGame")
             local counter = tonumber(et.trap_Cvar_Get("g_currentRound"))
             assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
                 and tonumber(et.trap_Cvar_Get("gamestate")) == GS_INTERMISSION
-                and counter == (runtime_timing_binding.half == 1 and 1 or 0),
+                and counter == (runtime_timing_binding.half - 1),
                 "runtime timing requires completed stopwatch half")
             assert(runtime_timing_binding.map_name == mapname and runtime_timing_binding.half == round,
                 "runtime timing end context mismatch")
@@ -1846,6 +1847,7 @@ function et_InitGame(levelTime, randomSeed, restart)
         gamestate = tonumber(et.trap_Cvar_Get("gamestate")),
         counter = tonumber(et.trap_Cvar_Get("g_currentRound")),
         map_name = et.trap_Cvar_Get("mapname"),
+        exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION),
     }
     local active_urls = configured_webhook_urls()
     if #active_urls == 0 then

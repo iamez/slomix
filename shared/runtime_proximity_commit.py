@@ -60,7 +60,7 @@ async def inspect_proximity_commit(
         if row is not None:
             payload = read_verified_proximity_source(directory / admission.filename,
                 expected_size=admission.size, expected_sha256=admission.sha256)
-            declared = proximity_header_identity(StringIO(payload.decode('utf-8')), admission.filename)
+            declared = proximity_header_identity(StringIO(payload.decode('utf-8', errors='replace')), admission.filename)
             if declared is not None and not allow_declared_mapping:
                 return ProximityCommitObservation('conflict', 'declared_identity_mapping_pending')
         if row is not None and allow_declared_mapping:

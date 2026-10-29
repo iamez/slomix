@@ -46,7 +46,7 @@ class DeclaredProximityBinding:
                 or hashlib.sha256(payload).hexdigest() != self.sha256
                 or filename != self.filename or session_date != self.session_date):
             raise ValueError('Declared proximity bytes disagree with trusted binding')
-        identity = proximity_header_identity(StringIO(payload.decode('utf-8')), filename)
+        identity = proximity_header_identity(StringIO(payload.decode('utf-8', errors='replace')), filename)
         if identity is None or identity.source_id != self.source_id:
             raise ValueError('Declared proximity source disagrees with trusted binding')
         map_name = filename[18:].rsplit('-round-', 1)[0]

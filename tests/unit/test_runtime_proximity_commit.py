@@ -99,3 +99,25 @@ async def test_database_failure_propagates(setup):
     observer.fetchrow.side_effect = OSError('fixture connection unavailable')
     with pytest.raises(OSError, match='fixture connection unavailable'):
         await inspect(directory, observer)
+
+
+async def test_legacy_non_utf8_name_matches_actual_parser_decoding(setup):
+    from proximity.parser.parser import ProximityParserV4
+
+    directory, observer, _ = setup
+    payload = PAYLOAD + (
+        b'# PLAYER_TRACKS\n' + b'a' * 32 +
+        b';Player\xff;AXIS;MEDIC;0;1000;100;world;1;0,0,0,0,100,0,8,0,0,spawn\n'
+    )
+    source = directory / NAME
+    source.write_bytes(payload)  # Still unadmitted controlled fixture input.
+    parser = ProximityParserV4(gametimes_dir=str(directory))
+    assert parser.parse_file(str(source))
+    assert parser.player_tracks[0].name == 'Player\ufffd'
+    digest = hashlib.sha256(payload).hexdigest()
+    options = {**OPTIONS, 'expected_sha256': digest,
+               'completion': {**OPTIONS['completion'], 'bytes': len(payload)}}
+    publish_proximity_admission(directory, **options)
+    observer.fetchrow.return_value['file_hash'] = digest
+    assert (await inspect(directory, observer)).status == 'committed'
+    assert source.read_bytes() == payload
