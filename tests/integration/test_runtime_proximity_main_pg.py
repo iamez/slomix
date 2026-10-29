@@ -5,7 +5,8 @@ import asyncio
 import asyncpg
 import pytest
 
-from shared.runtime_proximity_main import ProximityProcessConfig, serve
+from shared.runtime_cache_main import serve
+from shared.runtime_proximity_config import ProximityProcessConfig
 from shared.runtime_proximity_worker import RuntimeProximityWorker
 from tests.integration.test_runtime_events_pg import connection_options, journal_db  # noqa: F401
 
