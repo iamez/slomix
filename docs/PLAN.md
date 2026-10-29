@@ -1,3 +1,19 @@
+## 2026-10-29 — Verified forward schema and inherited state admission fix
+
+All 67 proximity schema cases at 428a0ee4 passed on both actual CI PostgreSQL 14
+and 17, with zero skips. These include valid-row preservation, atomic refusal of
+invalid preexisting lineage and three executable SQL guard mutants. This closes
+that head's SQL proof gap; fresh CI is still required after inheriting #1097's
+new bare-ancestor admission correction. No applied migration bytes changed.
+
+#1096 is merged. #1097's prior merge cycle correctly refused a new unresolved
+review; its corrected source is inherited here before the replacement cycle.
+#1107 separately publishes all five preserved timing/lifecycle SQL sources and
+currently awaits its own PostgreSQL CI. Neither #1101 nor #1107 has numbered
+owner merge permission. They do not authorize database execution or activation.
+Identity/receipt linking and bounded ingestion remain next, with D4/D5 and the
+complete Supply/frame-health/Spiderweb/UI/Stats roadmap preserved.
+
 ## 2026-10-29 — Refuse selected subtrees of bare Git repositories
 
 The approved #1097 merge cycle refused safely: failed=0, threads=1, behind=0,
@@ -20,6 +36,66 @@ CI plus the complete prescribed 420-second merge cycle under existing numbered
 have no numbered merge permission. Original full runtime plan, D4/D5 and
 Supply/frame-health/Spiderweb/UI/Stats obligations remain. Production and
 owner-upgraded Puran are unchanged.
+
+## 2026-10-29 — Preserve applied migrations and move lineage guards forward
+
+Actual DEV role preflights exposed checksum differences for096/100. Independently
+verified original bytes against105-row live ledger and eight preserved release
+copies per file, including Git object38dbeebf. Restore the consumed096/100bytes;
+keep their historical semantics intact and move the existing strict lineage
+indexes/FKs/null-gate check into NEW105_runtime_proximity_parent_constraints.sql.
+No live ledger or table is edited. New105validates existing rows and refuses
+incompatible lineage; it never infers a link or rewrites data.
+
+Bootstrap mirrors original096/100once plus105once; newest release config includes
+105. Tests cover a valid existing row unchanged across upgrade, atomic rejection
+of three invalid existing states, three executable SQL guard mutants and pinned
+old checksums. Local71unit/static/release-config cases pass;53actual PostgreSQL
+cases explicitly skip without an isolated service. This is NOT a SQL execution
+certificate. Publish for current-head PG14/17CI before claiming the fix verified.
+
+Unpublished identity/application source still accounts for five other already
+applied migrations097/098/101/102/103. The earlier shorthand attributing all seven
+missing app-source migrations to1101was imprecise:1101provides096/100only. Preserve
+both later publication lanes and never weaken startup inventory to hide omissions.
+Original runtime/D4/D5, Supply recovery and UI/Spiderweb plans remain. Owner's
+Puran update and production app version are unchanged. No new server or DB write.
+
+## 2026-10-25 — PR #1101: actual PostgreSQL proof and rejected column-ACL review premise
+
+- Verified public source head 9db6212a8c52905d4b45515affeda496856d3049 against CI run 39654495446, both Python jobs SUCCESS. PostgreSQL 14 / Python 3.11 job 119411051105: 11140 passed,161 skipped,11 subtests; PostgreSQL 17 / Python 3.13 job 119411050977: 11144 passed,157 skipped,11 subtests. Each job executed all 57 proximity schema cases, including 49 database cases, eight direct/PUBLIC column-ACL cases, three inherited-access refusals and three observed SQL guard mutations. Schema case counts independently agree via parsed log records and line counts.
+- This closes the previous missing disposable-PG proof for the Oct21 relational constraints. Native PG executed the mismatched stats parent, legacy/unlinked/hash-mismatched receipt, nullable gate, post-binding receipt edits, migration replay and SQL mutant cases. Local services/databases were not started or changed.
+- Review 4340613934 / PRRT_kwDOP4ZX3s6u52sJ is a false positive: the claimed column-ACL test failures are contradicted by both actual CI logs. PostgreSQL REVOKE documentation explicitly states table privilege revocation also revokes corresponding privileges on every column: https://www.postgresql.org/docs/17/sql-revoke.html . Existing REVOKE ALL covers direct website_app and PUBLIC column grants; inherited access intentionally remains a refusal. No redundant column enumeration or SQL/bootstrap change is needed.
+- Evidence is in the public CI jobs; private downloaded logs remain outside git. Continue the original runtime plan and review queue. PR #1101 remains unmerged and still needs its own explicit owner merge permission; approvals #1095–#1097 do not extend to it.
+
+## 2026-10-21 — PR #1101 review: strict relational provenance and recoverable admission
+
+- Addressed reviews 4337378411/8425/8436/8445/8462: release v1.45.0 explicitly lists unmerged migrations 096 and 100; admission source IDs use the existing lowercase RoundIdentity alphabet; shared publication refuses unreadable/non-private temporary modes before the atomic link, preserving restrictive 0400 and ordinary 0600 without chmod.
+- Migration 100 adds unique parent indexes and composite foreign keys: source/round/canonical ID must name the SAME stats mapping; filename/canonical ID/SHA-256 must name the SAME strictly linked receipt. Migration 096 requires runtime_parent_gate IS TRUE (NULL must not pass SQL CHECK). No merged migration was edited, no backfill or historical receipt adoption is introduced. Exact bootstrap blocks match both migration files.
+- Local proof: 292 passed, 49 disposable-PG cases skipped; shared spool, completion, manifest read/retry, release contract and fresh-process admission recovery included. Source/mode/release guard mutants visibly failed 1/3/1 cases and source bytes were restored with cmp. Ruff and diff checks passed. New SQL rejection, post-link receipt mutation and three in-memory SQL guard-mutant cases await disposable CI PostgreSQL; skipped tests are NOT database proof.
+- Prior published head CI job log independently confirms 42 schema cases passed and the sole Python 3.11 failure was the missing release config entries (11120 passed,161 skipped). That old SQL execution does NOT validate the new relational constraints. No database/service/browser was started and no production or DEV state changed.
+- Continue the preserved runtime plan after fresh CI/review; #1101 still needs its own explicit owner merge permission. Existing approval for #1095–#1097 does not extend here.
+
+## 2026-10-21 — Proximity schema and admission publication slice
+
+Prepared from reviewed local candidate 9c09267c onto state-handover base 3551ca21.
+Only migrations 096/100, their exact bootstrap blocks, persistent admission and
+focused tests enter this slice. Existing bootstrap bytes remain unchanged.
+This publishes existing implementation; it does not replace the original roadmap.
+Admission persists trusted caller input before capture, never an import ACK.
+
+Validation: 40 passed, 34 explicitly skipped without a disposable PostgreSQL
+configuration. Actual fresh processes recover identical source/generation/date/
+size/hash without payload, database or Discord imports. Source-binding and exact
+bootstrap mutations each failed, then files were restored and cmp verified.
+Ruff and whitespace checks pass. Native PostgreSQL constraints/ACL/replay proof
+is pending; textual bootstrap checks are not SQL execution. No service or DB use.
+
+Next: review this <=25-file slice, then identity/parent/receipt publication and
+bounded ingestion/queue publication. Three admission-to-ingest test cases stay
+in the full candidate for that later dependency. D4/D5, trusted producer admission,
+exclusive legacy/manual/remote writer handover and sustained consumer-off/recovery
+acceptance remain open. No merge approval, publication or activation is implied.
 
 ## 2026-10-29 — Protect release directories and publication from permissive umask
 
