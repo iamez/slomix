@@ -41,6 +41,40 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Publish declared proximity parent and receipt primitives
+
+App #1096 and state #1097 are merged (5c4ad123 and 70a94d35). Independent
+comparison proves the latter merge tree equals the exact reviewed 52189ee5 tree.
+#1101 now targets main at 6d3b5958; source bytes are unchanged by verified ancestry
+recording. #1107 at b08ced4e includes the timing declaration detection exemption
+and inherits all current state guards. Fresh CI is required; neither PR has
+numbered owner merge permission.
+
+The next dependency slice reuses existing header, declared parent resolution and
+receipt-link primitives from the full candidate, including the dot/plus map
+alphabet fix. Independent trusted source/hash/size/date binding precedes mapping,
+canonical round and initial-journal agreement. Legacy absence remains unbound;
+explicit contradictions refuse instead of clock fallback. Receipt prevalidation
+refuses historical completed/unlinked rows and reassignment; late link recording
+participates in the caller-owned transaction. No parser/Lua/consumer activation
+or ingest/queue wiring is included in this library slice.
+
+Local focused contracts: 95 passed, 15 PostgreSQL cases explicitly skipped.
+Native verified-source file proof covers both halves of five map spellings with
+exact identical library bytes and independent GNU/Python hashes. Digest guard
+removal causes one observed failure; actual journal-guard removal causes two,
+then cmp verifies restoration. An earlier inequality inversion was inconclusive:
+it rejected a different healthy half, masking the intended negative mutation.
+Do not call that result a proven guard. New disposable-PG cases exercise actual
+R1/R2 mapping/journal queries, contradictions, missing mapping without clock
+fallback, receipt rollback, legacy refusal and strict late-link prerequisites.
+Actual PostgreSQL CI proof remains required for these newly extracted cases.
+
+Next: review the identity primitives, then the existing bounded ingest/commit/
+retry/dispatch/queue/batch integration. Preserve D4/D5 trusted-source/exclusive
+writer gates and the original runtime/Supply/frame-health/Spiderweb/UI/Stats
+roadmap. No service, database write, new server, Puran or production action.
+
 ## 2026-10-29 — Verified forward schema and inherited state admission fix
 
 All 67 proximity schema cases at 428a0ee4 passed on both actual CI PostgreSQL 14
