@@ -41,6 +41,29 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Refuse selected subtrees of bare Git repositories
+
+The approved #1097 merge cycle refused safely: failed=0, threads=1, behind=0,
+sha=yes; the PR stayed OPEN. Review 4407550761 is confirmed: selecting a child
+of a bare repository bypassed the root/nested metadata guard. Nine new cases
+failed before the fix, covering initial plan, late seed arrival, source/target
+delta scans and an actual plan CLI subprocess.
+
+Inventory now inspects every selected-root ancestor for bare metadata, using a
+separate bare-layout predicate. Ordinary data inside a normal Git worktree
+remains supported. The existing selected-root/nested .git and bare checks stay
+in force. All 217 state tests pass; removing the ancestor guard produces two
+observed failures, then cmp confirms restoration. Native CLI refuses before
+report/destination creation. No live state is copied or service controlled.
+
+Publish the corrected head, answer/resolve the confirmed review, and repeat fresh
+CI plus the complete prescribed 420-second merge cycle under existing numbered
+#1097 approval. Do not reuse the earlier completed wait or claim it merged.
+#1096 remains merged; #1101 and new #1107 (preserved timing/lifecycle schema)
+have no numbered merge permission. Original full runtime plan, D4/D5 and
+Supply/frame-health/Spiderweb/UI/Stats obligations remain. Production and
+owner-upgraded Puran are unchanged.
+
 ## 2026-10-29 — Protect release directories and publication from permissive umask
 
 Review4403859169 is confirmed: umask000/002 allowed writable payload directories,
