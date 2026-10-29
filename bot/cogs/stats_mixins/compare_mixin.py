@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from io import BytesIO
 
 import discord
 from discord.ext import commands
@@ -44,8 +45,6 @@ class _StatsCompareMixin:
             try:
                 import matplotlib
                 matplotlib.use("Agg")  # Non-GUI backend
-                from pathlib import Path
-
                 import matplotlib.pyplot as plt
                 import numpy as np
             except Exception as e:
@@ -56,7 +55,6 @@ class _StatsCompareMixin:
                 has_matplotlib = False
                 np = None
                 plt = None
-                Path = None
 
             # Ensure player_name alias for this command's DB connection
             try:
@@ -334,22 +332,15 @@ class _StatsCompareMixin:
             # Add grid
             ax.grid(True, linestyle="--", alpha=0.7)
 
-            # Save figure
-            output_dir = Path("temp")
-            output_dir.mkdir(exist_ok=True)
-            output_path = (
-                output_dir
-                / f'compare_{p1_stats["guid"][:6]}_{p2_stats["guid"][:6]}.png'
-            )
-
-            plt.tight_layout()
-            plt.savefig(
-                output_path,
-                dpi=150,
-                bbox_inches="tight",
-                facecolor="white",
-            )
-            plt.close()
+            # Keep per-request charts in memory, not in the release directory.
+            # A shared filename also let simultaneous comparisons overwrite one another.
+            with BytesIO() as chart:
+                try:
+                    fig.tight_layout()
+                    fig.savefig(chart, format="png", dpi=150, bbox_inches="tight", facecolor="white")
+                    chart_bytes = chart.getvalue()
+                finally:
+                    plt.close(fig)
 
             # Create detailed comparison embed
             embed = discord.Embed(
@@ -416,16 +407,13 @@ class _StatsCompareMixin:
             )
 
             # Send chart and embed
-            file = discord.File(output_path, filename="comparison.png")
             embed.set_image(url="attachment://comparison.png")
-
-            await ctx.send(embed=embed, file=file)
-
-            # Clean up
-            try:
-                output_path.unlink()
-            except Exception:  # nosec B110
-                logger.debug("Failed to clean up comparison chart file", exc_info=True)
+            with BytesIO(chart_bytes) as attachment:
+                file = discord.File(attachment, filename="comparison.png")
+                try:
+                    await ctx.send(embed=embed, file=file)
+                finally:
+                    file.close()
 
             logger.info(
                 f"📊 Comparison generated: {p1_stats['name']} vs {p2_stats['name']}"

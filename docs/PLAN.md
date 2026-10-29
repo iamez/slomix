@@ -1,3 +1,89 @@
+## 2026-10-29 — Protect release directories and publication from permissive umask
+
+Review4403859169 is confirmed: umask000/002 allowed writable payload directories,
+and restrictive umask077 also prevented normalized directory modes. Fifteen new
+cases failed before the fix. Create every directory component with0755 and
+normalize it, including root and both frontend output trees. Reserve each file
+owner-only0600 before copyfile writes any bytes, then set its committed0644/0755
+mode. Reserve the manifest privately and publish it as0644. This closes the
+related open-file race under umask000, not just final directory permissions.
+
+Version2verification now requires0755directories and0644manifest in addition to
+its existing complete file-mode/hash inventory. Legacy version1retains its prior
+byte-only contract.243focused packaging/bootstrap/contract/health/consumer tests
+pass. Directory-admission and private-copy mutants are observed failing, then
+restored with cmp. Fresh exact-source actual-package/native unit proof follows;
+old local version2artifacts are retained and never silently rewritten.
+
+Native9db712c4artifact proof completed before this follow-up: both frontends,
+1037fileGit-free package, exact HTTP200bytes, operator tools without-B, actual
+external config/role interpreters and systemd249parse passed. No native schema
+readiness is claimed: applied096/100source hashes still require immutable source
+restoration and a new forward hardening migration, plus pending104. No live DB,
+service, game or production change. Owner's completed Puran upgrade is preserved.
+
+## 2026-10-28 — Fix native systemd 249 inline argument rejection
+
+Actual final-path unit verification exposed a previously untested host limit:
+4411byte hex bootstrap argument exceeds systemd249's4095byte argument budget.
+A native isolated unit fixture independently reproduces rejection at4096bytes
+but accepts4095 with default dependencies disabled. Encode the same trusted
+stdlib verifier using strict Base64, preserving all integrity pins, source
+buffers, namespace admission and raw-argv matching. Refuse oversized startup
+arguments during preparation rather than emitting unusable unit text.
+Three new cases failed before the change;201focused bootstrap/contract/health/
+package/ledger cases pass afterwards. Disabling the size guard fails visibly;
+source restored with cmp. Repeat exact-source builds/package/native unit proof
+from this final commit before considering the approved merge cycle ready.
+
+Correction: an earlier ad-hoc shell sequence masked systemd-analyze's returncode
+with a subsequent successful Python command. Explicit returncode capture showed
+failure; do not claim old generated units passed. Separate read-only actual-role
+schema gates refuse the old package's missing applied-source files and pending104;
+fullcandidate additionally exposes096/100source-vs-ledger checksum differences.
+Do not rewrite DB ledger checksums or apply migrations automatically. Puran stays
+deferred; no service/unit installation, restart or live DB write occurred.
+
+## 2026-10-28 — Final app source integration verified locally
+
+222 focused Python cases pass using a new outside-Git basetemp. The first
+attempt under the default /tmp fixture path correctly refused this host's
+existing /tmp/.git fence; the marker was preserved and no guard weakened.
+Modern-output integrity guard mutation was observed failing at the assertion
+that refusal precedes destination creation; source restored with cmp and the
+restored case passes. Both npm lock audits report zero vulnerabilities;
+frontend typecheck passes with isolated Node22.23.4. Frontend tests and final
+exact-source builds/package proof follow. No live service or data change.
+
+## 2026-10-28 — Resume runtime app delivery; defer Puran update
+
+Owner explicitly deferred the Puran engine update until a future instruction.
+Retain its reviewed packet without executing the updater. Resume original runtime
+queue at #1096 application packaging, then #1097 state handover and D4/D5.
+Integrate the previously verified modern route-host provenance/copy guards into
+#1096 while retaining its newer no-bytecode bootstrap and raw systemctl argument
+fixes. Inherit the already developed Node22.23.4 and frontend lockfile security
+floor so this application preparation does not rebuild superseded dependencies.
+Next: focused regression/mutation checks, both exact-source builds, new Git-free
+package and native static-response proof. Source readiness, merge and service
+activation remain separate. Production, Puran and live DEV services unchanged.
+
+## 2026-10-25 — Diagnostic tools preserve inventory and raw systemd argv
+
+Reviews4369811073/4369811077 addressed. Packaged contract/health tools set
+sys.dont_write_bytecode before project imports; preparation does the same.
+Native actual packaged --help now runs without -B and preserves the v2 inventory.
+Health command parsing compares systemctl's raw joined argv bytes, never shlex
+syntax; the known contract requires whitespace-free arguments and rejects
+ambiguous inputs. Literal quotes inside the hex bootstrap remain significant.
+The fixture now models actual raw systemctl output rather than shlex.join.
+
+103 focused tests pass. Contract-bytecode, health-bytecode and raw-argv mutants
+were observed failing, then restored with cmp. No manager mutation, application
+startup, service restart or deploy. The separate static/modern artifact omission
+review remains in progress in an isolated worktree.1095 owner-approved merge
+cycle is running with full420second pause; no merge asserted until verification.
+
 ## 2026-10-25 — Close remaining inherited settings, audit path and CLI bytecode gaps
 
 Corrected #1095 review4340638914: marked environment loading now calls the full
@@ -29,6 +115,47 @@ configuration, database, Discord connection, game process or deployment occurred
 #1095/#1096/#1097 approvals remain subject to fresh reviews/CI and the prescribed
 merge cycle; no push or merge performed here. Continue trusted #1096 bootstrap
 integration and preserved runtime/state/proximity/UI/Spiderweb plan.
+
+## 2026-10-25 — Package startup dependency, modes and unfiltered readiness
+
+PR1096 reviews4340716247/4340716262/4340716275/4340716286 addressed in source.
+The release allowlist now includes runtime_app_bootstrap. New prepared releases
+emit manifest v2 with exact0644/0755 modes for every payload file, and verification
+checks the full mode inventory including executable/set-ID drift. Historical v1
+manifests retain their previous byte-only contract; no existing artifact rewritten.
+Readiness writes/flushed stderr after startup checks, independent of LOG_LEVEL.
+Resolved command comparison refuses concatenated extra ExecStartPre structures.
+
+143 targeted tests pass, including actually prepared Git-free package tools
+--help in isolated native Python, all log-level cases and exact-mode drift.
+Four removed guards visibly fail (package inclusion/modes/extra commands/readiness)
+and original files are restored with cmp. Full package preparation remains offline;
+no service/DB/network listener started. Existing prepared units need regeneration
+from final reviewed source. Original runtime/proximity/UI/D4/D5 plan preserved.
+Initial overly broad v1 mode restriction rejected legacy fixtures under host
+umask0002; corrected to versioned v2 guarantees instead of silently changing the
+historical format. Two existing websockets deprecation warnings remain.
+
+## 2026-10-21 — Verify application payload before any project execution
+
+PR1096 closes the launcher integration for1095 review4337326790. Prepared unit
+commands now embed a standard-library-only bootstrap under isolated Python.
+External unit pins bind both manifest and verifier bytes; the verified verifier
+buffer executes before any project import, then verifies the complete payload.
+Bot/preflight entry buffers are rehashed and executed directly with the verified
+root marker. Web CLI starts only after the same admission. No payload-local
+launcher is trusted before verification. Stable trusted owner/unit/interpreter
+remain prerequisites; this is not protection against an authorized hostile owner.
+
+104 targeted tests pass, including native child execution, preflight and actual
+uvicorn --version without binding a server. Tampering with entry, imports,
+verifier, manifest, extra files and symlinks refuses before application output.
+Three removed guards (manifest pin/verifier pin/full inventory) each visibly fail;
+original file restored and cmp verified. Older contract tests were updated for
+new argv shape and systemd quoting; isolation flags remain actually exercised.
+No service was installed/started/restarted and no database was contacted.
+Existing prepared units must be regenerated from final reviewed source before
+any owner activation. Original runtime/D4/D5 and proximity/UI roadmap retained.
 
 ## 2026-10-21 — Enforce marked bot configuration and writable-state boundaries
 
@@ -334,6 +461,50 @@ real database or deployed payload was touched. Next: refresh dependent PR parent
 answer the five review comments, and inspect exact-head CI; per-PR merge and owner
 activation gates remain unchanged. Existing original runtime plan is retained.
 
+## 2026-10-20 — Admit exact GNU locale metadata without weakening configuration guards
+
+Review1096 found six missing GNU libc locale categories. Add only LC_PAPER,
+LC_NAME, LC_ADDRESS, LC_TELEPHONE, LC_MEASUREMENT and LC_IDENTIFICATION to the
+shared system metadata allowlist; arbitrary LC_* remains refused. Approved-file
+value conflicts still refuse, including these exact names. GNU libc/Linux locale
+reference checked; no wildcard environment permission was added.
+
+162 focused environment, contract and health tests pass. Actual isolated child
+preflight accepts each category before its database double; /proc health reads
+real child environments containing all six and still rejects unknown/loader/app
+settings. Removing the six entries produces12observed regression failures;
+source restored andcmp verified. Ruff/diff checks pass. Initial fixture run:
+6failed156passed because /tmp/.git correctly fences preparation; a NEW private
+/var/tmp fixture rerun passes. No production, service or live database was used.
+
+Next: integrate reviewed game parent, refresh state child, publish and answer
+review4322079388, then inspect exact-head CI. Original plan and owner-specific
+merge/activation gates remain in force; old prepared contracts need regeneration.
+
+## 2026-10-20 — Application launch isolation and pre-start policy review closure
+
+Addressed all three new1096findings. Bot/web use-E-B-s, consumers additionally-u:
+-E ignores every PYTHON* influence, explicit-B/-s preserve bytecode/user-site
+protection, and-u preserves consumer output behavior otherwise lost when-E ignores
+PYTHONUNBUFFERED. Isolated preflight remains-I-B. Actual child interpreter tests
+exercise PYTHONPLATLIBDIR, no-user-site and output buffering, not just unit text.
+
+Prepared contracts record Requires/Wants/After. Resolved health requires every
+contract member while permitting implicit systemd dependencies. Release schema
+preflight now rejects unapproved environment BEFORE DB access. Health shares the
+same safe environment policy; legacy unmarked APIs retain their existing mode.
+Old prepared contracts fail closed and must be regenerated. Temporary audit
+mute overrides must be reconciled into an approved config/contract before later
+activation; do not silently certify the currently installed old contract.
+
+Agent256tests passed and six mutations were observed failing withcmp restoration.
+Public app269tests pass after game-parent integration; full candidate409targeted
+checks pass (overlapping sets). Native child/preflight tests use driver doubles,
+not live services or databases. Ruff/security/diff checks pass. No activation,
+mount, DB migration or deployed payload change occurred. Next:publish, refresh
+state child, answer three review threads and inspect exact-head CI. First merge
+candidate1093remains clean/green atc40537ba,behindmain0,owner approval required.
+
 ## 2026-10-20 — Audit admission, bytecode and fixed launch contract corrections
 
 Addressed all five new1095findings. Marked audit CLI requires-I before project/
@@ -358,6 +529,21 @@ Ruff/configured security/diff checks pass. No engine, real DB, service, deployed
 payload or production configuration was touched. Next:publish, refresh children,
 answer five comments and inspect newly triggered exact-head CI. Original plan
 and per-PR owner merge/activation gates remain in force.
+
+## 2026-10-19 — Admit systemd memory-pressure metadata without app overrides
+
+New1096review identified systemd>=254's MEMORY_PRESSURE_WATCH/WRITE metadata.
+Both exact keys now belong to the safe OS allowlist; similarly named keys,
+unknown application settings, loader variables and approved-value overrides
+remain refused. Official systemd resource-control documentation confirms the
+keys; the actual CI runner environment contains a cgroup WATCH and base64 WRITE.
+Host systemd249 cannot prove a systemd254 service launch, so no such claim is made.
+
+44health tests pass with27actual child process combinations and /proc metadata
+checks. Removing both keys causes2observed failures; original restored withcmp.
+After integrating the common runner fixture correction,160app/operator/startup
+checks pass. Ruff/diff-check clean. No service/mount/DB/deployed payload operation.
+Next:publish, refresh state child, answer review4307535251 and inspect exact-headCI.
 
 ## 2026-10-19 — Reproduce and fix runner loader fixture contamination
 
@@ -405,6 +591,39 @@ Next:publish, refresh child branches, inspect exact-head CI and answer the three
 comments. Per-PR merge authority and owner-run activation remain separate gates.
 Original runtime/D4/D5/exclusive handover/Spiderweb/UI plans remain preserved.
 
+## 2026-10-18 — Effective DEV health and consumer protection review closure
+
+Addressed six new#1096 findings. Prepared system units now unset all five unsafe
+Python/loader variables; readiness verifies the resolved filter and exact
+Restart=always/RestartUSec=10s. Actual process environment must be approved dotenv,
+prepared bootstrap or a fixed safe OS metadata allowlist; unknown application
+settings such as BETS_LIFECYCLE_SECONDS are refused, not silently inherited.
+
+A healthy website and active bot PID are insufficient. Bot emits a PID/invocation
+journal marker only at successful end of on_ready, after security/voice startup.
+The health gate requires matching journal unit/PID/invocation and fresh timestamp,
+then rechecks services. This proves startup completion, not continuous Discord
+connectivity. Current deployed builds lack this marker and are not certified by
+the new source. Read-only host checks verified actual Restart/RestartUSec and
+journald PID/invocation/unit/timestamp fields. No new service or message ran.
+
+Consumer verifier regenerates exact required unit bytes instead of trusting a
+jointly modified unit and digest. User units require PrivateUsers and ReadOnlyPaths;
+isolated prestart checks actual ST_RDONLY on the release and descendants before
+worker imports. Unsupported/ignored sandboxing fails closed on writable mounts.
+Actual protection after activation remains required_at_start_unmeasured: no
+mount/service was started, and a verifier report is not a kernel-enforcement proof.
+
+Combined app health/consumer fixtures124passed. Five parent guard/signal mutations
+each caused1observed failure; consumer semantic mutation6failures, disabled mount
+guard1failure; all restored withcmp. Native writable-filesystem child refuses;
+actual on_ready tests cover success/security rejection/startup exception with
+mock transports. Ruff and diff checks pass. Next: refresh reviewed parent,
+publish this slice, inspect exact-head CI and answer all six review comments.
+Production audit silence remains owner-pending; DEV temporary audit=false is
+confirmed active after the separately documented diagnostic recovery. No agent
+service command, DB write, migration, browser or production deployment occurred.
+
 ## 2026-10-16 — Six further game-delivery review findings addressed
 
 #1095 review exposed six additional boundaries after its earlier green CI.
@@ -443,6 +662,42 @@ No merge occurred; request unambiguous owner permission for#1093 before retry.
 Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
 all six review threads with evidence. Original runtime, Spiderweb and UI work
 remain preserved; merge approval and owner-run DEV activation are separate gates.
+
+## 2026-10-16 — DEV readiness access, monitor paths and CI follow-up
+
+PR #1096 CI at4f96e678 failed on two checks on both Python versions: the
+retro-viz OpenAPI description was stale (only that description differed), and
+an old maintenance test expected cwd/logs despite the shared test environment's
+BOT_LOG_DIR. Regenerated the PR snapshot (full source was already current);
+parameterized directory creation for unset/empty/external log paths.
+
+New review findings fixed: compatibility team CLI verifies contracts without
+injecting a conflicting preparation component; SSHMonitor downloads now use
+config.stats_directory (real local write with fake SSH/SCP, no remote transfer).
+DEV contracts require effective read/write/traverse permissions as the samba
+service account, including existing metrics DB files, not just ReadWritePaths.
+Preparation as another account is refused. CI fixtures substitute only service
+UID identity, retain actual chmod/access checks and restore directory modes.
+Consumer units also remove LD_AUDIT; explicit app config refuses loader overrides.
+
+Readiness accepts visible approved dotenv keys only with matching values and
+rejects mismatches, extra DB settings and loader injection. Correction to the
+review premise: an actual child load_environment/setdefault experiment loaded
+its synthetic key, while /proc/environ did NOT show that added key. Linux normally
+exposes exec-time environment there. This admits both exec-time shapes; it does
+not prove dynamic app configuration through proc. ExecStartPre still rejects
+inherited overrides, and the exact approved file digest remains checked.
+
+178 related tests passed; post-mutation narrower suite147 passed. Nine failures
+were observed across access(3), loaded-key(1), wrapper(2), SSH output(1) and audit
+environment(2) negative controls, each restored with cmp. Ancestor traversal was
+already refused by canonical resolution and is not credited as a new mutation.
+Actual offline CLI prepared three synthetic files; systemd-analyze verify passed
+both DEV units. Fake payload/interpreters only; no installation, service start,
+real dependency/DB startup proof or deployment. Existing legacy-test Ruff findings
+remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
+and additional review closure remain pending. Preserve original plan and queues.
+
 
 ## 2026-10-16 — Availability test controls the market transition explicitly
 
@@ -539,7 +794,6 @@ caller1 failure; actual ancestor dotenv leak1 failure. Every source restored wit
 cmp. No service, ET, migration, application write or production action. Refresh
 parents normally and run exact-head CI before final review closure. #1093 remains
 fully green and owner-specific merge approval is still pending. All plan retained.
-
 
 ## 2026-10-16 — Bound team contention remains retryable after canonical commit
 
@@ -646,6 +900,36 @@ Next: exact-head CI, review replies and normal dependency refresh1094–1096.
 All original runtime, handover, D5, proximity/gametime and UI plans remain open
 where previously recorded. Per-number owner permission still gates each merge.
 
+## 2026-10-16 — Package bytes match captured Git blobs, including transient drift
+
+Corrected the provenance measurement: the existing SPA validator already denies
+an ordinary tracked-dirty tree. Two earlier mutation failures only changed the
+expected error boundary; they did not demonstrate unsafe payload acceptance.
+The relevant earlier checkpoint and lesson are corrected, retaining the history.
+Explicit package state checks still make that contract local and cover the final
+manifest boundary.
+
+A stronger race fixture copies temporarily modified runtime bytes, restores the
+source before clean snapshots, then briefly repeats the edit during real source
+hashing and restores again. With Git-blob comparison deliberately disabled, the
+old per-file comparison accepts a self-consistent manifest stamped with clean
+HEAD while its runtime payload differs from that committed blob. This unsafe
+synthetic artifact was independently verified and retained privately. Both
+transient-source and executable-mode mutations were seen failing; restored
+source cmp matched and both regressions passed.
+
+The builder now captures regular blob/mode identities from the exact Git tree,
+compares copied bytes via git hash-object --no-filters against those objects,
+and takes executable bits from committed mode, not mutable checkout metadata.
+This also preserves binaries on core.filemode=false filesystems. Fourteen
+package tests passed. This is point-in-time provenance under trusted stable
+output ownership, not a signature or hostile same-UID protection.
+Evidence: /tmp/slomix-package-blob-*, /tmp/slomix-package-race-negative-proof.log
+and /tmp/slomix-package-provenance-final.log; synthetic retained /var/tmp outputs.
+No active package, installed unit, application data or service was changed.
+Next: exact-head CI/review, then original source admission/D5 and owner gates.
+Original PLAN bytes and all pending runtime/UI work remain preserved.
+
 ## 2026-10-16 — Forward-only map alphabet and explicit rebuild dependencies
 
 Two later #1093 review findings: restrictive round-mapping FKs blocked explicit
@@ -678,6 +962,44 @@ resolve review. Keep owner merge permissions per PR, source admission/exclusive
 handover, D5 and every original proximity/gametime/API/live/Spiderweb/UI item.
 Full original PLAN bytes remain preserved in the primary checkout. Production,
 services, installed units, application rows and old candidate packages untouched.
+
+## 2026-10-16 — Application delivery review closes state and provenance gaps
+
+#1096 now preserves the lexical bin/python leaf of ordinary symlink venvs for
+both DEV and standalone consumer units; venv/bin ancestors and pyvenv.cfg must
+remain canonical. Actual --without-pip venv execution confirmed sys.executable
+and sys.prefix select that venv, not the resolved base interpreter. Parent/config
+alias regressions still refuse. The compatibility wrapper explicitly exports
+canonical rather than leaving an unused import note unexplained.
+
+Packaging now checks clean tracked/index bytes against exact HEAD both before
+copying and before manifest creation, preserving its hidden-index flag guard.
+Staged/unstaged runtime changes refuse before destination creation; mid-copy
+drift retains incomplete output without a release stamp. Actual clean CLI still
+packages eighteen synthetic payload files, with independent SHA256 agreement.
+Health reads and compares resolved MemoryMax/CPUQuotaPerSecUSec, including empty
+or infinity overrides. Actual host formats were observed read-only.
+
+Both manual sync callbacks now download/list/verify the configured external
+stats directory. File-producing command fixtures exercise download and import
+arguments without SSH/Discord/DB transport and leave release cwd empty.
+Team/cache unit text clears inherited Python/loader variables; both actual
+systemd-analyze --user parses and separate verification CLIs pass. No unit is
+installed or started and configuration/handover remain unmeasured.
+
+103 selected tests passed, then 45 venv/contract tests including two added alias
+cases (overlapping, do not sum). Twelve targeted mutations produced failures;
+two dirty-source cases failed on expected-message assertions while the existing
+SPA identity validator still rejected them. Those two are boundary duplication,
+not proof of unsafe payload acceptance. The other ten guards were seen failing;
+all twelve restored cases passed. Game guards independently had five detected failures
+and ten restored passes. Ruff and script Bandit gates pass. Evidence remains
+local in /tmp/slomix-app-review2*, /tmp/slomix-review2* and retained /var/tmp proofs.
+
+Refresh parent #1095, publish and resolve exact-head CI/review. This remains
+preparation, not a new active release or complete dependency/schema acceptance.
+Original primary plan bytes, pending source admission/exclusive handover, D5,
+proximity/gametime/storage/API/live/Spiderweb/UI work all remain preserved.
 
 ## 2026-10-16 — Closed supervisor bootstrap and enforced resource contract
 
@@ -746,6 +1068,56 @@ inspection. No service/game/database operation, deployment or PR merge occurred.
 Retain D5, source admission/exclusive writer handover, proximity/gametime/storage,
 API/live/Spiderweb/UI work and all original roadmap items. The full original
 plan remains byte-preserved in the primary development checkout.
+
+## 2026-10-16 — Immutable application payload and external mutable state
+
+Next cohesive branch feat/runtime-app-delivery-20261016 is based on PR #1095
+(a4095604), itself dependent on #1094 then #1093. None has number-specific merge
+permission. #1095 contains 32 changed paths independently measured by Git diff,
+tree objects and GitHub; CodeQL/security/JS/Lua/React/hygiene passed, full Python
+matrix was still running when this checkpoint was written.
+
+Application slice connects Git-free payload preparation/manifest build identity,
+offline DEV startup contract/unit verification, exact-process health checks and
+external configuration loaded before import-time constants. Bot metrics/audit,
+maintenance/shadow files and downloaded-stats lookup honor external state paths;
+comparison PNGs use memory and close attachments/figures on send failure.
+Retention can be explicitly disabled during handover. Retro gallery listing
+and byte serving share one external PNG-only root; missing explicit storage is
+unavailable, not silently empty. Independent gametime decoder work stays in the
+full development source, not accidentally copied with the bot entrypoint.
+
+107 selected tests passed (21.97s). Service-byte guard mutation failed both bot
+and web cases; restored copy cmp matched, then 40 related tests passed. Fixture
+credentials are generated. Ruff/Bandit medium-high gate pass; two narrowly
+annotated 0.0.0.0 literals only render/compare the existing DEV bind, never open
+sockets. A real CLI packaged 18 synthetic payload files, excluding .git/.env;
+Python SHA256 and sha256sum agree on every file. A separate CLI verified all
+three prepared contract/unit files, again with independent hashes. These are
+synthetic offline packaging proofs and ASGI fixture responses, not a new active
+release, real virtualenv inventory, installed units, live health or native DB
+acceptance. No service/game/migration/deployment operation occurred.
+
+Standalone team/cache delivery is included in PR #1096 with the compatibility
+team command and disabled configuration examples. Twenty consumer-delivery tests
+passed; actual separate CLI verification and systemd-analyze --user verify pass
+for both synthetic units, without installation or activation. A missing unit-hash
+guard is detected by mutation; restored cmp and regression pass. These user
+consumers are independent from the system DEV bot/web units.
+
+#1095 first full CI had exactly one documentation-routing failure on each leg:
+10288/10292 other tests passed (3.11/3.13). The leading checkpoint hid the required
+routing preamble from its guard. Moved checkpoints after the preamble preserving
+every line; eleven contract tests pass in both branches. #1095 c933793d and #1096
+include the correction, with normal dependency merge in #1096 (no PR merge).
+
+Evidence: /tmp/slomix-app-*.log; retained /var/tmp/slx-app-* proof directories.
+Next: publish/review and resolve exact-head CI; then source admission/exclusive
+writer handover, complete schema/application consolidation and D5 observation.
+Keep pending proximity/gametime migrations, storage relocation reconciliation,
+API/live/Spiderweb/UI and every original roadmap item. Original 0261b076 plan
+bytes remain intact in the preserved full development checkout. Preparation
+never authorizes activation; production remains untouched.
 
 ## 2026-10-16 — Immutable game delivery and supervised proof import
 

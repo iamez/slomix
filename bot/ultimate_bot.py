@@ -66,6 +66,8 @@ except ImportError:
     WS_CLIENT_AVAILABLE = False
     StatsWebSocketClient = None
 
+# Environment has already been loaded before service imports.
+
 # ==================== COMPREHENSIVE LOGGING SETUP ====================
 
 # Import our custom logging configuration
@@ -2201,6 +2203,10 @@ class UltimateETLegacyBot(
                     logger.info("✅ Monitoring service started")
             except Exception as e:
                 logger.error(f"⚠️ Monitoring service failed to start: {e}", exc_info=True)
+
+        # Emitted only after Discord on_ready and security/startup checks finish.
+        sys.stderr.write(f'[RUNTIME-READY] pid={os.getpid()} invocation={os.getenv("INVOCATION_ID", "")}\n')
+        sys.stderr.flush()
 
     async def on_command(self, ctx):
         """Track command execution start"""
