@@ -1,11 +1,5 @@
 -- Forward-only admitted proximity provenance, atomic with children and receipt.
 -- No backfill or legacy receipt adoption. Trusted admission remains caller-owned.
--- Existing parent migrations remain immutable. Composite keys prevent mixing
--- a valid stats identity with another round, or adopting an unlinked receipt.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_runtime_round_mapping_parent_binding
-    ON runtime_round_mappings(source_key, round_key, canonical_round_id);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_proximity_receipt_runtime_binding
-    ON proximity_processed_files(filename, linked_round_id, file_hash);
 CREATE TABLE IF NOT EXISTS runtime_proximity_mappings (
     filename TEXT PRIMARY KEY REFERENCES proximity_processed_files(filename) ON DELETE RESTRICT
         CHECK (length(filename) BETWEEN 1 AND 240),
@@ -18,10 +12,8 @@ CREATE TABLE IF NOT EXISTS runtime_proximity_mappings (
     canonical_round_id INTEGER NOT NULL UNIQUE REFERENCES rounds(id) ON DELETE RESTRICT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (source_key, generation),
-    FOREIGN KEY (source_key, round_key, canonical_round_id)
-        REFERENCES runtime_round_mappings(source_key, round_key, canonical_round_id) ON DELETE RESTRICT,
-    FOREIGN KEY (filename, canonical_round_id, source_sha256)
-        REFERENCES proximity_processed_files(filename, linked_round_id, file_hash) ON DELETE RESTRICT
+    FOREIGN KEY (source_key, round_key)
+        REFERENCES runtime_round_mappings(source_key, round_key) ON DELETE RESTRICT
 );
 COMMENT ON TABLE runtime_proximity_mappings IS
     'Explicit admitted proximity binding, not engine authentication, historical adoption or source acknowledgement.';

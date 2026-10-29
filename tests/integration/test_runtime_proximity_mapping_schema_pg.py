@@ -11,11 +11,12 @@ from tests.integration.test_runtime_website_privileges_pg import default_acls, d
 
 ROOT = Path(__file__).resolve().parents[2]
 MIGRATION = ROOT / 'migrations/100_runtime_proximity_mappings.sql'
+FORWARD = ROOT / 'migrations/105_runtime_proximity_parent_constraints.sql'
 acl_db = _acl_db
 pytestmark = pytest.mark.timeout(120)
 
 
-async def parents(conn, *, link_sql=None):
+async def parents(conn, *, link_sql=None, harden=True):
     """Only synthetic transaction-scoped parents; no application data."""
     await conn.execute('CREATE TABLE rounds (id INTEGER PRIMARY KEY)')
     await conn.execute('CREATE TABLE proximity_processed_files ('
@@ -37,6 +38,9 @@ async def parents(conn, *, link_sql=None):
         "('first.txt',true,true,$1,1),('second.txt',true,true,$1,2),('third.txt',true,true,$1,3)",
         'b' * 64,
     )
+    if harden:
+        await conn.execute(MIGRATION.read_text())
+        await conn.execute(FORWARD.read_text())
 
 
 async def insert(conn, **changed):
@@ -58,7 +62,8 @@ def _assert_exact_migration_once(schema, migration):
 
 
 @pytest.mark.parametrize('migration_name', ['096_proximity_receipt_round_link.sql',
-                                         '100_runtime_proximity_mappings.sql'])
+                                         '100_runtime_proximity_mappings.sql',
+                                         '105_runtime_proximity_parent_constraints.sql'])
 def test_bootstrap_appends_exact_proximity_mapping_migration(migration_name):
     schema = (ROOT / 'tools/schema_postgresql.sql').read_text()
     migration = (ROOT / 'migrations' / migration_name).read_text()
@@ -68,7 +73,8 @@ def test_bootstrap_appends_exact_proximity_mapping_migration(migration_name):
 
 @pytest.mark.parametrize('mutation', ['missing', 'edited', 'duplicated'])
 @pytest.mark.parametrize('migration_name', ['096_proximity_receipt_round_link.sql',
-                                         '100_runtime_proximity_mappings.sql'])
+                                         '100_runtime_proximity_mappings.sql',
+                                         '105_runtime_proximity_parent_constraints.sql'])
 def test_bootstrap_contract_rejects_changed_proximity_migration(mutation, migration_name):
     schema = (ROOT / 'tools/schema_postgresql.sql').read_text()
     migration = (ROOT / 'migrations' / migration_name).read_text()
@@ -265,41 +271,78 @@ async def test_receipt_binding_cannot_change_after_mapping(acl_db, change):
 
 @pytest.mark.parametrize('guard', ['stats_parent', 'strict_receipt', 'nullable_gate'])
 async def test_mutated_schema_guard_accepts_invalid_binding(acl_db, guard):
-    """In-memory mutants prove each SQL guard is exercised on disposable PG."""
-    migration = MIGRATION.read_bytes()
-    link_path = ROOT / 'migrations/096_proximity_receipt_round_link.sql'
-    link_original = link_path.read_bytes()
-    link_sql = link_original.decode()
-    sql = migration.decode()
+    """In-memory forward SQL mutants execute on disposable PostgreSQL."""
+    original = FORWARD.read_bytes()
+    sql = original.decode()
     if guard == 'stats_parent':
         sql = sql.replace('FOREIGN KEY (source_key, round_key, canonical_round_id)',
                           'FOREIGN KEY (source_key, round_key)').replace(
             'REFERENCES runtime_round_mappings(source_key, round_key, canonical_round_id)',
             'REFERENCES runtime_round_mappings(source_key, round_key)')
     elif guard == 'strict_receipt':
-        sql = sql.replace(',\n    FOREIGN KEY (filename, canonical_round_id, source_sha256)\n'
-                          '        REFERENCES proximity_processed_files(filename, linked_round_id, file_hash) '
-                          'ON DELETE RESTRICT', '')
+        block = ("ALTER TABLE runtime_proximity_mappings\n"
+                 "    ADD CONSTRAINT runtime_proximity_mapping_receipt_fkey\n"
+                 "    FOREIGN KEY (filename, canonical_round_id, source_sha256)\n"
+                 "        REFERENCES proximity_processed_files(filename, linked_round_id, file_hash) "
+                 "ON DELETE RESTRICT;\n")
+        assert sql.count(block) == 1
+        sql = sql.replace(block, '')
     else:
-        link_sql = link_sql.replace('runtime_parent_gate IS TRUE AND', 'runtime_parent_gate AND')
-    assert sql != migration.decode() or link_sql != link_original.decode()
-    await parents(acl_db, link_sql=link_sql)
+        sql = sql.replace('runtime_parent_gate IS TRUE AND', 'runtime_parent_gate AND')
+    assert sql != original.decode()
+    await parents(acl_db, harden=False)
+    await acl_db.execute(MIGRATION.read_text())
     await acl_db.execute(sql)
     if guard == 'stats_parent':
         await insert(acl_db, filename='second.txt', canonical_round_id=2)
     else:
-        if guard == 'strict_receipt':
-            await acl_db.execute("UPDATE proximity_processed_files SET linked_round_id=NULL "
-                                "WHERE filename='first.txt'")
-        else:
-            await acl_db.execute("UPDATE proximity_processed_files SET runtime_parent_gate=NULL "
-                                "WHERE filename='first.txt'")
+        change = 'linked_round_id=NULL' if guard == 'strict_receipt' else 'runtime_parent_gate=NULL'
+        await acl_db.execute(f"UPDATE proximity_processed_files SET {change} WHERE filename='first.txt'")
         await insert(acl_db)
-    invalid_rows = await acl_db.fetch('SELECT * FROM runtime_proximity_mappings')
-    assert len(invalid_rows) == await acl_db.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 1
-    # The same no-invalid-row assertion must visibly fail with the guard removed.
+    rows = await acl_db.fetch('SELECT * FROM runtime_proximity_mappings')
+    assert len(rows) == await acl_db.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 1
     with pytest.raises(AssertionError):
-        assert invalid_rows == []
-    assert MIGRATION.read_bytes() == migration
-    assert link_path.read_bytes() == link_original
-    print(f'Observed failing SQL guard mutation: {guard}; source bytes unchanged')
+        assert rows == []
+    assert FORWARD.read_bytes() == original
+    print(f'Observed failing forward SQL guard mutation: {guard}; source bytes unchanged')
+
+
+@pytest.mark.parametrize('filename,expected', [
+    ('096_proximity_receipt_round_link.sql', '45211ddd560ba3ed6b10be63bf24cce898908efe75bbb68fb66b52d87045669d'),
+    ('100_runtime_proximity_mappings.sql', '1825ad01a79ba42c854895f567a6b8974eb7c71f26b7780752afc437af32ee16'),
+])
+def test_applied_proximity_migration_checksums_are_preserved(filename, expected):
+    import hashlib
+
+    assert hashlib.sha256((ROOT / 'migrations' / filename).read_bytes()).hexdigest() == expected
+
+
+async def test_forward_upgrade_preserves_existing_valid_mapping(acl_db):
+    await parents(acl_db, harden=False)
+    await acl_db.execute(MIGRATION.read_text())
+    await insert(acl_db)
+    before = await acl_db.fetch('SELECT * FROM runtime_proximity_mappings')
+    async with acl_db.transaction():
+        await acl_db.execute(FORWARD.read_text())
+    assert await acl_db.fetch('SELECT * FROM runtime_proximity_mappings') == before
+    assert len(before) == await acl_db.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 1
+    await acl_db.execute(MIGRATION.read_text())
+    assert await acl_db.fetch('SELECT * FROM runtime_proximity_mappings') == before
+
+
+@pytest.mark.parametrize('defect', ['stats_parent', 'unlinked_receipt', 'nullable_gate'])
+async def test_forward_upgrade_refuses_invalid_existing_data_atomically(acl_db, defect):
+    await parents(acl_db, harden=False)
+    await acl_db.execute(MIGRATION.read_text())
+    if defect == 'stats_parent':
+        await insert(acl_db, filename='second.txt', canonical_round_id=2)
+    else:
+        change = 'linked_round_id=NULL' if defect == 'unlinked_receipt' else 'runtime_parent_gate=NULL'
+        await acl_db.execute(f"UPDATE proximity_processed_files SET {change} WHERE filename='first.txt'")
+        await insert(acl_db)
+    before = await acl_db.fetch('SELECT * FROM runtime_proximity_mappings')
+    with pytest.raises((asyncpg.ForeignKeyViolationError, asyncpg.CheckViolationError)):
+        async with acl_db.transaction():
+            await acl_db.execute(FORWARD.read_text())
+    assert await acl_db.fetch('SELECT * FROM runtime_proximity_mappings') == before
+    assert await acl_db.fetchval("SELECT to_regclass('idx_runtime_round_mapping_parent_binding')") is None

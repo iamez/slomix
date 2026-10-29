@@ -42,6 +42,30 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 
 
 
+## 2026-10-29 — Preserve applied migrations and move lineage guards forward
+
+Actual DEV role preflights exposed checksum differences for096/100. Independently
+verified original bytes against105-row live ledger and eight preserved release
+copies per file, including Git object38dbeebf. Restore the consumed096/100bytes;
+keep their historical semantics intact and move the existing strict lineage
+indexes/FKs/null-gate check into NEW105_runtime_proximity_parent_constraints.sql.
+No live ledger or table is edited. New105validates existing rows and refuses
+incompatible lineage; it never infers a link or rewrites data.
+
+Bootstrap mirrors original096/100once plus105once; newest release config includes
+105. Tests cover a valid existing row unchanged across upgrade, atomic rejection
+of three invalid existing states, three executable SQL guard mutants and pinned
+old checksums. Local71unit/static/release-config cases pass;53actual PostgreSQL
+cases explicitly skip without an isolated service. This is NOT a SQL execution
+certificate. Publish for current-head PG14/17CI before claiming the fix verified.
+
+Unpublished identity/application source still accounts for five other already
+applied migrations097/098/101/102/103. The earlier shorthand attributing all seven
+missing app-source migrations to1101was imprecise:1101provides096/100only. Preserve
+both later publication lanes and never weaken startup inventory to hide omissions.
+Original runtime/D4/D5, Supply recovery and UI/Spiderweb plans remain. Owner's
+Puran update and production app version are unchanged. No new server or DB write.
+
 ## 2026-10-25 — PR #1101: actual PostgreSQL proof and rejected column-ACL review premise
 
 - Verified public source head 9db6212a8c52905d4b45515affeda496856d3049 against CI run 39654495446, both Python jobs SUCCESS. PostgreSQL 14 / Python 3.11 job 119411051105: 11140 passed,161 skipped,11 subtests; PostgreSQL 17 / Python 3.13 job 119411050977: 11144 passed,157 skipped,11 subtests. Each job executed all 57 proximity schema cases, including 49 database cases, eight direct/PUBLIC column-ACL cases, three inherited-access refusals and three observed SQL guard mutations. Schema case counts independently agree via parsed log records and line counts.

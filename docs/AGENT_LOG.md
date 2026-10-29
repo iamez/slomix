@@ -1,3 +1,27 @@
+## 2026-10-29 — Preserve applied migrations and move lineage guards forward
+
+Actual DEV role preflights exposed checksum differences for096/100. Independently
+verified original bytes against105-row live ledger and eight preserved release
+copies per file, including Git object38dbeebf. Restore the consumed096/100bytes;
+keep their historical semantics intact and move the existing strict lineage
+indexes/FKs/null-gate check into NEW105_runtime_proximity_parent_constraints.sql.
+No live ledger or table is edited. New105validates existing rows and refuses
+incompatible lineage; it never infers a link or rewrites data.
+
+Bootstrap mirrors original096/100once plus105once; newest release config includes
+105. Tests cover a valid existing row unchanged across upgrade, atomic rejection
+of three invalid existing states, three executable SQL guard mutants and pinned
+old checksums. Local71unit/static/release-config cases pass;53actual PostgreSQL
+cases explicitly skip without an isolated service. This is NOT a SQL execution
+certificate. Publish for current-head PG14/17CI before claiming the fix verified.
+
+Unpublished identity/application source still accounts for five other already
+applied migrations097/098/101/102/103. The earlier shorthand attributing all seven
+missing app-source migrations to1101was imprecise:1101provides096/100only. Preserve
+both later publication lanes and never weaken startup inventory to hide omissions.
+Original runtime/D4/D5, Supply recovery and UI/Spiderweb plans remain. Owner's
+Puran update and production app version are unchanged. No new server or DB write.
+
 ## 2026-10-21 — Publish proximity foundations without importing later lanes
 
 Admission tests include three later ingest-dependent cases; publishing the file

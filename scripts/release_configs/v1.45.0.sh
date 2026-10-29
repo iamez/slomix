@@ -109,6 +109,7 @@ MIGRATIONS=(
   "099_runtime_round_mappings.sql"
   "100_runtime_proximity_mappings.sql"
   "104_runtime_round_mapping_map_alphabet.sql"
+  "105_runtime_proximity_parent_constraints.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"

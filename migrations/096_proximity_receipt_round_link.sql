@@ -5,7 +5,7 @@ ALTER TABLE proximity_processed_files
     ADD COLUMN IF NOT EXISTS linked_round_id INTEGER
         REFERENCES rounds(id) ON DELETE RESTRICT
         CHECK (linked_round_id IS NULL OR
-            (runtime_parent_gate IS TRUE AND aggregates_applied IS TRUE AND file_hash IS NOT NULL));
+            (runtime_parent_gate AND aggregates_applied IS TRUE AND file_hash IS NOT NULL));
 
 CREATE INDEX IF NOT EXISTS idx_proximity_receipt_linked_round
     ON proximity_processed_files(linked_round_id) WHERE linked_round_id IS NOT NULL;
