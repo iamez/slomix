@@ -41,6 +41,27 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-10-29 — Native ingestion succeeds; repair remaining historical fixture closure
+
+First expanded CI346f75a0/PG14 proves all six new checkpoint/configured-entrypoint
+policy cases and actual Lua canonical mapping/aggregate tests PASS. The full job
+reports20failed/11848passed/163skipped: nineteen depend on an older linked_import
+fixture lacking migration096/its batch-dispatch keyword interface; one still
+asserts the old known-bug zero-origin duration of0instead of3000. Carry the existing
+canonical fixture/test updates without changing source or weakening schema guards.
+Current5a7d1323 Lua, security, frontend and CodeQL checks pass; the same obsolete
+PG fixture closure still needs correction and a fresh exact-head full CI run.
+
+Owner also requested a short player-facing Puran upgrade recap. Before-update
+native evidence says2.84.0; selected archive/native proof says2.86.0-13-g39c75a3.
+Primary upstream comparison confirms exactly13commits beyond v2.86.0, no behind
+commits. Private evidence/puran-community-comp13-recap.md records the ready draft
+and links. Do not attribute later Coming Soon antilag fixes or native-client-only
+OpenAL benefits to this server/PK3 upgrade; no Discord message was sent.
+
+Original runtime/D4/D5 and all retained incident/UI/history lanes remain intact.
+No service, production, game, live DB or migration action; no merge permission1108.
+
 ## 2026-10-29 — Preserve full Lua CI contracts during ingestion publication
 
 #1108 expanded head346f75a0 is published,67paths, within the recorded75-file
