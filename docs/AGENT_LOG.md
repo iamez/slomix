@@ -1,3 +1,56 @@
+## 2026-10-30 — Preserve strict legacy ingestion under declared policy opt-in
+
+Original runtime PLAN and its improvements remain the goal; the testing audit
+is recorded below and must not replace that roadmap. Prior2b29ab00 passes all
+26checks(25SUCCESS/1SKIPPED), PG14=12012/163skips, PG17=12016/159skips. Its direct
+legacy replay correction has full native proof. Tenth review identifies a genuine
+runtime policy composition bug: enabling support for declared captures also forces
+legacy captures through declared provenance and prevents their import/replay.
+
+Classify only source bytes verified against persisted admission size/hash, and
+only after matching sealed completion. Declared headers keep strict mapping;
+undeclared files keep existing strict canonical-parent/receipt checks. Malformed
+present declarations still fail; never infer or adopt declared provenance for
+legacy files. Observer only queries declared proof when source declares identity.
+Explicit parser binding semantics remain strict. No existing reconciliation hold
+is cleared, no completion/source is changed and no data is auto-repaired.
+
+Two regression cases fail before correction;146related local cases pass after.
+Reverting observer selection or import selection each yields1failure; both sources
+restore byte-identically with cmp. Ruff/Bandit pass. Extend actual canonical PG
+legacy import -> independent receipt -> replay for policy OFF/ON, requiring one
+track/strict digest/parent receipt, zero declared mappings and unchanged source.
+Fresh exact-head native PG14/17 and full CI remain required; no new local full run.
+
+After this runtime slice: numbered#1108merge permission, prescribed420secondcycle,
+exact-source release preparation and originalD4/D5 source/writer/recovery gates.
+Testing-quality lane retains70unexpected SQL skips, duplicated CI, missing runtime
+coverage measurement and separate real browser/game evidence. All old plans,
+features, Supply/frame-health/Spiderweb/UI/Stats/security/history stay preserved.
+No service/deploy/liveDB/migration/game action; original PLAN remains byte-contained.
+
+## 2026-10-30 — Testing audit remains part of the original runtime roadmap
+
+Owner reaffirms runtime development plus the improvements/fixes recorded in the
+original PLAN. Read-only audit of2b29ab00 measures12174collected Python cases,
+7145base names;990Reactcases. Both push/PR run two Python/PG jobs, yielding48056
+successful Python case executions and48.75summed CI job-minutes, excluding other
+workflows. These are repeated executions, not48056independent test definitions.
+
+Confirmed priority gaps:70plausibility SQL and2view cases skip because fixtures
+expect application POSTGRES_* while CI supplies isolated POSTGRES_TEST_*; broad
+exception/SystemExit handling hides it. Fix with isolated populated fixtures and
+fail when explicitly requested setup breaks, never application credentials.
+Coverage63% measures bot/backend only; shared runtime/parser are unmeasured there.
+Playwright/real ET asset gates remain separate; six Python e2e cases only test
+configuration. Deduplicate push/PR while retaining stacked PR/merge_group proof;
+track skipped behavioral coverage and avoid source-name-only confidence. Keep all
+history. Private report evidence/TESTING-AUDIT-20261030.md and measuredJSON.
+
+Audit ran no tests, DB connections, browsers, services or workflow changes.
+Return to current #1108 legacy-policy compatibility fix, then exact-source release
+and originalD4/D5 source/writer/recovery plan. No numbered1108merge approval.
+
 ## 2026-10-29 — Close direct legacy replay capture-boundary dependency
 
 Priorheadbeb8b295 completes26checks:25SUCCESS/1SKIPPED(CodeRabbit), zero failures;

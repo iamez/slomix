@@ -121,3 +121,21 @@ async def test_legacy_non_utf8_name_matches_actual_parser_decoding(setup):
     observer.fetchrow.return_value['file_hash'] = digest
     assert (await inspect(directory, observer)).status == 'committed'
     assert source.read_bytes() == payload
+
+
+@pytest.mark.parametrize('valid', [True, False])
+async def test_declared_policy_keeps_legacy_strict_receipt_checks(setup, valid):
+    directory, observer, _ = setup
+    publish_proximity_admission(directory, **OPTIONS)
+    observer.fetchrow.return_value['runtime_parent_gate'] = valid
+
+    @asynccontextmanager
+    async def readonly(**options):
+        assert options == dict(isolation='repeatable_read', readonly=True)
+        yield
+
+    observer.transaction = readonly
+    result = await inspect_proximity_commit(directory, source_id=SOURCE,
+        generation=GENERATION, observer=observer, allow_declared_mapping=True)
+    assert result.status == ('committed' if valid else 'conflict')
+    observer.fetchrow.assert_awaited_once()  # no declared mapping lookup for legacy

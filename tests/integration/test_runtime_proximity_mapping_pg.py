@@ -569,7 +569,8 @@ async def test_declared_non_utf8_name_import_and_observer_agree(pipeline):
     print('DECLARED NON-UTF8: real Lua source, unchanged raw hash, canonical replacement display, commit/replay recognized')
 
 
-async def test_legacy_non_utf8_import_then_independent_commit_replay(full_import_db, tmp_path):
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_legacy_non_utf8_import_then_independent_commit_replay(full_import_db, tmp_path, enabled):
     from shared.runtime_spool import publish_proximity_file
 
     manager, reader = full_import_db
@@ -591,11 +592,16 @@ async def test_legacy_non_utf8_import_then_independent_commit_replay(full_import
                          "VALUES (810,1,20,'supply',1700000000)")
     async with manager.pool.acquire() as writer:
         options = dict(source_id='fixture', generation=directory.name, adapter=adapter_for(writer),
-                       observer=reader, gametimes_dir=tmp_path)
+                       observer=reader, gametimes_dir=tmp_path, allow_declared_mapping=enabled)
         first = await process_proximity_once(directory, now=1000, **options)
         assert first.action == 'committed', first
         assert (await process_proximity_once(directory, now=1001, **options)).action == 'committed'
     assert await reader.fetchval('SELECT player_name FROM player_track') == 'Player\ufffd'
     assert await reader.fetchval('SELECT count(*) FROM player_track') == 1
+    assert tuple(await reader.fetchrow(
+        'SELECT file_hash,runtime_parent_gate,aggregates_applied,linked_round_id '
+        'FROM proximity_processed_files')) == (digest, True, True, 810)
+    assert await reader.fetchval('SELECT count(*) FROM runtime_proximity_mappings') == 0
     assert (directory / filename).read_bytes() == payload
-    print('LEGACY NON-UTF8: actual canonical import, independent committed receipt, exact replay, raw bytes retained')
+    print(f'LEGACY NON-UTF8 policy={enabled}: canonical import/replay, independently strict receipt, '
+          'no declared provenance adoption, raw bytes retained')

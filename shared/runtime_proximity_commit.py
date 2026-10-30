@@ -57,13 +57,14 @@ async def inspect_proximity_commit(
             'SELECT file_hash, runtime_parent_gate, aggregates_applied, linked_round_id '
             'FROM proximity_processed_files WHERE filename = $1', admission.filename,
         )
+        declared = None
         if row is not None:
             payload = read_verified_proximity_source(directory / admission.filename,
                 expected_size=admission.size, expected_sha256=admission.sha256)
             declared = proximity_header_identity(StringIO(payload.decode('utf-8', errors='replace')), admission.filename)
             if declared is not None and not allow_declared_mapping:
                 return ProximityCommitObservation('conflict', 'declared_identity_mapping_pending')
-        if row is not None and allow_declared_mapping:
+        if row is not None and allow_declared_mapping and declared is not None:
             try:
                 binding = DeclaredProximityBinding(admission.source_id, admission.generation, admission.filename,
                                                    admission.size, admission.sha256, admission.session_date)

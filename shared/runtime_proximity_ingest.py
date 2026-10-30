@@ -2,12 +2,15 @@
 
 from dataclasses import dataclass
 from datetime import date
+from io import StringIO
 from pathlib import Path
 from typing import Literal
 
 from shared import proximity_import
+from shared.proximity_source import read_verified_proximity_source
 from shared.runtime_manifest_reader import inspect_proximity_completion_manifest
 from shared.runtime_proximity_admission import read_proximity_admission
+from shared.runtime_proximity_identity import proximity_header_identity
 from shared.runtime_proximity_mapping import DeclaredProximityBinding
 from shared.runtime_spool import _PROXIMITY_NAME, _validate_metadata
 
@@ -41,9 +44,20 @@ async def import_admitted_proximity_file(
         return None
     options = {}
     if allow_declared_mapping:
-        options['declared_binding'] = DeclaredProximityBinding(
-            admission.source_id, admission.generation, admission.filename, admission.size,
-            admission.sha256, admission.session_date)
+        # Select declared verification only after a matching sealed completion.
+        # The opt-in permits new declarations; it does not upgrade legacy bytes
+        # to declared provenance or bypass their existing strict parent gate.
+        completion = inspect_proximity_completion_manifest(directory, admission.filename)
+        if (completion.status == 'match' and completion.size == admission.size
+                and completion.sha256 == admission.sha256):
+            payload = read_verified_proximity_source(directory / admission.filename,
+                expected_size=admission.size, expected_sha256=admission.sha256)
+            identity = proximity_header_identity(
+                StringIO(payload.decode('utf-8', errors='replace')), admission.filename)
+            if identity is not None:
+                options['declared_binding'] = DeclaredProximityBinding(
+                    admission.source_id, admission.generation, admission.filename, admission.size,
+                    admission.sha256, admission.session_date)
     return await import_completed_proximity_file(
         directory, admission.filename, adapter=adapter, session_date=admission.session_date,
         gametimes_dir=gametimes_dir, expected_size=admission.size, expected_sha256=admission.sha256,

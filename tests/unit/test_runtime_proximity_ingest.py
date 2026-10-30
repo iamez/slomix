@@ -100,3 +100,30 @@ async def test_stats_filename_does_not_enter_proximity_import(source):
     with pytest.raises(ValueError, match='filename'):
         await import_completed_proximity_file(directory, NAME.replace('_engagements', ''), **options)
     canonical.assert_not_awaited()
+
+
+@pytest.mark.parametrize('enabled', [False, True])
+@pytest.mark.parametrize('complete', [False, True])
+async def test_declared_policy_preserves_legacy_manifest_gated_import(source, enabled, complete):
+    from shared.runtime_proximity_admission import publish_proximity_admission
+    from shared.runtime_proximity_ingest import import_admitted_proximity_file
+    from shared.runtime_source_reservation import reserve_source_generation
+
+    root, canonical, options = source
+    generation = '8' * 32
+    directory = reserve_source_generation(root, generation)
+    publish_proximity_admission(directory, source_id='fixture', generation=generation,
+        completion=RECEIPT, expected_sha256=HASH, session_date=options['session_date'])
+    if complete:
+        publish_proximity_file(directory, NAME, [PAYLOAD], expected_size=len(PAYLOAD), expected_sha256=HASH)
+        record_proximity_completion_once(directory, RECEIPT, expected_sha256=HASH)
+    result = await import_admitted_proximity_file(directory, source_id='fixture',
+        generation=generation, adapter=options['adapter'], gametimes_dir=root,
+        allow_declared_mapping=enabled)
+    assert result.manifest_status == ('match' if complete else 'missing_manifest')
+    if complete:
+        canonical.assert_awaited_once()
+        assert canonical.call_args.kwargs['require_linked_parent'] is True
+        assert 'declared_binding' not in canonical.call_args.kwargs
+    else:
+        canonical.assert_not_awaited()

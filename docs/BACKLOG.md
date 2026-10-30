@@ -1,3 +1,33 @@
+## 2026-10-30 — Preserve strict legacy ingestion under declared policy opt-in
+
+Runtime compatibility fix complete locally; fresh native/full CI next. Testing
+audit and its improvements remain in the original PLAN, not a replacement roadmap.
+
+## 2026-10-30 — Testing audit remains part of the original runtime roadmap
+
+Audit complete; see matching PLAN checkpoint/private report. Resume runtime
+legacy-policy fix at its saved return point. Testing quality is a retained lane.
+
+## 2026-10-30 — Testing audit requested; preserve runtime return point
+
+Owner confirms original runtime PLAN, including its planned improvements/fixes,
+remains the goal. Current detour is a read-only audit of test volume, coverage,
+duplication and development verification, not a new test campaign.
+
+Return point: #1108 published2b29ab00 now has26completechecks(25SUCCESS/1SKIPPED),
+PG14=12012passed/163skipped, PG17=12016passed/159skipped. Ninth raw-track replay
+finding has local/native proof but still needs thread resolution. Tenth finding
+is confirmed: declared opt-in incorrectly forces declarations onto legacy files.
+Five current uncommitted source/test files fix observer/import classification,
+add6focused cases and parameterize actual legacy import/replay for both policies.
+146related local cases pass; original failures2 and two restored guard mutations
+(each1failure) are recorded. New native flag-on legacy case is not executed yet.
+No push/new CI during this testing audit. Full binary patch is private evidence/
+runtime-review5-before-testing-audit.patch; retain both existing worktrees.
+After audit: finish this runtime compatibility slice, then resume original release
+preparation and D4/D5 source/exclusive-writer/recovery acceptance. No numbered
+#1108 approval, service/deployment/DB/migration/game action or deletion.
+
 ## 2026-10-29 — Close direct legacy replay capture-boundary dependency
 
 See matching PLAN: ninth review fixes direct legacy replay gaps; fresh CI and
