@@ -146,6 +146,7 @@ async def linked_import(journal_db, monkeypatch, tmp_path):  # noqa: F811
     await writer.execute('CREATE TABLE proof_child (id INTEGER PRIMARY KEY, round_id INTEGER REFERENCES rounds(id))')
     migration = Path(__file__).resolve().parents[2] / 'migrations/094_proximity_runtime_parent_gate.sql'
     await writer.execute(migration.read_text())
+    await writer.execute((migration.parent / '096_proximity_receipt_round_link.sql').read_text())
     payload = b'# map=fixture\n# round=1\n# round_start_unix=1789794600\n# round_end_unix=1789795200\n'
     digest = hashlib.sha256(payload).hexdigest()
     source = publish_proximity_file(tmp_path, '2026-09-19-051000-fixture-round-1_engagements.txt',
@@ -194,7 +195,43 @@ async def linked_import(journal_db, monkeypatch, tmp_path):  # noqa: F811
 
     monkeypatch.setattr(proximity_import, 'ProximityParserV4', factory)
 
-    async def run(strict=True):
+    async def run(strict=True, *, manifest_gated=False, admission_directory=None,
+                  dispatch_now=None, queue_now=None, batch_now=None, batch_after=None, batch_size=16):
+        if batch_now is not None:
+            from shared.runtime_proximity_batch import process_proximity_batch
+
+            return await process_proximity_batch(
+                tmp_path, source_id='fixture-server', now=batch_now, adapter=adapter,
+                observer=observer, gametimes_dir=tmp_path, after=batch_after, batch_size=batch_size,
+            )
+        if queue_now is not None:
+            from shared.runtime_proximity_queue import process_proximity_once
+
+            return await process_proximity_once(
+                admission_directory, source_id='fixture-server', generation=admission_directory.name,
+                now=queue_now, adapter=adapter, observer=observer, gametimes_dir=tmp_path,
+            )
+        if dispatch_now is not None:
+            from shared.runtime_proximity_dispatch import dispatch_proximity_once
+
+            return await dispatch_proximity_once(
+                admission_directory, source_id='fixture-server', generation=admission_directory.name,
+                now=dispatch_now, adapter=adapter, gametimes_dir=tmp_path,
+            )
+        if admission_directory is not None:
+            from shared.runtime_proximity_ingest import import_admitted_proximity_file
+
+            return await import_admitted_proximity_file(
+                admission_directory, source_id='fixture-server', generation=admission_directory.name,
+                adapter=adapter, gametimes_dir=tmp_path,
+            )
+        if manifest_gated:
+            from shared.runtime_proximity_ingest import import_completed_proximity_file
+
+            return await import_completed_proximity_file(
+                source.parent, source.name, adapter=adapter, session_date=date(2026, 9, 19),
+                gametimes_dir=tmp_path, expected_size=len(payload), expected_sha256=digest,
+            )
         return await proximity_import.import_proximity_file(
             source, adapter=adapter, session_date=date(2026, 9, 19), gametimes_dir=tmp_path,
             expected_size=len(payload), expected_sha256=digest, require_linked_parent=strict,

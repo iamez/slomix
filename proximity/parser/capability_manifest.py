@@ -35,6 +35,9 @@ from __future__ import annotations
 
 import re
 
+from proximity.parser.capture_pauses import observe_capture_pauses
+from proximity.parser.time_basis import missing_basis, observe_basis
+
 MANIFEST_VERSION = 1
 
 #: A section header is `# NAME` and nothing else. Column-description lines
@@ -164,6 +167,8 @@ def build_manifest(
     test_mode: bool | None = None,
     tracker_version_full: str | None = None,
     position_sample_interval_ms: int | None = None,
+    event_time_basis: dict | None = None,
+    capture_pauses: dict | None = None,
 ) -> dict:
     """Build the manifest stored in `proximity_processed_files.capabilities`.
 
@@ -202,6 +207,8 @@ def build_manifest(
         "position_sample_interval_ms": position_sample_interval_ms,
         "tracker_version_full": tracker_version_full,
         "test_mode": test_mode,
+        "event_time_basis": event_time_basis if event_time_basis is not None else missing_basis(),
+        "capture_pauses": capture_pauses if capture_pauses is not None else {"status": "unknown"},
     }
 
 
@@ -231,6 +238,8 @@ def scan_file(path: str) -> dict:
     interval: int | None = None
     sections_with_rows: set[str] = set()
     current = ""
+    event_time_basis = None
+    capture_pauses = None
 
     with open(path, encoding="utf-8", errors="replace") as handle:
         for raw in handle:
@@ -238,7 +247,11 @@ def scan_file(path: str) -> dict:
             if not line:
                 continue
             if line.startswith("#"):
-                if line.startswith("# capabilities="):
+                if line.startswith("# capture_pauses="):
+                    capture_pauses = observe_capture_pauses(capture_pauses, line.split("=", 1)[1])
+                elif line.startswith("# event_time_basis="):
+                    event_time_basis = observe_basis(event_time_basis, line.split("=", 1)[1])
+                elif line.startswith("# capabilities="):
                     declared = parse_declaration(line.split("=", 1)[1])
                 elif line.startswith("# test_mode="):
                     test_mode = line.split("=", 1)[1] == "1"
@@ -266,4 +279,6 @@ def scan_file(path: str) -> dict:
         "tracker_version_full": version_full,
         "position_sample_interval_ms": interval,
         "sections_with_rows": sections_with_rows,
+        "event_time_basis": event_time_basis,
+        "capture_pauses": capture_pauses,
     }

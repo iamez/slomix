@@ -8,6 +8,7 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -66,7 +67,7 @@ print(json.dumps(dict(source=value.source_id, generation=value.generation,
 '''
     results = []
     for _ in range(2):
-        result = subprocess.run([sys.executable, '-B', '-c', script, str(directory), SOURCE, GENERATION],
+        result = subprocess.run([sys.executable, '-c', script, str(directory), SOURCE, GENERATION],
                                 cwd=Path(__file__).resolve().parents[2], capture_output=True,
                                 text=True, timeout=10, check=True)
         results.append(json.loads(result.stdout))
@@ -175,6 +176,46 @@ def test_read_only_record_from_umask_stays_readable(directory):
         os.umask(mask)
     assert stat.S_IMODE(path.stat().st_mode) == 0o400
     assert read(directory).completion() == COMPLETION
+
+
+async def test_import_recovers_persisted_identity_not_filename_date(directory, monkeypatch):
+    from shared import runtime_proximity_ingest as ingest
+
+    downstream = AsyncMock(return_value=ingest.CompletedProximityImportResult('missing_manifest'))
+    monkeypatch.setattr(ingest, 'import_completed_proximity_file', downstream)
+    adapter = object()
+    options = dict(source_id=SOURCE, generation=GENERATION, adapter=adapter,
+                   gametimes_dir=directory)
+    assert await ingest.import_admitted_proximity_file(directory, **options) is None
+    downstream.assert_not_awaited()
+    path = publish_proximity_admission(directory, **OPTIONS)
+    before = path.read_bytes()
+    result = await ingest.import_admitted_proximity_file(directory, **options)
+    assert result is downstream.return_value
+    downstream.assert_awaited_once_with(
+        directory, NAME, adapter=adapter, session_date=date(2026, 10, 4),
+        gametimes_dir=directory, expected_size=7, expected_sha256=HASH,
+    )
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize('failure', ['wrong-source', 'corrupt'])
+async def test_invalid_admission_never_enters_import(directory, monkeypatch, failure):
+    from shared import runtime_proximity_ingest as ingest
+
+    downstream = AsyncMock()
+    monkeypatch.setattr(ingest, 'import_completed_proximity_file', downstream)
+    path = publish_proximity_admission(directory, **OPTIONS)
+    if failure == 'corrupt':
+        path.write_text('{')
+    before = path.read_bytes()
+    with pytest.raises(ValueError):
+        await ingest.import_admitted_proximity_file(
+            directory, source_id='wrong-source' if failure == 'wrong-source' else SOURCE,
+            generation=GENERATION, adapter=object(), gametimes_dir=directory,
+        )
+    downstream.assert_not_awaited()
+    assert path.read_bytes() == before
 
 
 @pytest.mark.parametrize('mask', [0o777, 0o677, 0o477])

@@ -36,7 +36,7 @@ def _path(points: list[tuple[int, float, float]]) -> str:
 def _track(guid, name, team, cls, spawn, death, path_points):
     duration = (death - spawn) if death else None
     return (guid, name, team, cls, spawn, death, duration,
-            _path(path_points), 100.0, 10.0)
+            _path(path_points), 100.0, 10.0, None)
 
 
 async def _call(db, **overrides):
@@ -86,7 +86,7 @@ async def test_kills_bucket_into_correct_life() -> None:
 
     assert res["summary"] == {
         "lives": 2, "kills": 1, "deaths": 1,
-        "avg_life_s": 12.5, "objective_events": 0,
+        "avg_life_s": None, "avg_raw_span_s": 12.5, "raw_span_samples": 2, "objective_events": 0,
         "objective_events_unavailable": None,
     }
     life1, life2 = res["lives"]
@@ -145,7 +145,7 @@ async def test_solo_when_no_teammate_nearby() -> None:
 async def test_empty_path_track_still_returns_life() -> None:
     db = AsyncMock()
     tracks = [
-        (SUBJECT, "Subject", "AXIS", "MEDIC", 0, 5000, 5000, "[]", 0.0, 0.0),
+        (SUBJECT, "Subject", "AXIS", "MEDIC", 0, 5000, 5000, "[]", 0.0, 0.0, None),
     ]
     db.fetch_all = AsyncMock(side_effect=[tracks, [], [], [], [], []])
 
@@ -166,3 +166,17 @@ def test_downsample_path_halves_200ms_to_400ms() -> None:
     out = _downsample_path(path, 400)
     assert [p["t"] for p in out] == [0, 400, 800, 1200, 1600, 2000]
     assert out[0]["health"] == 100  # rich fields preserved
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("terminal", ["world", "unknown", None])
+async def test_journey_uses_authoritative_terminal_despite_capture_resume(terminal):
+    row = list(_track(SUBJECT, "Subject", "AXIS", "MEDIC", 0, 5000,
+                      [(0, 0, 0), (5000, 100, 0)]))
+    path = json.loads(row[7])
+    path[-1]["event"] = "capture_resume"
+    row[7], row[10] = json.dumps(path), terminal
+    db = AsyncMock()
+    db.fetch_all = AsyncMock(side_effect=[[tuple(row)], [], [], [], [], []])
+    result = await _call(db)
+    assert result["lives"][0]["death_type"] == terminal

@@ -36,7 +36,12 @@ from proximity.parser.capability_manifest import (
     build_manifest,
     parse_declaration,
 )
+from proximity.parser.capture_pauses import observe_capture_pauses
 from proximity.parser.import_receipt import claim_import_receipt
+from proximity.parser.time_basis import observe_basis, receipt_basis_sql
+from shared.proximity_errors import TRANSIENT_PROXIMITY_ERRORS
+from shared.runtime_proximity_identity import proximity_header_identity
+from shared.runtime_proximity_mapping import DeclaredProximityBinding, import_declared_proximity
 
 PROXIMITY_FILENAME_ROUND_RE = re.compile(r"-round-(\d+)_engagements\.txt$", re.IGNORECASE)
 GAMETIME_FILENAME_RE = re.compile(r"^gametime-(?P<map>.+)-R(?P<round>\d+)-(?P<ts>\d+)\.json$")
@@ -95,7 +100,7 @@ class PathPoint:
     weapon: int
     stance: int         # 0=standing, 1=crouching, 2=prone
     sprint: int         # 0=not sprinting, 1=sprinting
-    event: str          # spawn, sample, death, round_end
+    event: str          # spawn, sample, death, round_end, capture_resume (incoming gap)
 
 
 @dataclass
@@ -112,17 +117,29 @@ class PlayerTrack:
     sample_count: int
     path: list[PathPoint] = field(default_factory=list)
 
+    def _capture_boundary_times(self) -> set[int]:
+        """Offline metrics use the same whole-timestamp boundary as replay.
+
+        Paths remain mutable during parsing, so do not cache this evidence.
+        Coincident unmarked points cannot establish measurement eligibility.
+        """
+        return {p.time for p in self.path if p.event == 'capture_resume'}
+
+    def _measured_points(self) -> list[PathPoint]:
+        boundary_times = self._capture_boundary_times()
+        return [p for p in self.path if p.time not in boundary_times]
+
     @property
     def duration_ms(self) -> int:
-        """How long player was alive"""
-        if self.death_time and self.spawn_time:
+        """Raw source-clock span, including pauses; 0 retains the missing-end fallback."""
+        if self.death_time is not None and self.spawn_time is not None:
             return self.death_time - self.spawn_time
         return 0
 
     @property
     def time_to_first_move_ms(self) -> int | None:
-        """Time from spawn until first movement"""
-        if self.first_move_time and self.spawn_time:
+        """Raw source-clock delta, not verified active reaction time; zero is valid."""
+        if self.first_move_time is not None and self.spawn_time is not None:
             return self.first_move_time - self.spawn_time
         return None
 
@@ -131,9 +148,12 @@ class PlayerTrack:
         """Calculate total distance traveled"""
         if len(self.path) < 2:
             return 0.0
+        boundary_times = self._capture_boundary_times()
         total = 0.0
         for i in range(1, len(self.path)):
             p1, p2 = self.path[i-1], self.path[i]
+            if p2.time in boundary_times:
+                continue
             dx = p2.x - p1.x
             dy = p2.y - p1.y
             dz = p2.z - p1.z
@@ -145,7 +165,7 @@ class PlayerTrack:
         """Average speed across all samples"""
         if not self.path:
             return 0.0
-        speeds = [p.speed for p in self.path if p.speed > 0]
+        speeds = [p.speed for p in self._measured_points() if p.speed > 0]
         return sum(speeds) / len(speeds) if speeds else 0.0
 
     @property
@@ -153,35 +173,36 @@ class PlayerTrack:
         """Percentage of time sprinting"""
         if not self.path:
             return 0.0
-        sprinting = sum(1 for p in self.path if p.sprint == 1)
-        return (sprinting / len(self.path)) * 100
+        measured = self._measured_points()
+        sprinting = sum(1 for p in measured if p.sprint == 1)
+        return (sprinting / len(measured)) * 100 if measured else 0.0
 
     @property
     def peak_speed(self) -> float:
         """Maximum speed recorded across all samples"""
         if not self.path:
             return 0.0
-        return max((p.speed for p in self.path), default=0.0)
+        return max((p.speed for p in self._measured_points()), default=0.0)
 
     @property
     def stance_standing_sec(self) -> float:
         """Seconds spent standing (stance=0), excluding spawn/death events"""
-        return sum(0.2 for p in self.path if p.stance == 0 and p.event == 'sample')
+        return sum(0.2 for p in self._measured_points() if p.stance == 0 and p.event == 'sample')
 
     @property
     def stance_crouching_sec(self) -> float:
         """Seconds spent crouching (stance=1)"""
-        return sum(0.2 for p in self.path if p.stance == 1 and p.event == 'sample')
+        return sum(0.2 for p in self._measured_points() if p.stance == 1 and p.event == 'sample')
 
     @property
     def stance_prone_sec(self) -> float:
         """Seconds spent prone (stance=2)"""
-        return sum(0.2 for p in self.path if p.stance == 2 and p.event == 'sample')
+        return sum(0.2 for p in self._measured_points() if p.stance == 2 and p.event == 'sample')
 
     @property
     def sprint_sec(self) -> float:
         """Seconds spent sprinting"""
-        return sum(0.2 for p in self.path if p.sprint == 1 and p.event == 'sample')
+        return sum(0.2 for p in self._measured_points() if p.sprint == 1 and p.event == 'sample')
 
     @property
     def post_spawn_distance(self) -> float:
@@ -194,10 +215,17 @@ class PlayerTrack:
             if p.event == 'spawn':
                 start_idx = i
                 break
+        boundary_times = self._capture_boundary_times()
+        if self.path[start_idx].time in boundary_times:
+            return 0.0  # spawn itself was unobserved; no initial contiguous window
         end_idx = min(start_idx + 16, len(self.path))  # 15 intervals = 16 points
         total = 0.0
         for i in range(start_idx + 1, end_idx):
             p1, p2 = self.path[i-1], self.path[i]
+            # This is the initial contiguous spawn window, not the first N
+            # observations accumulated across arbitrary pauses.
+            if p2.time in boundary_times:
+                break
             dx = p2.x - p1.x
             dy = p2.y - p1.y
             dz = p2.z - p1.z
@@ -684,8 +712,11 @@ class ProximityParserV4:
             # capability_manifest.build_manifest, which may answer `unknown` but
             # never `disabled`. An empty dict would mean "declared nothing".
             'tracker_version_full': None,
+            'event_time_basis': None,
+            'capture_pauses': None,
             'test_mode': None,
             'capabilities_declared': None,
+            'runtime_identity': None,
         }
 
     @staticmethod
@@ -850,6 +881,10 @@ class ProximityParserV4:
         try:
             with (open(filepath, encoding='utf-8', errors='replace') if source_bytes is None
                   else StringIO(source_bytes.decode('utf-8', errors='replace'), newline=None)) as f:
+                identity = proximity_header_identity(f, filepath)
+                if identity is not None:
+                    self.metadata['runtime_identity'] = identity.encode()
+                f.seek(0)
                 for line in f:
                     line = line.strip()
                     if not line:
@@ -1005,6 +1040,14 @@ class ProximityParserV4:
                         section = 'objective_runs'
                         continue
 
+                    if line.startswith('# capture_pauses='):
+                        self.metadata['capture_pauses'] = observe_capture_pauses(
+                            self.metadata['capture_pauses'], line.split('=', 1)[1])
+                        continue
+                    if line.startswith('# event_time_basis='):
+                        self.metadata['event_time_basis'] = observe_basis(
+                            self.metadata['event_time_basis'], line.split('=', 1)[1])
+                        continue
                     if line.startswith('# tracker_version_full='):
                         self.metadata['tracker_version_full'] = line.split('=', 1)[1]
                         continue
@@ -1111,7 +1154,10 @@ class ProximityParserV4:
                     elif section == 'objective_runs':
                         self._parse_objective_run(line)
 
-            self._normalize_round_metadata(filepath)
+            if identity is None:
+                self._normalize_round_metadata(filepath)
+            # A declared half is never overwritten from neighboring gametimes
+            # or guessed from a missing/contradictory header.
             self.logger.info(
                 "Parsed %d engagements, %d tracks, %d reaction rows from %s",
                 len(self.engagements),
@@ -1153,6 +1199,8 @@ class ProximityParserV4:
             self.logger.warning(
                 f"_table_has_column DB query failed for {table}.{column}: {e}"
             )
+            if isinstance(e, TRANSIENT_PROXIMITY_ERRORS) or getattr(self, '_declared_import', False):
+                raise
             return False
 
     async def _resolve_round_link_context(self, session_date) -> None:
@@ -1288,7 +1336,7 @@ class ProximityParserV4:
 
     async def _append_round_link_columns(self, table: str, columns: list[str], values: list[object]) -> None:
         context = self._round_link_context or {}
-        if await self._table_has_column(table, "round_id"):
+        if context.get('round_link_source') == 'runtime_round_mapping' or await self._table_has_column(table, "round_id"):
             columns.append("round_id")
             values.append(context.get("round_id"))
         if await self._table_has_column(table, "round_link_source"):
@@ -1433,7 +1481,9 @@ class ProximityParserV4:
             # Detect format by checking if field 7 looks like a number (sample_count) or a string (death_type)
             if len(parts) >= 10:
                 # v4.1 format: death_type is field 7, samples is field 8, path is field 9
-                death_type = parts[7] if parts[7] and parts[7] != 'unknown' else None
+                # Explicit source unknown is not the same as a v4 file that
+                # never had this field; only the latter may use legacy evidence.
+                death_type = parts[7] or 'unknown'
                 sample_count = int(parts[8])
                 path_data = parts[9] if len(parts) > 9 else ""
             else:
@@ -1567,13 +1617,21 @@ class ProximityParserV4:
         except ValueError as exc:
             self.logger.debug("Skipping invalid reaction metric entry: %s (%s)", line[:120], exc)
 
-    async def import_file(self, filepath: str, session_date, *, source_bytes: bytes | None = None) -> bool:
+    async def import_file(self, filepath: str, session_date, *, source_bytes: bytes | None = None,
+                          declared_binding: DeclaredProximityBinding | None = None) -> bool:
         """Parse and import to database
 
         Args:
             filepath: Path to engagement file
             session_date: Date as string (YYYY-MM-DD) or datetime.date object
         """
+        self._round_link_context = {'round_id': None, 'round_link_source': 'unresolved',
+                                    'round_link_reason': 'not_resolved', 'round_linked_at': None}
+        self._declared_import = False
+        if declared_binding is not None:
+            # Reuse after a schema change cannot keep a negative optional-column
+            # cache and silently omit mandatory declared child linkage/data.
+            self._schema_cache.clear()
         if not self.db_adapter:
             self.logger.error("No database adapter")
             return False
@@ -1584,12 +1642,25 @@ class ProximityParserV4:
         if not self.parse_file(filepath, source_bytes=source_bytes):
             return False
 
+        if self.metadata.get('runtime_identity') is not None and declared_binding is None:
+            self.logger.error('Declared proximity identity requires canonical mapping; import deferred')
+            return False
+
         # Convert string date to date object if needed
         if isinstance(session_date, str):
             from datetime import datetime
             session_date = datetime.strptime(session_date, '%Y-%m-%d').date()
 
-        await self._resolve_round_link_context(session_date)
+        if declared_binding is not None:
+            if not isinstance(declared_binding, DeclaredProximityBinding):
+                return False
+            try:
+                declared_binding.verify(source_bytes, os.path.basename(filepath), session_date)
+            except ValueError:
+                return False
+            self._declared_import = True
+        else:
+            await self._resolve_round_link_context(session_date)
 
         async def _run_import_steps():
             # Ownership must precede this read and persist through commit.
@@ -1685,12 +1756,20 @@ class ProximityParserV4:
 
         try:
             async with self.db_adapter.transaction():
-                await claim_import_receipt(self.db_adapter, os.path.basename(filepath))
-                await _run_import_steps()
+                if declared_binding is not None:
+                    await import_declared_proximity(self, declared_binding, source_bytes,
+                                                   os.path.basename(filepath), session_date, _run_import_steps)
+                else:
+                    await claim_import_receipt(self.db_adapter, os.path.basename(filepath))
+                    await _run_import_steps()
 
             self.logger.info(f"Successfully imported {filepath}")
             return True
 
+        except TRANSIENT_PROXIMITY_ERRORS:
+            # Rollback completes before propagation; the queue must not persist
+            # a reconciliation hold for a retryable database/transport failure.
+            raise
         except Exception as e:
             self.logger.error(f"Import error: {e}", exc_info=True)
             return False
@@ -1720,6 +1799,8 @@ class ProximityParserV4:
             declared=self.metadata.get('capabilities_declared'),
             test_mode=self.metadata.get('test_mode'),
             tracker_version_full=self.metadata.get('tracker_version_full'),
+            event_time_basis=self.metadata.get('event_time_basis'),
+            capture_pauses=self.metadata.get('capture_pauses'),
             position_sample_interval_ms=self.metadata.get(
                 'position_sample_interval_declared'
             ),
@@ -1764,7 +1845,7 @@ class ProximityParserV4:
                     'proximity_processed_files', 'capabilities'
                 ):
                     await self.db_adapter.execute(
-                        """INSERT INTO proximity_processed_files
+                        f"""INSERT INTO proximity_processed_files
                                (filename, aggregates_applied, tracker_version,
                                 round_key, capabilities)
                            VALUES ($1, TRUE, $2, $3, $4)
@@ -1776,7 +1857,7 @@ class ProximityParserV4:
                                    -- inferred one is a lower bound, so a
                                    -- re-import of an old file must not
                                    -- overwrite what a newer tracker stated.
-                                   capabilities = CASE
+                                   capabilities = (CASE
                                        WHEN EXCLUDED.capabilities->>'source'
                                             = 'declared'
                                            THEN EXCLUDED.capabilities
@@ -1786,7 +1867,8 @@ class ProximityParserV4:
                                            THEN proximity_processed_files
                                                 .capabilities
                                        ELSE EXCLUDED.capabilities
-                                   END""",
+                                   END) || jsonb_build_object(
+                                       'event_time_basis', {receipt_basis_sql()})""",
                         (filename, tracker_version, round_key,
                          json.dumps(self.build_capability_manifest())),
                     )
@@ -1920,6 +2002,7 @@ class ProximityParserV4:
                 "total_distance", "avg_speed", "sprint_percentage",
                 "peak_speed", "stance_standing_sec", "stance_crouching_sec",
                 "stance_prone_sec", "sprint_sec", "post_spawn_distance",
+                "death_type",
             ]
             values = [
                 session_date,
@@ -1946,6 +2029,7 @@ class ProximityParserV4:
                 track.stance_prone_sec,
                 track.sprint_sec,
                 track.post_spawn_distance,
+                track.death_type,
             ]
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
@@ -3884,6 +3968,17 @@ class ProximityParserV4:
 
     def _compute_support_uptime(self) -> dict | None:
         if not self.player_tracks:
+            return None
+
+        # Legacy nearest-position/combat-window logic has no pause-aware active
+        # clock. Refuse an affected round, rather than invent support samples.
+        pauses = self.metadata.get('capture_pauses')
+        if pauses is not None and (
+            pauses.get('status') != 'declared'
+            or pauses.get('pause_observed') or pauses.get('signal_unknown')
+        ):
+            return None
+        if any(p.event == 'capture_resume' for t in self.player_tracks for p in t.path):
             return None
 
         support_dist = float(os.getenv("PROXIMITY_SUPPORT_DIST", "600"))
