@@ -11,6 +11,7 @@ import time
 from datetime import datetime, timedelta
 
 from bot.logging_config import get_logger
+from bot.services.webhook_round_metadata_service import normalize_lua_round_number
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -24,20 +25,7 @@ class _WebhookMetadataMixin:
         Normalize Lua round numbering for webhook/gametime metadata paths.
         ET:Legacy may report g_currentRound=0 for stopwatch R2.
         """
-        if raw_round is None:
-            return 0
-        raw_text = str(raw_round).strip()
-        if not raw_text:
-            return 0
-        try:
-            parsed = int(raw_text)
-        except (TypeError, ValueError):
-            return 0
-        if parsed == 0 and raw_text.lstrip("+-") == "0":
-            return 2
-        if parsed < 0:
-            return 0
-        return parsed
+        return normalize_lua_round_number(raw_round)
 
     def _normalize_metadata_map_name(self, map_name: str | None) -> str:
         return str(map_name or "").strip().lower()

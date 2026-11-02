@@ -53,8 +53,8 @@ async def seed(conn, round_id=1, round_number=1):
     await conn.execute("INSERT INTO lua_round_teams VALUES ($1,$1,60,$2,$3,'NORMAL',0,0)", round_id, round_id * 1000, round_id * 1000 + 60)
 
 
-async def fill(adapter):
-    return await reconcile_missing_round_timing(adapter, enabled=True)
+async def fill(adapter, *, round_ids=None):
+    return await reconcile_missing_round_timing(adapter, enabled=True, round_ids=round_ids)
 
 
 async def test_commit_notify_noop_and_scoped_canonical_ids(timing_db):
@@ -88,17 +88,18 @@ async def test_commit_notify_noop_and_scoped_canonical_ids(timing_db):
     print("R02a commit proof: timing + scoped canonical ID + event, one notification, repeat no-op")
 
 
-async def test_event_failure_rolls_back_timing_and_allows_retry(timing_db):
+@pytest.mark.parametrize("scope", [None, (1,)])
+async def test_event_failure_rolls_back_timing_and_allows_retry(timing_db, scope):
     writer, reader, adapter = timing_db
     await seed(writer)
     await writer.execute("ALTER TABLE runtime_events ADD CONSTRAINT test_reject CHECK (event_type <> 'round_timing_reconciled')")
     with pytest.raises(asyncpg.CheckViolationError):
-        await fill(adapter)
+        await fill(adapter, round_ids=scope)
     assert await reader.fetchval("SELECT actual_duration_seconds FROM rounds WHERE id=1") is None
     assert await reader.fetchval("SELECT round_canonical_id FROM rounds WHERE id=1") is None
     assert await reader.fetchval("SELECT count(*) FROM runtime_events") == 0
     await writer.execute("ALTER TABLE runtime_events DROP CONSTRAINT test_reject")
-    assert await fill(adapter) == 1
+    assert await fill(adapter, round_ids=scope) == 1
     print("R02a rollback proof: rejected event leaves timing NULL; retry commits")
 
 
@@ -188,3 +189,42 @@ async def test_fill_is_bounded_per_poll(timing_db):
     assert await fill(adapter) == 1
     assert await reader.fetchval("SELECT count(*) FROM runtime_events") == 101
     assert len(await reader.fetch("SELECT * FROM runtime_events")) == 101
+
+
+async def test_scope_precedes_limit_and_preserves_eligible_history(timing_db):
+    writer, reader, adapter = timing_db
+    await writer.execute("INSERT INTO rounds (id,round_number,gaming_session_id) SELECT n,1,42 FROM generate_series(1,101) n")
+    await writer.execute("INSERT INTO lua_round_teams SELECT n,n,60,n*1000,n*1000+60,'NORMAL',0,0 FROM generate_series(1,101) n")
+    assert await fill(adapter, round_ids=(101, 101)) == 1
+    assert await fill(adapter, round_ids=(101,)) == 0
+    assert await reader.fetch("SELECT id FROM rounds WHERE actual_duration_seconds IS NOT NULL") == [(101,)]
+    assert await reader.fetchval("SELECT count(*) FROM rounds WHERE actual_duration_seconds IS NULL") == 100
+    assert await reader.fetchval("SELECT count(*) FROM rounds WHERE round_canonical_id IS NOT NULL") == 1
+    assert await reader.fetch("SELECT round_id FROM runtime_events") == [(101,)]
+    assert await writer.fetchval("SELECT count(*) FROM runtime_events") == 1
+    print("SCOPED TIMING PROOF: selected 101 filled once; 100 eligible historical rounds unchanged")
+
+
+async def test_empty_and_missing_scopes_never_fall_back_to_global(timing_db):
+    writer, reader, adapter = timing_db
+    await seed(writer)
+    for scope in ((), [], (999,)):
+        assert await fill(adapter, round_ids=scope) == 0
+    assert await reader.fetchval("SELECT actual_duration_seconds FROM rounds WHERE id=1") is None
+    assert await reader.fetchval("SELECT round_canonical_id FROM rounds WHERE id=1") is None
+    assert await reader.fetch("SELECT * FROM runtime_events") == []
+
+
+async def test_scoped_ambiguous_r0_and_locked_sources_do_not_spill(timing_db):
+    writer, reader, adapter = timing_db
+    for round_id, half in ((1, 0), (2, 2), (3, 1), (4, 1)):
+        await seed(writer, round_id, half)
+    await writer.execute("INSERT INTO lua_round_teams VALUES (5,2,70,2000,2070,'NORMAL',0,0)")
+    async with reader.transaction():
+        await reader.execute("SELECT id FROM lua_round_teams WHERE id=3 FOR UPDATE")
+        assert await asyncio.wait_for(fill(adapter, round_ids=(1, 2, 3)), 2) == 0
+        assert await writer.fetchval("SELECT count(*) FROM runtime_events") == 0
+    assert await fill(adapter, round_ids=(1, 2, 3)) == 1
+    assert await reader.fetch("SELECT id FROM rounds WHERE actual_duration_seconds IS NOT NULL") == [(3,)]
+    assert await reader.fetch("SELECT round_id FROM runtime_events") == [(3,)]
+    assert await writer.fetchval("SELECT actual_duration_seconds FROM rounds WHERE id=4") is None

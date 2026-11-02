@@ -32,6 +32,7 @@ def _build_app() -> FastAPI:
 
 
 def _set_oauth_env(monkeypatch) -> None:
+    monkeypatch.setenv("WEBSITE_UI_MODE", "legacy")
     monkeypatch.setenv("DISCORD_CLIENT_ID", "test-client-id")
     monkeypatch.setenv("DISCORD_CLIENT_SECRET", "test-client-secret")
     monkeypatch.setenv("DISCORD_REDIRECT_URI", "https://stats.example.com/auth/callback")
@@ -41,7 +42,7 @@ def _set_oauth_env(monkeypatch) -> None:
 async def test_login_includes_csrf_state(monkeypatch):
     _set_oauth_env(monkeypatch)
     transport = httpx.ASGITransport(app=_build_app())
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="https://stats.example.com") as client:
         response = await client.get("/auth/login", follow_redirects=False)
         assert response.status_code in {302, 307}
 
@@ -59,7 +60,7 @@ async def test_login_includes_csrf_state(monkeypatch):
 async def test_callback_rejects_invalid_oauth_state(monkeypatch):
     _set_oauth_env(monkeypatch)
     transport = httpx.ASGITransport(app=_build_app())
-    async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with httpx.AsyncClient(transport=transport, base_url="https://stats.example.com") as client:
         login_response = await client.get("/auth/login", follow_redirects=False)
         assert login_response.status_code in {302, 307}
 
@@ -186,7 +187,7 @@ async def _run_login_then_callback(monkeypatch, next_value: str | None) -> str:
     auth_router._oauth_rate_buckets.clear()  # noqa: SLF001
     app = _build_app()
     transport = httpx.ASGITransport(app=app)
-    async with _RealAsyncClient(transport=transport, base_url="http://testserver") as client:
+    async with _RealAsyncClient(transport=transport, base_url="https://stats.example.com") as client:
         params = {} if next_value is None else {"next": next_value}
         login_response = await client.get("/auth/login", params=params, follow_redirects=False)
         state = parse_qs(urlsplit(login_response.headers["location"]).query)["state"][0]

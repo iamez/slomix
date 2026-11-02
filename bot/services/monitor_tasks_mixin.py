@@ -1217,7 +1217,10 @@ class _MonitorTasksMixin:
         if body is None:
             logger.info("[DATA-AUDIT] daily audit clean — no live violations")
             return
-        logger.error("[DATA-AUDIT] %s", body.replace("\n", " | "))
+        logger.warning("[DATA-AUDIT] %s", body.replace("\n", " | "))
+        if not getattr(cfg, "data_audit_discord_enabled", False):
+            logger.info("[DATA-AUDIT] Discord delivery disabled; findings retained in local log")
+            return
         try:
             await self.alert_admins("Data-plausibility audit: ugotovitve za pregled", body)
         except Exception:

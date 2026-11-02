@@ -1,3 +1,6 @@
+# This fixture intentionally exercises bot-private ingestion and queue methods.
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import json
@@ -9,9 +12,6 @@ from bot.ultimate_bot import UltimateETLegacyBot
 
 
 class _FakeBot:
-    _fields_to_metadata_map = UltimateETLegacyBot._fields_to_metadata_map
-    _parse_lua_version_from_footer = UltimateETLegacyBot._parse_lua_version_from_footer
-    _build_round_metadata_from_map = UltimateETLegacyBot._build_round_metadata_from_map
     _normalize_lua_round_for_metadata_paths = UltimateETLegacyBot._normalize_lua_round_for_metadata_paths
     _normalize_metadata_map_name = UltimateETLegacyBot._normalize_metadata_map_name
     _pending_metadata_key = UltimateETLegacyBot._pending_metadata_key
@@ -36,6 +36,20 @@ class _FakeBot:
 
     async def _fetch_latest_stats_file(self, _round_metadata: dict, _trigger_message):
         return None
+
+
+@pytest.mark.parametrize("document", [None, [], {}, {"payload": {"embeds": [None]}},
+    {"payload": {"embeds": [{"fields": [
+        {"name": "map", "value": "supply"}, {"name": "round", "value": "1"},
+        {"name": "lua_roundstart", "value": "not-a-timestamp"},
+    ]}]}}])
+async def test_invalid_document_returns_false_before_any_store_or_queue(tmp_path, document):
+    bot = _FakeBot()
+    path = tmp_path / "invalid.json"
+    path.write_text(json.dumps(document), encoding="utf-8")
+    assert await UltimateETLegacyBot._process_gametimes_file(bot, str(path), path.name) is False
+    assert bot.stored_rounds == bot.stored_spawn_batches == []
+    assert not bot._pending_round_metadata
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -59,8 +59,8 @@ class _FakeDB:
                 "content_hash_sha256": content_hash_sha256,
                 "status": "uploaded",
                 "error": None,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
                 "metadata_json": None,
                 "warnings_json": None,
                 "analysis_json_path": None,
@@ -78,7 +78,7 @@ class _FakeDB:
             row["warnings_json"] = warnings_json
             row["analysis_json_path"] = analysis_json_path
             row["report_txt_path"] = report_txt_path
-            row["processing_finished_at"] = datetime.utcnow()
+            row["processing_finished_at"] = datetime.now(timezone.utc)
             return
 
         if "INSERT INTO greatshot_analysis" in query:
@@ -87,7 +87,7 @@ class _FakeDB:
                 "metadata_json": metadata_json,
                 "stats_json": stats_json,
                 "events_json": events_json,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
             return
 
@@ -204,7 +204,8 @@ def _valid_demo_bytes() -> bytes:
     return header + (b"\x00" * 128)
 
 
-def test_upload_list_detail_and_reports_with_mocked_job(tmp_path: Path, monkeypatch):
+@pytest.mark.parametrize("relocated", [False, True])
+def test_upload_list_detail_and_reports_with_mocked_job(tmp_path: Path, monkeypatch, relocated):
     fake_db = _FakeDB()
     fake_jobs = _FakeJobService()
 
@@ -247,6 +248,7 @@ def test_upload_list_detail_and_reports_with_mocked_job(tmp_path: Path, monkeypa
     report_path = artifacts_dir / "report.txt"
 
     analysis_doc = {
+        "player_stats": {"Copied player": {"kills": 17}},
         "metadata": {"map": "etl_goldrush", "duration_ms": 30000, "mod": "Legacy", "mod_version": "v2.83.1"},
         "stats": {"player_count": 2, "kill_count": 3, "chat_count": 1},
         "timeline": [{"t_ms": 1000, "type": "chat", "attacker": "PlayerOne", "message": "go"}],
@@ -258,11 +260,16 @@ def test_upload_list_detail_and_reports_with_mocked_job(tmp_path: Path, monkeypa
     fake_db.greatshot_demos[demo_id]["metadata_json"] = json.dumps(analysis_doc["metadata"])
     fake_db.greatshot_demos[demo_id]["analysis_json_path"] = str(analysis_path)
     fake_db.greatshot_demos[demo_id]["report_txt_path"] = str(report_path)
+    if relocated:
+        # DB keeps the retired absolute namespace; only the new tree has files.
+        storage.legacy_root = tmp_path / "retired"
+        for column, path in (("analysis_json_path", analysis_path), ("report_txt_path", report_path)):
+            fake_db.greatshot_demos[demo_id][column] = str(storage.legacy_root / path.relative_to(storage.root))
     fake_db.greatshot_analysis[demo_id] = {
         "metadata_json": json.dumps(analysis_doc["metadata"]),
         "stats_json": json.dumps(analysis_doc["stats"]),
         "events_json": json.dumps(analysis_doc["timeline"]),
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
     }
 
     list_resp = client.get("/api/greatshot")
@@ -275,6 +282,7 @@ def test_upload_list_detail_and_reports_with_mocked_job(tmp_path: Path, monkeypa
     assert detail["status"] == "analyzed"
     assert detail["downloads"]["json"]
     assert detail["downloads"]["txt"]
+    assert detail["player_stats"] == analysis_doc["player_stats"]
 
     json_report_resp = client.get(f"/api/greatshot/{demo_id}/report.json")
     assert json_report_resp.status_code == 200

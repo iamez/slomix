@@ -34,6 +34,11 @@ def fixture(tmp_path):
         "website/frontend/src/app/main.ts": "console.log('app');\n",
         "docs/api/openapi.json": "{}\n",
         "scripts/spa_artifact.py": HELPER.read_text(),
+        "scripts/dev_deploy.sh": DEPLOY.read_text(),
+        # Record-only substitutes for the external DB/systemd boundaries.
+        "scripts/dev_schema_preflight.py": "import sys; print('schema boundary recorded: ' + ' '.join(sys.argv[1:]))\n",
+        "scripts/dev_verify_health.py": "print('{}')\n",
+        "migrations/001_fixture.sql": "SELECT 1;\n",
         "bot/runtime.py": "ENABLED = False\n",
     }
     for relative, content in files.items():
@@ -81,7 +86,7 @@ def test_historical_recipe_pins_built_commit_in_actual_preflight(fixture, docume
     deploy.write_bytes(DEPLOY.read_bytes())
     deploy.chmod(0o755)
     git(source, "add", "scripts/dev_deploy.sh")
-    git(source, "commit", "-m", "feature deployment recipe")
+    git(source, "commit", "--allow-empty", "-m", "feature deployment recipe")
     # The published main remains older than the built feature HEAD.
     git(source, "remote", "add", "origin", str(run))
     head = git(source, "rev-parse", "HEAD")
@@ -103,6 +108,7 @@ def test_historical_recipe_pins_built_commit_in_actual_preflight(fixture, docume
     result = subprocess.run(
         ["bash", "-c", recipe], cwd=source, text=True, capture_output=True,
         env={**os.environ, "DEV_PREFLIGHT_ONLY": "1", "DEV_RUN_DIR": str(run),
+             "DEV_GATE_PYTHON": sys.executable,
              "PATH": f'{commands}:{os.environ["PATH"]}'},
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -128,6 +134,7 @@ def preflight(source, run, target="HEAD", extra=None, allow_source_fetch=False):
         stub.write_text(f'#!/bin/bash\necho "{name}" >> "{log}"\nexit 89\n')
         stub.chmod(0o755)
     env = dict(os.environ, DEV_SRC_DIR=str(source), DEV_RUN_DIR=str(run),
+               DEV_GATE_PYTHON=sys.executable,
                DEV_PREFLIGHT_ONLY="1", PATH=f"{mocks}:{os.environ['PATH']}")
     env.update(extra or {})
     before = git(run, "rev-parse", "HEAD"), (run / "website/static/app/app.html").read_bytes()
@@ -136,6 +143,36 @@ def preflight(source, run, target="HEAD", extra=None, allow_source_fetch=False):
     assert before == (git(run, "rev-parse", "HEAD"), (run / "website/static/app/app.html").read_bytes())
     assert not list(source.parent.glob(".slomix-artifact.*"))
     return result
+
+
+@pytest.mark.parametrize("ignored", [False, True])
+def test_extra_migration_sql_cannot_enter_source_pinned_gate(fixture, ignored):
+    source, run = fixture
+    if ignored:
+        (source / ".git/info/exclude").write_text("migrations/999_extra.sql\n")
+    build(source)
+    (source / "migrations/999_extra.sql").write_text("SELECT 1;\n")
+    result = preflight(source, run)
+    assert result.returncode != 0
+    assert "migration SQL must exactly match" in result.stderr
+
+
+def test_both_consumer_schemas_are_required_before_any_run_mutation(fixture):
+    source, run = fixture
+    build(source)
+    result = preflight(source, run)
+    assert result.returncode == 0, result.stderr
+    assert "--expected-user etlegacy_user" in result.stdout
+    assert "--expected-user website_app" in result.stdout
+    assert str(run / "website/.env") in result.stdout
+    checker = source / "scripts/dev_schema_preflight.py"
+    checker.write_text("import sys\nprint('schema boundary refusal')\nsys.exit(7 if 'website_app' in sys.argv else 0)\n")
+    git(source, "add", "scripts/dev_schema_preflight.py")
+    git(source, "commit", "-m", "refuse web schema boundary")
+    build(source)
+    result = preflight(source, run)
+    assert result.returncode == 7
+    assert "schema boundary refusal" in result.stdout
 
 
 def test_default_target_refreshes_source_remote_before_validation(fixture):
@@ -294,7 +331,8 @@ def test_disposable_activation_uses_verified_stage_and_preserves_previous(fixtur
     legacy = run / "website/static/modern/route-host.js"
     legacy.parent.mkdir()
     legacy.write_text("existing legacy")
-    env = dict(os.environ, DEV_SRC_DIR=str(source), DEV_RUN_DIR=str(run), SKIP_RESTART="1")
+    env = dict(os.environ, DEV_SRC_DIR=str(source), DEV_RUN_DIR=str(run), SKIP_RESTART="1",
+               DEV_GATE_PYTHON=sys.executable)
     result = subprocess.run(["bash", str(DEPLOY), "HEAD"], env=env, text=True, capture_output=True)
     assert result.returncode == 0, result.stderr
     assert git(run, "rev-parse", "HEAD") == git(source, "rev-parse", "HEAD")

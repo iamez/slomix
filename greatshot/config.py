@@ -10,6 +10,8 @@ from pathlib import Path
 @dataclass
 class GreatshotConfig:
     storage_root: Path = field(default_factory=lambda: Path("data/greatshot"))
+    # A lexical namespace only: never read files from this retired root.
+    legacy_storage_root: Path | None = None
     max_upload_bytes: int = 200 * 1024 * 1024  # 200 MB
     allow_extensions: tuple[str, ...] = (".dm_84", ".tv_84")
 
@@ -46,6 +48,8 @@ DEF_ROOT = Path(_env("GREATSHOT_STORAGE_ROOT", "DEMOS_STORAGE_ROOT", "data/great
 
 CONFIG = GreatshotConfig(
     storage_root=DEF_ROOT,
+    legacy_storage_root=(Path(os.environ["GREATSHOT_LEGACY_STORAGE_ROOT"])
+                         if os.getenv("GREATSHOT_LEGACY_STORAGE_ROOT") else None),
     max_upload_bytes=int(_env("GREATSHOT_MAX_UPLOAD_BYTES", "DEMOS_MAX_UPLOAD_BYTES", str(200 * 1024 * 1024))),
     allow_extensions=tuple(
         ext.strip().lower()

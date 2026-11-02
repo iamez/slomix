@@ -3,6 +3,10 @@ the audit's --json output correctly (Data Trust pillar B made permanent)."""
 from __future__ import annotations
 
 import inspect
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock, patch
+
+import pytest
 
 from bot.services.monitor_tasks_mixin import (
     _MonitorTasksMixin,  # noqa: SLF001 - the mixin IS the unit under test
@@ -11,6 +15,48 @@ from bot.services.monitor_tasks_mixin import (
 
 def _mixin_src() -> str:
     return inspect.getsource(_MonitorTasksMixin)
+
+
+@pytest.mark.parametrize('value,expected', [(None, False), ('false', False), ('', False),
+                                            ('true', True), ('YES', True), ('unexpected', False)])
+def test_discord_config_defaults_to_silent(mock_config, monkeypatch, tmp_path, value, expected):
+    if value is None:
+        monkeypatch.delenv('DATA_AUDIT_DISCORD_ENABLED', raising=False)
+    else:
+        monkeypatch.setenv('DATA_AUDIT_DISCORD_ENABLED', value)
+    config = mock_config(config_file=str(tmp_path / 'absent.json'))
+    assert config.data_audit_discord_enabled is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('setting,expected', [(None, 0), (False, 0), (True, 1)])
+async def test_audit_discord_delivery_requires_explicit_opt_in(setting, expected):
+    config = SimpleNamespace(data_audit_sentinel_enabled=True)
+    if setting is not None:
+        config.data_audit_discord_enabled = setting
+    runner = Mock(return_value={'rules': [{'name': 'candidate', 'live': 1}], 'trends': []})
+    sender = AsyncMock()
+    bot = SimpleNamespace(config=config, _run_audit_in_thread=runner, alert_admins=sender,
+                          _summarize_audit_payload=_MonitorTasksMixin._summarize_audit_payload)  # noqa: SLF001
+    with patch('bot.services.monitor_tasks_mixin.logger') as log:
+        await _MonitorTasksMixin.data_plausibility_sentinel.coro(bot)
+    runner.assert_called_once_with()
+    log.warning.assert_called_once()
+    assert 'candidate' in log.warning.call_args.args[1]
+    assert sender.await_count == expected
+    if expected:
+        assert sender.await_args.args[0] == 'Data-plausibility audit: ugotovitve za pregled'
+
+
+@pytest.mark.asyncio
+async def test_disabling_audit_still_prevents_query_and_delivery():
+    runner, sender = Mock(), AsyncMock()
+    bot = SimpleNamespace(config=SimpleNamespace(data_audit_sentinel_enabled=False,
+                                               data_audit_discord_enabled=True),
+                          _run_audit_in_thread=runner, alert_admins=sender)
+    await _MonitorTasksMixin.data_plausibility_sentinel.coro(bot)
+    runner.assert_not_called()
+    sender.assert_not_awaited()
 
 
 def test_sentinel_loop_exists_and_is_daily():

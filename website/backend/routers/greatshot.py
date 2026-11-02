@@ -416,14 +416,13 @@ async def get_greatshot_detail(demo_id: str, request: Request, db=Depends(get_db
     player_stats = None
     if analysis_json_path:
         import json as json_mod
-        from pathlib import Path as PathLib
         try:
-            analysis_file = PathLib(analysis_json_path)
+            analysis_file = storage.resolve_checked_path(analysis_json_path)
             if analysis_file.is_file():
                 with analysis_file.open() as f:
                     full_analysis = json_mod.load(f)
                     player_stats = full_analysis.get("player_stats") or None
-        except (OSError, json_mod.JSONDecodeError, KeyError, ValueError):
+        except (HTTPException, OSError, json_mod.JSONDecodeError, KeyError, ValueError):
             logger.debug("Could not read analysis JSON")
 
     return {

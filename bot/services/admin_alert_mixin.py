@@ -80,9 +80,8 @@ class _AdminAlertMixin:
 
         # Best-effort per channel: one misconfigured admin channel (e.g. the
         # bot was removed from it) must not stop the alert reaching the
-        # others. Each admin_channels entry belongs to whichever guild this
-        # bot process is actually running against (dev or production have
-        # separate .env files, so this never crosses between them).
+        # others. Separate env files do not isolate destinations: if both
+        # installs configure the same IDs and can access them, both send there.
         sent = False
         for channel_id in channel_ids:
             try:

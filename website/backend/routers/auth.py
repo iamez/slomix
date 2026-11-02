@@ -9,17 +9,16 @@ import time
 # identity, so it must get the Secure flag unless explicitly opted out for
 # local HTTP dev (SESSION_HTTPS_ONLY=false). A prod deploy that forgets to set
 # this still gets a Secure cookie.
-_SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").lower() == "true"
 from collections import defaultdict, deque
 from typing import Any
 from urllib.parse import urlencode, urlsplit
 
 import httpx
-from dotenv import load_dotenv
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from shared.database_adapter import DatabaseAdapter
+from shared.runtime_environment import load_environment
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
 from website.backend.middleware.auth_helpers import require_ajax_csrf_header as _require_ajax_csrf_header
@@ -27,7 +26,8 @@ from website.backend.rate_limit import limiter
 from website.backend.routers.api_helpers import resolve_display_name
 
 # Load .env file explicitly
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
+load_environment(os.path.join(os.path.dirname(__file__), "../../.env"))
+_SESSION_HTTPS_ONLY = os.getenv("SESSION_HTTPS_ONLY", "true").lower() == "true"
 
 logger = get_app_logger("auth.router")
 router = APIRouter()
@@ -40,9 +40,19 @@ _oauth_rate_buckets: dict[str, deque[float]] = defaultdict(deque)
 
 
 def _normalize_redirect_uri(value: str) -> str:
-    parsed = urlsplit(str(value or "").strip())
-    if not parsed.scheme or not parsed.netloc:
-        raise HTTPException(status_code=500, detail="Invalid DISCORD_REDIRECT_URI configuration")
+    raw = str(value or "").strip()
+    try:
+        parsed = urlsplit(raw)
+        if (
+            parsed.scheme not in ("http", "https") or not parsed.hostname
+            or parsed.username is not None or parsed.password is not None
+            or parsed.query or parsed.fragment or "\\" in raw
+            or any(char.isspace() or ord(char) < 32 for char in raw)
+        ):
+            raise ValueError
+        _ = parsed.port
+    except ValueError:
+        raise HTTPException(status_code=500, detail="Invalid DISCORD_REDIRECT_URI configuration") from None
     path = parsed.path or ""
     return f"{parsed.scheme.lower()}://{parsed.netloc}{path}"
 
@@ -53,7 +63,6 @@ def _redirect_allowlist(default_redirect_uri: str) -> set[str]:
     if not entries:
         entries = [default_redirect_uri]
     normalized = {_normalize_redirect_uri(entry) for entry in entries}
-    normalized.add(default_redirect_uri)
     return normalized
 
 
@@ -92,6 +101,15 @@ def get_frontend_origin(config: dict[str, Any]) -> str:
         return f"{parsed_redirect.scheme}://{parsed_redirect.netloc}"
 
     return "http://localhost:8000"
+
+
+def _frontend_default_path(*, profile: bool = False) -> str:
+    mode = os.getenv("WEBSITE_UI_MODE", "legacy")
+    if mode == "app":
+        return "/app/profile" if profile else "/app"
+    if mode == "legacy":
+        return "/#/profile" if profile else "/"
+    raise HTTPException(status_code=500, detail="WEBSITE_UI_MODE must be legacy or app")
 
 
 def _oauth_bucket_key(request: Request, endpoint: str) -> str:
@@ -372,6 +390,31 @@ async def login(request: Request, next: str | None = None):
     if not config["client_id"]:
         raise HTTPException(status_code=500, detail="Discord Client ID not configured")
 
+    # OAuth state is held in a host-only session cookie. Start it on the
+    # configured callback origin, never an alternate LAN/VPN host. The target
+    # comes ONLY from trusted configuration, not Host/Forwarded/next input.
+    callback_url = urlsplit(config["redirect_uri"])
+    try:
+        incoming_url = urlsplit(str(request.url))
+        incoming_origin = (
+            incoming_url.scheme, incoming_url.hostname,
+            incoming_url.port if incoming_url.port is not None else (443 if incoming_url.scheme == "https" else 80),
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid login origin") from None
+    callback_origin = (
+        callback_url.scheme, callback_url.hostname,
+        callback_url.port if callback_url.port is not None else (443 if callback_url.scheme == "https" else 80),
+    )
+    next_path = _safe_next_path(next)
+    if incoming_origin != callback_origin:
+        # Keep the configured callback's mount prefix, if a proxy supplies one.
+        login_path = callback_url.path.rsplit("/", 1)[0] + "/login"
+        destination = f"{callback_url.scheme}://{callback_url.netloc}{login_path}"
+        if next_path:
+            destination += "?" + urlencode({"next": next_path})
+        return RedirectResponse(destination)
+
     state = secrets.token_urlsafe(32)
     code_verifier = secrets.token_urlsafe(64)
     code_challenge = _pkce_challenge(code_verifier)
@@ -379,7 +422,6 @@ async def login(request: Request, next: str | None = None):
     request.session["oauth_state"] = state
     request.session["oauth_state_issued_at"] = int(time.time())
     request.session["oauth_pkce_verifier"] = code_verifier
-    next_path = _safe_next_path(next)
     if next_path:
         request.session["oauth_next"] = next_path
     else:
@@ -512,9 +554,7 @@ async def callback(
         # Back to the /app page the visitor pressed Connect ID on (the SPA
         # sends ?next=; the legacy site never does and keeps its defaults).
         return RedirectResponse(url=f"{frontend_origin}{next_path}")
-    if linked_player_name:
-        return RedirectResponse(url=f"{frontend_origin}/")
-    return RedirectResponse(url=f"{frontend_origin}/#/profile")
+    return RedirectResponse(url=f"{frontend_origin}{_frontend_default_path(profile=not bool(linked_player_name))}")
 
 
 @router.post("/logout")
@@ -522,7 +562,7 @@ async def logout(request: Request):
     _require_ajax_csrf_header(request)
     request.session.clear()
     frontend_origin = get_frontend_origin(get_discord_config())
-    response = JSONResponse({"ok": True, "redirect_url": f"{frontend_origin}/"})
+    response = JSONResponse({"ok": True, "redirect_url": f"{frontend_origin}{_frontend_default_path()}"})
     response.delete_cookie(
         "session", path="/", httponly=True, samesite="lax", secure=_SESSION_HTTPS_ONLY
     )
@@ -545,7 +585,7 @@ async def start_link_flow(request: Request):
         return RedirectResponse(url="/auth/login")
 
     frontend_origin = get_frontend_origin(get_discord_config())
-    return RedirectResponse(url=f"{frontend_origin}/#/profile")
+    return RedirectResponse(url=f"{frontend_origin}{_frontend_default_path(profile=True)}")
 
 
 @router.get("/link/status")

@@ -25,7 +25,8 @@ MODERN_OUTPUT = Path("website/static/modern")
 TARGETS = {"app": (OUTPUT, "vite.app.config.ts"),
            "modern": (MODERN_OUTPUT, "vite.config.ts")}
 GENERATED = FRONTEND / "src/api/generated/openapi.d.ts"
-INPUTS = [str(FRONTEND), "docs/api/openapi.json", ".nvmrc", "scripts/spa_artifact.py"]
+INPUTS = [str(FRONTEND), "docs/api/openapi.json", ".nvmrc", "scripts/spa_artifact.py",
+          "scripts/dev_deploy.sh", "scripts/dev_schema_preflight.py", "scripts/dev_verify_health.py", "migrations"]
 
 
 def git(root, *args):
@@ -54,6 +55,12 @@ def identity(root, kind="app"):
     commit = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
     if git(root, "status", "--porcelain", "--untracked-files=no"):
         raise ValueError("tracked source is dirty; commit changes before npm run build:app")
+    git(root, "ls-files", "--error-unmatch", "--", "scripts/dev_deploy.sh",
+        "scripts/dev_schema_preflight.py", "scripts/dev_verify_health.py")
+    tracked_sql = set(filter(None, git(root, "ls-files", "-z", "--", "migrations/*.sql").split(b"\0")))
+    actual_sql = {os.fsencode(str(path.relative_to(root))) for path in (root / "migrations").glob("*.sql")}
+    if actual_sql != tracked_sql:
+        raise ValueError("migration SQL must exactly match tracked source; extra or missing SQL detected")
     flagged = git(root, "ls-files", "-v", "-z", "--", *INPUTS).split(b"\0")
     if any(entry[:1].islower() or entry.startswith(b"S ") for entry in flagged if entry):
         raise ValueError("unsupported index flags on build inputs; clear assume-unchanged/skip-worktree")
