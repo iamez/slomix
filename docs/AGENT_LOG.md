@@ -1,3 +1,15 @@
+## 2026-11-02 - Make descriptor ownership explicit for CodeQL
+
+Initial1112head42a66bf3 reports two CodeQL warnings: File is opened but is not
+closed. The code registered os.close through ExitStack callbacks and local
+pipeline cases observed closed descriptors. Replace callback registration with
+one context-managed descriptor helper whose os.open/try/finally/os.close lifetime
+is explicit; ExitStack enters that context for both directory and file handles.
+No scanner suppression/policy change or reduced source admission.16local CLI
+cases pass after the refactor, including actual new-process admission without
+service imports. Strengthen partial failure/cancellation cases to assert closure
+of both admitted source FDs. New exact-head CodeQL/native CI remains required.
+
 ## 2026-11-02 - Bounded stats/timing caller local proof before native CI
 
 New CLI/runtime_timing_import_cli and owned runtime_timing_resources compose

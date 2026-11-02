@@ -111,7 +111,7 @@ def test_only_fresh_receipt_observation_completes(source, monkeypatch, capsys, v
 
 @pytest.mark.parametrize('failure', [OSError('synthetic-secret'), asyncio.CancelledError()])
 def test_partial_progress_survives_failure_and_cancellation(source, monkeypatch, capsys, failure):
-    lock, closed, calls, _ = successful_stages(monkeypatch)
+    lock, closed, calls, fds = successful_stages(monkeypatch)
     lock[0] = source.lock
 
     async def stats(manager, current, **options):
@@ -132,6 +132,9 @@ def test_partial_progress_survives_failure_and_cancellation(source, monkeypatch,
     assert [row['retention'] for row in report['timing']] == ['retained', 'retained']
     assert not any(name == 'apply_declared_gametime' for name, _ in calls)
     assert closed == [True] and logging.root.manager.disable == before
+    for fd in set(fds):
+        with pytest.raises(OSError):
+            os.fstat(fd)
 
 
 @pytest.mark.parametrize('fault', ['digest', 'symlink', 'hardlink', 'directory', 'world-write', 'map', 'identity'])

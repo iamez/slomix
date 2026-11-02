@@ -71,14 +71,23 @@ def validate_arguments(args):
 
 
 @contextmanager
+def _owned_descriptor(path, flags, *, dir_fd=None):
+    fd = os.open(path, flags, dir_fd=dir_fd)
+    try:
+        yield fd
+    finally:
+        os.close(fd)
+
+
+@contextmanager
 def timing_sources(args, identities, map_name):
     """Own no-follow regular descriptors; verify ALL timing bytes before SQL."""
     root = Path(args.timing_directory)
     if not root.is_absolute() or root.resolve(strict=True) != root:
         raise ValueError('Canonical absolute timing directory required')
     with ExitStack() as stack:
-        root_fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
-        stack.callback(os.close, root_fd)
+        root_fd = stack.enter_context(_owned_descriptor(
+            root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC))
         info = os.fstat(root_fd)
         if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
             raise ValueError('Timing directory must be private and owned by the operator')
@@ -87,9 +96,9 @@ def timing_sources(args, identities, map_name):
             generation, filename, size, digest = fields
             if not filename or Path(filename).name != filename or '\x00' in filename:
                 raise ValueError('One explicit timing filename component required')
-            fd = os.open(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
-                         dir_fd=root_fd)
-            stack.callback(os.close, fd)
+            fd = stack.enter_context(_owned_descriptor(
+                filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                dir_fd=root_fd))
             info = os.fstat(fd)
             if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
                     or info.st_mode & 0o002 or info.st_nlink != 1):
