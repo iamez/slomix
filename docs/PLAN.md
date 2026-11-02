@@ -1,3 +1,65 @@
+## 2026-11-02 - Preserve R0 in complete snapshots; count only played halves
+
+Source review confirms the unchanged canonical R2 parser supplies match_summary
+and the manager still inserts R0. Correct the NEW native test's total-row
+assumption before accepting evidence: count played rounds using IN(1,2), check
+R0 independently, retain every R0 row in the complete replay snapshot, and count
+played player rows through the same filtered parent join. This is a measurement
+fix, not deletion of R0 or a change to parser/statistics behavior. Await native
+SQL confirmation on both engines; do not claim predicted counts as DB evidence.
+
+## 2026-11-02 - CI fixture environment and handoff routing corrected
+
+Initial1111head0ba4a2cf fails4cases on each native engine: two new TCP CLI cases,
+one successful-config unit case and the handoff header contract. Exact errors:
+assert 1 == 0; assert 0 == 1; routing header assertion in empty introduction.
+Failed native runs otherwise report12512/12516passes and163/159skips.
+
+RCA: setup-python exports LD_LIBRARY_PATH. The production config guard correctly
+rejects inherited loader overrides; successful test fixtures failed to scrub it.
+Clean only the explicit test/child environment (including LD_PRELOAD/LD_AUDIT and
+PYTHONHOME), retain production refusal and add those keys to refusal tests. No
+application guard or import contract is weakened. Both CI refusals/header failures
+reproduced locally before correction. The new handoff checkpoints must follow
+its preserved initial current-routing header, not precede it. All original bytes
+and paragraph order are retained.79focused config/ledger cases pass with an
+injected loader environment; new exact-head native execution is still required.
+
+## 2026-11-02 - Import target implementation evidence before native CI
+
+152focused local cases pass; the native CLI case is unexecuted locally because
+no disposable PostgreSQL was authorized. Two native cases now collect: complete
+pair/replay and R2-corruption preserving a committed R1. Actual PG execution is
+required from fresh CI before claiming them proved.
+
+Both real DEV external configuration files are accepted with their startup SHA
+and independently supplied target tuples. Actual asyncpg pools remain lazy at
+zero connections/capacity one and close. Separate readonly sessions confirm the
+expected database/user via SQL, read-only mode and two query paths; source config
+bytes are unchanged. No import, live data write, migration or service action.
+Observed mutations: removing target agreement fails4cases; removing config SHA
+fails1case. Both guards restored with external cmp and focused cases pass.
+Ruff and configured Bandit pass. No unrelated consumer config is relaxed.
+
+## 2026-11-02 - Explicit pinned TCP importer target
+
+Owner-approved1110 is merged as2c899728; API confirms merged and its complete
+Git tree equals reviewed1db71b59. No service/database action follows source merge.
+Continue the original runtime caller contract: existing one-shot importer gains
+an alternative private external TCP config, mandatory SHA256, independent target
+tuple and writer-handover declaration. Existing Unix mode remains unchanged.
+No ambient credential discovery, schema bootstrap, scheduler or source ACK.
+
+Initial143focused tests pass. Full-config inspection found known legacy DB_PATH,
+SSL and pool fields: only PostgreSQL mode permits legacy DB_PATH, importer pool
+remains0..1, and any requested TLS is refused rather than silently downgraded.
+Actual DEV config parsing, functional/mutation proof and native PG CI remain
+pending. The next timing caller still needs separate trusted source FD/identity,
+stage outcomes and an independent observer; this target slice is not that caller.
+Keep pending104/105, backup/restore, owner single-writer handover and D4/D5 explicit.
+Original runtime plan, all remaining source/improvement tracks and archives stay
+preserved. Dependabot139 remains open; do not downgrade or dismiss as a shortcut.
+
 ## 2026-11-02 — Native CI exposed and corrected an inbox fixture dependency
 
 Initial1110head2c555a65 passes all194focused local cases and all15selected native
