@@ -1,3 +1,52 @@
+## 2026-11-02 - Bounded stats/timing caller local proof before native CI
+
+New CLI/runtime_timing_import_cli and owned runtime_timing_resources compose
+existing canonical APIs with no whole-pipeline transaction. All timing FD bytes
+are verified before SQL; unknown is recorded before every in-flight stage.
+Complete requires fresh independent applied-receipt observations for both halves
+and successful resource cleanup. Earlier retained/accepted work survives errors.
+
+57focused composition/resource/session cases pass; actual separate CLI process
+additionally admits all four real Lua files while Discord/web/dotenv/setup imports
+are blocked, then explicitly refuses an absent socket before writes. Source bytes
+remain. This is producer/admission/process proof, not native DB application.
+Mutating the fresh application-observer guard fails2cases; mutating observer
+target agreement fails4cases. Both original files restored with external cmp,
+restored cases pass. Ruff and configured Bandit pass. Two native cases collect:
+actual CLI pair/application/fresh-process replay and cancellation at R2 followed
+by actual CLI resumption. Native PG14/17 execution remains pending; no live SQL.
+
+Retain existing Unix and pinned TCP modes; initial timing adapter explicitly
+refuses colon-bearing hosts including IPv6 before session creation. Real DEV
+IPv4/localhost remains the target. Team effects stay deferred to their consumer.
+No source ACK, automatic adoption, remote capture, daemon or provider activation.
+Original master plan and all remaining packaging/handover/restore/D4-D5 work stay.
+
+## 2026-11-02 - Owner-approved1111 merged; implement actual bounded timing caller
+
+PR1111 explicitly approved by the owner, full420second pinned cycle succeeds,
+merged as4d0bd515edfa51cde6690b9db180d695a2acd70d. Fresh GitHub merged=true and
+independent complete-tree equality confirm the reviewed65693a4e result. No
+service, live import, migration, production or game action. Authority is1111only.
+
+Next original runtime slice in reviews/timing-driver implements ONE CLI for
+admitted R1/R2 plus separately verified declared timing files. Reuse canonical
+stats, retention, mapping, link/application receipts. One shared writer pool of
+capacity one plus separately owned readonly observer prevents self-starvation.
+Require independently supplied identities, journal/deferred teams and explicit
+correction-writer handover. No global clock repair or source ACK. Expose unknown
+in-flight stages and earlier accepted/retained work after failure/cancellation.
+Current timing adapter explicitly refuses colon-bearing hosts (including IPv6)
+before resource creation; actual DEV IPv4/localhost targets remain supported.
+
+Initial57focused cases pass;2new native cases collect but no local SQL execution
+is authorized. They must run on fresh CI PG14/17. Actual Lua emits0664 under this
+host umask, so admit group-write beneath owned0700root while preserving regular
+owned/no-follow/single-link/no-world-write and repeated sealed hash checks. Early
+negative fixture probes (symlink alias then file-mode assumption) are retained;
+no services/source files were modified to manufacture a passing producer.
+Original package/source/writer/restore/D4-D5 and all wider plans remain open.
+
 ## 2026-11-02 - Preserve R0 in complete snapshots; count only played halves
 
 Source review confirms the unchanged canonical R2 parser supplies match_summary
