@@ -1,3 +1,8 @@
+## 2026-11-02 — #1108 merged; publish existing timing lifecycle
+
+1108 merged with exact tree proof; existing18path timing publication is next.
+Native CI/review and operational caller remain; all original plans are retained.
+
 ## 2026-10-30 — Preserve strict legacy ingestion under declared policy opt-in
 
 Runtime compatibility fix complete locally; fresh native/full CI next. Testing

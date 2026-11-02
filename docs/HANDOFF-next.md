@@ -41,6 +41,36 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-11-02 — #1108 merged; publish existing timing lifecycle
+
+Approved proximity PR1108 merged as0b24a9892fcb1bb06926f38b122ad3389b3f7b84.
+The full420second cycle returned failed=0,threads=0,behind=0,sha=yes; GitHub API
+confirms merged and the reviewed0e3622ff/merged trees are identical. Approval is
+consumed for1108; no service/DB/migration/game action or deployment follows.
+
+Publish the six preserved timing modules: retention, evidence-only diagnostics,
+physical correlation, durable linkage, conservative preview and atomic application.
+Their18source/test paths include six unit files, five timing PG files and the
+existing stricter ACL fixture. One explicit caller owns source identity/FD,
+transaction/timeouts and exclusive legacy-correction handover. There is no new
+automatic scheduler/transport/activation. Application only fills the three
+missing/default round timing scalars; it never overwrites existing unexplained
+values, recalculates player statistics or turns a clock match into identity.
+
+205focused unit cases pass (including actual Lua writer/files/ENOSPC). All58native
+cases collect against the merged base; actual PG14/17 execution remains pending.
+Removing the equal-values-without-receipt guard produces1failure; cmp restores
+source. Ruff/Bandit and direct import closure pass. Tests retain raw sources,
+independent commit observation, rollback/replay, exact write scope, corrupt/legacy
+refusal and ACL constraints. Main journal fixture remains unchanged; the carried
+ACL fixture refuses borrowing any preexisting website role and safely cleans up.
+
+Next: current-head native proof/review for this timing publication, then explicit
+operational timing caller composition and complete immutable source packaging.
+Retain original R01-R04/M1-M5/D4-D5 and all wider improvements. One review worktree
+for this actual slice is under slomix-development/reviews/timing-lifecycle; do not
+create new worktrees per check. No new schema or historical data repair.
+
 ## 2026-10-30 — Preserve strict legacy ingestion under declared policy opt-in
 
 Original runtime PLAN and its improvements remain the goal; the testing audit

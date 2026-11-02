@@ -30,13 +30,18 @@ def assert_expected_pg_major(version_number):
 @pytest.fixture
 async def acl_db():
     conn = await asyncpg.connect(**connection_options())
-    tx = conn.transaction()
-    await tx.start()
+    tx = None
+    started = False
     try:
+        tx = conn.transaction()
+        await tx.start()
+        started = True
         assert_expected_pg_major(await conn.fetchval("SHOW server_version_num"))
-        # Existing roles are never changed; new test roles roll back with the fixture.
-        if not await conn.fetchval("SELECT EXISTS(SELECT FROM pg_roles WHERE rolname='website_app')"):
-            await conn.execute("CREATE ROLE website_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT")
+        # Roles are cluster-wide, even with a private per-test schema. Refuse
+        # to exercise membership grants against any preexisting website role.
+        if await conn.fetchval("SELECT EXISTS(SELECT FROM pg_roles WHERE rolname='website_app')"):
+            raise RuntimeError("Refusing ACL fixture: website_app already exists")
+        await conn.execute("CREATE ROLE website_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT")
         schema = "runtime_acl_test_" + uuid.uuid4().hex
         await conn.execute(f'CREATE SCHEMA "{schema}"')
         await conn.execute(f'SET LOCAL search_path TO "{schema}"')
@@ -53,8 +58,11 @@ async def acl_db():
             await conn.execute(files[0].read_text())
         yield conn
     finally:
-        await tx.rollback()
-        await conn.close(timeout=5)
+        try:
+            if started:
+                await tx.rollback()
+        finally:
+            await conn.close(timeout=5)
 
 
 async def default_acls(conn):
