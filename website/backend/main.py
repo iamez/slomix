@@ -3,7 +3,6 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -22,6 +21,12 @@ except ImportError:  # pragma: no cover - optional dependency fallback
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
 sys.path.append(project_root)
 
+# Load configuration before modules with import-time settings or logging.
+from shared.runtime_environment import load_environment
+
+website_env = os.path.join(os.path.dirname(__file__), "../.env")
+load_environment(website_env if os.path.exists(website_env) else os.path.join(project_root, ".env"))
+
 try:
     from slowapi import _rate_limit_exceeded_handler
     from slowapi.errors import RateLimitExceeded
@@ -30,13 +35,6 @@ try:
     HAS_SLOWAPI = True
 except ImportError:  # pragma: no cover - optional in minimal installs
     HAS_SLOWAPI = False
-
-# Load environment variables BEFORE importing logging (for LOG_LEVEL env var)
-website_env = os.path.join(os.path.dirname(__file__), "../.env")
-if os.path.exists(website_env):
-    load_dotenv(website_env)
-else:
-    load_dotenv(os.path.join(project_root, ".env"))
 
 # Setup logging (must happen before other imports that use logging)
 from website.backend.env_utils import getenv_int, strip_inline_comment
@@ -501,6 +499,11 @@ async def health_check():
 
 
 # Serve Static Files (Frontend)
+# Only public gallery PNGs, never the shared data/config root.
+from website.backend.services.retro_viz_store import gallery
+
+app.mount("/data/retro-viz", gallery, name="retro-viz-images")
+
 # Mount this LAST to avoid conflicts with API routes
 static_dir = os.path.join(project_root, "website")
 app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")

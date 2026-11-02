@@ -176,7 +176,7 @@ def main(argv=None):
                 raise PreflightError("Release migration/config paths do not match startup contract")
             refuse_config_overrides(
                 read_external_environment(args.env_file, root=release_root,
-                                          expected_digest=args.expected_env_sha256), os.environ)
+                                          expected_digest=args.expected_env_sha256), os.environ, strict=True)
         options = connection_options(args.env_file, (
             args.expected_host, args.expected_port, args.expected_database, args.expected_user),
             release_root=release_root, expected_digest=args.expected_env_sha256)

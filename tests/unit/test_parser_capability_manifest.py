@@ -169,6 +169,7 @@ def _via_scan(path: str) -> dict:
         test_mode=scanned["test_mode"],
         tracker_version_full=scanned["tracker_version_full"],
         position_sample_interval_ms=scanned["position_sample_interval_ms"],
+        event_time_basis=scanned["event_time_basis"],
     )
 
 

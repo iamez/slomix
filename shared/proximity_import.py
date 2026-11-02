@@ -9,11 +9,15 @@ capture, durable retries and correlation delivery remain caller responsibilities
 import time
 from dataclasses import dataclass
 from datetime import date
+from io import StringIO
 from pathlib import Path
 
 from proximity.parser import ProximityParserV4
 from proximity.parser.import_receipt import claim_import_receipt
+from shared.proximity_receipt_link import record_receipt_parent, validate_receipt_parent
 from shared.proximity_source import bind_proximity_source, read_verified_proximity_source
+from shared.runtime_proximity_identity import proximity_header_identity
+from shared.runtime_proximity_mapping import DeclaredMappingPending, DeclaredProximityBinding, resolve_declared_parent
 
 
 class _ImportFailed(Exception):
@@ -68,6 +72,7 @@ async def import_proximity_file(
     filepath: Path, *, adapter, session_date: date, gametimes_dir: Path,
     expected_size: int, expected_sha256: str, max_bytes: int = 8 * 1024 * 1024,
     require_linked_parent: bool = False,
+    declared_binding: DeclaredProximityBinding | None = None,
 ) -> ProximityImportResult:
     """Use the canonical parser; never create a connection or guess a session.
 
@@ -85,9 +90,10 @@ async def import_proximity_file(
     forward-only handover. Pending results are NOT acknowledgments: retain the
     sealed source and retry missing parents/sessions with bounded scheduling;
     ambiguous/missing source identity needs reconciliation, not a guessed link.
-    This mode requires migration094 and defers first ingestion, rather than
+    This mode requires migrations094/096 and defers first ingestion, rather than
     repairing history. Receipts created by the permissive path are rejected:
-    the persisted runtime_parent_gate must prove strict first ingestion.
+    the persisted runtime_parent_gate and linked_round_id must prove strict first
+    ingestion. Already-completed pre096 receipts are not silently adopted.
     Default preserves the existing low-level boundary for compatibility. No cog
     or worker is activated here. Successful results remain caller-transaction
     scoped, not evidence that an enclosing transaction has committed.
@@ -102,10 +108,36 @@ async def import_proximity_file(
         filepath, expected_size=expected_size, expected_sha256=expected_sha256,
         max_bytes=max_bytes,
     )
+    declared = proximity_header_identity(StringIO(payload.decode('utf-8', errors='replace')), filepath.name)
+    if declared_binding is not None:
+        if not isinstance(declared_binding, DeclaredProximityBinding) or require_linked_parent is not True:
+            raise ValueError('Declared import requires explicit binding and strict parent policy')
+        identity, map_name = declared_binding.verify(payload, filepath.name, session_date)
+    if declared is not None and declared_binding is None:
+        # Never discard an explicit producer identity and fall back to a clock
+        # join. Durable trusted ID-to-parent mapping is a separate activation gate.
+        return ProximityImportResult(False, None, pending_reason='declared_identity_mapping_pending')
     parser = ProximityParserV4(
         db_adapter=adapter, output_dir=str(filepath.parent),
         gametimes_dir=str(gametimes_dir),
     )
+    if declared_binding is not None:
+        try:
+            async with adapter.transaction():
+                parent = await resolve_declared_parent(adapter, identity, map_name)
+                success = await parser.import_file(str(filepath), session_date, source_bytes=payload,
+                                                   declared_binding=declared_binding)
+                if not success:
+                    raise _ImportFailed
+                confirmed = await resolve_declared_parent(adapter, identity, map_name)
+                if (confirmed != parent or parser._round_link_context.get('round_id') != parent.round_id):  # noqa: SLF001
+                    raise ValueError('Declared proximity parent changed during import')
+        except DeclaredMappingPending:
+            return ProximityImportResult(False, None, pending_reason='declared_identity_mapping_pending')
+        except _ImportFailed:
+            return ProximityImportResult(False, None)
+        return ProximityImportResult(True, parser.get_stats(), round_id=parent.round_id,
+                                     gaming_session_id=parent.gaming_session_id)
     parent = None
     if require_linked_parent and not parser.parse_file(str(filepath), source_bytes=payload):
         return ProximityImportResult(False, None)
@@ -118,6 +150,7 @@ async def import_proximity_file(
             await bind_proximity_source(adapter, filepath.name, expected_sha256)
             if require_linked_parent:
                 parent = await _linked_parent(adapter, parser.metadata)
+                await validate_receipt_parent(adapter, filepath.name, parent[0])
             success = await parser.import_file(str(filepath), session_date, source_bytes=payload)
             if not success:
                 raise _ImportFailed
@@ -126,6 +159,7 @@ async def import_proximity_file(
                 if (confirmed != parent
                         or parser._round_link_context.get('round_id') != parent[0]):  # noqa: SLF001 -- canonical parser integration seam, checked before commit
                     raise RuntimeError('Proximity parent identity changed during import')
+                await record_receipt_parent(adapter, filepath.name, parent[0])
     except _ParentPending as exc:
         return ProximityImportResult(False, None, pending_reason=str(exc))
     except _ImportFailed:

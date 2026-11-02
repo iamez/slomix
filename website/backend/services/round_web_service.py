@@ -73,6 +73,7 @@ from typing import Any
 
 from proximity.parser.capability_manifest import FEATURE_FLAGS, is_declared
 from proximity.parser.capability_manifest import UNKNOWN as UNKNOWN_STATE
+from proximity.parser.time_basis import unanimous_basis
 from shared.round_time import round_duration_sql
 from website.backend.logging_config import get_app_logger
 from website.backend.services import line_of_sight
@@ -111,6 +112,7 @@ from website.backend.services.replay_service import (
     _ensure_path_list,
     _safe_float,
 )
+from website.backend.services.track_lifecycle import track_end_sql
 from website.backend.utils.et_constants import strip_et_colors
 
 logger = get_app_logger("service.round_web")
@@ -189,6 +191,7 @@ class CapturePolicy:
     #: earlier version reported the flag count under a file-count name
     #: (CodeRabbit, PR #795).
     conflicting_flags: int = 0
+    event_time_basis: str | None = None
 
 
 @dataclass(slots=True)
@@ -331,6 +334,11 @@ def derive_velocity(
         return None, None, None, None, "no_strictly_earlier_sample"
 
     prev = path[prev_index]
+    # A pause/resume boundary is explicit evidence of an unobserved incoming
+    # segment, even when its timestamps fit max_dt_ms. Duplicate-time samples
+    # must not let the backward search hop over that boundary either.
+    if any(p.get("event") == "capture_resume" for p in path[prev_index + 1:sample_index + 1]):
+        return None, None, None, None, "capture_discontinuity"
     dt_ms = int(cur_time - (prev.get("time", 0) or 0))
     if dt_ms <= 0:
         return None, None, None, None, "non_monotonic_samples"
@@ -619,16 +627,21 @@ def _player_to_dict(st: PlayerState) -> dict[str, Any]:
 async def load_capture_policy(db, round_id: int) -> CapturePolicy:
     """What the round's source file says it was able to record.
 
-    `proximity_processed_files` has no round_id, so the bridge is `round_key`
-    (migration 062): `date|map|round|start_unix`. Only its LAST field is used.
+    Prefer migration096's explicit `linked_round_id`, verified at ingestion.
+    A bound file never falls back to its old round_key, even if parent metadata
+    was subsequently edited. This is retained provenance, not verification of
+    the current parent metadata or source completeness.
 
-    ⭐ Matching the whole key would be wrong. The round number in it comes from
-    the parser's own normalisation, and two of the 184 keys written so far
-    disagree with what re-parsing the same file produces today — so a whole-key
-    match would silently drop those rounds. `round_start_unix` alone identifies
-    950 of 951 rounds; the single colliding pair returns two manifests and takes
-    the disagreement path below, which is the honest outcome rather than a
-    coin flip. 828 rows make the unindexed cast free.
+    For UNBOUND files, round_key's last field is a LEGACY epoch association.
+    When multiple canonical rounds own that epoch, retain a NULL evidence row
+    for each ambiguous receipt. Discarding it would let an explicit sibling
+    falsely establish unanimity. Identical declarations do not prove ownership.
+
+    Historical key round-number normalization differs from today's parser for
+    some files; requiring whole-key equality would silently drop those sources.
+    Unique epoch association preserves that compatibility but does NOT prove
+    exact source ownership. Migration096 is required; schema errors propagate.
+    Uniqueness and receipt lookup share one SQL statement snapshot.
 
     A round with no manifest keeps the default, which is `unknown` on every
     field. That is not a placeholder to be improved away: 30 processed files
@@ -636,17 +649,25 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
     so rather than inherit the software's current defaults (§4.2).
     """
     rows = await db.fetch_all("""
-        SELECT f.capabilities
+        SELECT CASE
+            WHEN f.linked_round_id IS NULL AND EXISTS (
+                SELECT 1 FROM rounds other
+                WHERE other.round_start_unix = r.round_start_unix
+                  AND other.id <> r.id
+            ) THEN NULL
+            ELSE f.capabilities
+        END AS capabilities
         FROM rounds r
         JOIN proximity_processed_files f
-          ON split_part(f.round_key, '|', 4) = r.round_start_unix::text
+          ON f.linked_round_id = r.id
+          OR (f.linked_round_id IS NULL
+              AND r.round_start_unix IS NOT NULL AND r.round_start_unix > 0
+              AND split_part(f.round_key, '|', 4) = r.round_start_unix::text)
         WHERE r.id = $1
           -- ⛔ NULL manifests are SELECTED, not filtered out. Excluding them
           -- made a file with no manifest invisible to the agreement checks
           -- below, so one file declaring 200 ms was "unanimous" while its
           -- sibling had declared nothing at all (Codex, PR #807).
-          AND r.round_start_unix IS NOT NULL
-          AND r.round_start_unix > 0
         ORDER BY f.filename
     """, (round_id,))
     manifests: list[dict] = []
@@ -766,6 +787,7 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
         source=(sources.pop() if len(sources) == 1 else "conflicting"),
         manifest_count=len(manifests),
         conflicting_flags=conflicting_flags,
+        event_time_basis=unanimous_basis(manifests, unusable=unusable),
     )
 
 
@@ -1106,11 +1128,11 @@ async def load_round_information_state(
         for p in snapshot.players.values() if _has_position(p)
     }
 
-    deaths = await db.fetch_all("""
+    deaths = await db.fetch_all(f"""
         SELECT player_guid, team, death_time_ms
         FROM player_track
         WHERE round_id = $1 AND death_time_ms IS NOT NULL AND death_time_ms <= $2
-          AND path -> -1 ->> 'event' IN
+          AND {track_end_sql()} IN
               ('killed', 'selfkill', 'fallen', 'world', 'teamkill')
     """, (round_id, t_ms))
     engagements = await db.fetch_all("""
@@ -1654,6 +1676,10 @@ async def get_round_snapshot(
              if t[4] is not None), default=0
         )) if tracks else None,
         "capture_policy": {
+            "event_time_basis": {
+                "status": "declared" if policy.event_time_basis else "unknown",
+                "value": policy.event_time_basis,
+            },
             "mode": policy.mode,
             "observation_interval_ms": policy.observation_interval_ms,
             "source": policy.source,

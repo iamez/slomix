@@ -349,3 +349,32 @@ def test_get_stats_files_tracked_is_set_size(monitor):
     monitor.processed_files = {"a.txt", "b.txt", "c.txt"}
     out = monitor.get_stats()
     assert out["files_tracked"] == 3
+
+
+def test_download_writes_configured_stats_directory(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    import paramiko
+    import scp
+
+    release = tmp_path / "release"
+    release.mkdir()
+    monkeypatch.chdir(release)
+    bot = _make_bot()
+    bot.config.stats_directory = str(tmp_path / "state/stats")
+    monitor = SSHMonitor(bot)
+    ssh = MagicMock()
+    monkeypatch.setattr(paramiko, "SSHClient", lambda: ssh)
+    monkeypatch.setattr("bot.automation.ssh_handler.configure_ssh_host_key_policy", lambda client: None)
+    transport = MagicMock()
+    def write_file(remote, local):
+        assert remote == "/stats/2026-10-16-120000-supply-round-1.txt"
+        Path(local).write_bytes(b"synthetic stats; not imported")
+    transport.__enter__.return_value.get.side_effect = write_file
+    monkeypatch.setattr(scp, "SCPClient", lambda *args: transport)
+    local, duration = monitor._download_file_sync("2026-10-16-120000-supply-round-1.txt")  # noqa: SLF001 -- download boundary
+    assert local == str(tmp_path / "state/stats/2026-10-16-120000-supply-round-1.txt")
+    assert Path(local).read_bytes() == b"synthetic stats; not imported"
+    assert duration >= 0
+    ssh.close.assert_called_once()
+    assert list(release.iterdir()) == []
