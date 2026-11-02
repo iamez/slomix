@@ -1,3 +1,53 @@
+## 2026-11-02 — Forward-only reconciliation of existing development PRs
+
+Refresh this PR against main0b24a989. Private proof verifies every main ledger
+line in order, all original branch insertion blocks and exact source three-way
+composition. Original heads are retained in a verified Git bundle; no deletion,
+force push, service action, database write or game update.
+
+Actual tip-to-tip source comparison finds1100 already incorporated: five files
+are byte-identical to main and the frontend manifest differs only by main's newer
+modern provenance build command. Preserve that improvement; do not treat a stale
+three-dot PR diff as missing code. Retain1100's branch/history and close it as
+superseded, rather than merging a documentation-only duplicate.
+
+Remaining order:1103 Python trust/crypto ->1104 Supply retention ->1105 R1 event
+clock ->1106 update safeguards ->1109 timing.1109 depends on already merged schema
+and proximity. Before EACH merge: latest-main refresh, exact-head CI/review, full
+420second cycle and independently matching reviewed/merged trees. The current
+request does not name PR numbers; obtain one explicit numbered decision for this
+five-PR queue.956 release automation and historical NEVER MERGE reviews stay held.
+Resume original runtime caller/package/D4/D5 gates after reconciliation.
+
+## 2026-10-27 — DEV Python security replacements prepared, activation pending
+
+Owner scope remains DEV/build tools; old slomix_vm and puran are excluded.
+New isolated role environments were created from the actual installed bot/web
+inventories, preserving current split payload revisions and database roles.
+Both use pip26.2.2, certifi2026.10.19 and cryptography50.0.2; bot additionally
+uses Pillow13.0.0 already pinned on main. Root now explicitly pins the deployed
+Starlette1.3.1 and both manifests declare their direct crypto/trust dependencies.
+Website's previously documented aiosqlite dependency is made explicit as well.
+
+Fresh complete installed-graph audits found0known vulnerabilities for both roles;
+pip check passed twice. New-role interpreters passed78bot and30web checks,
+including real screenshot fixtures and contact encryption. Native Ed25519 and
+bot Paramiko RSA-SHA2 signing/key serialization passed with bundled OpenSSL4.0.3.
+Actual loaded application and pip CA stores exclude distrusted emSign G3;
+the same assertion fails against both old role stores. Trusted pip bootstrap
+was independently hash checked; source-only trueskill0.4.5 required a cached
+wheel whose complete code was compared against hash-verified upstream sdist.
+No source build executed. Private evidence/operational preparation:
+/home/samba/share/slomix-dev-security-20261027.
+
+No active environment, source payload, unit, service, DB or game was changed.
+Copied Python binaries remain3.13.16 with shared system stdlib; Python3.13.18
+base update is still an owner-managed host step, not solved by replacing venvs.
+Role-specific activation readiness is tracked in the private packet; do not use
+the single-release pair generator for today's different bot/web payloads.
+Supply reset investigation and full original runtime plan remain separate,
+retained lanes.1096/1097 approvals persist; no new numbered merge permission.
+
 ## 2026-10-30 — Preserve strict legacy ingestion under declared policy opt-in
 
 Original runtime PLAN and its improvements remain the goal; the testing audit
