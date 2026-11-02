@@ -24,8 +24,7 @@ def _point(time_ms: int, speed: float, sprint: int) -> PathPoint:
 
 
 def test_player_track_metrics_handle_zero_spawn_time():
-    """When spawn_time=0, duration_ms returns 0 because 0 is falsy in the guard.
-    This is a known edge case. Use spawn_time=1 for normal behavior."""
+    """Raw elapsed spans must be invariant under an origin shift, including zero."""
     track_zero = PlayerTrack(
         guid="g1",
         name="Zero Spawn",
@@ -44,8 +43,8 @@ def test_player_track_metrics_handle_zero_spawn_time():
         ],
     )
 
-    # spawn_time=0 is falsy, so duration_ms returns 0
-    assert track_zero.duration_ms == 0
+    assert track_zero.duration_ms == 3000
+    assert track_zero.time_to_first_move_ms == 500
 
     # With spawn_time=1, duration works correctly
     track = PlayerTrack(
@@ -67,6 +66,16 @@ def test_player_track_metrics_handle_zero_spawn_time():
     )
     assert track.duration_ms == 3000
     assert track.time_to_first_move_ms == 500
+
+
+def test_raw_first_move_zero_is_not_missing():
+    track = PlayerTrack("G", "Synthetic", "AXIS", "MEDIC", 0, 100, 0, "world", 0)
+    assert track.time_to_first_move_ms == 0
+    track.first_move_time = None
+    assert track.time_to_first_move_ms is None
+    track.death_time = None
+    # Keep the historical duration fallback; it is not proof of zero active time.
+    assert track.duration_ms == 0
 
 
 def test_player_track_metrics_are_sample_count_based():

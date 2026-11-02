@@ -4,6 +4,7 @@
  */
 
 import { API_BASE, fetchJSON, formatNumber, escapeHtml } from './utils.js';
+import { journeyPointAt } from './journey-position.js';
 import { getRouteHash } from './route-registry.js?v=20260720-ssd-gsid';
 
 const DEFAULT_RANGE_DAYS = 30;
@@ -2656,13 +2657,14 @@ function renderJourney(payload) {
     const s = payload.summary || {};
     const name = stripEtColors(payload.player?.name || '');
     if (statusEl) {
-        statusEl.textContent = `${name} — ${s.lives} lives, ${s.kills} kills / ${s.deaths} deaths, avg life ${s.avg_life_s}s. Click a life to trace it.`;
+        const raw = Number.isFinite(s.avg_raw_span_s) ? `${s.avg_raw_span_s}s (${s.raw_span_samples} eligible tracks)` : 'unavailable';
+        statusEl.textContent = `${name} — ${s.lives} lives, ${s.kills} kills / ${s.deaths} deaths, average raw span ${raw}; may include pauses, not active life time. Click a life to trace it.`;
     }
     if (livesEl) {
         livesEl.innerHTML = lives.map((life) => {
-            const dur = (life.duration_ms / 1000).toFixed(0);
+            const dur = Number.isFinite(life.raw_duration_ms) ? `${(life.raw_duration_ms / 1000).toFixed(0)}s raw span` : 'raw span unavailable';
             const kd = `${(life.kills || []).length}K${life.death ? '/1D' : ''}`;
-            const solo = life.solo_pct != null ? `${life.solo_pct.toFixed(0)}% solo` : '';
+            const solo = life.solo_pct != null ? `${life.solo_pct.toFixed(0)}% distant observed teammate` : '';
             const obj = (life.objective_events || []).length ? ' • obj' : '';
             const active = life.life_index === proximityJourneyState.selectedLife;
             return `
@@ -2672,7 +2674,7 @@ function renderJourney(payload) {
                     data-life="${life.life_index}">
                     <span class="font-bold">#${life.life_index}</span>
                     <span class="text-slate-500">${escapeHtml(String(life.player_class || '').toLowerCase())}</span>
-                    ${dur}s • ${kd}${solo ? ` • ${solo}` : ''}${obj}
+                    ${dur} • ${kd}${solo ? ` • ${solo}` : ''}${obj}
                 </button>`;
         }).join('');
         livesEl.querySelectorAll('.journey-life-row').forEach((btn) => {
@@ -2684,7 +2686,9 @@ function renderJourney(payload) {
     }
     const life = lives.find((l) => l.life_index === proximityJourneyState.selectedLife) || lives[0];
     const narrativeEl = document.getElementById('proximity-journey-narrative');
-    if (narrativeEl) narrativeEl.textContent = life.narrative || '';
+    if (narrativeEl) narrativeEl.textContent = (payload.elapsed_time_quality
+        ? life.narrative || '' : 'Legacy narrative withheld: timing unverified')
+        + ' Map markers approximate the nearest sample within one observed segment; outside coverage, positions are omitted, not events.';
     renderJourneyTimeline(life);
     void drawJourneyLife(life, payload.scope?.map_name || proximityScopeState.mapName);
 }
@@ -2699,7 +2703,7 @@ function renderJourneyTimeline(life) {
     const series = life?.proximity_series || [];
     if (!series.length) {
         strip.classList.add('hidden');
-        if (caption) caption.textContent = '';
+        if (caption) caption.textContent = life?.proximity_unavailable || 'No proximity observations for this life.';
         return;
     }
     strip.classList.remove('hidden');
@@ -2708,12 +2712,15 @@ function renderJourneyTimeline(life) {
     const span = Math.max(end - start, 1);
 
     const bands = series.map((s) => {
-        const danger = Number.isFinite(s.nearest_enemy) && s.nearest_enemy != null && s.nearest_enemy <= 500;
-        const solo = s.nearest_teammate == null || s.nearest_teammate > 500;
+        const danger = Number.isFinite(s.enemies_500u) ? s.enemies_500u > 0
+            : Number.isFinite(s.nearest_enemy) && s.nearest_enemy != null && s.nearest_enemy <= 500;
+        const unknown = s.nearest_teammate == null;
+        const solo = !unknown && (Number.isFinite(s.teammates_500u)
+            ? s.teammates_500u === 0 : s.nearest_teammate > 500);
         const color = danger ? 'rgba(244, 63, 94, 0.55)'
             : solo ? 'rgba(251, 191, 36, 0.4)'
                 : 'rgba(100, 116, 139, 0.25)';
-        const state = danger ? 'enemy ≤500u' : solo ? 'solo' : 'with team';
+        const state = danger ? 'enemy ≤500u' : unknown ? 'teammate coverage unavailable' : solo ? 'observed teammate >500u' : 'with observed teammate';
         const tip = `${((s.t - start) / 1000).toFixed(0)}s • ${state}`
             + (s.nearest_enemy != null ? ` • enemy ${Math.round(s.nearest_enemy)}u` : '')
             + (s.nearest_teammate != null ? ` • teammate ${Math.round(s.nearest_teammate)}u` : '');
@@ -2735,7 +2742,7 @@ function renderJourneyTimeline(life) {
     }
     strip.innerHTML = bands + markers.join('');
     if (caption) {
-        caption.textContent = 'Life timeline: red = enemy within 500u, amber = solo, grey = with team • ▲ kill ✖ death ◆ objective';
+        caption.textContent = 'Sample timeline: red = observed enemy within 500u, amber = observed teammate farther than 500u, grey = near teammate or unavailable (hover) • ▲ kill ✖ death ◆ objective';
     }
 }
 
@@ -2750,7 +2757,7 @@ function clearJourneyCanvas() {
 
 // Color a path point by enemy distance: cyan (safe) → rose (enemy ≤500u).
 function journeyDangerColor(enemyDist, alpha = 0.9) {
-    if (!Number.isFinite(enemyDist)) return `rgba(34, 211, 238, ${alpha})`;
+    if (!Number.isFinite(enemyDist)) return `rgba(148, 163, 184, ${alpha})`;
     const t = clamp(1 - enemyDist / 1500, 0, 1);
     const r = Math.round(34 + (244 - 34) * t);
     const g = Math.round(211 + (63 - 211) * t);
@@ -2802,14 +2809,17 @@ async function drawJourneyLife(life, mapName) {
         || seriesByBucket.get(Math.round(t / 1000) - 1)
         || null;
 
-    const path = (life.path || []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    const path = life.path || []; // Keep coordinate-less boundaries; filtering would reconnect the gap.
     for (let i = 1; i < path.length; i += 1) {
+        if (path[i].break_before || path[i].event === 'capture_resume') continue;
+        if (![path[i - 1].x, path[i - 1].y, path[i].x, path[i].y].every(Number.isFinite)) continue;
         const a = worldToCanvasPoint(path[i - 1].x, path[i - 1].y, width, height, worldBounds);
         const b = worldToCanvasPoint(path[i].x, path[i].y, width, height, worldBounds);
         if (!a || !b) continue;
         const ctxSample = seriesAt(path[i].t);
         const solo = ctxSample && Number.isFinite(ctxSample.nearest_teammate)
-            ? ctxSample.nearest_teammate > 500
+            ? (Number.isFinite(ctxSample.teammates_500u)
+                ? ctxSample.teammates_500u === 0 : ctxSample.nearest_teammate > 500)
             : false;
         ctx.save();
         ctx.strokeStyle = journeyDangerColor(ctxSample?.nearest_enemy);
@@ -2823,7 +2833,7 @@ async function drawJourneyLife(life, mapName) {
     }
 
     // Spawn marker
-    if (path.length) {
+    if (path.length && Number.isFinite(path[0].x) && Number.isFinite(path[0].y)) {
         const sp = worldToCanvasPoint(path[0].x, path[0].y, width, height, worldBounds);
         if (sp) {
             ctx.fillStyle = 'rgba(34, 197, 94, 0.95)';
@@ -2832,16 +2842,8 @@ async function drawJourneyLife(life, mapName) {
             ctx.fill();
         }
     }
-    // Kill markers (▲) at the nearest path point to each kill time.
-    const pointAt = (t) => {
-        let best = null;
-        let bestDt = Infinity;
-        for (const p of path) {
-            const dt = Math.abs(p.t - t);
-            if (dt < bestDt) { bestDt = dt; best = p; }
-        }
-        return best;
-    };
+    // Approximate markers only within one observed segment; never across gaps.
+    const pointAt = (t) => journeyPointAt(path, t);
     for (const kill of life.kills || []) {
         const p = pointAt(kill.time);
         const cp = p && worldToCanvasPoint(p.x, p.y, width, height, worldBounds);

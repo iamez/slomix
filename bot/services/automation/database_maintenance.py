@@ -38,12 +38,17 @@ class DatabaseMaintenance:
         self.db_path = db_path
         self.admin_channel_id = admin_channel_id
 
+        retention = os.getenv("MAINTENANCE_RETENTION_ENABLED", "true").strip().lower()
+        if retention not in {"true", "false"}:
+            raise ValueError("MAINTENANCE_RETENTION_ENABLED must be true or false")
+        self.retention_enabled = retention == "true"
+
         # Backup settings
-        self.backup_dir = "logs/backups"
+        self.backup_dir = os.path.join(os.getenv("BOT_LOG_DIR") or "logs", "backups")
         self.backup_retention = 7  # Keep last 7 backups
 
         # Log settings
-        self.log_dir = "logs"
+        self.log_dir = os.getenv("BOT_LOG_DIR") or "logs"
         self.log_retention_days = 30
 
         # State
@@ -199,6 +204,9 @@ class DatabaseMaintenance:
 
     async def cleanup_old_logs(self) -> int:
         """Remove old log files"""
+        if not self.retention_enabled:
+            logger.info("Log retention disabled; existing files preserved")
+            return 0
         try:
             if not os.path.exists(self.log_dir):
                 return 0
@@ -226,6 +234,9 @@ class DatabaseMaintenance:
 
     async def _cleanup_old_backups(self):
         """Keep only most recent backups"""
+        if not self.retention_enabled:
+            logger.info("Backup retention disabled; existing files preserved")
+            return
         try:
             backups = sorted(
                 [f for f in os.listdir(self.backup_dir) if "backup" in f],

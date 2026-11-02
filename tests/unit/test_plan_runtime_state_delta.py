@@ -1,0 +1,311 @@
+"""A final transfer cannot overwrite independent edits in the copied state."""
+import copy
+import json
+from pathlib import Path
+
+import pytest
+
+from scripts import plan_runtime_state_delta as delta
+from scripts import prepare_runtime_state as seed
+
+
+def item(digest):
+    return {'size': 1, 'sha256': digest, 'mtime_ns': 1} if digest is not None else None
+
+
+@pytest.mark.parametrize('base,old,new,expected', [
+    ('a', 'a', 'a', 'unchanged'), ('a', 'b', 'b', 'converged'),
+    (None, 'a', 'a', 'converged'), ('a', None, None, 'converged'),
+    (None, 'a', None, 'copy_new'), ('a', 'b', 'a', 'replace_requires_archive'),
+    ('a', 'a', 'b', 'target_changed_preserve'), ('a', 'a', None, 'target_changed_preserve'),
+    ('a', 'b', 'c', 'conflict'), (None, 'a', 'b', 'conflict'),
+    ('a', None, 'a', 'source_absent_preserve_target'),
+    (None, None, 'a', 'source_absent_preserve_target'),
+    ('a', None, 'b', 'source_absent_preserve_target'),
+])
+def test_three_way_contract(base, old, new, expected):
+    assert delta.classify(item(base), item(old), item(new)) == expected
+
+
+@pytest.fixture(autouse=True)
+def service_account_for_ci(monkeypatch):
+    # CI may not have Samba's passwd entry; substitute only the expected UID.
+    import os
+    from types import SimpleNamespace
+
+    def account(name):
+        assert name == 'samba'
+        return SimpleNamespace(pw_uid=os.geteuid())
+
+    monkeypatch.setattr(seed.pwd, 'getpwnam', account)
+
+
+@pytest.fixture
+def baseline(tmp_path):
+    sources = {}
+    for name in sorted(seed.NAMES):
+        root = tmp_path / 'old' / name
+        root.mkdir(parents=True)
+        (root / 'original.txt').write_bytes(b'initial')
+        sources[name] = str(root)
+    return seed.seed(seed.plan(sources, tmp_path / 'shared'))
+
+
+def test_real_three_way_scan_is_nonmutating(baseline):
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    (old / 'added.txt').write_bytes(b'new file')
+    (old / 'original.txt').write_bytes(b'changed source')
+    (new / 'independent.txt').write_bytes(b'new runtime file')
+    before = (seed.inventory(old), seed.inventory(new))
+    report = delta.compare(baseline)
+    assert report['ready_for_activation'] is False
+    assert report['requires_quiesced_recheck'] is True
+    assert report['summary']['stats']['classifications'] == {
+        'copy_new': 1, 'replace_requires_archive': 1, 'source_absent_preserve_target': 1}
+    assert (seed.inventory(old), seed.inventory(new)) == before
+
+
+def test_mtime_alone_does_not_propose_replacement():
+    original = item('same')
+    touched = dict(original, mtime_ns=900)
+    assert delta.classify(original, touched, original) == 'unchanged'
+    assert delta.classify(None, {'size': 0, 'sha256': 'empty'}, None) == 'copy_new'
+
+
+def test_changed_inventory_refuses(baseline, monkeypatch):
+    actual = delta.inventory
+    calls = 0
+    def drift(root):
+        nonlocal calls
+        calls += 1
+        result = actual(root)
+        if calls > 14 and root == Path(baseline['sources']['stats']):
+            result['files'] = {}
+        return result
+    monkeypatch.setattr(delta, 'inventory', drift)
+    with pytest.raises(ValueError, match='changed during comparison'):
+        delta.compare(baseline)
+
+
+@pytest.mark.parametrize('damage', ['dry_run', 'overlap', 'missing_scope', 'symlink'])
+def test_bad_scope_refused(baseline, damage):
+    record = copy.deepcopy(baseline)
+    if damage == 'dry_run':
+        record['status'] = 'dry_run_not_copied'
+    elif damage == 'overlap':
+        record['sources']['stats'] = record['sources']['gametimes']
+    elif damage == 'missing_scope':
+        record['sources'].pop('stats')
+    else:
+        (Path(record['state']) / 'data/stats/link').symlink_to(record['sources']['stats'])
+    with pytest.raises(ValueError):
+        delta.compare(record)
+
+
+@pytest.mark.parametrize('side', ['source', 'target'])
+def test_file_directory_collision_is_never_copy_new(baseline, side):
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    file_root, dir_root = (old, new) if side == 'source' else (new, old)
+    (file_root / 'collision').write_text('file')
+    (dir_root / 'collision').mkdir()
+    (dir_root / 'collision/child').write_text('child')
+    changes = delta.compare(baseline)['changes']['stats']
+    assert changes['collision']['classification'] == 'path_type_conflict'
+    assert changes['collision/child']['classification'] == 'path_type_conflict'
+
+
+@pytest.mark.parametrize('damage', ['list', 'path', 'hash', 'bool_size', 'dirs'])
+def test_malformed_baseline_refused(baseline, damage):
+    group = baseline['inventory']['stats']
+    if damage == 'list':
+        group['files'] = []
+    elif damage == 'path':
+        group['files']['../escape'] = group['files'].pop('original.txt')
+    elif damage == 'hash':
+        group['files']['original.txt']['sha256'] = 'invalid'
+    elif damage == 'bool_size':
+        group['files']['original.txt']['size'] = True
+    else:
+        group['directories'] = ['original.txt']
+    with pytest.raises(ValueError):
+        delta.compare(baseline)
+
+
+def test_cli_malformed_source_map_returns_structured_refusal(tmp_path, capsys):
+    baseline = tmp_path / 'invalid.json'
+    baseline.write_text(json.dumps({'sources': [], 'state': str(tmp_path / 'shared')}))
+    report = tmp_path / 'not-created.json'
+    assert delta.main(['--seed-report', str(baseline), '--report', str(report)]) == 1
+    assert json.loads(capsys.readouterr().out)['status'] == 'refused'
+    assert not report.exists()
+
+
+@pytest.mark.parametrize('base_kind,source_kind,target_kind,expected', [
+    ('file', 'absent', 'directory', 'source_absent_preserve_target'),
+    ('file', 'directory', 'absent', 'conflict'),
+    ('directory', 'absent', 'directory', 'source_absent_preserve_target'),
+    ('directory', 'directory', 'absent', 'target_changed_preserve'),
+    ('directory', 'file', 'absent', 'conflict'),
+    ('absent', 'directory', 'absent', 'copy_new'),
+    ('absent', 'absent', 'directory', 'source_absent_preserve_target'),
+    ('directory', 'absent', 'absent', 'converged'),
+    ('file', 'directory', 'directory', 'converged'),
+    ('directory', 'file', 'file', 'converged'),
+])
+def test_native_empty_directory_three_way_state(baseline, base_kind, source_kind, target_kind, expected):
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    group = baseline['inventory']['stats']
+    name = 'kind-change'
+    # Define a valid baseline snapshot; current trees then independently evolve.
+    if base_kind == 'directory':
+        group['directories'].append(name)
+    elif base_kind == 'file':
+        group['files'][name] = {'size': 0, 'mtime_ns': 1,
+                               'sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'}
+    for root, kind in ((old, source_kind), (new, target_kind)):
+        if kind == 'directory':
+            (root / name).mkdir()
+        elif kind == 'file':
+            (root / name).write_bytes(b'')
+    before = seed.inventory(old), seed.inventory(new)
+    result = delta.compare(baseline)
+    change = result['changes']['stats'][name]
+    assert change['classification'] == expected
+    for label, kind in (('baseline', base_kind), ('source', source_kind), ('target', target_kind)):
+        assert change[label] is None if kind == 'absent' else change[label]['kind'] == kind
+    assert (seed.inventory(old), seed.inventory(new)) == before
+    assert result['summary']['stats']['source_directories'] == (source_kind == 'directory')
+    assert result['summary']['stats']['target_directories'] == (target_kind == 'directory')
+
+
+def test_content_tokens_have_fixed_shape_and_distinct_path_kinds():
+    directory = delta.content({'kind': 'directory'})
+    empty_file = delta.content({'kind': 'file', 'size': 0, 'sha256': 'empty'})
+    assert directory == ('directory', None, None)
+    assert empty_file == ('file', 0, 'empty')
+    assert len(directory) == len(empty_file) == 3
+    assert directory != empty_file and delta.content(None) is None
+
+
+def test_pre_epoch_timestamp_survives_seed_and_delta(tmp_path):
+    import os
+
+    sources = {}
+    for name in sorted(seed.NAMES):
+        root = tmp_path / 'old' / name
+        root.mkdir(parents=True)
+        sources[name] = str(root)
+    original = Path(sources['stats']) / 'before-epoch.txt'
+    original.write_bytes(b'pre-epoch synthetic source')
+    stamp = -1_000_000_000
+    os.utime(original, ns=(stamp, stamp))
+    assert original.stat().st_mtime_ns == stamp
+    baseline = seed.seed(seed.plan(sources, tmp_path / 'shared'))
+    copied = Path(baseline['state']) / 'data/stats/before-epoch.txt'
+    assert copied.stat().st_mtime_ns == stamp
+    assert baseline['inventory']['stats']['files']['before-epoch.txt']['mtime_ns'] == stamp
+    before = seed.inventory(original.parent), seed.inventory(copied.parent)
+    report = delta.compare(baseline)
+    assert report['changes']['stats'] == {}
+    assert report['summary']['stats']['classifications'] == {'unchanged': 1}
+    assert (seed.inventory(original.parent), seed.inventory(copied.parent)) == before
+
+
+@pytest.mark.parametrize('bad', [True, False, 1.5, '-1', None])
+def test_timestamp_requires_integer_not_nonnegative(baseline, bad):
+    baseline['inventory']['stats']['files']['original.txt']['mtime_ns'] = bad
+    with pytest.raises(ValueError, match='file metadata'):
+        delta.compare(baseline)
+
+
+@pytest.mark.parametrize('nested', [False, True])
+def test_baseline_type_conflict_blocks_descendant_copy_candidates(baseline, nested):
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    parent = 'outer/a' if nested else 'a'
+    before = old / parent
+    before.parent.mkdir(parents=True, exist_ok=True)
+    before.write_bytes(b'baseline file')
+    if nested:
+        baseline['inventory']['stats']['directories'].append('outer')
+        (new / 'outer').mkdir()
+    baseline['inventory']['stats']['files'][parent] = seed.fingerprint(before)
+    (new / parent).write_bytes(b'baseline file')
+    (new / parent).unlink()
+    # Independent target removal conflicts with replacing a baseline file by a directory.
+    before.unlink()
+    before.mkdir()
+    (before / 'deep').mkdir()
+    (before / 'deep/child').write_bytes(b'new source bytes')
+    snapshot = seed.inventory(old), seed.inventory(new)
+    report = delta.compare(baseline)
+    changes = report['changes']['stats']
+    assert changes[parent]['classification'] == 'conflict'
+    assert changes[parent + '/deep']['classification'] == 'path_type_conflict'
+    assert changes[parent + '/deep/child']['classification'] == 'path_type_conflict'
+    assert (seed.inventory(old), seed.inventory(new)) == snapshot
+
+
+def test_native_cli_type_conflict_preserves_trees(baseline, tmp_path):
+    import subprocess
+    import sys
+
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    path = old / 'a'
+    path.write_bytes(b'baseline')
+    baseline['inventory']['stats']['files']['a'] = seed.fingerprint(path)
+    (new / 'a').write_bytes(b'baseline')
+    (new / 'a').unlink()
+    path.unlink()
+    path.mkdir()
+    (path / 'child').write_bytes(b'new source')
+    before = seed.inventory(old), seed.inventory(new)
+    report = tmp_path / 'delta.json'
+    initial = tmp_path / 'seed.json'
+    initial.write_text(json.dumps(baseline))
+    result = subprocess.run([sys.executable, '-B', delta.__file__, '--seed-report', str(initial),
+                             '--report', str(report)], capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    value = json.loads(report.read_text())
+    assert value['changes']['stats']['a/child']['classification'] == 'path_type_conflict'
+    assert value['ready_for_activation'] is False
+    assert (seed.inventory(old), seed.inventory(new)) == before
+
+
+@pytest.mark.parametrize('nested', [False, True])
+def test_target_deleted_directory_preserves_added_descendants(baseline, tmp_path, nested):
+    import subprocess
+    import sys
+
+    old = Path(baseline['sources']['stats'])
+    new = Path(baseline['state']) / 'data/stats'
+    parent = 'outer/a' if nested else 'a'
+    (old / parent).mkdir(parents=True)
+    (new / parent).mkdir(parents=True)
+    baseline['inventory']['stats'] = seed.inventory(old)
+    (new / parent).rmdir()
+    (old / parent / 'deep').mkdir()
+    (old / parent / 'empty').mkdir()
+    (old / parent / 'deep/child').write_bytes(b'new source')
+    (old / parent / 'zero').write_bytes(b'')
+    # A genuinely new sibling remains eligible; only deleted ancestry fences copying.
+    (old / 'sibling').write_bytes(b'new sibling')
+    before = seed.inventory(old), seed.inventory(new)
+    initial, report = tmp_path / 'seed.json', tmp_path / 'delta.json'
+    initial.write_text(json.dumps(baseline))
+    result = subprocess.run([sys.executable, '-B', delta.__file__, '--seed-report', str(initial),
+                             '--report', str(report)], capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    native = json.loads(report.read_text())
+    measured = delta.compare(baseline)
+    assert native == measured
+    changes = measured['changes']['stats']
+    for suffix in ('', '/deep', '/empty', '/deep/child', '/zero'):
+        assert changes[parent + suffix]['classification'] == 'target_changed_preserve'
+    assert changes['sibling']['classification'] == 'copy_new'
+    assert measured['ready_for_activation'] is False
+    assert (seed.inventory(old), seed.inventory(new)) == before

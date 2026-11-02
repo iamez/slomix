@@ -8,6 +8,7 @@ import json
 from bisect import bisect_left
 from collections import defaultdict
 
+from shared.proximity_paths import capture_segments, in_capture_gap
 from website.backend.logging_config import get_app_logger
 from website.backend.utils.et_constants import strip_et_colors
 
@@ -46,8 +47,10 @@ def _ensure_path_list(path) -> list:
 
 
 def _find_position_at_time(path: list, target_ms: int) -> dict | None:
-    """Binary search path array for nearest sample to target time."""
+    """Nearest sample, except inside an explicitly unobserved capture gap."""
     if not path:
+        return None
+    if in_capture_gap(path, target_ms):
         return None
 
     times = [s.get("time", 0) for s in path]
@@ -441,6 +444,7 @@ async def get_player_positions(db, round_id: int, time_ms: int) -> dict:
         player_tracks[guid].append(t)
 
     players = []
+    gaps = {}
     for guid, track_list in player_tracks.items():
         active = None
         last_before_t = None
@@ -487,12 +491,15 @@ async def get_player_positions(db, round_id: int, time_ms: int) -> dict:
                 "alive": alive,
                 "stance": pos.get("stance"),
             })
+        else:
+            gaps[guid] = "capture_discontinuity" if in_capture_gap(path, lookup_time) else "no_position_samples"
 
     return {
         "t_ms": time_ms,
         "map_name": map_name,
         "player_count": len(players),
         "players": players,
+        "gaps": gaps,
     }
 
 
@@ -524,26 +531,29 @@ async def get_player_paths(db, round_id: int, from_ms: int, to_ms: int) -> dict:
         if not path:
             continue
 
-        # Extract sub-array within [from_ms, to_ms]
-        sub_path = [s for s in path if from_ms <= s.get("time", 0) <= to_ms]
-        if not sub_path:
-            continue
-
-        player_paths.append({
-            "guid": t[0],
-            "name": strip_et_colors(t[1]),
-            "team": t[2],
-            "class": t[3],
-            "spawn_time_ms": t[4],
-            "death_time_ms": t[5],
-            "samples": sub_path,
-        })
+        # Split BEFORE clipping: even a client ignorant of marker semantics must
+        # receive separate polylines, never a line crossing an explicit gap.
+        for segment_index, segment in enumerate(capture_segments(path)):
+            sub_path = [s for s in segment if from_ms <= s.get("time", 0) <= to_ms]
+            if not sub_path:
+                continue
+            player_paths.append({
+                "guid": t[0],
+                "name": strip_et_colors(t[1]),
+                "team": t[2],
+                "class": t[3],
+                "spawn_time_ms": t[4],
+                "death_time_ms": t[5],
+                "segment_index": segment_index,
+                "samples": sub_path,
+            })
 
     return {
         "round_id": round_id,
         "map_name": map_name,
         "from_ms": from_ms,
         "to_ms": to_ms,
-        "player_count": len(player_paths),
+        "player_count": len({p["guid"] for p in player_paths}),
+        "segment_count": len(player_paths),
         "paths": player_paths,
     }

@@ -19372,7 +19372,7 @@
   },
   "/api/retro-viz/gallery": {
    "get": {
-    "description": "List PNG files in the retro-viz output directory.",
+    "description": "List the same public PNG-only directory served by the gallery mount.",
     "operationId": "get_retro_viz_gallery_api_retro_viz_gallery_get",
     "responses": {
      "200": {

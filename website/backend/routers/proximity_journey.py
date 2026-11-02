@@ -11,8 +11,11 @@ Strictly round-scoped (session_date + map_name + round_number required) to
 keep payloads bounded (~100-300 KB for a long round).
 """
 
-from fastapi import APIRouter, Depends, Query
+import math
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+from shared.proximity_paths import capture_segments
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.routers.proximity_helpers import (
@@ -20,6 +23,7 @@ from website.backend.routers.proximity_helpers import (
     _parse_json_field,
     logger,
 )
+from website.backend.services.track_lifecycle import track_end_sql
 from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
@@ -30,92 +34,119 @@ SERIES_BUCKET_MS = 1000
 SOLO_RADIUS = 500  # units from nearest teammate = "solo" (lurker convention)
 
 
-def _last_event(path: list) -> str | None:
-    """The `event` of the last path point, when the tracker wrote one."""
-    if not path:
+def _raw_track_span(start: int | None, end: int | None) -> int | None:
+    """Raw source-clock span, NOT pause-adjusted active time; end0 is unknown."""
+    if start is None or end is None or start < 0 or end <= 0 or end < start:
         return None
-    last = path[-1]
-    ev = last.get("event") if isinstance(last, dict) else None
-    return str(ev) if ev else None
+    return end - start
+
+
+def _event_owner(time: int | None, rows: list) -> tuple[int | None, str | None]:
+    """Require one known closed window; no inferred end or boundary tiebreak."""
+    if time is None or time < 0:
+        return None, "missing_or_negative_timestamp"
+    candidates = []
+    for index, row in enumerate(rows):
+        start, end = row[4], row[5]
+        known = _raw_track_span(start, end) is not None
+        if start is not None and start >= 0 and time < start:
+            continue
+        # An invalid/reversed interval supplies no reliable upper bound.
+        if known and time > end:
+            continue
+        candidates.append((index, known))
+    if len(candidates) != 1:
+        return None, "ambiguous_life_windows" if candidates else "outside_life_windows"
+    index, known = candidates[0]
+    return (index, None) if known else (None, "unknown_life_bounds")
 
 
 def _downsample_path(path: list, step_ms: int) -> list[dict]:
     """Thin a 200ms path to step_ms, keeping the rich per-point fields."""
     out: list[dict] = []
     last_t = -step_ms
+    segmented = capture_segments(path or [])
+    boundary_ids = {id(segment[0]) for segment in segmented[1:]}
     for p in path or []:
         try:
             t = int(p.get("time", 0))
         except (TypeError, AttributeError):
             continue
-        if t - last_t >= step_ms:
+        boundary = id(p) in boundary_ids or p.get("event") == "capture_resume"
+        if boundary or t - last_t >= step_ms:
             out.append({
                 "t": t,
-                "x": float(p.get("x", 0)),
-                "y": float(p.get("y", 0)),
-                "z": float(p.get("z", 0)),
+                "x": float(p["x"]) if p.get("x") is not None else None,
+                "y": float(p["y"]) if p.get("y") is not None else None,
+                "z": float(p["z"]) if p.get("z") is not None else None,
                 "health": p.get("health"),
                 "speed": p.get("speed"),
                 "stance": p.get("stance"),
                 "sprint": p.get("sprint"),
                 "event": p.get("event"),
+                "break_before": boundary,
             })
             last_t = t
     return out
 
 
-def _bucket_points(path: list) -> dict[int, tuple[int, float, float]]:
-    """Map 1s bucket -> (time, x, y), one representative point per bucket."""
-    buckets: dict[int, tuple[int, float, float]] = {}
+def _observations(path: list):
+    """Finite source positions only; missing fields are not zero coordinates."""
     for p in path or []:
-        try:
-            t = int(p.get("time", 0))
-            x = float(p.get("x", 0))
-            y = float(p.get("y", 0))
-        except (TypeError, AttributeError, ValueError):
+        if not isinstance(p, dict):
             continue
+        t, x, y = p.get("time"), p.get("x"), p.get("y")
+        if type(t) is not int or t < 0:
+            continue
+        if any(type(v) not in (int, float) or not math.isfinite(v) for v in (x, y)):
+            continue
+        yield t, float(x), float(y)
+
+
+def _bucket_points(path: list) -> dict[int, tuple[int, float, float]]:
+    """One actual subject observation per second; no fabricated coordinates."""
+    buckets: dict[int, tuple[int, float, float]] = {}
+    for t, x, y in _observations(path):
         buckets.setdefault(t // SERIES_BUCKET_MS, (t, x, y))
     return buckets
 
 
-def _nearest_in_buckets(
-    bucket: int, x: float, y: float,
-    others: list[dict[int, tuple[int, float, float]]],
-) -> tuple[float, int]:
-    """(nearest distance, count within SOLO_RADIUS) vs other players' buckets.
-
-    Probes the +-1 neighbouring buckets so a 1s sampling phase shift between
-    two tracks cannot make a teammate invisible.
-    """
-    nearest = float("inf")
-    within = 0
-    for buckets in others:
-        best = float("inf")
-        for b in (bucket - 1, bucket, bucket + 1):
-            pt = buckets.get(b)
-            if pt is None:
-                continue
-            d = ((x - pt[1]) ** 2 + (y - pt[2]) ** 2) ** 0.5
-            if d < best:
-                best = d
-        if best < nearest:
-            nearest = best
-        if best <= SOLO_RADIUS:
-            within += 1
-    return nearest, within
+def _simultaneous_neighbours(t: int, x: float, y: float, team: str, observations: dict) -> dict:
+    """One unambiguous position per GUID at this exact raw timestamp."""
+    friends, enemies = [], []
+    ambiguous = 0
+    for positions in observations.get(t, {}).values():
+        if len(positions) != 1:
+            ambiguous += 1
+            continue
+        other_team, ox, oy = next(iter(positions))
+        distance = math.hypot(x - ox, y - oy)
+        (friends if other_team == team else enemies).append(distance)
+    return {
+        "t": t,
+        "nearest_teammate": round(min(friends), 1) if friends else None,
+        "nearest_enemy": round(min(enemies), 1) if enemies else None,
+        "teammates_500u": sum(d <= SOLO_RADIUS for d in friends),
+        "enemies_500u": sum(d <= SOLO_RADIUS for d in enemies),
+        "observed_teammates": len(friends),
+        "observed_enemies": len(enemies),
+        "ambiguous_players": ambiguous,
+    }
 
 
 def _life_narrative(life: dict, player_name: str) -> str:
     """One human sentence per life, storytelling style."""
     parts: list[str] = []
-    dur_s = (life["duration_ms"] or 0) / 1000
+    raw_ms = life.get("raw_duration_ms")
     cls = life.get("player_class") or "player"
-    parts.append(f"{player_name} spawned as {cls}, lived {dur_s:.0f}s")
+    elapsed = (f"raw track span {raw_ms / 1000:.0f}s (may include pauses)"
+               if raw_ms is not None else "raw track span unavailable")
+    parts.append(f"{player_name} spawned as {cls}, {elapsed}")
     solo = life.get("solo_pct")
     if solo is not None and solo >= 50:
-        parts.append(f"mostly alone ({solo:.0f}% solo)")
+        parts.append(f"observed teammates farther than 500u in {solo:.0f}% of covered samples")
     elif solo is not None and solo <= 15:
-        parts.append("glued to the team")
+        parts.append("near observed teammates in most covered samples")
     kills = life.get("kills") or []
     if kills:
         denials = [k["time_to_next_spawn"] for k in kills if k.get("time_to_next_spawn")]
@@ -134,8 +165,10 @@ def _life_narrative(life: dict, player_name: str) -> str:
             parts.append(f"downed by {killer or 'the enemy'} but revived")
         elif outcome:
             parts.append(f"died to {killer or 'the world'} ({outcome})")
-    elif life.get("death_type") == "round_end":
+    elif not life.get("deaths") and life.get("death_type") == "round_end":
         parts.append("survived to the end of the round")
+    if life.get("event_assignment_unavailable"):
+        parts.append(life["event_assignment_unavailable"])
     return ", ".join(parts) + "."
 
 
@@ -155,13 +188,19 @@ async def get_player_journey(
     )
 
     guid = player_guid.strip().upper()
+    elapsed_time_quality = {
+        "basis": "raw_source_timestamps",
+        "active_time_verified": False,
+        "reason": "Raw spans may include pauses; active life time is not verified.",
+        "excludes": "Missing/negative spawn, missing/zero end sentinel, or reversed end.",
+    }
     # All tracks for the round — the subject's lives plus everyone else for
     # the nearest-teammate/enemy series (~80 tracks/round, cheap).
     track_rows = await db.fetch_all(
         f"""
         SELECT player_guid, player_name, team, player_class,
                spawn_time_ms, death_time_ms, duration_ms, path,
-               total_distance, sprint_percentage
+               total_distance, sprint_percentage, {track_end_sql()} AS death_type
         FROM player_track
         {where_sql}
         ORDER BY spawn_time_ms
@@ -170,14 +209,31 @@ async def get_player_journey(
     )
 
     subject_rows = [r for r in (track_rows or []) if (r[0] or "").upper().startswith(guid)]
+    if len({(r[0] or "").upper() for r in subject_rows}) > 1:
+        raise HTTPException(status_code=409, detail="Ambiguous player GUID prefix; use a full GUID.")
     if not subject_rows:
         return {
             "status": "ok", "scope": scope, "player": None, "lives": [],
-            "summary": {"lives": 0},
+            "summary": {"lives": 0, "avg_life_s": None,
+                        "avg_raw_span_s": None, "raw_span_samples": 0},
+            "elapsed_time_quality": elapsed_time_quality,
+            "event_assignment": {"status": "unavailable", "reason": "No matching tracks; event lookups not performed."},
+            "unassigned_events": [],
             "message": "No tracks for this player in the selected round.",
         }
 
     subject_guid = subject_rows[0][0]
+    # Interim conservative scope gate: neighbouring bucket probes do not yet
+    # carry per-segment coverage, so any declared gap invalidates this series.
+    proximity_unavailable = (
+        "Proximity unavailable: capture interruption in the selected round; "
+        "segment-aware neighbour coverage is not yet available."
+        if any(
+            p.get("event") == "capture_resume"
+            for row in (track_rows or [])
+            for p in (_parse_json_field(row[7]) or [])
+        ) else None
+    )
     subject_team = subject_rows[0][2]
     player = {
         "guid": subject_guid,
@@ -226,7 +282,7 @@ async def get_player_journey(
         )
         objective_events += [
             {
-                "type": "carrier", "time": int(r[0] or 0), "end_time": int(r[1] or 0),
+                "type": "carrier", "time": int(r[0]) if r[0] is not None else None, "end_time": int(r[1] or 0),
                 "outcome": r[2], "carry_distance": float(r[3] or 0), "flag_team": r[4],
             }
             for r in (carrier_rows or [])
@@ -242,7 +298,7 @@ async def get_player_journey(
         )
         objective_events += [
             {
-                "type": "objective_run", "time": int(r[0] or 0),
+                "type": "objective_run", "time": int(r[0]) if r[0] is not None else None,
                 "action": r[1], "objective": r[2], "run_type": r[3],
             }
             for r in (run_rows or [])
@@ -257,7 +313,8 @@ async def get_player_journey(
             tuple(guid_params),
         )
         objective_events += [
-            {"type": "construction", "time": int(r[0] or 0), "action": r[1], "objective": r[2]}
+            {"type": "construction", "time": int(r[0]) if r[0] is not None else None,
+             "action": r[1], "objective": r[2]}
             for r in (constr_rows or [])
         ]
     except Exception as exc:
@@ -268,37 +325,58 @@ async def get_player_journey(
         objective_events_unavailable = f"objective lookup failed: {type(exc).__name__}"
         objective_events = []
 
-    # Bucket every OTHER player's path once for the proximity series.
-    others: list[dict] = []
+    kill_owners = [_event_owner(k[0], subject_rows) for k in (kill_rows or [])]
+    objective_owners = [_event_owner(e["time"], subject_rows) for e in objective_events]
+    unassigned_events = [
+        {"kind": "combat", "time": k[0], "killer_guid": k[1], "victim_guid": k[3],
+         "outcome": k[5], "reason": owner[1]}
+        for k, owner in zip(kill_rows or [], kill_owners) if owner[0] is None
+    ] + [
+        {**e, "kind": "objective", "reason": owner[1]}
+        for e, owner in zip(objective_events, objective_owners) if owner[0] is None
+    ]
+    event_assignment_unavailable = (
+        f"event attribution incomplete: {len(unassigned_events)} source events have no unique known life"
+        if unassigned_events else None
+    )
+
+    # Index all observations once: subject downsampling must not discard the
+    # simultaneous neighbour point. A repeated GUID never adds a second player.
+    observations: dict = {}
     for r in (track_rows or []):
-        if r[0] == subject_guid:
+        other_guid = (r[0] or "").upper()
+        if not other_guid or other_guid == subject_guid.upper():
             continue
+        if r[2] not in ("AXIS", "ALLIES"):
+            continue  # Unknown/spectator allegiance is not an observed enemy.
         path = _parse_json_field(r[7]) or []
-        if not path:
-            continue
-        others.append({
-            "team": r[2],
-            "spawn": int(r[4] or 0),
-            "death": int(r[5] or 0) or None,
-            "buckets": _bucket_points(path),
-        })
+        for t, x, y in _observations(path):
+            if r[4] is not None and r[4] >= 0 and t < r[4]:
+                continue
+            if r[5] is not None and r[5] > 0 and t > r[5]:
+                continue
+            observations.setdefault(t, {}).setdefault(other_guid, set()).add((r[2], x, y))
 
     lives = []
     total_kills = 0
     total_deaths = 0
     for idx, r in enumerate(subject_rows, start=1):
+        life_team = r[2]
+        life_proximity_unavailable = proximity_unavailable
+        if life_team not in ("AXIS", "ALLIES"):
+            life_proximity_unavailable = "Proximity unavailable: this track has no known playing team."
         spawn_ms = int(r[4] or 0)
         death_ms = int(r[5] or 0) or None
-        end_ms = death_ms if death_ms is not None else float("inf")
         path = _parse_json_field(r[7]) or []
 
         # Kills/death inside this life window.
         kills = []
         death = None
-        for k in (kill_rows or []):
-            kt = int(k[0] or 0)
-            if not (spawn_ms <= kt <= end_ms):
+        deaths = []
+        for k, owner in zip(kill_rows or [], kill_owners):
+            if owner[0] != idx - 1:
                 continue
+            kt = int(k[0])
             st = st_by_kill.get((kt, k[1], k[3]))
             if k[1] == subject_guid:
                 kills.append({
@@ -319,77 +397,94 @@ async def get_player_journey(
                     # victim-side wait the death cost (seconds to next wave)
                     "victim_wait_ms": int(st[4]) if st else None,
                 }
+                deaths.append(death)
+        # The legacy singular slot cannot represent multiple source outcomes.
+        # Keep every record, but do not silently pick the last as definitive.
+        if len(deaths) > 1:
+            death = None
         total_kills += len(kills)
-        if death:
-            total_deaths += 1
+        total_deaths += len(deaths)
 
-        # 1s proximity series vs teammates and enemies alive at that moment.
+        # Sampled proximity vs simultaneous positions, not a full alive roster.
         series = []
         solo_samples = 0
-        for bp in _bucket_points(path).values():
+        observed_team_samples = 0
+        for bp in ([] if life_proximity_unavailable else _bucket_points(path).values()):
             t, x, y = bp
-            alive_team = [
-                o["buckets"] for o in others
-                if o["team"] == subject_team
-                and o["spawn"] <= t <= (o["death"] or float("inf"))
-            ]
-            alive_enemy = [
-                o["buckets"] for o in others
-                if o["team"] != subject_team
-                and o["spawn"] <= t <= (o["death"] or float("inf"))
-            ]
-            bucket = t // SERIES_BUCKET_MS
-            near_tm, tm_500 = _nearest_in_buckets(bucket, x, y, alive_team)
-            near_en, en_500 = _nearest_in_buckets(bucket, x, y, alive_enemy)
-            if near_tm > SOLO_RADIUS:
-                solo_samples += 1
-            series.append({
-                "t": t,
-                "nearest_teammate": round(near_tm, 1) if near_tm != float("inf") else None,
-                "nearest_enemy": round(near_en, 1) if near_en != float("inf") else None,
-                "teammates_500u": tm_500,
-                "enemies_500u": en_500,
-            })
-        solo_pct = round(solo_samples / len(series) * 100, 1) if series else None
+            sample = _simultaneous_neighbours(t, x, y, life_team, observations)
+            if sample["nearest_teammate"] is not None:
+                observed_team_samples += 1
+                if sample["teammates_500u"] == 0:
+                    solo_samples += 1
+            series.append(sample)
+        solo_pct = (
+            round(solo_samples / observed_team_samples * 100, 1)
+            if observed_team_samples else None
+        )
 
         life_objectives = [
-            e for e in objective_events
-            if spawn_ms <= e["time"] <= end_ms
+            e for e, owner in zip(objective_events, objective_owners)
+            if owner[0] == idx - 1
         ]
 
         life = {
             "life_index": idx,
+            "team": life_team,
             "player_class": r[3],
             "spawn_time_ms": spawn_ms,
             "death_time_ms": death_ms,
             "duration_ms": int(r[6] or 0),
+            # Legacy stored duration above is retained, not certified/repaired.
+            "raw_duration_ms": _raw_track_span(r[4], r[5]),
             "total_distance": float(r[8] or 0),
             "sprint_pct": float(r[9] or 0),
-            # The tracker's last path event names how the life ended
-            # (killed / selfkill / fallen / world / teamkill / disconnect …);
-            # a life without a death time ended with the round.
-            "death_type": "round_end" if death_ms is None else _last_event(path),
+            # No death-time sentinel or positional gap can establish a cause.
+            "death_type": r[10],
             "path": _downsample_path(path, downsample_ms),
             "kills": kills,
             "death": death,
+            "deaths": deaths,
             "proximity_series": series,
+            "proximity_unavailable": life_proximity_unavailable,
+            "solo_basis": "Simultaneous raw-time observations; missing times, conflicting GUID positions and unknown/nonplaying teams excluded, not proof of solitude or a complete alive roster.",
+            "proximity_coverage": {"subject_samples": len(series),
+                                   "samples_with_observed_teammate": observed_team_samples},
             "solo_pct": solo_pct,
             "objective_events": life_objectives,
+            "event_assignment_unavailable": (
+                "; ".join(filter(None, [event_assignment_unavailable,
+                    "multiple death outcomes in this track; singular death unavailable" if len(deaths) > 1 else None]))
+                or None
+            ),
         }
         life["narrative"] = _life_narrative(life, strip_et_colors(player["name"]))
         lives.append(life)
 
-    alive_total_ms = sum(life["duration_ms"] for life in lives)
+    raw_spans = [life["raw_duration_ms"] for life in lives if life["raw_duration_ms"] is not None]
     return {
         "status": "ok",
         "scope": scope,
         "player": player,
         "lives": lives,
+        "elapsed_time_quality": elapsed_time_quality,
+        "event_assignment": {
+            "status": "partial" if unassigned_events or objective_events_unavailable else "assigned",
+            "basis": "Unique known closed source window; shared endpoints are ambiguous.",
+            "scope": "Retrieved combat and objective records only; not evidence of complete capture.",
+            "objective_lookup_unavailable": objective_events_unavailable,
+            "source_events": len(kill_owners) + len(objective_owners),
+            "assigned": len(kill_owners) + len(objective_owners) - len(unassigned_events),
+            "unassigned": len(unassigned_events),
+            "excludes": "Unknown/overlapping life bounds, missing/negative times and events outside lives.",
+        },
+        "unassigned_events": unassigned_events,
         "summary": {
             "lives": len(lives),
             "kills": total_kills,
             "deaths": total_deaths,
-            "avg_life_s": round(alive_total_ms / len(lives) / 1000, 1) if lives else 0,
+            "avg_life_s": None,  # Deprecated: raw spans never certify active life.
+            "avg_raw_span_s": round(sum(raw_spans) / len(raw_spans) / 1000, 1) if raw_spans else None,
+            "raw_span_samples": len(raw_spans),
             "objective_events": None if objective_events_unavailable else len(objective_events),
             "objective_events_unavailable": objective_events_unavailable,
         },

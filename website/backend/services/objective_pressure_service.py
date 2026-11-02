@@ -24,6 +24,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from shared.guid_utils import short_guid
+from shared.proximity_paths import capture_segments
 from website.backend.logging_config import get_app_logger
 from website.backend.utils.et_constants import strip_et_colors
 
@@ -154,25 +155,38 @@ async def compute_objective_pressure(db, session_date, limit: int = 10) -> dict:
     guid_name: dict[str, str] = {}
     maps_counted: set = set()
     by_round: dict[tuple, list] = defaultdict(list)
+    boundary_markers = 0
+    excluded_boundary_points = 0
 
     for t in (tracks or []):
         zones = zones_by_map.get((t["map_name"] or "").lower())
         if not zones:
             continue
         path = t["path"] if isinstance(t["path"], list) else json.loads(t["path"])
-        samples = sorted(
-            (int(s["time"]), float(s["x"]), float(s["y"]), float(s.get("z", 0.0)))
-            for s in path if "time" in s and "x" in s and "y" in s
-        )
-        if not samples:
-            continue
+        # Keep boundary-only points even if coordinates are absent; filtering
+        # those out first silently joins samples across an explicit gap.
+        ordered = sorted((s for s in path if "time" in s or s.get("event") == "capture_resume"),
+                         key=lambda s: int(s.get("time", 0)))
+        boundary_markers += sum(s.get("event") == "capture_resume" for s in ordered)
+        boundary_times = {s.get("time") for s in ordered if s.get("event") == "capture_resume"}
         guid = t["player_guid"]
-        # last seen name wins (tracks come out in row order; good enough for a label)
-        guid_name[guid] = strip_et_colors(t["player_name"] or guid[:8])
-        maps_counted.add(t["map_name"])
-        by_round[(t["round_start_unix"], t["round_number"], t["map_name"])].append(
-            (t["team"], guid, samples)
-        )
+        for segment in capture_segments(ordered):
+            samples = []
+            for s in segment:
+                if s["time"] in boundary_times:
+                    excluded_boundary_points += 1
+                    continue  # a baseline/duplicate is not presence or duration credit
+                if "x" in s and "y" in s:
+                    samples.append((int(s["time"]), float(s["x"]), float(s["y"]), float(s.get("z", 0.0))))
+            if samples:
+                # Preserve the legacy numeric tuple ordering inside each
+                # contiguous segment (including duplicate-time coordinate ties).
+                samples.sort()
+                guid_name[guid] = strip_et_colors(t["player_name"] or guid[:8])
+                maps_counted.add(t["map_name"])
+                by_round[(t["round_start_unix"], t["round_number"], t["map_name"])].append(
+                    (t["team"], guid, samples)
+                )
 
     for (_rsu, _rnum, mapname), rtracks in by_round.items():
         _accumulate_round(rtracks, zones_by_map[(mapname or "").lower()], pressure)
@@ -221,6 +235,13 @@ async def compute_objective_pressure(db, session_date, limit: int = 10) -> dict:
         "maps_counted": len(maps_counted),
         "top_fragger_guids": top_fragger_guids,
         "players": all_players,
+        "capture_quality": {
+            "policy": "explicit_path_boundaries_v1",
+            "status": "partial" if boundary_markers else "unknown",
+            "boundary_markers": boundary_markers,
+            "excluded_boundary_points": excluded_boundary_points,
+            "reason": "explicit_gaps_excluded" if boundary_markers else "no_pause_free_clock_proof",
+        },
     }
     _CACHE[cache_key] = (full, time.monotonic())
     _evict_oldest()

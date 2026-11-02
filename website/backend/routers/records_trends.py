@@ -1,11 +1,11 @@
 """Records sub-router: Stats trends and retro-viz gallery endpoints."""
 
-import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -16,6 +16,7 @@ from website.backend.routers.api_helpers import (
 from website.backend.routers.api_helpers import (
     normalize_map_name as _normalize_map_name,
 )
+from website.backend.services.retro_viz_store import gallery
 
 router = APIRouter()
 
@@ -162,32 +163,5 @@ async def get_stats_trends(
 
 @router.get("/retro-viz/gallery")
 async def get_retro_viz_gallery():
-    """List PNG files in the retro-viz output directory."""
-    gallery_dir = os.path.join(os.path.dirname(__file__), "..", "..", "data", "retro-viz")
-    gallery_dir = os.path.normpath(gallery_dir)
-
-    if not os.path.isdir(gallery_dir):
-        return {"images": []}
-
-    images = []
-    try:
-        for fname in sorted(os.listdir(gallery_dir)):
-            if not fname.lower().endswith(".png"):
-                continue
-            fpath = os.path.join(gallery_dir, fname)
-            if not os.path.isfile(fpath):
-                continue
-            # Prevent symlink traversal outside gallery directory
-            if not os.path.realpath(fpath).startswith(os.path.realpath(gallery_dir)):
-                continue
-            stat = os.stat(fpath)
-            images.append({
-                "filename": fname,
-                "url": f"/data/retro-viz/{fname}",
-                "size": stat.st_size,
-                "modified": datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat(),
-            })
-    except Exception as e:
-        logger.error(f"Retro-viz gallery listing failed: {e}")
-
-    return {"images": images}
+    """List the same public PNG-only directory served by the gallery mount."""
+    return {"images": await run_in_threadpool(gallery.images)}
