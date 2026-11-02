@@ -1,6 +1,18 @@
 ## 2026-11-02 — Approved queue refresh after preceding merge
 
 Owner explicitly approves1103/1104/1105/1106/1109. This PR now includes main
+227a7a5d2f76191d2068b26c070656e307598609; original source delta and both ledger histories are retained.
+Require fresh exact-head CI/review and the full420second pinned merge cycle.
+No service, database, migration, deployment or game action. Original runtime
+caller/package/D4-D5 and wider improvement plans remain authoritative.
+
+## 2026-11-02 — #1108 merged; publish existing timing lifecycle
+
+1108 merged with exact tree proof; existing18path timing publication is next.
+Native CI/review and operational caller remain; all original plans are retained.
+## 2026-11-02 — Approved queue refresh after preceding merge
+
+Owner explicitly approves1103/1104/1105/1106/1109. This PR now includes main
 8f6b637f2cb43433cb1f13073b27315f6088c952; original source delta and both ledger histories are retained.
 Require fresh exact-head CI/review and the full420second pinned merge cycle.
 No service, database, migration, deployment or game action. Original runtime
