@@ -14,6 +14,8 @@ python-dotenv==1.2.2
 asyncpg==0.31.0
 python-multipart==0.0.31
 httpx==0.28.1
+# Application CA bundle; the installer uses its own separately patched bundle.
+certifi==2026.10.19
 itsdangerous==2.2.0
 slowapi==0.1.9
 # Observability (IMP-005): prod runs the web service from venv-web built off
@@ -60,3 +62,6 @@ starlette==1.3.1
 #                 would NOT crash: encryption would silently turn itself off.
 #   aiosqlite     website/backend/local_database_adapter.py, for the SQLite dev
 #                 fallback (scripts/dev_up.sh defaults DATABASE_TYPE=sqlite).
+# Direct crypto API dependency; pin the patched release rather than a transitive choice.
+cryptography==50.0.2
+aiosqlite==0.22.1

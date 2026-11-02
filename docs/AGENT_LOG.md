@@ -2697,6 +2697,34 @@ Two new cases distinguish one-line and multiline malformed input. Focused suite
 135passed; removing the compatibility branch caused1expected failure, restored
 with cmp. Native parsing confirms both the historical error and six retained
 Supply orphan records with no R0. Ruff/diff pass. No service or DB change.
+## 2026-10-27 — DEV Python security replacements prepared, activation pending
+
+Owner scope remains DEV/build tools; old slomix_vm and puran are excluded.
+New isolated role environments were created from the actual installed bot/web
+inventories, preserving current split payload revisions and database roles.
+Both use pip26.2.2, certifi2026.10.19 and cryptography50.0.2; bot additionally
+uses Pillow13.0.0 already pinned on main. Root now explicitly pins the deployed
+Starlette1.3.1 and both manifests declare their direct crypto/trust dependencies.
+Website's previously documented aiosqlite dependency is made explicit as well.
+
+Fresh complete installed-graph audits found0known vulnerabilities for both roles;
+pip check passed twice. New-role interpreters passed78bot and30web checks,
+including real screenshot fixtures and contact encryption. Native Ed25519 and
+bot Paramiko RSA-SHA2 signing/key serialization passed with bundled OpenSSL4.0.3.
+Actual loaded application and pip CA stores exclude distrusted emSign G3;
+the same assertion fails against both old role stores. Trusted pip bootstrap
+was independently hash checked; source-only trueskill0.4.5 required a cached
+wheel whose complete code was compared against hash-verified upstream sdist.
+No source build executed. Private evidence/operational preparation:
+/home/samba/share/slomix-dev-security-20261027.
+
+No active environment, source payload, unit, service, DB or game was changed.
+Copied Python binaries remain3.13.16 with shared system stdlib; Python3.13.18
+base update is still an owner-managed host step, not solved by replacing venvs.
+Role-specific activation readiness is tracked in the private packet; do not use
+the single-release pair generator for today's different bot/web payloads.
+Supply reset investigation and full original runtime plan remain separate,
+retained lanes.1096/1097 approvals persist; no new numbered merge permission.
 
 ## 2026-11-02 — Forward-only reconciliation of existing development PRs
 
