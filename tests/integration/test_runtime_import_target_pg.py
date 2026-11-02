@@ -90,8 +90,18 @@ async def test_pinned_tcp_cli_actual_commit_and_replay(full_import_db, tmp_path,
     await invoke()
     committed = await snapshot()
     expected_rounds = 1 if corrupt_second else 2
-    assert len(committed['rounds']) == len(committed['runtime_events']) == len(committed['processed_files']) == expected_rounds
-    assert len(committed['player_comprehensive_stats']) == 2 * expected_rounds
+    halves = [row for row in committed['rounds'] if row['round_number'] in (1, 2)]
+    summaries = [row for row in committed['rounds'] if row['round_number'] == 0]
+    assert len(halves) == len(committed['runtime_events']) == len(committed['processed_files']) == expected_rounds
+    # The canonical R2 parser still writes a legacy cumulative R0 summary. Keep
+    # it in the full replay snapshot, but never count it as another played half.
+    assert len(summaries) == (0 if corrupt_second else 1)
+    assert len(committed['rounds']) == len(halves) + len(summaries)
+    assert await observer.fetchval('SELECT count(*) FROM rounds WHERE round_number IN (1,2)') == len(halves)
+    played_players = await observer.fetchval('SELECT count(*) FROM player_comprehensive_stats p '
+        'JOIN rounds r ON r.id=p.round_id WHERE r.round_number IN (1,2)')
+    assert played_players == 2 * expected_rounds
+    assert len(committed['player_comprehensive_stats']) == 2 * len(committed['rounds'])
     await invoke()
     assert await snapshot() == committed
     for item, retained in zip(pair, preserved, strict=True):

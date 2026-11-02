@@ -1,3 +1,13 @@
+## 2026-11-02 - Preserve R0 in complete snapshots; count only played halves
+
+Source review confirms the unchanged canonical R2 parser supplies match_summary
+and the manager still inserts R0. Correct the NEW native test's total-row
+assumption before accepting evidence: count played rounds using IN(1,2), check
+R0 independently, retain every R0 row in the complete replay snapshot, and count
+played player rows through the same filtered parent join. This is a measurement
+fix, not deletion of R0 or a change to parser/statistics behavior. Await native
+SQL confirmation on both engines; do not claim predicted counts as DB evidence.
+
 ## 2026-11-02 - CI fixture environment and handoff routing corrected
 
 Initial1111head0ba4a2cf fails4cases on each native engine: two new TCP CLI cases,
