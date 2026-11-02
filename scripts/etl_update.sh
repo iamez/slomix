@@ -9,7 +9,7 @@
 #   - snapshot vs stable mode + version/Lua verification
 #
 # Usage:
-#   etl_update.sh <stable|snapshot> <download-url>
+#   etl_update.sh <stable|snapshot> <download-url> <sha256>
 #
 # Get <download-url> from https://www.etlegacy.com/download — copy the
 #   Linux "x86_64 archive" (.tar.gz) link:
@@ -22,15 +22,23 @@
 
 set -u
 
+# Inspection exits before creating backup/temp directories or invoking controls.
+if [ "${1:-}" = "--inspect" ]; then
+  [ "$#" -eq 3 ] || { echo "Usage: $0 --inspect <archive.tar.gz> <sha256>"; exit 2; }
+  exec python3 "$(dirname "$0")/etl_update_preflight.py" --archive "$2" --sha256 "$3"
+fi
+
 # ----------------------------- config ---------------------------------------
 GAME_DIR="$HOME/etlegacy-v2.83.1-x86_64"          # dir name kept on purpose
 LEGACY_DIR="$GAME_DIR/legacy"
 WATCHDOG_PAT="etlegacy-v2.83.1-x86_64/etdaemon.sh" # pkill -f pattern (watchdog)
 SCREEN_NAME="vektor"
 ETCONSOLE="$HOME/.etlegacy/legacy/etconsole.log"
+HOME_STATE="$HOME/.etlegacy/legacy"
 BACKUP_ROOT="$HOME/backups"
 # Custom files the stock tarball overlays/clobbers — backed up then restored:
 PRESERVE_FILES=(
+  "etmain/legacy.cfg"
   "legacy/omni-bot/et/scripts/et_botnames_ext.gm"
 )
 
@@ -61,24 +69,29 @@ fail_post() {  # failure AFTER overlay — print rollback
 print_rollback() {
   cat <<EOF | tee -a "$LOG"
 
-  ─── ROLLBACK (run manually if needed) ───
-  pkill -f etdaemon.sh; screen -S $SCREEN_NAME -X quit
-  cp "$BACKUP_DIR/etlded.x86_64" "$GAME_DIR/"
-  cp "$BACKUP_DIR/qagame.mp.x86_64.so" "$LEGACY_DIR/"
-  cp "$BACKUP_DIR/"legacy_v*.pk3 "$LEGACY_DIR/"
-  rm -f "$LEGACY_DIR/$NEW_PK3"            # remove the freshly-applied pk3
-  cd "$GAME_DIR" && nohup bash etdaemon.sh > etdaemon.log 2>&1 &
-  ─────────────────────────────────────────
+  Recovery evidence (inspect before restoring):
+    critical files: $BACKUP_DIR
+    complete code:  $BACKUP_DIR/game-base.tar
+    home state:     $BACKUP_DIR/home-state.tar
+    integrity:      $BACKUP_DIR/snapshot.sha256
+  A failure before overlay leaves the installed code unchanged.
+  Use the owner's approved process-control procedure for recovery.
+  Preserve any NEW post-update data and logs before restoring state.
+  Restore a reviewed matching code/state snapshot; core-file-only rollback
+  does not restore every overlaid dependency or persistent format.
 EOF
 }
 
 # ----------------------------- 1) validate args -----------------------------
 MODE="${1:-}"; URL="${2:-}"
+EXPECTED_ARCHIVE_SHA256="${3:-}"
 case "$MODE" in stable|snapshot) ;; *)
-  echo "Usage: $0 <stable|snapshot> <download-url>"; exit 2;; esac
-[ -n "$URL" ] || { echo "Usage: $0 <stable|snapshot> <download-url>"; exit 2; }
+  echo "Usage: $0 <stable|snapshot> <download-url> <sha256>"; exit 2;; esac
+[ -n "$URL" ] || { echo "Usage: $0 <stable|snapshot> <download-url> <sha256>"; exit 2; }
+[[ "$EXPECTED_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]] || { echo "Explicit archive SHA256 third argument required" >&2; exit 2; }
 
 mkdir -p "$BACKUP_ROOT"
+chmod 0700 "$BACKUP_ROOT" || abort "backup directory cannot be made private"
 log "ET:Legacy updater — mode=$MODE"
 log "URL: $URL"
 case "$URL" in
@@ -91,7 +104,11 @@ esac
 CUR_BIN_VER="$(strings "$GAME_DIR/etlded.x86_64" 2>/dev/null | grep -m1 -E 'ET Legacy v[0-9]+\.[0-9]')"
 log "Current binary: ${CUR_BIN_VER:-unknown}"
 FREE_KB="$(df -Pk "$HOME" | awk 'NR==2{print $4}')"
-[ "${FREE_KB:-0}" -gt 524288 ] || abort "Low disk (<512MB free in $HOME)"
+GAME_KB="$(du -sk --apparent-size "$GAME_DIR" | awk '{print $1}')"
+STATE_KB="$(du -sk --apparent-size "$HOME_STATE" | awk '{print $1}')"
+[[ "$GAME_KB" =~ ^[0-9]+$ && "$STATE_KB" =~ ^[0-9]+$ ]] || abort "cannot size complete backup inputs"
+NEEDED_KB=$((GAME_KB + STATE_KB + 524288))
+[ "${FREE_KB:-0}" -gt "$NEEDED_KB" ] || abort "insufficient disk for complete code/state backups plus staging margin"
 HHMM="$(date '+%H%M')"
 if [ "$HHMM" -ge 1955 ] && [ "$HHMM" -le 2005 ]; then
   warn "It is ~20:00 — the daily cron kills etlded now. Consider waiting."
@@ -101,6 +118,9 @@ if [ -f "$ETCONSOLE" ]; then
   RECENT_CONN="$(tail -40 "$ETCONSOLE" 2>/dev/null | grep -c 'ClientBegin')"
   [ "${RECENT_CONN:-0}" -gt 0 ] && warn "Recent ClientBegin in console — make sure server is EMPTY."
 fi
+
+# Refuse unknown or occupied status instead of inferring emptiness from a log tail.
+python3 "$(dirname "$0")/etl_update_preflight.py" --require-empty || abort "server empty-status gate refused"
 
 # ----------------------------- 3) confirm ------------------------------------
 echo
@@ -122,7 +142,7 @@ if command -v wget >/dev/null; then
 else
   curl -fL -o "$DL" "$URL" || abort "download failed"
 fi
-tar -tzf "$DL" >/dev/null 2>&1 || abort "downloaded file is not a valid .tar.gz"
+python3 "$(dirname "$0")/etl_update_preflight.py" --archive "$DL" --sha256 "$EXPECTED_ARCHIVE_SHA256" || abort "archive preflight refused"
 tar -xzf "$DL" -C "$TMP" || abort "extract failed"
 SRC="$(find "$TMP" -maxdepth 1 -type d -name 'etlegacy-v*' | head -1)"
 [ -n "$SRC" ] || abort "extracted etlegacy-v* dir not found"
@@ -147,18 +167,24 @@ ok "pk3 kind matches mode ($MODE)"
 
 # ----------------------------- 6) backup -------------------------------------
 mkdir -p "$BACKUP_DIR"
-cp "$GAME_DIR/etlded.x86_64"            "$BACKUP_DIR/" 2>/dev/null
-cp "$LEGACY_DIR/qagame.mp.x86_64.so"    "$BACKUP_DIR/" 2>/dev/null
-[ -n "$OLD_PK3" ] && cp "$LEGACY_DIR/$OLD_PK3" "$BACKUP_DIR/" 2>/dev/null
+cp "$GAME_DIR/etlded.x86_64" "$BACKUP_DIR/" || abort "engine backup failed"
+cp "$LEGACY_DIR/qagame.mp.x86_64.so" "$BACKUP_DIR/" || abort "server module backup failed"
+[ -n "$OLD_PK3" ] || abort "existing mod package missing"
+cp "$LEGACY_DIR/$OLD_PK3" "$BACKUP_DIR/" || abort "mod package backup failed"
+cmp "$GAME_DIR/etlded.x86_64" "$BACKUP_DIR/etlded.x86_64" || abort "engine backup differs"
+cmp "$LEGACY_DIR/qagame.mp.x86_64.so" "$BACKUP_DIR/qagame.mp.x86_64.so" || abort "server module backup differs"
+cmp "$LEGACY_DIR/$OLD_PK3" "$BACKUP_DIR/$OLD_PK3" || abort "mod package backup differs"
 for rel in "${PRESERVE_FILES[@]}"; do
   if [ -f "$GAME_DIR/$rel" ]; then
     mkdir -p "$BACKUP_DIR/preserve/$(dirname "$rel")"
-    cp "$GAME_DIR/$rel" "$BACKUP_DIR/preserve/$rel"
+    cp "$GAME_DIR/$rel" "$BACKUP_DIR/preserve/$rel" || abort "custom-file backup failed: $rel"
+    cmp "$GAME_DIR/$rel" "$BACKUP_DIR/preserve/$rel" || abort "custom-file backup differs: $rel"
   fi
 done
 ok "Backed up to $BACKUP_DIR"
 
 # ----------------------------- 7) stop (watchdog FIRST!) ---------------------
+python3 "$(dirname "$0")/etl_update_preflight.py" --require-empty || abort "server no longer proven empty before stop"
 log "Stopping server (watchdog first)…"
 pkill -f "$WATCHDOG_PAT" 2>/dev/null; sleep 2
 screen -S "$SCREEN_NAME" -X quit 2>/dev/null; sleep 2
@@ -171,6 +197,15 @@ if pgrep -f 'etlded.x86_64|etdaemon.sh' >/dev/null; then
   abort "could not stop server/watchdog cleanly — server still up, nothing overlaid"
 fi
 ok "Server + watchdog stopped"
+
+# Quiesced snapshots cover the complete overlay and persistent home state.
+# Earlier per-file copies remain an independently compared critical preimage.
+tar -cpf "$BACKUP_DIR/game-base.tar" -C "$GAME_DIR" . || fail_post "complete code backup failed; no overlay performed"
+tar -tf "$BACKUP_DIR/game-base.tar" >/dev/null || fail_post "complete code backup unreadable; no overlay performed"
+tar -cpf "$BACKUP_DIR/home-state.tar" -C "$HOME_STATE" . || fail_post "quiesced state backup failed; no overlay performed"
+tar -tf "$BACKUP_DIR/home-state.tar" >/dev/null || fail_post "quiesced state backup unreadable; no overlay performed"
+sha256sum "$BACKUP_DIR/game-base.tar" "$BACKUP_DIR/home-state.tar" > "$BACKUP_DIR/snapshot.sha256" || fail_post "snapshot hashing failed; no overlay performed"
+sha256sum --check "$BACKUP_DIR/snapshot.sha256" || fail_post "snapshot verification failed; no overlay performed"
 
 # ----------------------------- 8) overlay ------------------------------------
 log "Overlaying new files into $GAME_DIR …"
@@ -187,7 +222,9 @@ ok "Single legacy pk3: $(cd "$LEGACY_DIR" && ls -1 legacy_v*.pk3)"
 # ----------------------------- 10) restore preserved files -------------------
 for rel in "${PRESERVE_FILES[@]}"; do
   if [ -f "$BACKUP_DIR/preserve/$rel" ]; then
-    cp "$BACKUP_DIR/preserve/$rel" "$GAME_DIR/$rel" && ok "Restored custom: $rel"
+    cp "$BACKUP_DIR/preserve/$rel" "$GAME_DIR/$rel" || fail_post "custom-file restore failed: $rel"
+    cmp "$BACKUP_DIR/preserve/$rel" "$GAME_DIR/$rel" || fail_post "custom-file restore differs: $rel"
+    ok "Restored custom: $rel"
   fi
 done
 
@@ -211,18 +248,17 @@ if pgrep -f 'etlded.x86_64' >/dev/null && screen -ls 2>/dev/null | grep -q "$SCR
 else
   fail_post "server did not come back up after restart"
 fi
-# NB: etconsole.log is TRUNCATED on each restart, so the last 5 'loaded into Lua VM'
-# lines are this boot's modules (robust to truncate or append — no byte-offset diff).
-LUA_LOADS="$(grep 'loaded into Lua VM' "$ETCONSOLE" 2>/dev/null | tail -5)"
+# etconsole.log is truncated on restart; verify the exact current boot module set.
+LUA_LOADS="$(grep 'loaded into Lua VM' "$ETCONSOLE" 2>/dev/null)"
 LUA_N="$(printf '%s\n' "$LUA_LOADS" | grep -c 'loaded into Lua VM')"
-log "Lua modules loaded this boot: $LUA_N (expect 5)"
+log "Lua modules loaded this boot: $LUA_N; verifying the exact six-module set"
 printf '%s\n' "$LUA_LOADS" | sed -E 's/.*file .(.*). loaded.*/    \1/' | tee -a "$LOG"
 # real Lua errors this boot (exclude the benign Sys_LoadDll homepath qagame miss)
 LUA_ERR="$(tail -200 "$ETCONSOLE" 2>/dev/null | grep -iE 'nil value|traceback|attempt to|outputData ERROR' | grep -vc 'Sys_LoadDll')"
-if [ "${LUA_N:-0}" -ge 5 ] && [ "${LUA_ERR:-1}" -eq 0 ]; then
+if python3 "$(dirname "$0")/etl_update_preflight.py" --lua-log "$ETCONSOLE" && [ "${LUA_ERR:-1}" -eq 0 ]; then
   ok "All Lua modules loaded, no errors"
 else
-  warn "Lua check: modules=$LUA_N errors=$LUA_ERR — inspect $ETCONSOLE"
+  fail_post "Lua module/error verification failed — inspect $ETCONSOLE"
 fi
 
 # ----------------------------- 14) cleanup + 15) summary ---------------------
