@@ -2866,3 +2866,12 @@ request does not name PR numbers; obtain one explicit numbered decision for this
 five-PR queue.956 release automation and historical NEVER MERGE reviews stay held.
 Resume original runtime caller/package/D4/D5 gates after reconciliation.
 
+
+## 2026-11-02 — Audit opt-out needs a delivery gate and storage needs canonical paths
+
+Fact: main ignored data_audit_discord_enabled=False and attempted delivery; the
+explicit gate preserves local audit findings while requiring delivery opt-in.
+A runtime handover proof also compared a symlink-alias root with its resolved
+current root; actual copied bytes were correct. Apply: observe outbound attempts
+independently of logger severity and compare canonical storage paths plus file
+bytes. Separate DEV/PROD env files do not isolate shared Discord destinations.

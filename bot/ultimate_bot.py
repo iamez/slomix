@@ -1843,53 +1843,12 @@ class UltimateETLegacyBot(
             webhook_logger.error(f"❌ Failed to read gametime file {filename}: {e}")
             return False
 
-        payload = gametime_data.get("payload")
-        if isinstance(payload, str):
-            try:
-                payload = json.loads(payload)
-            except json.JSONDecodeError as e:
-                webhook_logger.error(f"❌ Gametime payload JSON decode failed: {e}")
-                return False
-
-        if not isinstance(payload, dict):
-            webhook_logger.error("❌ Gametime payload missing or invalid")
-            return False
-
-        embeds = payload.get("embeds") or []
-        if not embeds:
-            webhook_logger.warning(f"⚠️ Gametime payload has no embeds: {filename}")
-            return False
-
-        embed = embeds[0] or {}
-        metadata = self._fields_to_metadata_map(embed.get("fields", []))
-        footer_text = None
-        footer = embed.get("footer") if isinstance(embed, dict) else None
-        if isinstance(footer, dict):
-            footer_text = footer.get("text")
-
-        round_metadata = self._build_round_metadata_from_map(metadata, footer_text=footer_text)
-
-        meta = gametime_data.get("meta") or {}
-        if round_metadata.get("map_name") == "unknown" and meta.get("map"):
-            round_metadata["map_name"] = meta.get("map")
-        if round_metadata.get("round_number", 0) == 0 and meta.get("round") is not None:
-            round_metadata["round_number"] = self._normalize_lua_round_for_metadata_paths(
-                meta.get("round")
+        try:
+            metadata, round_metadata, spawn_stats_meta = (
+                self.webhook_round_metadata_service.decode_gametime_document(gametime_data)
             )
-        if round_metadata.get("round_end_unix", 0) == 0 and meta.get("round_end_unix"):
-            round_metadata["round_end_unix"] = int(meta.get("round_end_unix"))
-            round_metadata.setdefault("_correction_present_fields", []).append("round_end_unix")
-        spawn_stats_meta = meta.get("spawn_stats")
-        if isinstance(spawn_stats_meta, str):
-            try:
-                spawn_stats_meta = json.loads(spawn_stats_meta)
-            except json.JSONDecodeError:
-                spawn_stats_meta = []
-        if not isinstance(spawn_stats_meta, list):
-            spawn_stats_meta = []
-
-        if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) <= 0:
-            webhook_logger.warning(f"⚠️ Gametime file missing map/round metadata: {filename}")
+        except (ValueError, TypeError, OverflowError) as exc:
+            webhook_logger.warning("Gametime document rejected (%s): %s", filename, type(exc).__name__)
             return False
 
         try:

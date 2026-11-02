@@ -10,11 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
+from website.backend.services.greatshot_store import get_greatshot_storage
 
 router = APIRouter()
 logger = get_app_logger("greatshot.topshots")
 MAX_TOPSHOTS_LIMIT = 100
 MAX_DEMO_SCAN_LIMIT = 500
+storage = get_greatshot_storage(Path(__file__).resolve().parents[3])
 
 
 def _require_user_id(request: Request) -> int:
@@ -144,7 +146,7 @@ async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db))
             continue
 
         try:
-            analysis_file = Path(analysis_path)
+            analysis_file = storage.resolve_checked_path(analysis_path)
             if not analysis_file.is_file():
                 continue
 
@@ -175,7 +177,7 @@ async def get_top_players(request: Request, limit: int = 10, db=Depends(get_db))
                     "headshots": headshots,
                     "created_at": str(created_at),
                 })
-        except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+        except (HTTPException, OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             logger.warning("Failed to process demo %s: %s", demo_id, str(e).replace('\n', ' ')[:200])
             continue
 
@@ -231,7 +233,7 @@ async def get_top_accuracy(
             continue
 
         try:
-            analysis_file = Path(analysis_path)
+            analysis_file = storage.resolve_checked_path(analysis_path)
             if not analysis_file.is_file():
                 continue
 
@@ -257,7 +259,7 @@ async def get_top_accuracy(
                     "accuracy": round(accuracy, 1),
                     "created_at": str(created_at),
                 })
-        except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+        except (HTTPException, OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             logger.warning("Failed to process demo %s: %s", demo_id, str(e).replace('\n', ' ')[:200])
             continue
 
@@ -304,7 +306,7 @@ async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
             continue
 
         try:
-            analysis_file = Path(analysis_path)
+            analysis_file = storage.resolve_checked_path(analysis_path)
             if not analysis_file.is_file():
                 continue
 
@@ -326,7 +328,7 @@ async def get_top_damage(request: Request, limit: int = 10, db=Depends(get_db)):
                     "kills": kills,
                     "created_at": str(created_at),
                 })
-        except (OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
+        except (HTTPException, OSError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             logger.warning("Failed to process demo %s: %s", demo_id, str(e).replace('\n', ' ')[:200])
             continue
 

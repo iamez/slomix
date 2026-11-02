@@ -14,7 +14,8 @@
 # The SPA is built with npm run build:app after committing the exact target.
 # Its provenance and staged bytes are checked before the run clone changes.
 # Legacy static/modern is preserved, not copied without provenance.
-# Only the owner runs deployment. DEV_PREFLIGHT_ONLY=1 checks/stages without
+# Only the owner runs deployment. DEV_PREFLIGHT_ONLY=1 stages and reads both
+# DB schemas and systemd unit configuration without
 # changing the run clone or services; SKIP_STATIC=1 is intentionally rejected.
 #
 # Usage: scripts/dev_deploy.sh [ref]     (default: origin/main)
@@ -31,13 +32,14 @@ REF="${1:-origin/main}"
 # these before status (which can refresh the index), source fetch or staging.
 # NUL records preserve arbitrary Git paths; lowercase tags mean assume-unchanged,
 # S means skip-worktree (s means both). Git failures must abort, not look empty.
-python3 - "$RUN" <<'PY'
+python3 - "$RUN" "$SRC" <<'PY'
 import subprocess
 import sys
 
-entries = subprocess.check_output(["git", "-C", sys.argv[1], "ls-files", "-v", "-z"])
-if any(entry[:1].islower() or entry[:1] == b"S" for entry in entries.split(b"\0") if entry):
-    sys.exit("run clone has unsupported index flags; refusing deploy")
+for root in sys.argv[1:]:
+    entries = subprocess.check_output(["git", "-C", root, "ls-files", "-v", "-z"])
+    if any(entry[:1].islower() or entry[:1] == b"S" for entry in entries.split(b"\0") if entry):
+        sys.exit("source/run clone has unsupported index flags; refusing deploy")
 PY
 [ -z "$(git -C "$RUN" status --porcelain --untracked-files=no)" ] || { echo "run clone has tracked changes; refusing deploy" >&2; exit 3; }
 # Refresh the default source ref before pinning it; explicit commits stay offline.
@@ -53,6 +55,27 @@ cleanup() {
 }
 trap cleanup EXIT
 python3 "$helper" stage --source "$SRC" --target "$target" --stage "$stage/app"
+# Artifact provenance includes these tracked tools and migration bytes. Never
+# fall back to bot/owner credentials when the web role cannot pass this gate.
+gate_python="${DEV_GATE_PYTHON:-$SRC/venv/bin/python}"
+"$gate_python" "$SRC/scripts/dev_verify_health.py" capture --run "$RUN" > "$stage/services-before.json"
+for consumer in bot web; do
+  if [ "$consumer" = bot ]; then
+    env_file="$RUN/.env"
+    db_host="${DEV_BOT_DB_HOST:-192.168.64.116}"
+    db_user=etlegacy_user
+  else
+    env_file="$RUN/website/.env"
+    db_host="${DEV_WEB_DB_HOST:-localhost}"
+    db_user=website_app
+  fi
+  echo "checking $consumer schema compatibility for $target"
+  "$gate_python" "$SRC/scripts/dev_schema_preflight.py" \
+    --env-file "$env_file" --expected-host "$db_host" \
+    --expected-port "${DEV_DB_PORT:-5432}" --expected-database "${DEV_DB_NAME:-etlegacy}" \
+    --expected-user "$db_user" --migrations-dir "$SRC/migrations"
+done
+python3 "$helper" verify --source "$SRC" --target "$target" --stage "$stage/app"
 if [ "${DEV_PREFLIGHT_ONLY:-0}" = "1" ]; then
   echo "preflight passed; staged artifact verified; run checkout and services unchanged"
   exit 0
@@ -61,7 +84,12 @@ fi
 # No run-clone fetch, checkout or service action precedes successful staging.
 git -C "$RUN" fetch -q "$SRC" "$target"
 python3 "$helper" verify --source "$SRC" --target "$target" --stage "$stage/app"
-before=$(git -C "$RUN" rev-parse --short HEAD)
+before=$(git -C "$RUN" rev-parse HEAD)
+previous="not-present"
+deploy_failed() {
+  echo "DEV deployment incomplete; previous source=$before retained SPA=$previous; no automatic rollback performed" >&2
+}
+trap deploy_failed ERR
 git -C "$RUN" checkout -q -B main "$target"
 after=$(git -C "$RUN" rev-parse --short HEAD)
 echo "run dir: $before -> $after"
@@ -78,10 +106,9 @@ echo "WARNING: legacy static/modern preserved; its provenance is not verified or
 
 if [ "${SKIP_RESTART:-0}" != "1" ]; then
   sudo -n systemctl restart etlegacy-bot etlegacy-web
-  sleep 8
-  for u in etlegacy-bot etlegacy-web; do
-    pid=$(systemctl show "$u" -p MainPID --value)
-    echo "$u: $(systemctl is-active "$u") pid=$pid cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null || echo '?')"
-  done
-  curl -s -m 5 http://127.0.0.1:8000/api/build | head -c 160; echo
+  "$gate_python" "$SRC/scripts/dev_verify_health.py" verify --run "$RUN" \
+    --target "$target" --previous "$stage/services-before.json"
+  echo "DEV source, schema, services and HTTP build verified for $target"
+else
+  echo "Files installed only; services NOT restarted or certified healthy" >&2
 fi

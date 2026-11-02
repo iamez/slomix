@@ -7,7 +7,6 @@ import json
 import threading
 import traceback
 import uuid
-from pathlib import Path
 
 from greatshot.config import CONFIG as GREATSHOT_CONFIG
 from greatshot.cutter.api import build_clip_window, cut_demo
@@ -234,7 +233,6 @@ class GreatshotJobService:
                 return True
 
             stored_path, _ = row["stored_path"], row["extension"]
-            demo_path = Path(stored_path)
 
             await conn.execute(
                 """
@@ -249,6 +247,7 @@ class GreatshotJobService:
             )
 
         try:
+            demo_path = self.storage.resolve_checked_path(stored_path)
             artifacts_dir = self.storage.artifacts_dir(demo_id)
 
             # Enforce timeout to prevent analysis from hanging forever
@@ -499,8 +498,9 @@ class GreatshotJobService:
                 (highlight_id,),
             )
             existing_clip = str(existing_row[0]) if existing_row and existing_row[0] else None
-            if existing_clip and Path(existing_clip).is_file():
-                clip_demo_path = existing_clip
+            existing_path = self.storage.existing_artifact(existing_clip)
+            if existing_path is not None:
+                clip_demo_path = str(existing_path)
             else:
                 clips_dir = self.storage.clips_dir(demo_id)
                 clips_dir.mkdir(parents=True, exist_ok=True)
@@ -510,7 +510,7 @@ class GreatshotJobService:
                 try:
                     await asyncio.to_thread(
                         cut_demo,
-                        stored_path,
+                        self.storage.resolve_checked_path(stored_path),
                         clip_start,
                         clip_end,
                         tmp_clip,
@@ -526,8 +526,9 @@ class GreatshotJobService:
                             highlight_id,
                         )
                         locked_clip = locked_highlight[0] if locked_highlight else None
-                        if locked_clip and Path(str(locked_clip)).is_file():
-                            clip_demo_path = str(locked_clip)  # concurrent worker won
+                        locked_path = self.storage.existing_artifact(locked_clip)
+                        if locked_path is not None:
+                            clip_demo_path = str(locked_path)  # concurrent worker won
                         else:
                             tmp_clip.replace(final_clip)
                             clip_demo_path = str(final_clip)

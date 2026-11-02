@@ -26,6 +26,37 @@ async def test_disabled_needs_no_adapter():
     assert await reconcile_missing_round_timing(None, enabled=False) == 0
 
 
+@pytest.mark.parametrize("scope", [[], ()])
+async def test_empty_scope_needs_no_adapter(scope):
+    assert await reconcile_missing_round_timing(None, enabled=True, round_ids=scope) == 0
+
+
+@pytest.mark.parametrize("scope", [
+    "1", 1, {1}, {"id": 1}, [True], [False], [0], [-1], [1.0], ["1"],
+    [None], [2_147_483_648], list(range(1, 102)), [1] * 101,
+])
+async def test_invalid_scope_rejected_before_database_access(scope):
+    with pytest.raises(ValueError, match="Timing scope"):
+        await reconcile_missing_round_timing(None, enabled=True, round_ids=scope)
+
+
+async def test_scope_is_copied_deduplicated_and_bound():
+    from contextlib import asynccontextmanager
+
+    conn = SimpleNamespace(fetch=AsyncMock(return_value=[]))
+    scope = [3, 1, 3]
+
+    @asynccontextmanager
+    async def transaction():
+        scope.append(99)  # Caller mutation after admission cannot broaden scope.
+        yield conn
+
+    assert await reconcile_missing_round_timing(
+        SimpleNamespace(transaction=transaction), enabled=True, round_ids=scope,
+    ) == 0
+    assert conn.fetch.await_args.args[1] == (1, 3)
+
+
 def test_bootstrap_mirrors_timing_migration():
     root = Path(__file__).resolve().parents[2]
     migration = (root / "migrations/084_runtime_timing_events.sql").read_text().strip()

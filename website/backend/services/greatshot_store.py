@@ -34,7 +34,15 @@ class GreatshotStorageService:
         if not root.is_absolute():
             root = (project_root / root).resolve()
 
-        self.root = root
+        self.root = root.resolve()
+        self.legacy_root = CONFIG.legacy_storage_root
+        if self.legacy_root is not None:
+            # Do not resolve the old namespace: it may no longer exist.
+            if (not self.legacy_root.is_absolute()
+                    or ".." in self.legacy_root.parts
+                    or self.legacy_root.is_relative_to(self.root)
+                    or self.root.is_relative_to(self.legacy_root)):
+                raise ValueError("Greatshot legacy root must be absolute and disjoint from storage")
         self.max_upload_bytes = int(CONFIG.max_upload_bytes)
         self.allowed_extensions = {ext.lower() for ext in CONFIG.allow_extensions}
         self.allowed_mime_types = {
@@ -189,22 +197,44 @@ class GreatshotStorageService:
 
     def safe_relative(self, absolute_path: str | Path) -> str | None:
         try:
-            resolved = Path(absolute_path).resolve()
-            relative = resolved.relative_to(self.root)
-            return str(relative)
-        except (ValueError, OSError):
+            return str(self.resolve_checked_path(str(absolute_path)).relative_to(self.root))
+        except HTTPException:
             return None
 
     def resolve_checked_path(self, raw_path: str) -> Path:
-        resolved = Path(raw_path).resolve()
+        """Resolve persisted paths in current storage, with no retired-root fallback."""
         try:
+            candidate = Path(raw_path)
+            if not candidate.is_absolute() or ".." in candidate.parts:
+                raise ValueError("Expected absolute artifact path without traversal")
+            if self.legacy_root is not None and candidate.is_relative_to(self.legacy_root):
+                candidate = self.root / candidate.relative_to(self.legacy_root)
+            # Check both lexical containment and the actual filesystem target.
+            relative = candidate.relative_to(self.root)
+            cursor = self.root
+            for part in relative.parts:
+                cursor = cursor / part
+                if cursor.is_symlink():
+                    raise ValueError("Artifact symlinks are not allowed")
+            resolved = candidate.resolve()
             resolved.relative_to(self.root)
-        except ValueError as exc:
+        except (ValueError, OSError, RuntimeError) as exc:
             raise HTTPException(status_code=403, detail="Invalid artifact path") from exc
 
         if not resolved.exists() or not resolved.is_file():
             raise HTTPException(status_code=404, detail="Artifact file not found")
         return resolved
+
+    def existing_artifact(self, raw_path: str | None) -> Path | None:
+        """Missing derived clips may be rebuilt; invalid paths must fail closed."""
+        if not raw_path:
+            return None
+        try:
+            return self.resolve_checked_path(raw_path)
+        except HTTPException as exc:
+            if exc.status_code == 404:
+                return None
+            raise
 
     async def ensure_schema(self, db) -> None:
         schema_ready = await self._is_schema_ready(db)

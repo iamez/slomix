@@ -14,20 +14,34 @@ def timing_events_enabled() -> bool:
     return event_stream_enabled() and os.getenv("ROUND_TIMING_EVENTS_ENABLED", "false").strip().lower() == "true"
 
 
-async def reconcile_missing_round_timing(adapter, *, enabled: bool) -> int:
+async def reconcile_missing_round_timing(
+    adapter, *, enabled: bool, round_ids: tuple[int, ...] | list[int] | None = None,
+) -> int:
     """Commit at most 100 fills; any event/NOTIFY/commit failure propagates.
 
     The next existing poll can retry rolled-back NULL durations. Concurrent
     calls skip locked rounds; repeat after a successful fill is a no-op.
+    None retains the legacy global poll. Runtime callers must supply the IDs
+    they own; an empty scope performs no DB work, never a global fallback.
+    Scope limits selection, not proof of source identity or ingestion ownership.
     """
     if not enabled:
         return 0
+    if round_ids is not None:
+        if not isinstance(round_ids, (tuple, list)) or len(round_ids) > 100:
+            raise ValueError("Timing scope must be a list or tuple of at most 100 round IDs")
+        if any(type(value) is not int or not 0 < value <= 2_147_483_647 for value in round_ids):
+            raise ValueError("Timing scope requires positive PostgreSQL INTEGER round IDs")
+        round_ids = tuple(sorted(set(round_ids)))
+        if not round_ids:
+            return 0
     async with adapter.transaction() as conn:
         rows = await conn.fetch("""
             WITH candidates AS (
                 SELECT r.id, lrt.id AS source_id
                 FROM rounds r JOIN lua_round_teams lrt ON lrt.round_id = r.id
                 WHERE r.actual_duration_seconds IS NULL
+                  AND ($1::integer[] IS NULL OR r.id = ANY($1::integer[]))
                   AND r.round_number IN (1, 2)
                   AND lrt.actual_duration_seconds IS NOT NULL
                   AND NOT EXISTS (
@@ -49,7 +63,7 @@ async def reconcile_missing_round_timing(adapter, *, enabled: bool) -> int:
             RETURNING r.id, r.round_number, r.gaming_session_id, lrt.id AS source_id,
                       r.actual_duration_seconds, r.round_start_unix, r.round_end_unix,
                       r.end_reason, r.total_pause_seconds, r.pause_count
-        """)
+        """, round_ids)
         for row in rows:
             # Only this batch: never sweep unrelated historical canonical IDs.
             await conn.execute(r"""

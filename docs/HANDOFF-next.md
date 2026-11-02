@@ -41,6 +41,46 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-11-02 — Preserve runtime handover guards on the current main
+
+Integrate the declared existing handover source/test delta from the full candidate:
+Discord audit delivery requires explicit opt-in while local findings remain;
+OAuth state is created only on the configured callback origin with external env
+loading and explicit legacy/app destinations; relocated Greatshot reads use the
+current checked storage without retired-file fallback. Legacy gametime handling
+uses the shared decoder, and round timing can be scoped to admitted round IDs.
+Source/deployment artifact preflights cover relevant tools and exact tracked SQL.
+
+Baseline main reproduced an outbound audit attempt even with the new flag false.
+Selected implementation reports0attempts when false and1when explicitly true,
+with one local audit each. Actual in-process auth responses retain host-only
+Secure state, reject hostile aliases and return logout to app. Real synthetic
+file reads choose current bytes, refuse retired-only fallback/escaping symlinks,
+and preserve original data. Empty timing scope performs no DB access.
+
+194focused tests pass. Three observed/restored guard mutations produce2audit,
+4OAuth and7storage failures; cmp verifies original bytes and targeted restores
+pass. Ruff, configured Bandit, ShellCheck and whitespace checks pass. The initial
+ad-hoc Bandit invocation omitted repository configuration and reported two existing
+B608 low-confidence warnings; the unchanged project configuration scan passes.
+An offline proof first assumed the wrong Discord URL path, then compared a
+symlink alias to a canonical storage root; corrected measurement passes without
+application changes, and both negative retrievals are retained privately.
+
+15native cases collect; actual fresh PG14/17 execution remains pending CI. They
+cover scoped timing effect/rollback/locking/history bounds and real-source
+stats/timing/strict-proximity composition. Synthetic prelinked Lua evidence is
+explicit; it is not authenticated transport or autonomous source association.
+Unlinked real Lua timing remains retained without guessed linkage.
+
+Scope32paths including four existing ledgers. No migration, production/game/DB/
+service action or source deletion. No full-candidate overwrite: main-only identity
+safety test is retained. Existing wider107path inventory and original master plan
+remain in the private full candidate; this publication covers only declared28paths.
+Next: current-head native/review proof, numbered owner decision, then remaining
+source/UI/bootstrap/fixture prerequisites and actual standalone caller/config,
+complete app+modern immutable package, exclusive writer and originalD4/D5.
+
 ## 2026-11-02 — #1108 merged; publish existing timing lifecycle
 
 Approved proximity PR1108 merged as0b24a9892fcb1bb06926f38b122ad3389b3f7b84.
