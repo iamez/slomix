@@ -12,7 +12,7 @@ renders the outage as an empty section.
 So the check lives here, in the language that can read both sides.
 
 ⚠️ The classification matters as much as the list. Measured across
-`website/backend/routers/`, `status` takes 22 distinct values at the API
+`website/backend/routers/`, `status` takes 23 distinct values at the API
 boundary, and most are not verdicts about whether the request worked:
 `queued`/`uploaded` are an upload lifecycle, `LOOKING`/`AVAILABLE`/`MAYBE` are
 RSVP answers, `prototype`/`retired…` are a formula's maturity. A blanket
@@ -34,6 +34,7 @@ FRONTEND_MODULE = ROOT / "website" / "frontend" / "src" / "app" / "lib" / "respo
 NOT_A_RESULT_VERDICT = {
     "ok",
     "success",  # it worked
+    "assigned",  # proximity life-event assignment state; not an HTTP result verdict
     "online",  # a game server's state, not the request's
     "LOOKING",
     "AVAILABLE",
@@ -170,8 +171,8 @@ def test_the_numbers_this_files_prose_claims_are_still_true():
     moved the number.
     """
     measured = len(_emitted_statuses())
-    assert measured == 22, (
-        f"the emitted status vocabulary is now {measured} values, not 22 — "
+    assert measured == 23, (
+        f"the emitted status vocabulary is now {measured} values, not 23 — "
         f"update the count in this module's docstring and in the test above, "
         f"and check that every new spelling is classified on the TypeScript "
         f"side")

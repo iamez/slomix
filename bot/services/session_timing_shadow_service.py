@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import logging
+import os
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -112,9 +113,12 @@ class _LuaPrefixAggregate:
 class SessionTimingShadowService:
     """Service for session timing shadow comparisons and diagnostics."""
 
-    def __init__(self, db_adapter, artifact_dir: str | Path = "logs/timing_shadow"):
+    def __init__(self, db_adapter, artifact_dir: str | Path | None = None):
         self.db_adapter = db_adapter
-        self.artifact_dir = Path(artifact_dir)
+        self.artifact_dir = (
+            Path(artifact_dir) if artifact_dir is not None
+            else Path(os.getenv("BOT_LOG_DIR") or "logs") / "timing_shadow"
+        )
         self._cache: dict[tuple[int, ...], SessionTimingShadowResult] = {}
 
     @staticmethod

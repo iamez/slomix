@@ -58,7 +58,7 @@ local modname = "proximity_tracker"
 -- the capture is off and when it is on with nothing to report. Consumers were
 -- resolving that ambiguity by assuming, which turns missing telemetry into a
 -- claim about the match.
-local version = "6.14"
+local version = "6.15"
 
 -- BEGIN frame_health v6.13 (identical in every module; tests/unit/test_lua_frame_health_block_identical.py pins it)
 -- Every Lua module runs in its own VM, and the engine calls their
@@ -672,6 +672,7 @@ local tracker = {
     action_buffer = {},
     output_in_progress = false,
     output_written = false,
+    output_attempted = false,
     output_pending = false,
     output_due_ms = 0,
 
@@ -784,7 +785,39 @@ local tracker = {
 local round_start_unix = 0
 local round_end_unix = 0
 local client_cache = {}
-local frame_level_time = 0  -- updated each et_RunFrame; freezes during pause (unlike trap_Milliseconds)
+local frame_level_time = 0  -- latest Lua frame's levelTime; advances during match pause
+local pause_capture = {blocked=false, observed=false, unknown=false}
+
+-- ET 2.85 CS_SERVERTOGGLES bit 16 describes the CURRENT observed pause state,
+-- not level.timeCurrent. Missing/invalid input is not evidence of active play.
+local function captureBlocked()
+    local ok, raw = pcall(et.trap_GetConfigstring, et.CS_SERVERTOGGLES or 32)
+    local toggles = ok and tonumber(raw) or nil
+    if not toggles or toggles < 0 or toggles > 2147483647 or toggles % 1 ~= 0 then
+        pause_capture.unknown = true
+        return true
+    end
+    if math.floor(toggles / 16) % 2 == 1 then
+        pause_capture.observed = true
+        return true
+    end
+    return false
+end
+
+-- Lifecycle records remain intact during a pause, but positions do not imply
+-- movement. The first later point explicitly breaks the incoming path segment.
+local function appendTrackPoint(track, point)
+    if captureBlocked() then
+        track.capture_gap = true
+        return false
+    end
+    if track.capture_gap then
+        point.event = "capture_resume"
+        track.capture_gap = false
+    end
+    table.insert(track.path, point)
+    return true
+end
 
 -- ===== UTILITY FUNCTIONS =====
 
@@ -922,9 +955,9 @@ local function getGridKey(x, y)
 end
 
 local function gameTime()
-    -- Use frame_level_time (from et_RunFrame) instead of trap_Milliseconds.
-    -- trap_Milliseconds is wall-clock and keeps ticking during pause;
-    -- levelTime freezes during pause, giving correct game-relative timestamps.
+    -- Legacy level_time_offset_v1: includes pauses, relative to the tracker anchor.
+    -- ET 2.85 freezes timeCurrent, NOT levelTime. Hooks before et_RunFrame may
+    -- still see the previous frame. Do not silently change this persisted basis.
     return frame_level_time - tracker.round.start_time
 end
 
@@ -937,11 +970,42 @@ local function getMapName()
     return mapname
 end
 
+local runtime_proximity_context, runtime_proximity_binding
+local runtime_proximity_invalidated = false
+
 local function refreshRoundInfo()
     tracker.round.map_name = getMapName()
     local round_str = et.trap_Cvar_Get("g_currentRound")
-    local round_num = (tonumber(round_str) or 0) + 1
+    local round_num = runtime_proximity_binding and runtime_proximity_binding.half
+        or (tonumber(round_str) or 0) + 1
     tracker.round.round_num = round_num
+end
+
+
+function BindRuntimeProximity(identity, map_name)
+    -- Explicit trusted adapter only. This API neither allocates nor authenticates IDs.
+    assert(runtime_proximity_binding == nil and runtime_proximity_context ~= nil
+        and not runtime_proximity_invalidated and not tracker.output_attempted,
+        "runtime proximity requires unbound observed InitGame")
+    local codec = require("runtime_round_identity")
+    local wire = codec.encode(identity)
+    local frozen = codec.decode(wire)
+    local counter = tonumber(et.trap_Cvar_Get("g_currentRound"))
+    local exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION)
+    assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
+        and runtime_proximity_context.gamestate == 0
+        and tonumber(et.trap_Cvar_Get("gamestate")) == 0
+        and (exit_flag == "" or exit_flag == "0" or exit_flag == "1")
+        and exit_flag == runtime_proximity_context.exit_flag, "runtime proximity requires active stopwatch context")
+    assert((counter == 0 or counter == 1) and counter == runtime_proximity_context.counter
+        and frozen.round_number == 2 - counter, "runtime proximity start half mismatch")
+    assert(type(map_name) == "string" and #map_name >= 1 and #map_name <= 64
+        and map_name:match("^[A-Za-z0-9_.+%-]+$") and not map_name:find("..", 1, true)
+        and map_name == runtime_proximity_context.map_name
+        and map_name == getMapName(), "runtime proximity ticket map mismatch")
+    runtime_proximity_binding = {wire=wire, map_name=map_name, half=frozen.round_number}
+    tracker.round.round_num = frozen.round_number
+    return wire -- Acceptance is not a completion receipt or canonical DB mapping.
 end
 
 local function proxPrint(msg)
@@ -1172,7 +1236,7 @@ local function createPlayerTrack(clientnum)
         local weapon = safe_gentity_get(clientnum, "ps.weapon") or 0
         local speed = getPlayerSpeed(clientnum)
         local stance, sprint = getPlayerMovementState(clientnum, speed)
-        table.insert(track.path, {
+        appendTrackPoint(track, {
             time = now, x = round(pos.x, 1), y = round(pos.y, 1), z = round(pos.z, 1),
             health = health, speed = round(speed, 1), weapon = weapon,
             stance = stance, sprint = sprint, event = "spawn"
@@ -1186,6 +1250,10 @@ local function createPlayerTrack(clientnum)
 end
 
 local function samplePlayer(clientnum, track, event_type)
+    if captureBlocked() then
+        track.capture_gap = true
+        return
+    end
     local now = gameTime()
     local pos = getPlayerPos(clientnum)
     if not pos then return end
@@ -1193,25 +1261,27 @@ local function samplePlayer(clientnum, track, event_type)
     local weapon = safe_gentity_get(clientnum, "ps.weapon") or 0
     local speed = getPlayerSpeed(clientnum)
     local stance, sprint = getPlayerMovementState(clientnum, speed)
-    if not track.first_move_time and speed > 10 then
+    local resuming = track.capture_gap
+    if not resuming and not track.first_move_time and speed > 10 then
         local gs = tonumber(et.trap_Cvar_Get("gamestate")) or -1
         if gs == 0 and (track.spawn_time or 0) >= 0 and now >= 0 then
             track.first_move_time = now
             track.had_input = true
         end
     end
-    table.insert(track.path, {
+    appendTrackPoint(track, {
         time = now, x = round(pos.x, 1), y = round(pos.y, 1), z = round(pos.z, 1),
         health = health, speed = round(speed, 1), weapon = weapon,
         stance = stance, sprint = sprint, event = event_type or "sample"
     })
-    if isFeatureEnabled("heatmap_generation") then
+    if not resuming and isFeatureEnabled("heatmap_generation") then
         local key = getGridKey(pos.x, pos.y)
         if not tracker.movement_heatmap[key] then
             tracker.movement_heatmap[key] = { traversal = 0, combat = 0, escape = 0 }
         end
         tracker.movement_heatmap[key].traversal = tracker.movement_heatmap[key].traversal + 1
     end
+    return not resuming
 end
 
 local function endPlayerTrack(clientnum, death_pos, death_type, killer_name)
@@ -1223,7 +1293,7 @@ local function endPlayerTrack(clientnum, death_pos, death_type, killer_name)
     track.killer_name = killer_name
     if death_pos then
         local weapon = safe_gentity_get(clientnum, "ps.weapon") or 0
-        table.insert(track.path, {
+        appendTrackPoint(track, {
             time = track.death_time, x = round(death_pos.x, 1), y = round(death_pos.y, 1), z = round(death_pos.z, 1),
             health = 0, speed = 0, weapon = weapon, stance = 0, sprint = 0,
             event = death_type or "death"
@@ -1395,8 +1465,8 @@ local function sampleAllPlayers()
     local objectives = getObjectivesForMap(tracker.round.map_name)
     for clientnum, track in pairs(tracker.player_tracks) do
         if isPlayerActive(clientnum) then
-            samplePlayer(clientnum, track, "sample")
-            if objectives and config.objective_tracking then
+            local measured = samplePlayer(clientnum, track, "sample")
+            if measured and objectives and config.objective_tracking then
                 local pos = getPlayerPos(clientnum)
                 local obj_name, dist = getNearestObjective(pos, objectives)
                 if obj_name and dist then
@@ -1826,9 +1896,10 @@ local function calculateSpawnTimingScore(kill_game_time, victim_team_num)
 
     if interval <= 0 then return 0, 0 end
 
-    -- ET:Legacy spawn formula (from CG_CalculateReinfTime in cg_draw.c):
-    --   time_to_next = 1 + (interval - ((reinf_offset + elapsed_time) % interval)) / 1000
-    -- Where reinf_offset is a per-team random 0-15s offset set at match start via CS_REINFSEEDS.
+    -- Nominal phase wait, not a promise of actual respawn eligibility or the
+    -- client's rounded countdown. Engine SpectatorClientEndFrame uses
+    -- timeCurrent - startTime; caller currently supplies legacy tracker time.
+    -- Pauses and a different anchor can therefore shift this estimate.
     local reinf_offset = 0
     if victim_team_num == 1 then
         reinf_offset = tracker.spawn.axis_reinf_offset or 0
@@ -2516,6 +2587,12 @@ sampleCarrierPosition = function(clientNum)
     if not pos then return end
     local now = gameTime()
     if now - state.last_sample_time < config.teamplay.carrier_sample_interval_ms then return end
+    if state.capture_gap then
+        state.last_pos = pos
+        state.last_sample_time = now
+        state.capture_gap = false
+        return
+    end
     local d = distance3D(pos, state.last_pos)
     state.carry_distance = state.carry_distance + d
     state.last_pos = pos
@@ -2726,6 +2803,12 @@ sampleVehiclePositions = function()
         end
         local current_pos = {x = vx, y = vy, z = vz}
 
+        if veh.capture_gap then
+            veh.last_pos = current_pos
+            veh.capture_gap = false
+            goto continue_vehicle
+        end
+
         -- v6.14: an entity read before it spawns answers (0,0,0) (the init
         -- scan's sane_coord clamps garbage to 0 too). Its first real
         -- position is then a "move" of a few thousand units from the world
@@ -2752,7 +2835,7 @@ sampleVehiclePositions = function()
         if is_moving then
             veh.total_distance = veh.total_distance + delta
             -- v6.14: the escort moment's timestamp. `now` is gameTime()
-            -- (ms since round start, frozen during pause) — the same base
+            -- (legacy raw level offset, INCLUDING pause) — the same base
             -- as carrier kill_time, so the parser stores it unconverted.
             if veh.first_move_time == 0 then veh.first_move_time = now end
             veh.last_move_time = now
@@ -3140,8 +3223,21 @@ local function calculateApproachMetrics(track, action_time, window_ms)
     local approach_distance = 0
     local prev_sample = nil
 
+    -- Same-timestamp callbacks can surround a resume marker. None of those
+    -- coincident points proves a segment; only the last is an outgoing baseline.
+    local boundary_times = {}
+    for _, sample in ipairs(track.path) do
+        if sample.event == "capture_resume" then boundary_times[sample.time] = true end
+    end
+
     for _, sample in ipairs(track.path) do
         if sample.time >= start_time and sample.time <= action_time then
+            -- Report only the final contiguous approach, never a beeline or
+            -- elapsed duration spanning an unobserved movement interval.
+            if boundary_times[sample.time] then
+                first_sample, prev_sample = nil, nil
+                approach_distance = 0
+            end
             if not first_sample then
                 first_sample = sample
             end
@@ -3303,10 +3399,27 @@ local function pollConstructionProgress(now)
     end
 end
 
+local output_file_handle = nil
+local function writeOutput(data, count, fd)
+    local written = et.trap_FS_Write(data, count, fd)
+    assert(type(written) == "number" and written == count,
+        "proximity output short/failed write")
+end
+
 local function outputDataInner()
+    if runtime_proximity_binding ~= nil then
+        local binding = runtime_proximity_binding
+        assert(not runtime_proximity_invalidated, "runtime proximity binding invalidated")
+        assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
+            and tonumber(et.trap_Cvar_Get("gamestate")) == 3
+            and tonumber(et.trap_Cvar_Get("g_currentRound")) == (binding.half - 1)
+            and getMapName() == binding.map_name
+            and tracker.round.map_name == binding.map_name
+            and tracker.round.round_num == binding.half, "runtime proximity end context mismatch")
+    end
     if #tracker.completed == 0 and #tracker.completed_tracks == 0 then
         proxPrint("[PROX] No data to output\n")
-        return
+        return false
     end
 
     if tracker.round.map_name == "" or tracker.round.map_name == "unknown" then
@@ -3319,10 +3432,12 @@ local function outputDataInner()
     proxPrint("[PROX] Attempting to write: " .. filename .. "\n")
 
     local fd, len = et.trap_FS_FOpenFile(filename, et.FS_WRITE)
-    if not fd or fd == -1 or fd == 0 then
+    if not fd or fd == -1 or fd == 0 or len == -1 then
         et.G_Print("[PROX] ERROR: Could not open file: " .. filename .. "\n")
-        return
+        return false
     end
+
+    output_file_handle = fd
 
     -- ===== HEADER =====
     local header = string.format(
@@ -3341,7 +3456,12 @@ local function outputDataInner()
         config.crossfire_window_ms, config.escape_time_ms, config.escape_distance,
         config.position_sample_interval, round_start_unix, round_end_unix,
         tracker.spawn.axis_interval, tracker.spawn.allies_interval)
-    et.trap_FS_Write(header, string.len(header), fd)
+    writeOutput(header, string.len(header), fd)
+
+    if runtime_proximity_binding ~= nil then
+        local declaration = "# runtime_identity=" .. runtime_proximity_binding.wire .. "\n"
+        writeOutput(declaration, #declaration, fd)
+    end
 
     -- ===== CAPABILITY DECLARATION (6.11) =====
     -- Says outright which captures were on, because the file cannot show it.
@@ -3391,13 +3511,15 @@ local function outputDataInner()
     end
 
     local cap_header = string.format(
-        "# tracker_version_full=%s\n" ..
+        "# event_time_basis=level_time_offset_v1\n# tracker_version_full=%s\n" ..
+        "# capture_pauses=observed_pause_gate_v1:%d:%d\n" ..
         "# test_mode=%d\n" ..
         "# capabilities=%s\n",
         version,
+        pause_capture.observed and 1 or 0, pause_capture.unknown and 1 or 0,
         config.test_mode.enabled and 1 or 0,
         table.concat(cap_parts, ","))
-    et.trap_FS_Write(cap_header, string.len(cap_header), fd)
+    writeOutput(cap_header, string.len(cap_header), fd)
 
     -- ===== ENGAGEMENTS (v4) =====
     local fmt_header = "# ENGAGEMENTS\n" ..
@@ -3406,7 +3528,7 @@ local function outputDataInner()
         "is_crossfire;crossfire_delay;crossfire_participants;" ..
         "start_x;start_y;start_z;end_x;end_y;end_z;distance_traveled;" ..
         "positions;attackers\n"
-    et.trap_FS_Write(fmt_header, string.len(fmt_header), fd)
+    writeOutput(fmt_header, string.len(fmt_header), fd)
 
     for _, eng in ipairs(tracker.completed) do
         local cf_participants = eng.crossfire_participants and table.concat(eng.crossfire_participants, ",") or ""
@@ -3424,7 +3546,7 @@ local function outputDataInner()
             eng.distance_traveled or 0,
             serializePositions(eng.position_path),
             serializeAttackers(eng.attackers, eng.attacker_order))
-        et.trap_FS_Write(line, string.len(line), fd)
+        writeOutput(line, string.len(line), fd)
     end
 
     -- ===== PLAYER TRACKS (v4) =====
@@ -3433,7 +3555,7 @@ local function outputDataInner()
         "# death_type: killed|selfkill|fallen|world|teamkill|round_end|disconnect|unknown\n" ..
         "# path format: time,x,y,z,health,speed,weapon,stance,sprint,event separated by |\n" ..
         "# stance: 0=standing, 1=crouching, 2=prone | sprint: 0=no, 1=yes\n"
-    et.trap_FS_Write(track_header, string.len(track_header), fd)
+    writeOutput(track_header, string.len(track_header), fd)
 
     for _, track in ipairs(tracker.completed_tracks) do
         local line = string.format("%s;%s;%s;%s;%d;%d;%s;%s;%d;%s\n",
@@ -3441,31 +3563,31 @@ local function outputDataInner()
             track.spawn_time, track.death_time or 0,
             track.first_move_time or "", track.death_type or "unknown",
             #track.path, serializeTrackPath(track.path))
-        et.trap_FS_Write(line, string.len(line), fd)
+        writeOutput(line, string.len(line), fd)
     end
 
     -- ===== KILL HEATMAP (v4) =====
     local hm_header = "\n# KILL_HEATMAP\n# grid_x;grid_y;axis_kills;allies_kills\n"
-    et.trap_FS_Write(hm_header, string.len(hm_header), fd)
+    writeOutput(hm_header, string.len(hm_header), fd)
     for key, data in pairs(tracker.kill_heatmap) do
         local gx, gy = string.match(key, "(-?%d+),(-?%d+)")
         local line = string.format("%s;%s;%d;%d\n", gx, gy, data.axis, data.allies)
-        et.trap_FS_Write(line, string.len(line), fd)
+        writeOutput(line, string.len(line), fd)
     end
 
     -- ===== MOVEMENT HEATMAP (v4) =====
     local mv_header = "\n# MOVEMENT_HEATMAP\n# grid_x;grid_y;traversal;combat;escape\n"
-    et.trap_FS_Write(mv_header, string.len(mv_header), fd)
+    writeOutput(mv_header, string.len(mv_header), fd)
     for key, data in pairs(tracker.movement_heatmap) do
         local gx, gy = string.match(key, "(-?%d+),(-?%d+)")
         local line = string.format("%s;%s;%d;%d;%d\n", gx, gy, data.traversal, data.combat, data.escape)
-        et.trap_FS_Write(line, string.len(line), fd)
+        writeOutput(line, string.len(line), fd)
     end
 
     -- ===== OBJECTIVE FOCUS (v4) =====
     if config.objective_tracking and next(tracker.objective_stats) then
         local obj_header = "\n# OBJECTIVE_FOCUS\n# guid;name;team;objective;avg_distance;time_within_radius_ms;samples\n"
-        et.trap_FS_Write(obj_header, string.len(obj_header), fd)
+        writeOutput(obj_header, string.len(obj_header), fd)
         for guid, stats in pairs(tracker.objective_stats) do
             local top_obj, top_count = "", 0
             for name, count in pairs(stats.objective_counts or {}) do
@@ -3475,7 +3597,7 @@ local function outputDataInner()
             local line = string.format("%s;%s;%s;%s;%.1f;%d;%d\n",
                 guid, stats.name, stats.team, top_obj, avg_dist,
                 stats.time_within_radius_ms or 0, stats.samples or 0)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3484,7 +3606,7 @@ local function outputDataInner()
         local reaction_header = "\n# REACTION_METRICS\n" ..
             "# engagement_id;target_guid;target_name;target_team;target_class;outcome;num_attackers;" ..
             "return_fire_ms;dodge_reaction_ms;support_reaction_ms;start_time;end_time;duration\n"
-        et.trap_FS_Write(reaction_header, string.len(reaction_header), fd)
+        writeOutput(reaction_header, string.len(reaction_header), fd)
         for _, m in ipairs(tracker.reaction_metrics) do
             local line = string.format("%d;%s;%s;%s;%s;%s;%d;%s;%s;%s;%d;%d;%d\n",
                 m.engagement_id or 0, m.target_guid or "", m.target_name or "",
@@ -3494,7 +3616,7 @@ local function outputDataInner()
                 m.dodge_reaction_ms ~= nil and tostring(m.dodge_reaction_ms) or "",
                 m.support_reaction_ms ~= nil and tostring(m.support_reaction_ms) or "",
                 m.start_time or 0, m.end_time or 0, m.duration or 0)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3508,14 +3630,14 @@ local function outputDataInner()
             "# killer_guid;killer_name;killer_team;victim_guid;victim_name;victim_team;" ..
             "kill_time;enemy_spawn_interval;time_to_next_spawn;spawn_timing_score;" ..
             "killer_reinf;victim_reinf\n"
-        et.trap_FS_Write(st_header, string.len(st_header), fd)
+        writeOutput(st_header, string.len(st_header), fd)
         for _, t in ipairs(tracker.spawn.kill_timings) do
             local line = string.format("%s;%s;%s;%s;%s;%s;%d;%d;%d;%.3f;%.1f;%.1f\n",
                 t.killer_guid, t.killer_name, t.killer_team,
                 t.victim_guid, t.victim_name, t.victim_team,
                 t.kill_time, t.enemy_spawn_interval, t.time_to_next_spawn, t.spawn_timing_score,
                 t.killer_reinf or 0, t.victim_reinf or 0)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3523,13 +3645,13 @@ local function outputDataInner()
     if isFeatureEnabled("team_cohesion") and #tracker.cohesion.samples > 0 then
         local tc_header = "\n# TEAM_COHESION\n" ..
             "# time;team;alive_count;centroid_x;centroid_y;dispersion;max_spread;straggler_count;buddy_pair_guids;buddy_distance\n"
-        et.trap_FS_Write(tc_header, string.len(tc_header), fd)
+        writeOutput(tc_header, string.len(tc_header), fd)
         for _, s in ipairs(tracker.cohesion.samples) do
             local line = string.format("%d;%s;%d;%.1f;%.1f;%.1f;%.1f;%d;%s;%.1f\n",
                 s.time, s.team, s.alive_count, s.centroid_x, s.centroid_y,
                 s.dispersion, s.max_spread, s.straggler_count,
                 s.buddy_pair_guids, s.buddy_distance)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3542,13 +3664,13 @@ local function outputDataInner()
             local cf_header = "\n# CROSSFIRE_OPPORTUNITIES\n" ..
                 "# time;target_guid;target_name;target_team;teammate1_guid;teammate2_guid;" ..
                 "angular_separation;was_executed;damage_within_window\n"
-            et.trap_FS_Write(cf_header, string.len(cf_header), fd)
+            writeOutput(cf_header, string.len(cf_header), fd)
             for _, e in ipairs(tracker.crossfire_opps.events) do
                 local line = string.format("%d;%s;%s;%s;%s;%s;%.1f;%s;%d\n",
                     e.time, e.target_guid, e.target_name, e.target_team,
                     e.teammate1_guid, e.teammate2_guid,
                     e.angular_separation, e.was_executed, e.damage_within_window)
-                et.trap_FS_Write(line, string.len(line), fd)
+                writeOutput(line, string.len(line), fd)
             end
         end
     end
@@ -3557,13 +3679,13 @@ local function outputDataInner()
     if isFeatureEnabled("focus_fire") and #tracker.focus_fire.events > 0 then
         local ff_header = "\n# FOCUS_FIRE\n" ..
             "# engagement_id;target_guid;target_name;attacker_count;attacker_guids;total_damage;duration;focus_score\n"
-        et.trap_FS_Write(ff_header, string.len(ff_header), fd)
+        writeOutput(ff_header, string.len(ff_header), fd)
         for _, e in ipairs(tracker.focus_fire.events) do
             local line = string.format("%d;%s;%s;%d;%s;%d;%d;%.3f\n",
                 e.engagement_id, e.target_guid, e.target_name,
                 e.attacker_count, e.attacker_guids, e.total_damage,
                 e.duration, e.focus_score)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3584,13 +3706,13 @@ local function outputDataInner()
             local tp_header = "\n# TEAM_PUSHES\n" ..
                 "# start_time;end_time;team;avg_speed;direction_x;direction_y;" ..
                 "alignment_score;push_quality;participant_count;toward_objective\n"
-            et.trap_FS_Write(tp_header, string.len(tp_header), fd)
+            writeOutput(tp_header, string.len(tp_header), fd)
             for _, p in ipairs(tracker.pushes.events) do
                 local line = string.format("%d;%d;%s;%.1f;%.3f;%.3f;%.3f;%.3f;%d;%s\n",
                     p.start_time, p.end_time or now, p.team, p.avg_speed,
                     p.direction_x, p.direction_y, p.alignment_score, p.push_quality,
                     p.participant_count, p.toward_objective or "N/A")
-                et.trap_FS_Write(line, string.len(line), fd)
+                writeOutput(line, string.len(line), fd)
             end
         end
     end
@@ -3601,14 +3723,14 @@ local function outputDataInner()
             "# original_kill_time;traded_kill_time;delta_ms;" ..
             "original_victim_guid;original_victim_name;original_killer_guid;original_killer_name;" ..
             "trader_guid;trader_name\n"
-        et.trap_FS_Write(tk_header, string.len(tk_header), fd)
+        writeOutput(tk_header, string.len(tk_header), fd)
         for _, t in ipairs(tracker.trade_kills.events) do
             local line = string.format("%d;%d;%d;%s;%s;%s;%s;%s;%s\n",
                 t.original_kill_time, t.traded_kill_time, t.delta_ms,
                 t.original_victim_guid, t.original_victim_name,
                 t.original_killer_guid, t.original_killer_name,
                 t.trader_guid, t.trader_name)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3616,14 +3738,14 @@ local function outputDataInner()
     if #tracker.revives > 0 then
         local rev_header = "\n# REVIVES\n" ..
             "# time;medic_guid;medic_name;revived_guid;revived_name;x;y;z;distance_to_enemy;nearest_enemy_guid;under_fire\n"
-        et.trap_FS_Write(rev_header, string.len(rev_header), fd)
+        writeOutput(rev_header, string.len(rev_header), fd)
         for _, r in ipairs(tracker.revives) do
             local line = string.format("%d;%s;%s;%s;%s;%.1f;%.1f;%.1f;%.1f;%s;%s\n",
                 r.time, r.medic_guid, r.medic_name,
                 r.revived_guid, r.revived_name,
                 r.x, r.y, r.z,
                 r.distance_to_enemy, r.nearest_enemy_guid, r.under_fire)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3633,7 +3755,7 @@ local function outputDataInner()
     if has_weapon_data then
         local wa_header = "\n# WEAPON_ACCURACY\n" ..
             "# player_guid;player_name;team;weapon_id;shots_fired;hits;kills;headshots\n"
-        et.trap_FS_Write(wa_header, string.len(wa_header), fd)
+        writeOutput(wa_header, string.len(wa_header), fd)
         for guid, weapons in pairs(tracker.weapon_fire) do
             local name = weapons._name or "Unknown"
             local team = weapons._team or "SPEC"
@@ -3643,7 +3765,7 @@ local function outputDataInner()
                         guid, name, team, weapon_id,
                         data.shots or 0, data.hits or 0,
                         data.kills or 0, data.headshots or 0)
-                    et.trap_FS_Write(line, string.len(line), fd)
+                    writeOutput(line, string.len(line), fd)
                 end
             end
         end
@@ -3661,7 +3783,7 @@ local function outputDataInner()
             "outcome;outcome_time;delta_ms;effective_denied_ms;" ..
             "gibber_guid;gibber_name;reviver_guid;reviver_name\n" ..
             "# outcome: gibbed|revived|tapped_out|round_end|expired\n"
-        et.trap_FS_Write(ko_header, string.len(ko_header), fd)
+        writeOutput(ko_header, string.len(ko_header), fd)
         for _, ko in ipairs(tracker.kill_outcomes.completed) do
             local line = string.format("%d;%s;%s;%s;%s;%d;%s;%d;%d;%d;%s;%s;%s;%s\n",
                 ko.kill_time, ko.victim_guid, ko.victim_name,
@@ -3669,7 +3791,7 @@ local function outputDataInner()
                 ko.outcome, ko.outcome_time, ko.delta_ms, ko.effective_denied_ms,
                 ko.gibber_guid, ko.gibber_name,
                 ko.reviver_guid, ko.reviver_name)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3678,13 +3800,13 @@ local function outputDataInner()
         local hr_header = "\n# HIT_REGIONS\n" ..
             "# time;attacker_guid;attacker_name;victim_guid;victim_name;weapon;region;damage\n" ..
             "# region: 0=HEAD, 1=ARMS, 2=BODY, 3=LEGS\n"
-        et.trap_FS_Write(hr_header, string.len(hr_header), fd)
+        writeOutput(hr_header, string.len(hr_header), fd)
         for _, hr in ipairs(tracker.hit_regions) do
             local line = string.format("%d;%s;%s;%s;%s;%d;%d;%d\n",
                 hr.time, hr.attacker_guid, hr.attacker_name,
                 hr.victim_guid, hr.victim_name,
                 hr.weapon, hr.region, hr.damage)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3694,7 +3816,7 @@ local function outputDataInner()
             "# time;event;atk_guid;atk_name;atk_team;atk_class;" ..
             "vic_guid;vic_name;vic_team;vic_class;" ..
             "ax;ay;az;vx;vy;vz;weapon;mod;killer_health;axis_alive;allies_alive\n"
-        et.trap_FS_Write(cp_header, string.len(cp_header), fd)
+        writeOutput(cp_header, string.len(cp_header), fd)
         for _, cp in ipairs(tracker.combat_positions) do
             local line = string.format("%d;%s;%s;%s;%s;%s;%s;%s;%s;%s;%d;%d;%d;%d;%d;%d;%d;%d;%d;%d;%d\n",
                 cp.time, cp.event_type,
@@ -3703,7 +3825,7 @@ local function outputDataInner()
                 cp.ax, cp.ay, cp.az, cp.vx, cp.vy, cp.vz,
                 cp.weapon, cp.mod,
                 cp.killer_health or 0, cp.axis_alive or 0, cp.allies_alive or 0)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3712,7 +3834,7 @@ local function outputDataInner()
         local sf_header = "\n# SHOT_FIRED\n" ..
             "# time;guid;weapon;ox;oy;oz;yaw;pitch\n" ..
             "# yaw/pitch from ps.viewangles (runtime-validated binding)\n"
-        et.trap_FS_Write(sf_header, string.len(sf_header), fd)
+        writeOutput(sf_header, string.len(sf_header), fd)
         for _, sf in ipairs(tracker.shot_fired) do
             -- 6.02 fix: ox/oy/oz are round(...,1) FLOATS. Lua 5.4 `%d`
             -- rejects non-integer floats ("number has no integer
@@ -3730,7 +3852,7 @@ local function outputDataInner()
             local line = string.format("%d;%s;%d;%d;%d;%d;%.2f;%.2f\n",
                 sf.time, sf.guid, sf.weapon,
                 ox, oy, oz, sf.yaw, sf.pitch)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3749,14 +3871,14 @@ local function outputDataInner()
         if #tracker.aim_lock.events > 0 then
             local al_header = "\n# AIM_LOCK\n" ..
                 "# start_time;end_time;duration_ms;guid;name;team;target_guid;target_name;avg_err_deg;avg_dist;samples\n"
-            et.trap_FS_Write(al_header, string.len(al_header), fd)
+            writeOutput(al_header, string.len(al_header), fd)
             for _, al in ipairs(tracker.aim_lock.events) do
                 local line = string.format("%d;%d;%d;%s;%s;%s;%s;%s;%.1f;%d;%d\n",
                     al.start_time, al.end_time, al.duration,
                     al.guid, al.name, al.team,
                     al.target_guid, al.target_name,
                     al.avg_err, al.avg_dist, al.samples)
-                et.trap_FS_Write(line, string.len(line), fd)
+                writeOutput(line, string.len(line), fd)
             end
         end
     end
@@ -3765,12 +3887,12 @@ local function outputDataInner()
     if isFeatureEnabled("spawn_select") and #tracker.spawn_selects > 0 then
         local ss_header = "\n# SPAWN_SELECT\n" ..
             "# time;guid;name;team;spawn_index;last_spawn_time\n"
-        et.trap_FS_Write(ss_header, string.len(ss_header), fd)
+        writeOutput(ss_header, string.len(ss_header), fd)
         for _, ss in ipairs(tracker.spawn_selects) do
             local line = string.format("%d;%s;%s;%s;%d;%d\n",
                 ss.time, ss.guid, ss.name, ss.team,
                 ss.spawn_index, ss.last_spawn_time)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3802,9 +3924,9 @@ local function outputDataInner()
         if #rows > 0 then
             local sk_header = "\n# SKILL_SNAPSHOT\n" ..
                 "# guid;name;team;battle_sense;engineering;first_aid;signals;light_weapons;heavy_weapons;covertops\n"
-            et.trap_FS_Write(sk_header, string.len(sk_header), fd)
+            writeOutput(sk_header, string.len(sk_header), fd)
             for _, line in ipairs(rows) do
-                et.trap_FS_Write(line, string.len(line), fd)
+                writeOutput(line, string.len(line), fd)
             end
         end
     end
@@ -3813,11 +3935,11 @@ local function outputDataInner()
     if isFeatureEnabled("comm_events") and #tracker.comm_events > 0 then
         local cm_header = "\n# COMM_EVENTS\n" ..
             "# time;guid;name;team;cmd;arg\n"
-        et.trap_FS_Write(cm_header, string.len(cm_header), fd)
+        writeOutput(cm_header, string.len(cm_header), fd)
         for _, cm in ipairs(tracker.comm_events) do
             local line = string.format("%d;%s;%s;%s;%s;%s\n",
                 cm.time, cm.guid, cm.name, cm.team, cm.cmd, cm.arg)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3827,7 +3949,7 @@ local function outputDataInner()
             "# carrier_guid;carrier_name;carrier_team;flag_team;pickup_time;drop_time;duration_ms;" ..
             "outcome;carry_distance;beeline_distance;efficiency;path_samples;" ..
             "pickup_x;pickup_y;pickup_z;drop_x;drop_y;drop_z;killer_guid;killer_name\n"
-        et.trap_FS_Write(ce_header, string.len(ce_header), fd)
+        writeOutput(ce_header, string.len(ce_header), fd)
         for _, ce in ipairs(tracker.carrier.events) do
             local line = string.format(
                 "%s;%s;%s;%s;%d;%d;%d;%s;%.1f;%.1f;%.3f;%d;%d;%d;%d;%d;%d;%d;%s;%s\n",
@@ -3838,7 +3960,7 @@ local function outputDataInner()
                 ce.pickup_x, ce.pickup_y, ce.pickup_z,
                 ce.drop_x, ce.drop_y, ce.drop_z,
                 ce.killer_guid, ce.killer_name)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3848,13 +3970,13 @@ local function outputDataInner()
             "# kill_time;carrier_guid;carrier_name;carrier_team;" ..
             "killer_guid;killer_name;killer_team;means_of_death;" ..
             "carrier_distance_at_kill;flag_team\n"
-        et.trap_FS_Write(ck_header, string.len(ck_header), fd)
+        writeOutput(ck_header, string.len(ck_header), fd)
         for _, ck in ipairs(tracker.carrier.kills) do
             local line = string.format("%d;%s;%s;%s;%s;%s;%s;%d;%.1f;%s\n",
                 ck.kill_time, ck.carrier_guid, ck.carrier_name, ck.carrier_team,
                 ck.killer_guid, ck.killer_name, ck.killer_team,
                 ck.means_of_death, ck.carrier_distance_at_kill, ck.flag_team)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3863,13 +3985,13 @@ local function outputDataInner()
         local cr_header = "\n# CARRIER_RETURNS\n" ..
             "# return_time;returner_guid;returner_name;returner_team;flag_team;" ..
             "original_carrier_guid;drop_time;return_delay_ms;drop_x;drop_y;drop_z\n"
-        et.trap_FS_Write(cr_header, string.len(cr_header), fd)
+        writeOutput(cr_header, string.len(cr_header), fd)
         for _, cr in ipairs(tracker.carrier.returns) do
             local line = string.format("%d;%s;%s;%s;%s;%s;%d;%d;%d;%d;%d\n",
                 cr.return_time, cr.returner_guid, cr.returner_name, cr.returner_team,
                 cr.flag_team, cr.original_carrier_guid, cr.drop_time, cr.return_delay_ms,
                 cr.drop_x, cr.drop_y, cr.drop_z)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3886,7 +4008,7 @@ local function outputDataInner()
                 "# vehicle_name;vehicle_type;start_x;start_y;start_z;end_x;end_y;end_z;" ..
                 "total_distance;max_health;final_health;destroyed_count;" ..
                 "first_move_time;last_move_time;first_escort_time;last_escort_time\n"
-            et.trap_FS_Write(vp_header, string.len(vp_header), fd)
+            writeOutput(vp_header, string.len(vp_header), fd)
             -- Coordinates and health come from tonumber() and are floats;
             -- Lua 5.4 %d throws on a non-integral float. This is a FILE
             -- write the parser reads with a bare int(parts[i]) — so no
@@ -3914,7 +4036,7 @@ local function outputDataInner()
                     veh.total_distance, trunc(veh.max_health), trunc(veh.last_health),
                     veh.destroyed_count, trunc(veh.first_move_time), trunc(veh.last_move_time),
                     trunc(veh.first_escort_time), trunc(veh.last_escort_time))
-                et.trap_FS_Write(line, string.len(line), fd)
+                writeOutput(line, string.len(line), fd)
             end
 
             -- ===== VEHICLE DESTROYED (v6.14, docs/design/20 slice 2) =====
@@ -3933,13 +4055,13 @@ local function outputDataInner()
                 local vd_header = "\n# VEHICLE_DESTROYED\n" ..
                     "# vehicle_name;time;attacker_guid;attacker_name;attacker_team;" ..
                     "means_of_death;health_before\n"
-                et.trap_FS_Write(vd_header, string.len(vd_header), fd)
+                writeOutput(vd_header, string.len(vd_header), fd)
                 for _, it in ipairs(vd_items) do
                     local d = it.d
                     local line = string.format("%s;%d;%s;%s;%s;%d;%d\n",
                         it.name, trunc(d.time), d.attacker_guid, d.attacker_name, d.attacker_team,
                         trunc(d.means_of_death), trunc(d.health_before))
-                    et.trap_FS_Write(line, string.len(line), fd)
+                    writeOutput(line, string.len(line), fd)
                 end
             end
         end
@@ -3957,13 +4079,13 @@ local function outputDataInner()
             local ec_header = "\n# ESCORT_CREDIT\n" ..
                 "# player_guid;player_name;player_team;vehicle_name;mounted_time_ms;" ..
                 "proximity_time_ms;total_escort_distance;credit_distance;samples\n"
-            et.trap_FS_Write(ec_header, string.len(ec_header), fd)
+            writeOutput(ec_header, string.len(ec_header), fd)
             for _, ec in ipairs(ec_items) do
                 local line = string.format("%s;%s;%s;%s;%d;%d;%.1f;%.1f;%d\n",
                     ec.player_guid, ec.player_name, ec.player_team, ec.vehicle_name,
                     ec.mounted_ms, ec.proximity_ms, ec.total_escort_distance,
                     ec.credit_distance, ec.samples)
-                et.trap_FS_Write(line, string.len(line), fd)
+                writeOutput(line, string.len(line), fd)
             end
         end
     end
@@ -3973,12 +4095,12 @@ local function outputDataInner()
         local con_header = "\n# CONSTRUCTION_EVENTS\n" ..
             "# event_time;event_type;player_guid;player_name;player_team;track_name;" ..
             "player_x;player_y;player_z\n"
-        et.trap_FS_Write(con_header, string.len(con_header), fd)
+        writeOutput(con_header, string.len(con_header), fd)
         for _, ev in ipairs(tracker.construction.events) do
             local line = string.format("%d;%s;%s;%s;%s;%s;%d;%d;%d\n",
                 ev.event_time, ev.event_type, ev.player_guid, ev.player_name, ev.player_team,
                 ev.track_name, ev.player_x, ev.player_y, ev.player_z)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
@@ -3989,7 +4111,7 @@ local function outputDataInner()
             "approach_time_ms;approach_distance;beeline_distance;path_efficiency;" ..
             "self_kills;team_kills;escort_guids;enemies_nearby;nearby_teammates;" ..
             "run_type;obj_x;obj_y;obj_z;killer_guid;killer_name\n"
-        et.trap_FS_Write(orun_header, string.len(orun_header), fd)
+        writeOutput(orun_header, string.len(orun_header), fd)
         for _, run in ipairs(tracker.objective_runs.completed) do
             local line = string.format("%s;%s;%s;%s;%s;%d;%d;%.1f;%.1f;%.3f;%d;%d;%s;%d;%d;%s;%d;%d;%d;%s;%s\n",
                 run.engineer_guid, run.engineer_name, run.engineer_team,
@@ -3998,10 +4120,11 @@ local function outputDataInner()
                 run.self_kills, run.team_kills, run.escort_guids, run.enemies_nearby, run.nearby_teammates,
                 run.run_type, run.obj_x, run.obj_y, run.obj_z,
                 run.killer_guid, run.killer_name)
-            et.trap_FS_Write(line, string.len(line), fd)
+            writeOutput(line, string.len(line), fd)
         end
     end
 
+    output_file_handle = nil -- Do not retry an ambiguous close failure.
     et.trap_FS_FCloseFile(fd)
 
     -- Summary
@@ -4046,21 +4169,32 @@ local function outputDataInner()
     if config.test_mode.enabled and config.test_mode.lifecycle_log then
         outputLifecycleLog()
     end
+    return true -- Checked writes and close call, NOT fsync/durable completion.
 end
 
 -- Bug 15 fix: pcall wrapper ensures output_in_progress is always cleared
 local function outputData()
-    if config.output_guard and (tracker.output_in_progress or tracker.output_written) then
-        proxPrint("[PROX] Output already written or in progress, skipping\n")
+    if config.output_guard and (tracker.output_in_progress or tracker.output_attempted) then
+        proxPrint("[PROX] Output already attempted or in progress, skipping\n")
         return
     end
+    tracker.output_attempted = true
+    tracker.output_written = false
     tracker.output_in_progress = true
-    local ok, err = pcall(outputDataInner)
+    local ok, result = pcall(outputDataInner)
     tracker.output_in_progress = false
-    if ok then
+    if output_file_handle ~= nil then
+        local fd = output_file_handle
+        output_file_handle = nil
+        local closed, close_error = pcall(et.trap_FS_FCloseFile, fd)
+        if not closed then
+            et.G_Print("[PROX] ERROR closing failed output: " .. tostring(close_error) .. "\n")
+        end
+    end
+    if ok and result == true then
         tracker.output_written = true
-    else
-        et.G_Print("[PROX] ERROR in outputData: " .. tostring(err) .. "\n")
+    elseif not ok then
+        et.G_Print("[PROX] ERROR in outputData: " .. tostring(result) .. "\n")
     end
 end
 
@@ -4154,7 +4288,6 @@ end
 -- most 1/s, and a crash never loses buffered lines.
 local frame_health_state = {
     prev_wall = nil, prev_self = -1, last_write = -math.huge, writes = 0,
-    last_lt = nil, last_lt_wall = nil,
 }
 
 local function frameHealthReport(wall_now, level_time)
@@ -4184,22 +4317,16 @@ local function frameHealthReport(wall_now, level_time)
         end
         return
     end
-    -- v6.13: a pause freezes levelTime while the wall clock runs on. The
-    -- 2026-09-02 storm grew DURING a pause, and only this flag can say so
-    -- from the log alone (the etconsole prefix is svs.time, not a pause bit).
-    local paused = 0
-    if level_time ~= nil then
-        if st.last_lt == level_time then
-            if st.last_lt_wall ~= nil and wall_now - st.last_lt_wall >= 1000 then paused = 1 end
-        else
-            st.last_lt = level_time
-            st.last_lt_wall = wall_now
-        end
-    end
     local gap = wall_now - prev_start
     if gap < (fh.gap_threshold_ms or 100) then return end
     if wall_now - st.last_write < (fh.min_write_interval_ms or 1000) then return end
     if st.writes >= (fh.max_lines_per_state or 300) then return end
+    -- ET 2.85 freezes timeCurrent, NOT the levelTime passed to Lua.
+    -- Use the same CV_SVS_PAUSE bit as the engine client (menudef.h).
+    -- This observes state now, not proof the whole preceding gap was paused.
+    local toggles = tonumber(et.trap_GetConfigstring(et.CS_SERVERTOGGLES))
+    assert(toggles and toggles >= 0 and toggles % 1 == 0, "frame_health: invalid server toggles")
+    local paused = math.floor(toggles / 16) % 2
     st.last_write = wall_now
     st.writes = st.writes + 1
     local players = 0
@@ -4217,18 +4344,18 @@ local function frameHealthReport(wall_now, level_time)
 end
 
 function et_InitGame(levelTime, randomSeed, restart)
+    pause_capture = {blocked=false, observed=false, unknown=false}
+    runtime_proximity_invalidated = runtime_proximity_binding ~= nil
+    runtime_proximity_context = nil
     fh_init()
     et.RegisterModname(modname .. " " .. version)
 
-    -- A map_restart keeps the lua VM alive, so without this reset the INIT
-    -- proof line would skip restarts and the per-state write cap would
-    -- carry over (review on #876). The wall clock is engine-global and
-    -- never resets, so dropping prev_wall only suppresses one frame's gap.
+    -- Defensive same-instance reset. Official ET 2.85 map_restart destroys and
+    -- recreates Lua VMs (G_ShutdownGame/G_InitGame); a repeated InitGame on this
+    -- closure is a separate harness scenario, not proof of that engine lifecycle.
     frame_health_state.prev_wall = nil
     frame_health_state.prev_self = -1
     frame_health_state.writes = 0
-    frame_health_state.last_lt = nil
-    frame_health_state.last_lt_wall = nil
 
     if not config.output_dir or config.output_dir == "" then
         config.output_dir = "proximity/"
@@ -4238,11 +4365,17 @@ function et_InitGame(levelTime, randomSeed, restart)
     end
 
     refreshRoundInfo()
+    runtime_proximity_context = {
+        gamestate=tonumber(et.trap_Cvar_Get("gamestate")),
+        counter=tonumber(et.trap_Cvar_Get("g_currentRound")), map_name=getMapName(),
+        exit_flag=et.trap_GetConfigstring(et.CS_INTERMISSION),
+    }
     tracker.round.start_time = levelTime
     -- Set fallback unix timestamp now; et_RunFrame will overwrite on warmup→live transition
     round_start_unix = os.time()
     round_end_unix = 0
     tracker.output_written = false
+    tracker.output_attempted = false
     tracker.output_in_progress = false
     tracker.output_pending = false
     tracker.output_due_ms = 0
@@ -4690,7 +4823,25 @@ function et_RunFrame(levelTime)
         frame_health_state.error_printed = true
         et.G_Print("[PROX] frame_health error: " .. tostring(fh_err) .. "\n")
     end
-    frame_level_time = levelTime  -- Bug 1 fix: store for gameTime(); freezes during pause
+    frame_level_time = levelTime  -- raw frame clock, including pause; see gameTime()
+
+    local blocked = captureBlocked()
+    if blocked then
+        for _, track in pairs(tracker.player_tracks) do track.capture_gap = true end
+        for _, state in pairs(tracker.carrier.active) do state.capture_gap = true end
+        for _, veh in pairs(tracker.vehicles.entities) do veh.capture_gap = true end
+        tracker.last_stamina = {}
+    elseif pause_capture.blocked then
+        -- Unpause may occur after G_RunFrame accounts for a paused interval.
+        -- Do not call this transition an active sample or catch up missed ticks.
+        tracker.last_sample_time = gameTime()
+        tracker.cohesion.last_check_time = gameTime()
+        tracker.crossfire_opps.last_check_time = gameTime()
+        tracker.pushes.last_check_time = gameTime()
+        tracker.vehicles.last_check_time = gameTime()
+    end
+    local resume_transition = pause_capture.blocked and not blocked
+    pause_capture.blocked = blocked
 
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
 
@@ -4743,6 +4894,10 @@ function et_RunFrame(levelTime)
 
     -- Detect round start
     if gamestate == 0 and last_gamestate ~= 0 then
+        if runtime_proximity_context ~= nil then
+            if runtime_proximity_context.live_seen then runtime_proximity_invalidated = true end
+            runtime_proximity_context.live_seen = true
+        end
         refreshRoundInfo()
         refreshSpawnTimers()
         -- RCA-2: re-anchor the round time base to the ACTUAL round-live moment
@@ -4763,6 +4918,7 @@ function et_RunFrame(levelTime)
         round_start_unix = os.time()
         round_end_unix = 0
         tracker.output_written = false
+        tracker.output_attempted = false
         tracker.output_in_progress = false
         tracker.output_pending = false
         tracker.output_due_ms = 0
@@ -4787,7 +4943,7 @@ function et_RunFrame(levelTime)
             track.death_pos = pos
             track.death_type = "round_end"
             if pos then
-                table.insert(track.path, {
+                appendTrackPoint(track, {
                     time = track.death_time, x = round(pos.x, 1), y = round(pos.y, 1), z = round(pos.z, 1),
                     health = safe_gentity_get(clientnum, "health") or 0,
                     speed = 0, weapon = safe_gentity_get(clientnum, "ps.weapon") or 0,
@@ -4832,7 +4988,7 @@ function et_RunFrame(levelTime)
     last_gamestate = gamestate
 
     -- During play
-    if gamestate == 0 then
+    if gamestate == 0 and not blocked and not resume_transition then
         local fh_t0 = fh_now()
         sampleAllPlayers()
         fh_section("sample", fh_t0)
@@ -5191,7 +5347,7 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
             local health = safe_gentity_get(clientNum, "health") or 100
             local weapon = safe_gentity_get(clientNum, "ps.weapon") or 0
             local stance, sprint = getPlayerMovementState(clientNum, 0)
-            table.insert(track.path, {
+            appendTrackPoint(track, {
                 time = now, x = round(pos.x, 1), y = round(pos.y, 1), z = round(pos.z, 1),
                 health = health, speed = 0, weapon = weapon,
                 stance = stance, sprint = sprint, event = "revived"
@@ -5438,7 +5594,7 @@ function et_ShutdownGame(restart)
             track.death_pos = pos
             track.death_type = "shutdown"
             if pos then
-                table.insert(track.path, {
+                appendTrackPoint(track, {
                     time = track.death_time, x = round(pos.x, 1), y = round(pos.y, 1), z = round(pos.z, 1),
                     health = safe_gentity_get(clientnum, "health") or 0,
                     speed = 0, weapon = safe_gentity_get(clientnum, "ps.weapon") or 0,

@@ -32,6 +32,7 @@ from website.backend.services.reinforcement_clock import (
     ReviveObservation,
     TimingObservation,
 )
+from website.backend.services.track_lifecycle import track_end_sql
 
 
 def is_bot_player(guid: str | None, name: str | None) -> bool:
@@ -86,9 +87,9 @@ async def fetch_clock_lives_and_revives(
 ) -> tuple[list[PlayerLife], list[ReviveObservation], int]:
     """Lives and revives for one round, bots removed."""
     track_rows = await db.fetch_all(
-        """
+        f"""
         SELECT id, player_guid, player_name, team, spawn_time_ms, death_time_ms,
-               path -> -1 ->> 'event' AS death_type
+               {track_end_sql()} AS death_type
         FROM player_track
         WHERE round_id = $1
         ORDER BY player_guid, spawn_time_ms, id

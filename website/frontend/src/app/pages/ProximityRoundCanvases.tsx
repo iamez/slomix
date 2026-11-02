@@ -16,6 +16,7 @@
  * (both reviewers read the fixture and said so).
  */
 import { useState } from 'react';
+import { journeyPointAt } from '../../../../js/journey-position.js';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
@@ -24,7 +25,7 @@ import { isFailureStatus } from '../lib/responseStatus';
 import {
   usePlayerJourney, useProxPlayers, usePushHeatmap, useWaveCycles,
 } from '../lib/queries';
-import type { JourneyLife, WaveClockValidation } from '../lib/types';
+import type { JourneyLife, JourneyPathPoint, WaveClockValidation } from '../lib/types';
 import { ProxPanel, ProxRow } from './proximityShared';
 import { mmss } from '../components/RoundsTable';
 
@@ -172,18 +173,14 @@ function Heatmap({ sessionDate, mapName }: { sessionDate: string; mapName: strin
   );
 }
 
-/** The path point nearest to a timestamp — kill/death records carry times,
- * not coordinates, so a marker's place is the track's own answer to
- * "where were they then". */
+/** Sample-based estimate, restricted to one observed segment. */
 function nearestPoint(life: JourneyLife, t: number) {
-  let best = null as { x: number; y: number } | null;
-  let bestD = Infinity;
-  for (const p of life.path) {
-    if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
-    const d = Math.abs(p.t - t);
-    if (d < bestD) { bestD = d; best = { x: p.x, y: p.y }; }
-  }
-  return best;
+  return journeyPointAt(life.path, t);
+}
+
+function isJourneyPosition(point: JourneyPathPoint): point is JourneyPathPoint & { x: number; y: number } {
+  return typeof point.x === 'number' && typeof point.y === 'number'
+    && Number.isFinite(point.x) && Number.isFinite(point.y);
 }
 
 function LifePath({ life, extent }: { life: JourneyLife; extent: { minX: number; spanX: number; minY: number; spanY: number } }) {
@@ -195,8 +192,14 @@ function LifePath({ life, extent }: { life: JourneyLife; extent: { minX: number;
   const ny = (y: number) => (extent.spanY === 0 ? 0.5 : (y - extent.minY) / extent.spanY);
   const px = (x: number) => nx(x) * (w - 20) + 10;
   const py = (y: number) => h - (ny(y) * (h - 20) + 10);
-  const pathPts = life.path.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
-  const d = pathPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
+  const pathPts = life.path.filter(isJourneyPosition);
+  let connected = false;
+  const d = life.path.map((p) => {
+    if (!isJourneyPosition(p)) { connected = false; return ''; }
+    const command = !connected || p.break_before || p.event === 'capture_resume' ? 'M' : 'L';
+    connected = true;
+    return `${command}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`;
+  }).join(' ');
   const spawn = pathPts[0];
   return (
     <g>
@@ -269,7 +272,7 @@ function Journey({ sessionDate, mapName, roundNumber, roundStartUnix }: { sessio
           <Meta>{q.data.message ?? 'no tracks for this player in this round'}</Meta>
         ) : (() => {
           const pts = q.data.lives.flatMap((l) => l.path)
-            .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+            .filter(isJourneyPosition);
           const xs = pts.map((p) => p.x); const ys = pts.map((p) => p.y);
           const extent = {
             minX: Math.min(...xs), spanX: Math.max(...xs) - Math.min(...xs),
@@ -284,7 +287,7 @@ function Journey({ sessionDate, mapName, roundNumber, roundStartUnix }: { sessio
                 <Meta>
                   {q.data.player.name ? stripEtColors(q.data.player.name) : q.data.player.guid.slice(0, 8)} ({q.data.player.team.toLowerCase()}) ·
                   {' '}{figure(q.data.summary.lives ?? q.data.lives.length)} lives · {figure(q.data.summary.kills ?? 0)} kills · {figure(q.data.summary.deaths ?? 0)} deaths
-                  {q.data.summary.avg_life_s != null ? ` · ${figure(q.data.summary.avg_life_s)} s per life` : ''}
+                  {q.data.summary.avg_raw_span_s != null ? ` · ${figure(q.data.summary.avg_raw_span_s)} s average raw span (${figure(q.data.summary.raw_span_samples ?? 0)} eligible tracks); may include pauses` : ' · raw span unavailable; active life time unverified'}
                   {q.data.summary.objective_events_unavailable ? ' · objective events unavailable (the lookup failed)' : q.data.summary.objective_events != null ? ` · ${figure(q.data.summary.objective_events)} objective events` : ''}
                 </Meta>
               )}
@@ -293,14 +296,15 @@ function Journey({ sessionDate, mapName, roundNumber, roundStartUnix }: { sessio
                   <ProxRow
                     key={l.life_index}
                     name={`life ${l.life_index} · ${l.player_class.toLowerCase()}`}
-                    mid={`${l.narrative} · ${mmss(l.spawn_time_ms / 1000)}–${l.death_time_ms == null ? 'round end' : `${mmss(l.death_time_ms / 1000)}${l.death_type && l.death_type !== 'round_end' ? ` (${l.death_type.replace(/_/g, ' ')})` : ''}`} · ${figure(Math.round(l.total_distance))} u${l.sprint_pct != null ? ` · ${figure(Math.round(l.sprint_pct))}% sprint` : ''}${l.solo_pct != null ? ` · ${figure(Math.round(l.solo_pct))}% alone` : ''}${l.proximity_series ? ` · ${figure(l.proximity_series.length)} proximity samples` : ''}${l.objective_events && l.objective_events.length > 0 ? ` · ${figure(l.objective_events.length)} objective events` : ''}`}
-                    val={`${figure(Math.round(l.duration_ms / 1000))} s · ${figure(l.kills.length)}k`}
+                    mid={`${q.data.elapsed_time_quality ? l.narrative : 'Legacy narrative withheld: timing unverified'} · ${mmss(l.spawn_time_ms / 1000)}–${l.death_time_ms == null ? 'end unknown' : `${mmss(l.death_time_ms / 1000)}${l.death_type && l.death_type !== 'round_end' ? ` (${l.death_type.replace(/_/g, ' ')})` : ''}`} · ${figure(Math.round(l.total_distance))} u${l.sprint_pct != null ? ` · ${figure(Math.round(l.sprint_pct))}% sprint` : ''}${l.solo_pct != null && l.solo_basis ? ` · ${figure(Math.round(l.solo_pct))}% distant observed teammate` : ''}${l.proximity_unavailable ? ` · ${l.proximity_unavailable}` : l.proximity_series ? ` · ${figure(l.proximity_series.length)} proximity samples` : ''}${l.objective_events && l.objective_events.length > 0 ? ` · ${figure(l.objective_events.length)} objective events` : ''}`}
+                    val={`${l.raw_duration_ms == null ? 'raw span unavailable' : `${figure(Math.round(l.raw_duration_ms / 1000))} s raw span`} · ${figure(l.kills.length)}k`}
                   />
                 ))}
               </Stack>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
                 green spawn · amber kills · red death, each placed at the
-                track point nearest its timestamp — engine coordinates
+                nearest sample within one observed segment; markers outside coverage
+                are omitted, not missing events — approximate engine coordinates
                 normalised to this player's own extent, no map underlay
               </Lbl>
             </Stack>

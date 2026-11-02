@@ -104,6 +104,8 @@ def _publish_file(directory, filename, chunks, expected_size, expected_sha256):
                      0o600, dir_fd=directory_fd)
         created = True
         with os.fdopen(fd, 'wb') as stream:
+            if stat.S_IMODE(os.fstat(stream.fileno()).st_mode) not in {0o400, 0o600}:
+                raise ValueError('Publication requires an owner-readable private file')
             total = 0
             digest = hashlib.sha256() if expected_sha256 is not None else None
             for chunk in chunks:
