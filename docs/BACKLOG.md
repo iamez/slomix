@@ -1,3 +1,20 @@
+## 2026-11-02 - CI fixture environment and handoff routing corrected
+
+Initial1111head0ba4a2cf fails4cases on each native engine: two new TCP CLI cases,
+one successful-config unit case and the handoff header contract. Exact errors:
+assert 1 == 0; assert 0 == 1; routing header assertion in empty introduction.
+Failed native runs otherwise report12512/12516passes and163/159skips.
+
+RCA: setup-python exports LD_LIBRARY_PATH. The production config guard correctly
+rejects inherited loader overrides; successful test fixtures failed to scrub it.
+Clean only the explicit test/child environment (including LD_PRELOAD/LD_AUDIT and
+PYTHONHOME), retain production refusal and add those keys to refusal tests. No
+application guard or import contract is weakened. Both CI refusals/header failures
+reproduced locally before correction. The new handoff checkpoints must follow
+its preserved initial current-routing header, not precede it. All original bytes
+and paragraph order are retained.79focused config/ledger cases pass with an
+injected loader environment; new exact-head native execution is still required.
+
 ## 2026-11-02 - Import target implementation evidence before native CI
 
 152focused local cases pass; the native CLI case is unexecuted locally because

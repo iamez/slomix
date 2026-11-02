@@ -53,7 +53,8 @@ async def test_pinned_tcp_cli_actual_commit_and_replay(full_import_db, tmp_path,
     # Only the child is scrubbed: parent fixture authority remains intact.
     environment = {key: value for key, value in os.environ.items()
                    if not key.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_'))
-                   and key not in {'PYTHONPATH', 'PYTHONHOME', 'BOT_ENVIRONMENT'}}
+                   and key not in {'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH',
+                                   'LD_AUDIT', 'BOT_ENVIRONMENT'}}
 
     async def invoke():
         process = await asyncio.create_subprocess_exec(

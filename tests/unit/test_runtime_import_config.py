@@ -80,7 +80,8 @@ def test_incomplete_interpolated_or_ambiguous_configuration_is_refused(tmp_path,
 
 
 @pytest.mark.parametrize('key', ['PGHOST', 'PGPASSWORD', 'PGPASSFILE', 'PGSERVICE', 'POSTGRES_HOST',
-                                 'DATABASE_URL', 'DB_PASSWORD', 'PYTHONPATH', 'BOT_ENVIRONMENT'])
+                                 'DATABASE_URL', 'DB_PASSWORD', 'PYTHONPATH', 'PYTHONHOME',
+                                 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT', 'BOT_ENVIRONMENT'])
 def test_inherited_shadow_settings_are_refused_even_if_equal(tmp_path, key):
     path, digest = config_file(tmp_path)
     with pytest.raises(ValueError, match='Inherited environment'):
@@ -149,7 +150,9 @@ def test_tcp_does_not_admit_implicit_or_public_targets(host):
 
 def clear_database_environment(monkeypatch):
     for key in list(os.environ):
-        if key.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_')) or key in {'PYTHONPATH', 'BOT_ENVIRONMENT'}:
+        if key.startswith(('POSTGRES_', 'DB_', 'PG', 'DATABASE_')) or key in {
+            'PYTHONPATH', 'PYTHONHOME', 'LD_PRELOAD', 'LD_LIBRARY_PATH', 'LD_AUDIT', 'BOT_ENVIRONMENT',
+        }:
             monkeypatch.delenv(key)
 
 
