@@ -189,9 +189,9 @@
   "/api/voice-activity/history": "19 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3484,
+  "read": 3482,
   "unread": 6,
-  "dropped": 199,
+  "dropped": 201,
   "endpoints": 180,
   "endpoints_fully_read": 176,
   "unmeasured": 3
@@ -563,9 +563,9 @@
    "dropped": 0
   },
   "/api/proximity/player-journey": {
-   "read": 33,
+   "read": 31,
    "unread": 0,
-   "dropped": 0
+   "dropped": 2
   },
   "/api/proximity/player/{guid}/profile": {
    "read": 19,
@@ -8395,7 +8395,8 @@
   {
    "endpoint": "/api/proximity/player-journey",
    "key": "lives.duration_ms",
-   "status": "read"
+   "status": "dropped",
+   "reason": "Legacy stored duration is retained on the wire for compatibility, not certified active life time. ProximityRoundCanvases renders qualified raw_duration_ms with an explicit raw-span label instead (proximity_journey.py; 2ffab126; PLAN Journey elapsed qualification, 2026-10-09)."
   },
   {
    "endpoint": "/api/proximity/player-journey",
@@ -8515,7 +8516,8 @@
   {
    "endpoint": "/api/proximity/player-journey",
    "key": "summary.avg_life_s",
-   "status": "read"
+   "status": "dropped",
+   "reason": "Deprecated by proximity_journey.py, which now returns null: raw track spans do not certify active life time. The Journey UI reads avg_raw_span_s and raw_span_samples with a pause warning instead (2ffab126; PLAN Journey elapsed qualification, 2026-10-09)."
   },
   {
    "endpoint": "/api/proximity/player-journey",

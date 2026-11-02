@@ -1,3 +1,24 @@
+## 2026-11-02 — Forward-only reconciliation of existing development PRs
+
+Refresh this PR against main0b24a989. Private proof verifies every main ledger
+line in order, all original branch insertion blocks and exact source three-way
+composition. Original heads are retained in a verified Git bundle; no deletion,
+force push, service action, database write or game update.
+
+Actual tip-to-tip source comparison finds1100 already incorporated: five files
+are byte-identical to main and the frontend manifest differs only by main's newer
+modern provenance build command. Preserve that improvement; do not treat a stale
+three-dot PR diff as missing code. Retain1100's branch/history and close it as
+superseded, rather than merging a documentation-only duplicate.
+
+Remaining order:1103 Python trust/crypto ->1104 Supply retention ->1105 R1 event
+clock ->1106 update safeguards ->1109 timing.1109 depends on already merged schema
+and proximity. Before EACH merge: latest-main refresh, exact-head CI/review, full
+420second cycle and independently matching reviewed/merged trees. The current
+request does not name PR numbers; obtain one explicit numbered decision for this
+five-PR queue.956 release automation and historical NEVER MERGE reviews stay held.
+Resume original runtime caller/package/D4/D5 gates after reconciliation.
+
 ## 2026-10-28 — Keep complete update preimages private
 
 Full code/state backups contain private configuration and logs. Reviewedupdater
@@ -61,6 +82,593 @@ not replace it duringintegration. Supplyrecovery,frame-healthanalysisfixes and
 runtime1096/1097/D4/D5 remain. Owneractivation andpost-startnativeverification
 are distinct outstanding steps; productionSlomix is untouched.
 
+## 2026-10-30 — Preserve strict legacy ingestion under declared policy opt-in
+
+Original runtime PLAN and its improvements remain the goal; the testing audit
+is recorded below and must not replace that roadmap. Prior2b29ab00 passes all
+26checks(25SUCCESS/1SKIPPED), PG14=12012/163skips, PG17=12016/159skips. Its direct
+legacy replay correction has full native proof. Tenth review identifies a genuine
+runtime policy composition bug: enabling support for declared captures also forces
+legacy captures through declared provenance and prevents their import/replay.
+
+Classify only source bytes verified against persisted admission size/hash, and
+only after matching sealed completion. Declared headers keep strict mapping;
+undeclared files keep existing strict canonical-parent/receipt checks. Malformed
+present declarations still fail; never infer or adopt declared provenance for
+legacy files. Observer only queries declared proof when source declares identity.
+Explicit parser binding semantics remain strict. No existing reconciliation hold
+is cleared, no completion/source is changed and no data is auto-repaired.
+
+Two regression cases fail before correction;146related local cases pass after.
+Reverting observer selection or import selection each yields1failure; both sources
+restore byte-identically with cmp. Ruff/Bandit pass. Extend actual canonical PG
+legacy import -> independent receipt -> replay for policy OFF/ON, requiring one
+track/strict digest/parent receipt, zero declared mappings and unchanged source.
+Fresh exact-head native PG14/17 and full CI remain required; no new local full run.
+
+After this runtime slice: numbered#1108merge permission, prescribed420secondcycle,
+exact-source release preparation and originalD4/D5 source/writer/recovery gates.
+Testing-quality lane retains70unexpected SQL skips, duplicated CI, missing runtime
+coverage measurement and separate real browser/game evidence. All old plans,
+features, Supply/frame-health/Spiderweb/UI/Stats/security/history stay preserved.
+No service/deploy/liveDB/migration/game action; original PLAN remains byte-contained.
+
+## 2026-10-30 — Testing audit remains part of the original runtime roadmap
+
+Owner reaffirms runtime development plus the improvements/fixes recorded in the
+original PLAN. Read-only audit of2b29ab00 measures12174collected Python cases,
+7145base names;990Reactcases. Both push/PR run two Python/PG jobs, yielding48056
+successful Python case executions and48.75summed CI job-minutes, excluding other
+workflows. These are repeated executions, not48056independent test definitions.
+
+Confirmed priority gaps:70plausibility SQL and2view cases skip because fixtures
+expect application POSTGRES_* while CI supplies isolated POSTGRES_TEST_*; broad
+exception/SystemExit handling hides it. Fix with isolated populated fixtures and
+fail when explicitly requested setup breaks, never application credentials.
+Coverage63% measures bot/backend only; shared runtime/parser are unmeasured there.
+Playwright/real ET asset gates remain separate; six Python e2e cases only test
+configuration. Deduplicate push/PR while retaining stacked PR/merge_group proof;
+track skipped behavioral coverage and avoid source-name-only confidence. Keep all
+history. Private report evidence/TESTING-AUDIT-20261030.md and measuredJSON.
+
+Audit ran no tests, DB connections, browsers, services or workflow changes.
+Return to current #1108 legacy-policy compatibility fix, then exact-source release
+and originalD4/D5 source/writer/recovery plan. No numbered1108merge approval.
+
+## 2026-10-29 — Close direct legacy replay capture-boundary dependency
+
+Priorheadbeb8b295 completes26checks:25SUCCESS/1SKIPPED(CodeRabbit), zero failures;
+fullPG14=11991passed/163skipped, PG17=11995passed/159skipped, React990cases pass.
+A ninth review finding then reopens the actual legacy replay UI: it consumes raw
+tracks directly, bypassing the corrected backend replay positions/paths readers.
+Do not treat earlier green CI/eight resolved findings as this new fix's proof.
+
+Carry the existing canonical replay.js capture-boundary context into both Canvas
+track drawing and event-position lookup. Withhold the explicit unobserved gap,
+reset trails before every coincident resume group, preserve coordinate-less and
+legacy tuple markers, and retain unmarked legacy nearest-position behavior.
+Execute the whole shipped module in a Node VM/recording Canvas, not a reimplemented
+position model. Actual Lua file -> parser -> Canvas proof is included. Pin the
+review's200ms/x10 ->10600ms/x50 case at8000/10600/10800ms with a life spanning it.
+
+Before restoration19cases fail/2pass; afterwards21pass. Removing the new actual
+Canvas gap guard yields one observed failure, then cmp verifies full restoration.
+Generated datapoint ledger remains current. Fresh exact-head PG14/17 and complete
+CI are still required. No numbered #1108 merge permission, live data write,
+service/game/deploy/migration action. Original plan/history and all broader
+runtime/D4/D5, Supply, frame-health, live/Spiderweb/UI/Stats/security lanes remain.
+
+## 2026-10-29 — Complete journey renderers and sanitized timing admission
+
+173d8c59 passes all checks, including both native PostgreSQL suites. Two new
+review findings remain actionable: old Canvas/SVG journey rendering connects
+across capture gaps, and timing admission compares sanitized filenames with
+unsanitized original map names. Carry the existing canonical segmented journey
+UI/shared marker helper and raw-clock labels, including nullable boundary types.
+Markers require a unique observed segment; unavailable coverage is not solitude.
+The actual legacy Canvas/HTTP harness exercises the shipped code without a browser.
+
+Timing admission now validates original metadata/embed map agreement, derives the
+producer filename sanitization separately, and keeps raw-byte/source identity
+checks. Actual whole-producer output for supply.te+test is admitted for both
+halves; conflicting original names that sanitize identically remain rejected.
+151 focused cases pass. Reverting filename normalization fails both whole-producer
+cases; removing the Canvas boundary guard fails its rendering case. Both guards
+are restored byte-for-byte. Changed-file Bandit is clean. Fresh exact-head CI,
+including Node22 React typecheck/tests and both PostgreSQL versions, is required.
+
+No live DB write, migration, service/game action or deployment. No numbered #1108
+merge permission exists. Full original PLAN, broader runtime/D4/D5, Supply,
+frame-health, Spiderweb/geometry and security work remain retained; README B+C
+presentation stays deferred and DPM attribution belongs to Superboyy.
+
+## 2026-10-29 — Complete producer/reader contract after second review
+
+81883578 passes all26checks, but three new review findings block merge: new timing/
+proximity bindings inverted the existing active-start counter contract; replay
+lookahead crosses suppressed capture gaps; legacy receipt inspection decodes names
+more strictly than the canonical parser. All three require fixes, not closure by
+old green CI. No numbered1108merge permission exists.
+
+Align BOTH producers with actual runtime_init_lease/c0rnp0rn8: active counter1=R1,
+0=R2; G_LogExit flips it before Lua end callbacks (pinned COMP13g_main.c3116).
+Freeze half labels from the binding, require the complementary end counter and
+fresh InitGame exit-flag agreement, including retained CS_INTERMISSION=1. Align
+map alphabet with the existing lease. The two producer fixtures now invoke the
+actual stats lease module and cross-check its requested half. Full dispatched
+stats/timing/proximity outputs agree for normal and retained-intermission profiles.
+
+Carry the already-developed complete capture-aware reader slice from the canonical
+candidate: segmented replay/trails, unavailable gap positions, conservative pressure,
+journey/time-quality and receipt-linked capture policy. This is required telemetry
+compatibility; all broader frontend/geometry plans remain preserved. Match canonical
+replacement decoding in legacy observation and declared-binding header inspection;
+keep hashes over unchanged raw bytes and ASCII identity/map validation strict.
+
+371related local cases pass; actual ASGI/Lua/file/parser paths execute. Reverting
+either producer counter causes2failures; reverting legacy decoding causes1; removing
+replay gap guard causes1. cmp restores all. Prepared actual PG legacy/declared
+non-UTF8 canonical import/replay cases still require fresh exact-head CI. Bandit,
+selected Ruff and tracked Lua parsing pass. No live DB write, migration, deployment,
+service, game or production action. Original PLAN and older features stay intact.
+
+## 2026-10-29 — Resolve final review lifecycle and transient-error findings
+
+Exact expanded heada5e2a8aa passes all26checks. Full PG14/Python3.11 reports11869
+passed/163skipped; PG17/Python3.13 reports11873passed/159skipped. Every six new
+configured-policy case passes on both. Review then identifies two real P2 bugs:
+capture_resume can hide terminal type from old readers, and parser False after
+a transient DB cancellation can persist a sticky reconciliation hold.
+
+Carry the existing authoritative lifecycle SQL helper and NARROW lifecycle changes
+in clock/competitive/journey/information-state readers; explicit unknown prevents
+legacy fallback. Do not copy the full pending UI/geometry/replay features or lose
+them from canonical current. The complete candidate already includes those reader
+semantics; preserve its larger files and append only new regression coverage.
+
+Recognized timeout/connection/serialization/deadlock/capacity failures now propagate
+through parser import/optional-column probes and enter the worker's bounded
+backoff. Programming/identity conflicts remain visible/reconciliation cases. Add
+actual PG statement-timeout -> rollback/no hold/cooldown -> committed recovery,
+and whole Lua paused/resume death -> native lifecycle SQL -> normal spawn tests.
+These three native cases still require fresh exact-head PG14/17 CI. Local parser/
+worker/UI tests and observed7/3failure guard mutations pass after cmp restoration.
+Remove unused serve re-export; cleanup test now exercises actual child _batch.
+
+Publication grows to79files because review proves reader dependency is required,
+above the75target but within the existing225hard ceiling; retain one cohesive PR
+and normal hooks, never bypass them. All original plans/features and deferred
+README B+C remain. #1108 still needs numbered merge permission. No live DB write,
+migration, service, Puran/production action, new worktree or source deletion.
+
+## 2026-10-29 — Native ingestion succeeds; repair remaining historical fixture closure
+
+First expanded CI346f75a0/PG14 proves all six new checkpoint/configured-entrypoint
+policy cases and actual Lua canonical mapping/aggregate tests PASS. The full job
+reports20failed/11848passed/163skipped: nineteen depend on an older linked_import
+fixture lacking migration096/its batch-dispatch keyword interface; one still
+asserts the old known-bug zero-origin duration of0instead of3000. Carry the existing
+canonical fixture/test updates without changing source or weakening schema guards.
+Current5a7d1323 Lua, security, frontend and CodeQL checks pass; the same obsolete
+PG fixture closure still needs correction and a fresh exact-head full CI run.
+
+Owner also requested a short player-facing Puran upgrade recap. Before-update
+native evidence says2.84.0; selected archive/native proof says2.86.0-13-g39c75a3.
+Primary upstream comparison confirms exactly13commits beyond v2.86.0, no behind
+commits. Private evidence/puran-community-comp13-recap.md records the ready draft
+and links. Do not attribute later Coming Soon antilag fixes or native-client-only
+OpenAL benefits to this server/PK3 upgrade; no Discord message was sent.
+
+Original runtime/D4/D5 and all retained incident/UI/history lanes remain intact.
+No service, production, game, live DB or migration action; no merge permission1108.
+
+## 2026-10-29 — Preserve full Lua CI contracts during ingestion publication
+
+#1108 expanded head346f75a0 is published,67paths, within the recorded75-file
+review target. Self-review confirms default-off policy and retained main schema;
+CodeQL Python/JS and security checks pass. Fresh full CI exposed an old Lua
+harness assertion: "a frozen levelTime for > 1 s must read paused=1". Pinned
+COMP13 upstream39c75a3 g_main.c4614+ proves timeCurrent freezes during pause while
+level.time advances; etmain/ui/menudef.h403 defines CV_SVS_PAUSE=16.
+
+Carry the existing corrected frame-health harness and fix the vehicle fixture's
+engine stubs: numeric unpaused CS_SERVERTOGGLES and an accepted-byte count from
+FS_Write. Movement/escort/destruction assertions remain intact. All four actual
+Lua CI harness commands now pass locally; all35tracked Lua files parse. Removing
+the real pause-bit guard causes the updated harness to fail; cmp restores source.
+This is a fixture/contract integration fix, not a reason to restore the incorrect
+clock inference. Actual engine source references stay in private evidence.
+
+Full original plan/features/history remain retained. PostgreSQL CI execution is
+still pending; no1108merge approval, activation, migration or service/game action.
+
+## 2026-10-29 — Complete proximity integration prepared for disposable-PG CI
+
+Existing #1108 now carries one cohesive source path: real Lua producer IDs and
+capture-quality headers, verified timing decoder, canonical parser, manifest-
+gated ingestion, independent commit observation, durable retry/queue/cursor and
+bounded worker/spawn supervisor. Explicit declaration policy remains default-off.
+No extra branch or worktree was created. Existing main migrations/bootstrap are
+preserved; unrelated website/config/community-parser changes are excluded.
+
+Local selected suite: 595 passed, 110 PostgreSQL cases explicitly skipped; XML
+and console counts agree. Sixteen frame-health compatibility cases also pass.
+The first composition exposed24failures from a missing decode_gametime_document
+prerequisite; carrying its existing stateless decoder resolves them. The changed
+subset then passes160cases and the final selected suite has zero failures.
+Three actual Lua/file/parser/receipt capture scenarios execute. Removing the gap
+distance guard causes two observed failures (1010units instead of20); restore
+is verified by cmp and all three runtime capture cases pass again. Selected
+Python sources lint clean apart from the same two pre-existing parser datetime
+warnings independently reproduced on main; no suppression or clock change.
+
+Four new opted-in PG cases exercise actual DEV configuration through an async
+worker or a freshly spawned native batch, with default-off and explicit-on policy,
+owned DB resources, independent exact canonical links and retained inputs. These
+and the two checkpoint-policy cases have not yet executed locally; actual PG14/17
+CI is required. The old green46b5cabb foundation proof cannot certify this update.
+#1108 has no numbered merge approval. No deployment, migration, live DB write,
+service action, Puran/production change or source deletion. Retain the complete
+original runtime/D4/D5, Supply/frame-health/Spiderweb/UI/Stats and README B+C plan.
+
+## 2026-10-29 — Publish the complete proximity ingestion path in existing #1108
+
+Fresh checks on46b5cabb completed without failures. Preserve that exact foundation
+checkpoint and extend the same review worktree/PR with the canonical parser,
+bounded ingest/commit/queue/batch/cursor/worker and explicit default-off policy.
+Carry actual Lua producer/harness and timing-admission prerequisites needed by
+the full stats + proximity identity proof. Keep existing migrations/bootstrap
+from main; the full candidate contains an older schema ordering and must not
+replace the already-published104/105 definitions. Do not copy unrelated config,
+community parser or website/UI changes merely because static imports reach them.
+
+Run selected local contracts and actual opted-in disposable PG14/17 CI, including
+the two new policy-through-batch canonical import cases. Check exact source and
+fixture dependencies, fresh processes, observer visibility, rollback/replay and
+mutation failures before a complete-ingestion claim. No deployment/activation
+claim follows. Preserve sticky reconciliation holds, source files and default-off.
+#1108 still requires its own numbered owner merge permission after fresh proof.
+
+All original runtime/D4/D5, Supply, frame-health, Spiderweb/UI/Stats work and
+README B+C remain retained. No live DB write, migration, service/Puran action,
+production change, new branch/worktree, source deletion or archival pruning.
+
+## 2026-10-29 — Extend existing proximity PR with retry and resource foundations
+
+Continue from the consolidated workspace; no new branch or worktree. #1107 at
+b46b3bae and #1108 at e12acdc8 both have green CI and no unresolved review threads.
+Neither has numbered merge permission. Extend #1108's existing caller-owned
+identity/receipt primitives with the existing durable retry and database-resource
+primitives instead of opening another PR for this closely related foundation.
+
+Retry charges before work, serializes cooperating processes with flock, retains
+backoff across restarts/cancellation/crashes, caps delay at 1800s and attempts at
+64, and never acknowledges or deletes a source. Resource borrowing uses distinct
+primary writer/observer backends, rejects database/schema mismatch and inherited
+transactions, and unwinds borrowed connections on cancellation. No new pool or
+service is implicitly started. Legacy writer exclusion remains the owner gate.
+
+Combined local contracts pass132cases;16real-PostgreSQL cases explicitly skip
+without a disposable DB. Native fresh-process retry/locking/crash tests execute;
+removing backoff causes one observed failure, dropping resource identity guard
+causes two; cmp verifies restoration. Actual PG resource fixture checks commit
+visibility and rollback through the real adapter; fresh CI execution is required.
+Its cleanup explicitly handles Exception and CancelledError. The worker/cursor
+integration test remains in the full candidate for its later dependency slice.
+An unused test import exposed by extracting that case was removed before publish.
+
+Keep new test output and temporary directories inside the existing evidence
+packet (workspace evidence link). Existing conftest unconditionally creates a
+slomix-test-logs directory per run, even when log variables are configured;
+set TMPDIR to the packet's test-tmp for these local runs instead of scattering
+new directories in /tmp. No cleanup/deletion of previous outputs is performed.
+
+Next remains parser integration and bounded ingest/commit/retry/dispatch/queue/
+batch, then D4/D5 trusted-source/exclusive-writer acceptance. Original full PLAN,
+Supply/frame-health/Spiderweb/UI/Stats and deferred README/About B+C survive.
+No migration, live DB write, deployment, service/Puran action or merge occurs.
+
+## 2026-10-29 — Publish declared proximity parent and receipt primitives
+
+App #1096 and state #1097 are merged (5c4ad123 and 70a94d35). Independent
+comparison proves the latter merge tree equals the exact reviewed 52189ee5 tree.
+#1101 now targets main at 6d3b5958; source bytes are unchanged by verified ancestry
+recording. #1107 at b08ced4e includes the timing declaration detection exemption
+and inherits all current state guards. Fresh CI is required; neither PR has
+numbered owner merge permission.
+
+The next dependency slice reuses existing header, declared parent resolution and
+receipt-link primitives from the full candidate, including the dot/plus map
+alphabet fix. Independent trusted source/hash/size/date binding precedes mapping,
+canonical round and initial-journal agreement. Legacy absence remains unbound;
+explicit contradictions refuse instead of clock fallback. Receipt prevalidation
+refuses historical completed/unlinked rows and reassignment; late link recording
+participates in the caller-owned transaction. No parser/Lua/consumer activation
+or ingest/queue wiring is included in this library slice.
+
+Local focused contracts: 95 passed, 15 PostgreSQL cases explicitly skipped.
+Native verified-source file proof covers both halves of five map spellings with
+exact identical library bytes and independent GNU/Python hashes. Digest guard
+removal causes one observed failure; actual journal-guard removal causes two,
+then cmp verifies restoration. An earlier inequality inversion was inconclusive:
+it rejected a different healthy half, masking the intended negative mutation.
+Do not call that result a proven guard. New disposable-PG cases exercise actual
+R1/R2 mapping/journal queries, contradictions, missing mapping without clock
+fallback, receipt rollback, legacy refusal and strict late-link prerequisites.
+Actual PostgreSQL CI proof remains required for these newly extracted cases.
+
+Next: review the identity primitives, then the existing bounded ingest/commit/
+retry/dispatch/queue/batch integration. Preserve D4/D5 trusted-source/exclusive
+writer gates and the original runtime/Supply/frame-health/Spiderweb/UI/Stats
+roadmap. No service, database write, new server, Puran or production action.
+
+## 2026-10-29 — Verified forward schema and inherited state admission fix
+
+All 67 proximity schema cases at 428a0ee4 passed on both actual CI PostgreSQL 14
+and 17, with zero skips. These include valid-row preservation, atomic refusal of
+invalid preexisting lineage and three executable SQL guard mutants. This closes
+that head's SQL proof gap; fresh CI is still required after inheriting #1097's
+new bare-ancestor admission correction. No applied migration bytes changed.
+
+#1096 is merged. #1097's prior merge cycle correctly refused a new unresolved
+review; its corrected source is inherited here before the replacement cycle.
+#1107 separately publishes all five preserved timing/lifecycle SQL sources and
+currently awaits its own PostgreSQL CI. Neither #1101 nor #1107 has numbered
+owner merge permission. They do not authorize database execution or activation.
+Identity/receipt linking and bounded ingestion remain next, with D4/D5 and the
+complete Supply/frame-health/Spiderweb/UI/Stats roadmap preserved.
+
+## 2026-10-29 — Refuse selected subtrees of bare Git repositories
+
+The approved #1097 merge cycle refused safely: failed=0, threads=1, behind=0,
+sha=yes; the PR stayed OPEN. Review 4407550761 is confirmed: selecting a child
+of a bare repository bypassed the root/nested metadata guard. Nine new cases
+failed before the fix, covering initial plan, late seed arrival, source/target
+delta scans and an actual plan CLI subprocess.
+
+Inventory now inspects every selected-root ancestor for bare metadata, using a
+separate bare-layout predicate. Ordinary data inside a normal Git worktree
+remains supported. The existing selected-root/nested .git and bare checks stay
+in force. All 217 state tests pass; removing the ancestor guard produces two
+observed failures, then cmp confirms restoration. Native CLI refuses before
+report/destination creation. No live state is copied or service controlled.
+
+Publish the corrected head, answer/resolve the confirmed review, and repeat fresh
+CI plus the complete prescribed 420-second merge cycle under existing numbered
+#1097 approval. Do not reuse the earlier completed wait or claim it merged.
+#1096 remains merged; #1101 and new #1107 (preserved timing/lifecycle schema)
+have no numbered merge permission. Original full runtime plan, D4/D5 and
+Supply/frame-health/Spiderweb/UI/Stats obligations remain. Production and
+owner-upgraded Puran are unchanged.
+
+## 2026-10-29 — Preserve the timing declaration coverage exemption
+
+Initial #1107 PostgreSQL 17 CI executed all 65 new timing/lifecycle schema cases
+successfully, with zero skips, but the whole job failed two round-id coverage
+contract cases. Publication omitted an existing full-candidate dependency:
+runtime_gametime_identities.round_id is a producer-issued 32-hex TEXT identity,
+not canonical rounds.id. Restore its documented detection exemption; generic
+clock-based relinking must never rewrite these immutable declarations.
+
+Only the existing six-line exemption is ported. Relinker queries/writers and
+coverage/canary tests remain unchanged. The focused local contract/schema suite
+passes 19 cases and explicitly skips 53 PostgreSQL cases. Removing the exemption
+causes both observed failures again; cmp confirms restoration. Re-run full CI at
+the corrected published head before claiming green. No services, database writes
+or historical source adoption. #1107 still has no numbered owner merge approval.
+Original runtime plan, D4/D5 and retained incident/UI/Spiderweb work remain.
+
+## 2026-10-29 — Publish preserved timing schema before identity ingestion
+
+Runtime app #1096 is merged at 5c4ad123; the separately approved state #1097
+is still in its final merge cycle. Proximity #1101 at 428a0ee4 passed all 67
+actual schema cases on PostgreSQL 14 and 17, with zero skips. Its applied
+096/100 bytes are preserved; stricter provenance is forward migration 105.
+Neither #1101 nor this follow-up has numbered owner merge permission.
+
+Publish the five existing, already-applied timing/lifecycle SQL sources
+097/098/101/102/103 byte-for-byte from the preserved release. Register them in
+dependency order and retain exact timing bootstrap blocks plus the nullable
+player_track.death_type column. No timing consumer, Lua change, historical
+adoption, backfill, service action or migration execution accompanies this slice.
+Identity/receipt linking follows after source publication, then bounded ingestion.
+
+Ten source/registration/bootstrap cases failed before restoration. Afterwards,
+26 focused static cases pass, with 106 PostgreSQL cases explicitly skipped
+locally (including the inherited proximity suite); actual CI PostgreSQL proof is
+still required. Checksum and omitted-bootstrap mutants each produce one observed
+failure, then source restoration passes cmp. New SQL fixtures exercise legacy
+source preservation, private ACL replay/reachable-role refusal and nullable
+lifecycle cause preservation. Existing link/application schema fixtures are reused.
+
+Native read-only checks against BOTH actual DEV roles independently count 105
+applied ledger entries and verify every restored file checksum. Missing files,
+checksum differences and invalid required columns are all zero; only 104/105
+remain pending. This proves source completeness, not activation readiness.
+Preserve D4/D5 trusted-source admission/exclusive writer handover, the original
+full runtime plan and Supply/frame-health/Spiderweb/UI/Stats work. Production
+Slomix and owner-upgraded Puran stay unchanged. Private proof packet:
+/home/samba/share/slomix-runtime-app-final-20261029-9nixuxrr.
+
+## 2026-10-29 — Preserve applied migrations and move lineage guards forward
+
+Actual DEV role preflights exposed checksum differences for096/100. Independently
+verified original bytes against105-row live ledger and eight preserved release
+copies per file, including Git object38dbeebf. Restore the consumed096/100bytes;
+keep their historical semantics intact and move the existing strict lineage
+indexes/FKs/null-gate check into NEW105_runtime_proximity_parent_constraints.sql.
+No live ledger or table is edited. New105validates existing rows and refuses
+incompatible lineage; it never infers a link or rewrites data.
+
+Bootstrap mirrors original096/100once plus105once; newest release config includes
+105. Tests cover a valid existing row unchanged across upgrade, atomic rejection
+of three invalid existing states, three executable SQL guard mutants and pinned
+old checksums. Local71unit/static/release-config cases pass;53actual PostgreSQL
+cases explicitly skip without an isolated service. This is NOT a SQL execution
+certificate. Publish for current-head PG14/17CI before claiming the fix verified.
+
+Unpublished identity/application source still accounts for five other already
+applied migrations097/098/101/102/103. The earlier shorthand attributing all seven
+missing app-source migrations to1101was imprecise:1101provides096/100only. Preserve
+both later publication lanes and never weaken startup inventory to hide omissions.
+Original runtime/D4/D5, Supply recovery and UI/Spiderweb plans remain. Owner's
+Puran update and production app version are unchanged. No new server or DB write.
+
+## 2026-10-25 — PR #1101: actual PostgreSQL proof and rejected column-ACL review premise
+
+- Verified public source head 9db6212a8c52905d4b45515affeda496856d3049 against CI run 39654495446, both Python jobs SUCCESS. PostgreSQL 14 / Python 3.11 job 119411051105: 11140 passed,161 skipped,11 subtests; PostgreSQL 17 / Python 3.13 job 119411050977: 11144 passed,157 skipped,11 subtests. Each job executed all 57 proximity schema cases, including 49 database cases, eight direct/PUBLIC column-ACL cases, three inherited-access refusals and three observed SQL guard mutations. Schema case counts independently agree via parsed log records and line counts.
+- This closes the previous missing disposable-PG proof for the Oct21 relational constraints. Native PG executed the mismatched stats parent, legacy/unlinked/hash-mismatched receipt, nullable gate, post-binding receipt edits, migration replay and SQL mutant cases. Local services/databases were not started or changed.
+- Review 4340613934 / PRRT_kwDOP4ZX3s6u52sJ is a false positive: the claimed column-ACL test failures are contradicted by both actual CI logs. PostgreSQL REVOKE documentation explicitly states table privilege revocation also revokes corresponding privileges on every column: https://www.postgresql.org/docs/17/sql-revoke.html . Existing REVOKE ALL covers direct website_app and PUBLIC column grants; inherited access intentionally remains a refusal. No redundant column enumeration or SQL/bootstrap change is needed.
+- Evidence is in the public CI jobs; private downloaded logs remain outside git. Continue the original runtime plan and review queue. PR #1101 remains unmerged and still needs its own explicit owner merge permission; approvals #1095–#1097 do not extend to it.
+
+## 2026-10-21 — PR #1101 review: strict relational provenance and recoverable admission
+
+- Addressed reviews 4337378411/8425/8436/8445/8462: release v1.45.0 explicitly lists unmerged migrations 096 and 100; admission source IDs use the existing lowercase RoundIdentity alphabet; shared publication refuses unreadable/non-private temporary modes before the atomic link, preserving restrictive 0400 and ordinary 0600 without chmod.
+- Migration 100 adds unique parent indexes and composite foreign keys: source/round/canonical ID must name the SAME stats mapping; filename/canonical ID/SHA-256 must name the SAME strictly linked receipt. Migration 096 requires runtime_parent_gate IS TRUE (NULL must not pass SQL CHECK). No merged migration was edited, no backfill or historical receipt adoption is introduced. Exact bootstrap blocks match both migration files.
+- Local proof: 292 passed, 49 disposable-PG cases skipped; shared spool, completion, manifest read/retry, release contract and fresh-process admission recovery included. Source/mode/release guard mutants visibly failed 1/3/1 cases and source bytes were restored with cmp. Ruff and diff checks passed. New SQL rejection, post-link receipt mutation and three in-memory SQL guard-mutant cases await disposable CI PostgreSQL; skipped tests are NOT database proof.
+- Prior published head CI job log independently confirms 42 schema cases passed and the sole Python 3.11 failure was the missing release config entries (11120 passed,161 skipped). That old SQL execution does NOT validate the new relational constraints. No database/service/browser was started and no production or DEV state changed.
+- Continue the preserved runtime plan after fresh CI/review; #1101 still needs its own explicit owner merge permission. Existing approval for #1095–#1097 does not extend here.
+
+## 2026-10-21 — Proximity schema and admission publication slice
+
+Prepared from reviewed local candidate 9c09267c onto state-handover base 3551ca21.
+Only migrations 096/100, their exact bootstrap blocks, persistent admission and
+focused tests enter this slice. Existing bootstrap bytes remain unchanged.
+This publishes existing implementation; it does not replace the original roadmap.
+Admission persists trusted caller input before capture, never an import ACK.
+
+Validation: 40 passed, 34 explicitly skipped without a disposable PostgreSQL
+configuration. Actual fresh processes recover identical source/generation/date/
+size/hash without payload, database or Discord imports. Source-binding and exact
+bootstrap mutations each failed, then files were restored and cmp verified.
+Ruff and whitespace checks pass. Native PostgreSQL constraints/ACL/replay proof
+is pending; textual bootstrap checks are not SQL execution. No service or DB use.
+
+Next: review this <=25-file slice, then identity/parent/receipt publication and
+bounded ingestion/queue publication. Three admission-to-ingest test cases stay
+in the full candidate for that later dependency. D4/D5, trusted producer admission,
+exclusive legacy/manual/remote writer handover and sustained consumer-off/recovery
+acceptance remain open. No merge approval, publication or activation is implied.
+
+## 2026-10-29 — Protect release directories and publication from permissive umask
+
+Review4403859169 is confirmed: umask000/002 allowed writable payload directories,
+and restrictive umask077 also prevented normalized directory modes. Fifteen new
+cases failed before the fix. Create every directory component with0755 and
+normalize it, including root and both frontend output trees. Reserve each file
+owner-only0600 before copyfile writes any bytes, then set its committed0644/0755
+mode. Reserve the manifest privately and publish it as0644. This closes the
+related open-file race under umask000, not just final directory permissions.
+
+Version2verification now requires0755directories and0644manifest in addition to
+its existing complete file-mode/hash inventory. Legacy version1retains its prior
+byte-only contract.243focused packaging/bootstrap/contract/health/consumer tests
+pass. Directory-admission and private-copy mutants are observed failing, then
+restored with cmp. Fresh exact-source actual-package/native unit proof follows;
+old local version2artifacts are retained and never silently rewritten.
+
+Native9db712c4artifact proof completed before this follow-up: both frontends,
+1037fileGit-free package, exact HTTP200bytes, operator tools without-B, actual
+external config/role interpreters and systemd249parse passed. No native schema
+readiness is claimed: applied096/100source hashes still require immutable source
+restoration and a new forward hardening migration, plus pending104. No live DB,
+service, game or production change. Owner's completed Puran upgrade is preserved.
+
+## 2026-10-28 — Fix native systemd 249 inline argument rejection
+
+Actual final-path unit verification exposed a previously untested host limit:
+4411byte hex bootstrap argument exceeds systemd249's4095byte argument budget.
+A native isolated unit fixture independently reproduces rejection at4096bytes
+but accepts4095 with default dependencies disabled. Encode the same trusted
+stdlib verifier using strict Base64, preserving all integrity pins, source
+buffers, namespace admission and raw-argv matching. Refuse oversized startup
+arguments during preparation rather than emitting unusable unit text.
+Three new cases failed before the change;201focused bootstrap/contract/health/
+package/ledger cases pass afterwards. Disabling the size guard fails visibly;
+source restored with cmp. Repeat exact-source builds/package/native unit proof
+from this final commit before considering the approved merge cycle ready.
+
+Correction: an earlier ad-hoc shell sequence masked systemd-analyze's returncode
+with a subsequent successful Python command. Explicit returncode capture showed
+failure; do not claim old generated units passed. Separate read-only actual-role
+schema gates refuse the old package's missing applied-source files and pending104;
+fullcandidate additionally exposes096/100source-vs-ledger checksum differences.
+Do not rewrite DB ledger checksums or apply migrations automatically. Puran stays
+deferred; no service/unit installation, restart or live DB write occurred.
+
+## 2026-10-28 — Refuse bare Git metadata in state sources
+
+Review4370885447 is confirmed: the prior inventory admitted bare repositories
+at a selected source root or nested directory. Reuse the existing git_boundary
+recognizer before scanning every directory; plan, seed revalidation and delta
+source/target inventories now reject metadata before copying it.
+Eight new cases were observed failing before the fix, including actual native
+CLI acceptance, and all207state cases pass after it. Disabling the new guard
+again makes both root/nested cases fail; restore is cmp-checked and restored
+native refusal cases pass. Target-preservation classification mutation also
+fails as expected and restores with cmp. No live state/data or service change.
+
+Actual synthetic seven-scope plan/seed/delta workflow preserves a divergent new
+target. Read-only actual manager observations show DEV bot/webactive and both
+watchdogunitsinactive; no claim of exhaustive writer exclusion or readiness.
+Keep the routing header before dated handoff entries (11ledger cases pass in
+app after its first full-CI documentation ordering failure). App final source
+isecb812b9, actual final1037filepackage rebuilt and statically served; app CI and
+its420second approved merge gate are still pending. Puran update stays deferred.
+
+## 2026-10-28 — Refresh state handover after final app preparation
+
+Owner deferred Puran updates and requested autonomous runtime continuation.
+Merge reviewed app source71589a60 into the existing #1097 branch, preserving all
+state-only tools/tests and both ledger histories. The only conflict was an empty
+state side versus the diagnostic-tool handoff insertion; retain the insertion.
+App proof: 1037 Git-free payload files, native static responses, hash/mode tamper
+refusals, 285 Python cases and 985 frontend tests. #1096 current-head CI and its
+approved merge cycle remain separate; no merged state is asserted here.
+Next: focused state seed/delta/writer tests and fresh native CLI proof, then
+refresh #1097 after #1096 actually lands. No new data seed from live roots,
+service action, migration, Puran change or production deployment.
+
+## 2026-10-28 — Final app source integration verified locally
+
+222 focused Python cases pass using a new outside-Git basetemp. The first
+attempt under the default /tmp fixture path correctly refused this host's
+existing /tmp/.git fence; the marker was preserved and no guard weakened.
+Modern-output integrity guard mutation was observed failing at the assertion
+that refusal precedes destination creation; source restored with cmp and the
+restored case passes. Both npm lock audits report zero vulnerabilities;
+frontend typecheck passes with isolated Node22.23.4. Frontend tests and final
+exact-source builds/package proof follow. No live service or data change.
+
+## 2026-10-28 — Resume runtime app delivery; defer Puran update
+
+Owner explicitly deferred the Puran engine update until a future instruction.
+Retain its reviewed packet without executing the updater. Resume original runtime
+queue at #1096 application packaging, then #1097 state handover and D4/D5.
+Integrate the previously verified modern route-host provenance/copy guards into
+#1096 while retaining its newer no-bytecode bootstrap and raw systemctl argument
+fixes. Inherit the already developed Node22.23.4 and frontend lockfile security
+floor so this application preparation does not rebuild superseded dependencies.
+Next: focused regression/mutation checks, both exact-source builds, new Git-free
+package and native static-response proof. Source readiness, merge and service
+activation remain separate. Production, Puran and live DEV services unchanged.
+
+## 2026-10-25 — Diagnostic tools preserve inventory and raw systemd argv
+
+Reviews4369811073/4369811077 addressed. Packaged contract/health tools set
+sys.dont_write_bytecode before project imports; preparation does the same.
+Native actual packaged --help now runs without -B and preserves the v2 inventory.
+Health command parsing compares systemctl's raw joined argv bytes, never shlex
+syntax; the known contract requires whitespace-free arguments and rejects
+ambiguous inputs. Literal quotes inside the hex bootstrap remain significant.
+The fixture now models actual raw systemctl output rather than shlex.join.
+
+103 focused tests pass. Contract-bytecode, health-bytecode and raw-argv mutants
+were observed failing, then restored with cmp. No manager mutation, application
+startup, service restart or deploy. The separate static/modern artifact omission
+review remains in progress in an isolated worktree.1095 owner-approved merge
+cycle is running with full420second pause; no merge asserted until verification.
+
 ## 2026-10-25 — Close remaining inherited settings, audit path and CLI bytecode gaps
 
 Corrected #1095 review4340638914: marked environment loading now calls the full
@@ -92,6 +700,47 @@ configuration, database, Discord connection, game process or deployment occurred
 #1095/#1096/#1097 approvals remain subject to fresh reviews/CI and the prescribed
 merge cycle; no push or merge performed here. Continue trusted #1096 bootstrap
 integration and preserved runtime/state/proximity/UI/Spiderweb plan.
+
+## 2026-10-25 — Package startup dependency, modes and unfiltered readiness
+
+PR1096 reviews4340716247/4340716262/4340716275/4340716286 addressed in source.
+The release allowlist now includes runtime_app_bootstrap. New prepared releases
+emit manifest v2 with exact0644/0755 modes for every payload file, and verification
+checks the full mode inventory including executable/set-ID drift. Historical v1
+manifests retain their previous byte-only contract; no existing artifact rewritten.
+Readiness writes/flushed stderr after startup checks, independent of LOG_LEVEL.
+Resolved command comparison refuses concatenated extra ExecStartPre structures.
+
+143 targeted tests pass, including actually prepared Git-free package tools
+--help in isolated native Python, all log-level cases and exact-mode drift.
+Four removed guards visibly fail (package inclusion/modes/extra commands/readiness)
+and original files are restored with cmp. Full package preparation remains offline;
+no service/DB/network listener started. Existing prepared units need regeneration
+from final reviewed source. Original runtime/proximity/UI/D4/D5 plan preserved.
+Initial overly broad v1 mode restriction rejected legacy fixtures under host
+umask0002; corrected to versioned v2 guarantees instead of silently changing the
+historical format. Two existing websockets deprecation warnings remain.
+
+## 2026-10-21 — Verify application payload before any project execution
+
+PR1096 closes the launcher integration for1095 review4337326790. Prepared unit
+commands now embed a standard-library-only bootstrap under isolated Python.
+External unit pins bind both manifest and verifier bytes; the verified verifier
+buffer executes before any project import, then verifies the complete payload.
+Bot/preflight entry buffers are rehashed and executed directly with the verified
+root marker. Web CLI starts only after the same admission. No payload-local
+launcher is trusted before verification. Stable trusted owner/unit/interpreter
+remain prerequisites; this is not protection against an authorized hostile owner.
+
+104 targeted tests pass, including native child execution, preflight and actual
+uvicorn --version without binding a server. Tampering with entry, imports,
+verifier, manifest, extra files and symlinks refuses before application output.
+Three removed guards (manifest pin/verifier pin/full inventory) each visibly fail;
+original file restored and cmp verified. Older contract tests were updated for
+new argv shape and systemd quoting; isolation flags remain actually exercised.
+No service was installed/started/restarted and no database was contacted.
+Existing prepared units must be regenerated from final reviewed source before
+any owner activation. Original runtime/D4/D5 and proximity/UI roadmap retained.
 
 ## 2026-10-21 — Enforce marked bot configuration and writable-state boundaries
 
@@ -160,6 +809,35 @@ Next: refresh dependent parents/full candidate, publish, resolve this review and
 complete approved cycles. Original D4/D5/exclusive writer handover and the entire
 runtime roadmap remain preserved.
 
+## 2026-10-21 — Trusted probe execution, early report reservation and no-atime reads
+
+Addressed #1097 reviews4332970087/4332970092/4332970097. Writer probes execute
+only /usr/bin/systemctl after checking root ownership, regular executable kind,
+no symlink and non-group/world-writable executable/ancestors. Child environment
+is a fixed minimal allowlist, plus the validated canonical user bus for user
+scope; inherited PATH/loader/system-bus overrides cannot select probe code.
+Native fake PATH binary demonstrably executes in an unguarded positive control,
+then never executes through CLI. Actual read-only UID1000 host proof: sanitized
+CLI and independent clean /usr/bin/systemctl agree bot456340active. Named unit
+metadata remains neither writer exclusion nor source freshness/activation proof.
+
+Seed CLI validates the saved plan/UID before output, exclusively reserves the
+private report stream before any seed copy, and completes/fsyncs the same stream.
+Existing output wins before copy; partial report/output are retained on failure.
+Native filesystem/main control attempts a competing exclusive report create
+during seed, observes refusal, then verifies complete report and copied content.
+Inventory fingerprints, directory scans and source copying use Linux O_NOATIME;
+unsupported/permission-denied no-atime access refuses without unsafe fallback.
+Actual old atime fixtures prove file AND directory access timestamps unchanged
+through plan, seed and delta scans; target-deleted ancestry fence remains intact.
+
+199targeted tests pass. Four observed failing guard mutations: no-atime3cases,
+early reservation1, clean environment1, trusted executable metadata3. All source
+restored and compared with cmp. Ruff/diff pass; no service/ET/live DB/state change.
+Fresh game audit redaction review fixed separately as f40ede2e before any merge.
+Owner-approved1095cycle previously completed failed0/threads1/behind0/head same,
+correctly leftPRopen. Refresh/publish all parents, answer these reviews and run
+new exact-head CI plus full420second cycles; preserve D4/D5 and original roadmap.
 ## 2026-10-21 — Repair newly failing Pillow security gate
 
 Fresh exact-head Security CI failed: pip-audit reports8new CVEs for pinned
@@ -231,6 +909,19 @@ Next: refresh dependent application/state parents, publish, answer both reviews,
 then exact-head CI and ordered owner-approved merges. Original D4/D5, exclusive
 writer handover and all runtime roadmap/activation obligations remain preserved.
 
+## 2026-10-21 — Preserve target-deleted directory ancestry
+
+Addressed #1097 review4328261007. A baseline directory missing from the target
+now fences every descendant as target_changed_preserve, including newly added
+source files and empty directories; none can be proposed as copy_new and undo
+the independent deletion. Genuinely new siblings remain copy candidates.
+Native CLI and direct library results agree for shallow/nested deleted parents,
+empty dirs, zero-byte and nested files. Both source/target inventories remain
+unchanged and activation stays false.50targeted tests pass; disabling ancestry
+propagation produces2observed failures, then exact cmp restoration. Ruff/diff
+pass. No state application, DB write, service or deployment performed.
+Owner explicitly approved1095/1096/1097 on Oct21; fresh review findings are fixed
+before the ordered prescribed merge cycles. Preserve full original roadmap.
 ## 2026-10-20 — External supervisor bootstrap and raw source comparison
 
 Addressed #1095 P1 reviews4325182407/4325182418. Source admission no longer runs
@@ -265,6 +956,28 @@ observed failing test; every file restored and compared with cmp. Restored targe
 suite166passed; Ruff and diff checks pass. Counts overlap earlier runs.
 Next:publish and answer both reviews, refresh dependent parents and inspect exact
 head CI; preserve original D4/D5/exclusive writer handover and owner merge gates.
+
+## 2026-10-20 — Keep system writer observations on the local system bus
+
+Validated review4325190528: inherited DBUS_SYSTEM_BUS_ADDRESS selected another
+bus for non-root systemctl probes. Both scopes now drop that variable and
+SYSTEMD_BUS_ADDRESS before querying; user scope keeps its existing validated UID
+and explicit user-bus path. Unknown metadata/exclusion/activation semantics stay
+unchanged. No bus proxy, manager or service is started by this change.
+
+71writer tests pass. Native child fake-systemctl records absent override keys;
+removing the new guard causes3observed failures, restored/cmp. Actual UID1000
+read-only proof: direct systemctl with poisoned bus exits1; sanitized CLI and an
+independent clean systemctl agree on etlegacy-bot active/PID456340. This is one
+named-unit point-in-time metadata observation, not all-writer exclusion, freshness
+of application code or activation. Official sd_bus_default docs confirm the env
+variable selects the system bus. Ruff/diff pass; no live data/config changed.
+
+1093/1094already merged under their own owner approvals.1095has two further P1
+source-admission/entrypoint findings being corrected; no1095–1097merge approval
+is inferred from generic continue. Next:coordinate reviewed parent refresh,
+publish/reply and verify exact-head CI. Original D4/D5/exclusive handover and
+all preserved proximity/gametime/API/UI/Spiderweb/Stats lanes remain open.
 
 ## 2026-10-20 — Owner-approved PR1094 merged; next game source remains forward-only
 
@@ -314,6 +1027,32 @@ diff checks pass. No service, engine, live database or deployed payload touched.
 Next: publish, answer both reviews and refresh child dependencies with exact-head
 CI. Original D4/D5 and exclusive writer handover remain open; #1094 owner merge
 authorization does not authorize #1095 or activation. Preserve original roadmap.
+
+## 2026-10-20 — Propagate type conflicts and close metadata ancestry boundaries
+
+Validated three new1097reviews. An ancestor's baseline/source/target type conflict
+now makes descendants path_type_conflict even when the target independently
+removed the parent. No descendant copy_new can recreate that unresolved parent;
+existing classifications and nonmutating/manual reconciliation remain intact.
+
+Selected source checks inspect all absolute path components for .git/.env*, not
+only the leaf. State/report output boundaries share writer inventory's stdlib
+Git-layout helper: worktree markers and bare repository-shaped HEAD/objects/
+refs (also packed-refs/reftable) layouts refuse. No Git subprocess/config executes
+in admission; conservative metadata-shaped paths fail closed. Legacy dangling
+marker and immutable-release fences remain. No live data was copied or changed.
+
+192targeted state/delta/writer/path tests passed. Actual Git-init bare fixtures,
+native CLI refusal and native nonmutating delta output cover all three mechanisms.
+Kind/ancestor/bare mutations cause3/3/5observed failures; sources restored/cmp.
+Initial one source-ancestor fixture triggered the independent output Git fence;
+placing that source under a separate parent exercises the intended source guard.
+Ruff/diff pass. No service, real database or deployment was touched.
+
+1094owner-approved cycle is in progress at30775c84, later PRs not authorized.
+Next: coordinate reviewed game/app parent refresh, publish/answer three comments
+and inspect exact-head CI. Original plan/D4/D5/exclusive handover remains open;
+source safeguards do not certify all writers absent or activate a new lane.
 
 ## 2026-10-20 — Owner-approved PR1093 merged; producer successor prepared
 
@@ -367,6 +1106,35 @@ Next:refresh producer parent after1093merge, publish, refresh app/state children
 answer three reviews and inspect exact-head CI. Original runtime D4/D5/exclusive
 handover and all preserved roadmap/owner activation gates remain in force.
 
+## 2026-10-20 — Bind writer observations to user identity and reject credential trees
+
+Validated three new1097reviews. State inventory rejects every relative .env*
+component before type dispatch/traversal, including directories with innocuously
+named children. Explicitly selected .env* and .git roots also refuse. Git and
+other data/DB exclusions stay intact. No state copy or source deletion occurred.
+
+User-scope writer probes require --expected-user-uid; library probes without it
+return unknown. Expected UID must equal real and effective UID before systemctl
+runs. Reports record all three UIDs; user-bus/runtime paths are derived from the
+validated UID instead of inherited bus overrides. System probes remain unchanged.
+Empty-instance templates and multiple-at names refuse before probing; concrete
+instances remain accepted. Existing prepared invocation snippets need the UID
+argument. Named observations never certify exclusion, handover or activation.
+
+181targeted state/writer/delta/path tests passed. Native CLI systemctl doubles
+prove matching/wrong UID and template handling, plus .env directory refusal
+without destination/report or content disclosure. Removed directory/identity/
+template guards cause7/4/3observed failures; all restored andcmp verified. Ruff
+and diff checks pass. Actual read-only host probe, independently compared with
+systemctl: DEV bot456340/web3549798active, watchdog service/timer inactive.
+Named team/cache user units are unknown in inventory; direct UID1000 manager
+LoadState=not-found confirms neither installed unit. This is point-in-time named
+metadata, not all-writer exclusion or operational runtime acceptance.
+
+Next:refresh reviewed app parent, publish/answer three threads and inspect exact
+CI.1093is merged;1094requires its own owner approval. Original D4/D5/exclusive
+writer handover, consumer-off proof and preserved roadmap remain open.
+
 ## 2026-10-20 — Second game review: explicit targets and closed proof environment
 
 Validated and corrected five additional #1095 findings. Standalone marked audit
@@ -397,6 +1165,68 @@ real database or deployed payload was touched. Next: refresh dependent PR parent
 answer the five review comments, and inspect exact-head CI; per-PR merge and owner
 activation gates remain unchanged. Existing original runtime plan is retained.
 
+## 2026-10-20 — Admit exact GNU locale metadata without weakening configuration guards
+
+Review1096 found six missing GNU libc locale categories. Add only LC_PAPER,
+LC_NAME, LC_ADDRESS, LC_TELEPHONE, LC_MEASUREMENT and LC_IDENTIFICATION to the
+shared system metadata allowlist; arbitrary LC_* remains refused. Approved-file
+value conflicts still refuse, including these exact names. GNU libc/Linux locale
+reference checked; no wildcard environment permission was added.
+
+162 focused environment, contract and health tests pass. Actual isolated child
+preflight accepts each category before its database double; /proc health reads
+real child environments containing all six and still rejects unknown/loader/app
+settings. Removing the six entries produces12observed regression failures;
+source restored andcmp verified. Ruff/diff checks pass. Initial fixture run:
+6failed156passed because /tmp/.git correctly fences preparation; a NEW private
+/var/tmp fixture rerun passes. No production, service or live database was used.
+
+Next: integrate reviewed game parent, refresh state child, publish and answer
+review4322079388, then inspect exact-head CI. Original plan and owner-specific
+merge/activation gates remain in force; old prepared contracts need regeneration.
+
+## 2026-10-20 — Reject Git directory markers before state inventory dispatch
+
+PR1097 review4322041171 confirmed an empty .git directory could be inventoried
+and seeded because only regular files checked Git components. Inventory now
+rejects every relative .git component before lstat/type dispatch, including empty
+and nested directories, files and symlinks. Existing source-drift and report
+fences remain intact; no live data, service or deployment was touched.
+
+Targeted state suites:105passed with synthetic external fixtures. Six type/depth
+regressions plus two native child CLI cases cover plan/seed refusal without
+report/destination creation and byte-for-byte source preservation. Guard removal
+produced7observed failures; the independent seed drift guard still refused its
+case. Source restored andcmp verified. Ruff anddiff checks pass. The initial
+standard/tmp fixture run correctly hit this host's existing/tmp/.git fence;
+rerunning in a fresh/var/tmp fixture root avoided that unrelated Git ancestor.
+Next:coordinate parent refresh, publish and answer the review with exact-head
+CI. Original plan and per-PR merge/owner activation requirements remain intact.
+
+## 2026-10-20 — Application launch isolation and pre-start policy review closure
+
+Addressed all three new1096findings. Bot/web use-E-B-s, consumers additionally-u:
+-E ignores every PYTHON* influence, explicit-B/-s preserve bytecode/user-site
+protection, and-u preserves consumer output behavior otherwise lost when-E ignores
+PYTHONUNBUFFERED. Isolated preflight remains-I-B. Actual child interpreter tests
+exercise PYTHONPLATLIBDIR, no-user-site and output buffering, not just unit text.
+
+Prepared contracts record Requires/Wants/After. Resolved health requires every
+contract member while permitting implicit systemd dependencies. Release schema
+preflight now rejects unapproved environment BEFORE DB access. Health shares the
+same safe environment policy; legacy unmarked APIs retain their existing mode.
+Old prepared contracts fail closed and must be regenerated. Temporary audit
+mute overrides must be reconciled into an approved config/contract before later
+activation; do not silently certify the currently installed old contract.
+
+Agent256tests passed and six mutations were observed failing withcmp restoration.
+Public app269tests pass after game-parent integration; full candidate409targeted
+checks pass (overlapping sets). Native child/preflight tests use driver doubles,
+not live services or databases. Ruff/security/diff checks pass. No activation,
+mount, DB migration or deployed payload change occurred. Next:publish, refresh
+state child, answer three review threads and inspect exact-head CI. First merge
+candidate1093remains clean/green atc40537ba,behindmain0,owner approval required.
+
 ## 2026-10-20 — Audit admission, bytecode and fixed launch contract corrections
 
 Addressed all five new1095findings. Marked audit CLI requires-I before project/
@@ -422,6 +1252,21 @@ payload or production configuration was touched. Next:publish, refresh children,
 answer five comments and inspect newly triggered exact-head CI. Original plan
 and per-PR owner merge/activation gates remain in force.
 
+## 2026-10-19 — Admit systemd memory-pressure metadata without app overrides
+
+New1096review identified systemd>=254's MEMORY_PRESSURE_WATCH/WRITE metadata.
+Both exact keys now belong to the safe OS allowlist; similarly named keys,
+unknown application settings, loader variables and approved-value overrides
+remain refused. Official systemd resource-control documentation confirms the
+keys; the actual CI runner environment contains a cgroup WATCH and base64 WRITE.
+Host systemd249 cannot prove a systemd254 service launch, so no such claim is made.
+
+44health tests pass with27actual child process combinations and /proc metadata
+checks. Removing both keys causes2observed failures; original restored withcmp.
+After integrating the common runner fixture correction,160app/operator/startup
+checks pass. Ruff/diff-check clean. No service/mount/DB/deployed payload operation.
+Next:publish, refresh state child, answer review4307535251 and inspect exact-headCI.
+
 ## 2026-10-19 — Reproduce and fix runner loader fixture contamination
 
 Both Python CI legs on1095/1096/1097 failed the same two new release settings
@@ -441,6 +1286,22 @@ passed. This is a fixture/source result, not a new exact-head CI result.
 Next:publish, refresh child dependencies and inspect both Python CI legs again.
 Production audit override still absent at read-only host check; owner commands
 were provided, no production service/config/code was changed by the agent.
+
+## 2026-10-19 — State metadata and reserved report path review corrections
+
+Addressed all three new1097findings. content() now uses fixed-length3tuples for
+both directory and file tokens. Negative integer POSIX mtime_ns is accepted,
+matching the inventory/seed producer, while boolean/noninteger metadata remains
+invalid. Both state/report boundary helpers reject basename.git and
+.slomix-release.json before creating reserved markers or state output.
+
+138dedicated tests pass, Ruff/diff-check clean. Restored old behavior caused8
+observed failures; all three scripts restored withcmp. Actual CLI fixture retained
+mtime_ns=-1000000000 through seed/delta, refused both marker names and preserved
+source/target inventories. No local CodeQL engine run is claimed: public scanning
+must recheck the fixed tuple shape. No live data, database or services touched.
+Next:refresh app parent, publish and answer the three review threads; inspect CI.
+Original runtime/D4/D5/handover/Spiderweb/UI plans remain preserved.
 
 ## 2026-10-18 — Migration admission and raw Git provenance review closure
 
@@ -467,6 +1328,59 @@ Bandit/diff-check pass. These are source/fixture results, not deployed proof.
 Next:publish, refresh child branches, inspect exact-head CI and answer the three
 comments. Per-PR merge authority and owner-run activation remain separate gates.
 Original runtime/D4/D5/exclusive handover/Spiderweb/UI plans remain preserved.
+
+## 2026-10-18 — Effective DEV health and consumer protection review closure
+
+Addressed six new#1096 findings. Prepared system units now unset all five unsafe
+Python/loader variables; readiness verifies the resolved filter and exact
+Restart=always/RestartUSec=10s. Actual process environment must be approved dotenv,
+prepared bootstrap or a fixed safe OS metadata allowlist; unknown application
+settings such as BETS_LIFECYCLE_SECONDS are refused, not silently inherited.
+
+A healthy website and active bot PID are insufficient. Bot emits a PID/invocation
+journal marker only at successful end of on_ready, after security/voice startup.
+The health gate requires matching journal unit/PID/invocation and fresh timestamp,
+then rechecks services. This proves startup completion, not continuous Discord
+connectivity. Current deployed builds lack this marker and are not certified by
+the new source. Read-only host checks verified actual Restart/RestartUSec and
+journald PID/invocation/unit/timestamp fields. No new service or message ran.
+
+Consumer verifier regenerates exact required unit bytes instead of trusting a
+jointly modified unit and digest. User units require PrivateUsers and ReadOnlyPaths;
+isolated prestart checks actual ST_RDONLY on the release and descendants before
+worker imports. Unsupported/ignored sandboxing fails closed on writable mounts.
+Actual protection after activation remains required_at_start_unmeasured: no
+mount/service was started, and a verifier report is not a kernel-enforcement proof.
+
+Combined app health/consumer fixtures124passed. Five parent guard/signal mutations
+each caused1observed failure; consumer semantic mutation6failures, disabled mount
+guard1failure; all restored withcmp. Native writable-filesystem child refuses;
+actual on_ready tests cover success/security rejection/startup exception with
+mock transports. Ruff and diff checks pass. Next: refresh reviewed parent,
+publish this slice, inspect exact-head CI and answer all six review comments.
+Production audit silence remains owner-pending; DEV temporary audit=false is
+confirmed active after the separately documented diagnostic recovery. No agent
+service command, DB write, migration, browser or production deployment occurred.
+
+## 2026-10-18 — State path kinds and service ownership review closure
+
+Addressed#1097 path-kind and ownership findings. Three-way comparison now covers
+files, directories and absence together; change entries carry explicit kind.
+An independently changed empty directory cannot become an agreed file deletion.
+State seed requires the effective samba service UID before creating any output;
+wrong-owner private directories are refused rather than producing an unusable
+seed. Portable CI substitutes only the account lookup, not filesystem access.
+The malformed-JSON review finding was already fixed in1c1c727a; its12cases were
+verified unchanged, not implemented twice.
+
+Combined seed/delta/writer/ledger cohort136passed. Agent-focused78passed. Removing
+the two guards caused12observed failures; restored withcmp. Actual CLI fixture
+plan→seed→delta verified samba ownership, empty-directory preservation and
+unchanged source/target inventories during comparison. Ruff/diff-check pass.
+This is not a quiescence certificate, consistent database backup or activation
+approval. No live state, database or services were modified. Next:refresh app
+parent, publish source corrections, check CI and answer all three state threads.
+Production notification silence remains owner-pending; original roadmap retained.
 
 ## 2026-10-16 — Six further game-delivery review findings addressed
 
@@ -506,6 +1420,107 @@ No merge occurred; request unambiguous owner permission for#1093 before retry.
 Next:publish these fixes, refresh1096 and1097, inspect exact-head CI and answer
 all six review threads with evidence. Original runtime, Spiderweb and UI work
 remain preserved; merge approval and owner-run DEV activation are separate gates.
+
+## 2026-10-16 — Independent state review fixes malformed CLI input
+
+PR #1097 is published, depending on1096; owner approval is still needed before
+any merge. Independent read-only review found no new critical immutable/report
+boundary, delta-content or false-quiescence issue. It reproduced a real CLI bug:
+JSON[] reached sources.values() and raised AttributeError with a traceback.
+The CLI now requires an object for both the input and selected source mapping
+before placement checks. Invalid structures return structured refused JSON,
+empty stderr and no state/report output. No raw input path is echoed.
+
+113 selected state tests pass. Removing the new checks produced6 failures/6passes;
+original restored withcmp. The actual previously failing child CLI now returns
+refused with no traceback or created files. This extends the earlier101 tests
+and retains the7-file CLI copy/hash proof and nonmutating delta proof. It does
+not certify quiescence, arbitrary-source confidentiality or activation. Live
+state, services, game, databases and production remain untouched.
+
+## 2026-10-16 — SQLite rollback journals stay outside data seeds
+
+The existing state-source filter excluded SQLite databases, WAL and SHM but
+missed rollback-journal filenames. Added-journal to that same refusal boundary:
+auxiliary database state requires its separate consistent-backup contract, not
+a normal data-file seed. A synthetic metrics.db-journal input now refuses before
+copy; removing the new suffix produces one observed failure. Restored withcmp;
+101 state seed/delta/writer-inventory tests pass. This does not make the tool a
+generic secret scanner or a consistent snapshot of active writers.
+
+## 2026-10-16 — External state preparation advances without merge activation
+
+Continuation request was interpreted as permission for the previously proposed
+#1093 merge, but automatic approval review rejected it: no unambiguous owner
+approval specifically for #1093. The cycle script was not executed. Do not retry
+through a wrapper or alternative merge command; request explicit permission.
+#1093 remains green atc40537ba; each later PR still needs its own approval.
+
+Unblocked development continued with the next saved candidate cohort: three
+existing tools and their tests, extracted onto a new feature branch after1096.
+Source preflight and its tests already exist upstream and are not copied again.
+State preparation supports a dry-run inventory and copy-only seed into a new
+external shared directory. Delta planning classifies three-way differences and
+never replaces files. Named system/user unit inventory explicitly leaves writer
+absence, schema authority, handover and activation unmeasured/not ready.
+
+Found and fixed a boundary gap before publication: the seed/report gate accepted
+a new destination under a Git-free marked immutable payload. It now rejects
+ancestors carrying .slomix-release.json as well as .git, including dangling
+boundary markers. Writer report output applies the same dangling-marker rule.
+A synthetic before-probe admitted such a path without writing; the restored
+new gate refuses it before data copying. Source/state data were never real apps.
+
+100 tests pass; configured Ruff/Bandit pass. Removing immutable-release checks
+causes4 observed failures/2passes; removing dangling-marker checks causes2failures.
+Each file restored withcmp, then100 tests pass. Actual CLI proof copies7 synthetic
+files, compares Python and sha256sum hashes, preserves source trees, classifies
+3 independently changed paths and proves delta writes neither data tree. All
+reports are private and activation_ready remains false. Actual named-unit CLI
+read bot/web metadata only; active observations do not certify writer absence.
+
+The existing #1095 React CI also failed one availability form test (983passed).
+Its isolated follow-up is under review: do not claim an application bug until
+reproduced. Continue CI/review closure on1094–1096, publish the state cohort for
+review and preserve original source admission, exclusive handover, D5,
+proximity/gametime/storage/API/live/Spiderweb/UI roadmap. No services or DB writes,
+no migration, live state copy, game activation or production operation occurred.
+
+## 2026-10-16 — DEV readiness access, monitor paths and CI follow-up
+
+PR #1096 CI at4f96e678 failed on two checks on both Python versions: the
+retro-viz OpenAPI description was stale (only that description differed), and
+an old maintenance test expected cwd/logs despite the shared test environment's
+BOT_LOG_DIR. Regenerated the PR snapshot (full source was already current);
+parameterized directory creation for unset/empty/external log paths.
+
+New review findings fixed: compatibility team CLI verifies contracts without
+injecting a conflicting preparation component; SSHMonitor downloads now use
+config.stats_directory (real local write with fake SSH/SCP, no remote transfer).
+DEV contracts require effective read/write/traverse permissions as the samba
+service account, including existing metrics DB files, not just ReadWritePaths.
+Preparation as another account is refused. CI fixtures substitute only service
+UID identity, retain actual chmod/access checks and restore directory modes.
+Consumer units also remove LD_AUDIT; explicit app config refuses loader overrides.
+
+Readiness accepts visible approved dotenv keys only with matching values and
+rejects mismatches, extra DB settings and loader injection. Correction to the
+review premise: an actual child load_environment/setdefault experiment loaded
+its synthetic key, while /proc/environ did NOT show that added key. Linux normally
+exposes exec-time environment there. This admits both exec-time shapes; it does
+not prove dynamic app configuration through proc. ExecStartPre still rejects
+inherited overrides, and the exact approved file digest remains checked.
+
+178 related tests passed; post-mutation narrower suite147 passed. Nine failures
+were observed across access(3), loaded-key(1), wrapper(2), SSH output(1) and audit
+environment(2) negative controls, each restored with cmp. Ancestor traversal was
+already refused by canonical resolution and is not credited as a new mutation.
+Actual offline CLI prepared three synthetic files; systemd-analyze verify passed
+both DEV units. Fake payload/interpreters only; no installation, service start,
+real dependency/DB startup proof or deployment. Existing legacy-test Ruff findings
+remain6/29; no new ones, production/new test paths lint clean. New exact-head CI
+and additional review closure remain pending. Preserve original plan and queues.
+
 
 ## 2026-10-16 — Availability test controls the market transition explicitly
 
@@ -602,7 +1617,6 @@ caller1 failure; actual ancestor dotenv leak1 failure. Every source restored wit
 cmp. No service, ET, migration, application write or production action. Refresh
 parents normally and run exact-head CI before final review closure. #1093 remains
 fully green and owner-specific merge approval is still pending. All plan retained.
-
 
 ## 2026-10-16 — Bound team contention remains retryable after canonical commit
 
@@ -709,6 +1723,36 @@ Next: exact-head CI, review replies and normal dependency refresh1094–1096.
 All original runtime, handover, D5, proximity/gametime and UI plans remain open
 where previously recorded. Per-number owner permission still gates each merge.
 
+## 2026-10-16 — Package bytes match captured Git blobs, including transient drift
+
+Corrected the provenance measurement: the existing SPA validator already denies
+an ordinary tracked-dirty tree. Two earlier mutation failures only changed the
+expected error boundary; they did not demonstrate unsafe payload acceptance.
+The relevant earlier checkpoint and lesson are corrected, retaining the history.
+Explicit package state checks still make that contract local and cover the final
+manifest boundary.
+
+A stronger race fixture copies temporarily modified runtime bytes, restores the
+source before clean snapshots, then briefly repeats the edit during real source
+hashing and restores again. With Git-blob comparison deliberately disabled, the
+old per-file comparison accepts a self-consistent manifest stamped with clean
+HEAD while its runtime payload differs from that committed blob. This unsafe
+synthetic artifact was independently verified and retained privately. Both
+transient-source and executable-mode mutations were seen failing; restored
+source cmp matched and both regressions passed.
+
+The builder now captures regular blob/mode identities from the exact Git tree,
+compares copied bytes via git hash-object --no-filters against those objects,
+and takes executable bits from committed mode, not mutable checkout metadata.
+This also preserves binaries on core.filemode=false filesystems. Fourteen
+package tests passed. This is point-in-time provenance under trusted stable
+output ownership, not a signature or hostile same-UID protection.
+Evidence: /tmp/slomix-package-blob-*, /tmp/slomix-package-race-negative-proof.log
+and /tmp/slomix-package-provenance-final.log; synthetic retained /var/tmp outputs.
+No active package, installed unit, application data or service was changed.
+Next: exact-head CI/review, then original source admission/D5 and owner gates.
+Original PLAN bytes and all pending runtime/UI work remain preserved.
+
 ## 2026-10-16 — Forward-only map alphabet and explicit rebuild dependencies
 
 Two later #1093 review findings: restrictive round-mapping FKs blocked explicit
@@ -741,6 +1785,44 @@ resolve review. Keep owner merge permissions per PR, source admission/exclusive
 handover, D5 and every original proximity/gametime/API/live/Spiderweb/UI item.
 Full original PLAN bytes remain preserved in the primary checkout. Production,
 services, installed units, application rows and old candidate packages untouched.
+
+## 2026-10-16 — Application delivery review closes state and provenance gaps
+
+#1096 now preserves the lexical bin/python leaf of ordinary symlink venvs for
+both DEV and standalone consumer units; venv/bin ancestors and pyvenv.cfg must
+remain canonical. Actual --without-pip venv execution confirmed sys.executable
+and sys.prefix select that venv, not the resolved base interpreter. Parent/config
+alias regressions still refuse. The compatibility wrapper explicitly exports
+canonical rather than leaving an unused import note unexplained.
+
+Packaging now checks clean tracked/index bytes against exact HEAD both before
+copying and before manifest creation, preserving its hidden-index flag guard.
+Staged/unstaged runtime changes refuse before destination creation; mid-copy
+drift retains incomplete output without a release stamp. Actual clean CLI still
+packages eighteen synthetic payload files, with independent SHA256 agreement.
+Health reads and compares resolved MemoryMax/CPUQuotaPerSecUSec, including empty
+or infinity overrides. Actual host formats were observed read-only.
+
+Both manual sync callbacks now download/list/verify the configured external
+stats directory. File-producing command fixtures exercise download and import
+arguments without SSH/Discord/DB transport and leave release cwd empty.
+Team/cache unit text clears inherited Python/loader variables; both actual
+systemd-analyze --user parses and separate verification CLIs pass. No unit is
+installed or started and configuration/handover remain unmeasured.
+
+103 selected tests passed, then 45 venv/contract tests including two added alias
+cases (overlapping, do not sum). Twelve targeted mutations produced failures;
+two dirty-source cases failed on expected-message assertions while the existing
+SPA identity validator still rejected them. Those two are boundary duplication,
+not proof of unsafe payload acceptance. The other ten guards were seen failing;
+all twelve restored cases passed. Game guards independently had five detected failures
+and ten restored passes. Ruff and script Bandit gates pass. Evidence remains
+local in /tmp/slomix-app-review2*, /tmp/slomix-review2* and retained /var/tmp proofs.
+
+Refresh parent #1095, publish and resolve exact-head CI/review. This remains
+preparation, not a new active release or complete dependency/schema acceptance.
+Original primary plan bytes, pending source admission/exclusive handover, D5,
+proximity/gametime/storage/API/live/Spiderweb/UI work all remain preserved.
 
 ## 2026-10-16 — Closed supervisor bootstrap and enforced resource contract
 
@@ -809,6 +1891,56 @@ inspection. No service/game/database operation, deployment or PR merge occurred.
 Retain D5, source admission/exclusive writer handover, proximity/gametime/storage,
 API/live/Spiderweb/UI work and all original roadmap items. The full original
 plan remains byte-preserved in the primary development checkout.
+
+## 2026-10-16 — Immutable application payload and external mutable state
+
+Next cohesive branch feat/runtime-app-delivery-20261016 is based on PR #1095
+(a4095604), itself dependent on #1094 then #1093. None has number-specific merge
+permission. #1095 contains 32 changed paths independently measured by Git diff,
+tree objects and GitHub; CodeQL/security/JS/Lua/React/hygiene passed, full Python
+matrix was still running when this checkpoint was written.
+
+Application slice connects Git-free payload preparation/manifest build identity,
+offline DEV startup contract/unit verification, exact-process health checks and
+external configuration loaded before import-time constants. Bot metrics/audit,
+maintenance/shadow files and downloaded-stats lookup honor external state paths;
+comparison PNGs use memory and close attachments/figures on send failure.
+Retention can be explicitly disabled during handover. Retro gallery listing
+and byte serving share one external PNG-only root; missing explicit storage is
+unavailable, not silently empty. Independent gametime decoder work stays in the
+full development source, not accidentally copied with the bot entrypoint.
+
+107 selected tests passed (21.97s). Service-byte guard mutation failed both bot
+and web cases; restored copy cmp matched, then 40 related tests passed. Fixture
+credentials are generated. Ruff/Bandit medium-high gate pass; two narrowly
+annotated 0.0.0.0 literals only render/compare the existing DEV bind, never open
+sockets. A real CLI packaged 18 synthetic payload files, excluding .git/.env;
+Python SHA256 and sha256sum agree on every file. A separate CLI verified all
+three prepared contract/unit files, again with independent hashes. These are
+synthetic offline packaging proofs and ASGI fixture responses, not a new active
+release, real virtualenv inventory, installed units, live health or native DB
+acceptance. No service/game/migration/deployment operation occurred.
+
+Standalone team/cache delivery is included in PR #1096 with the compatibility
+team command and disabled configuration examples. Twenty consumer-delivery tests
+passed; actual separate CLI verification and systemd-analyze --user verify pass
+for both synthetic units, without installation or activation. A missing unit-hash
+guard is detected by mutation; restored cmp and regression pass. These user
+consumers are independent from the system DEV bot/web units.
+
+#1095 first full CI had exactly one documentation-routing failure on each leg:
+10288/10292 other tests passed (3.11/3.13). The leading checkpoint hid the required
+routing preamble from its guard. Moved checkpoints after the preamble preserving
+every line; eleven contract tests pass in both branches. #1095 c933793d and #1096
+include the correction, with normal dependency merge in #1096 (no PR merge).
+
+Evidence: /tmp/slomix-app-*.log; retained /var/tmp/slx-app-* proof directories.
+Next: publish/review and resolve exact-head CI; then source admission/exclusive
+writer handover, complete schema/application consolidation and D5 observation.
+Keep pending proximity/gametime migrations, storage relocation reconciliation,
+API/live/Spiderweb/UI and every original roadmap item. Original 0261b076 plan
+bytes remain intact in the preserved full development checkout. Preparation
+never authorizes activation; production remains untouched.
 
 ## 2026-10-16 — Immutable game delivery and supervised proof import
 

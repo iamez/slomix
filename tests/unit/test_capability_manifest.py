@@ -257,7 +257,7 @@ def test_lua_declares_effective_state_not_configuration() -> None:
     isFeatureEnabled(), never config.features[] (see line 338 of the tracker)."""
     source = TRACKER.read_text()
     block = source[source.index("local cap_order = {"):]
-    block = block[: block.index("et.trap_FS_Write(cap_header")]
+    block = block[: block.index("writeOutput(cap_header")]
     assert 'isFeatureEnabled(name)' in block
     assert 'config.features[name]' not in block
 
@@ -272,7 +272,7 @@ def test_lua_declaration_uses_the_wire_format_the_parser_reads() -> None:
     """
     source = TRACKER.read_text()
     block = source[source.index("local cap_order = {"):]
-    block = block[: block.index("et.trap_FS_Write(cap_header")]
+    block = block[: block.index("writeOutput(cap_header")]
     assert 'name .. ":" .. (isFeatureEnabled(name) and "1" or "0")' in block
     assert 'table.concat(cap_parts, ",")' in block
 
@@ -283,17 +283,18 @@ LUA = shutil.which("lua5.4") or shutil.which("lua")
 
 LUA_HARNESS = """
 local src = io.open(%r):read('a')
-local block = src:match('(local cap_order = {.-et%%.trap_FS_Write%%(cap_header, string%%.len%%(cap_header%%), fd%%))')
+local block = src:match('(local cap_order = {.-writeOutput%%(cap_header, string%%.len%%(cap_header%%), fd%%))')
 assert(block, 'declaration block not found')
+local writer = assert(src:match('(local function writeOutput.-)local function outputDataInner'), 'writer not found')
 local config = { test_mode = { enabled = %s }, features = { %s } }
 local function isFeatureEnabled(n)
   if config.test_mode.enabled then return false end
   return config.features[n]
 end
 local out = {}
-local et = { trap_FS_Write = function(s) out[#out+1] = s end }
-local chunk = assert(load('local config, isFeatureEnabled, et, version, fd = ... \\n' .. block))
-chunk(config, isFeatureEnabled, et, '6.11', 1)
+local et = { trap_FS_Write = function(s) out[#out+1] = s; return #s end }
+local chunk = assert(load('local config, isFeatureEnabled, et, version, fd, pause_capture = ... \\n' .. writer .. block))
+chunk(config, isFeatureEnabled, et, '6.11', 1, {observed=false, unknown=false})
 io.write(table.concat(out))
 """
 

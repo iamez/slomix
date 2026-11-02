@@ -35,6 +35,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from shared.release_manifest import MANIFEST, verify_release
+
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MIGRATIONS_DIR = PROJECT_ROOT / "migrations"
 
@@ -50,9 +52,16 @@ _STARTED_AT = datetime.now(timezone.utc)
 def _read_git_revision() -> tuple[str | None, str | None]:
     """(full_sha, short_sha) of HEAD, or (None, None) if unavailable.
 
-    Never raises: a container image built without a .git directory (or with
-    git absent) must not crash the app over a diagnostics field.
+    A marked Git-free release must verify its complete payload before its SHA
+    is trusted. Invalid marked releases fail startup rather than fall back to
+    Git in an unrelated ancestor. Unmarked legacy images may remain unknown.
     """
+    marker = PROJECT_ROOT / MANIFEST
+    if marker.exists() or marker.is_symlink():
+        full = verify_release(PROJECT_ROOT)['source_commit']
+        return full, full[:8]
+    if not (PROJECT_ROOT / '.git').exists():
+        return None, None
     try:
         out = subprocess.run(  # noqa: S603 # nosec B603 - fixed argv, no shell, no user input
             ["/usr/bin/env", "git", "rev-parse", "HEAD"],

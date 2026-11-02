@@ -503,7 +503,7 @@ class SSHMonitor:
             )
 
             # Download using SCP
-            local_dir = os.path.abspath("bot/local_stats")
+            local_dir = os.path.abspath(self.bot.config.stats_directory)
             os.makedirs(local_dir, exist_ok=True)
 
             local_path = os.path.abspath(os.path.join(local_dir, safe_filename))

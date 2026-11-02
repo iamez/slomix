@@ -3527,13 +3527,14 @@ export interface ProxPlayers {
 
 export interface JourneyPathPoint {
   t: number;
-  x: number;
-  y: number;
-  z: number;
-  health: number;
-  speed: number;
-  stance: number;
-  sprint: number;
+  break_before?: boolean;
+  x: number | null;
+  y: number | null;
+  z: number | null;
+  health: number | null;
+  speed: number | null;
+  stance: number | null;
+  sprint: number | null;
   event: string | null;
 }
 
@@ -3543,6 +3544,10 @@ export interface JourneyLife {
   spawn_time_ms: number;
   death_time_ms: number | null;
   duration_ms: number;
+  /** Qualified source-clock span, never certified active life time. */
+  raw_duration_ms?: number | null;
+  proximity_unavailable?: string | null;
+  solo_basis?: string;
   total_distance: number;
   sprint_pct: number | null;
   death_type: string | null;
@@ -3576,7 +3581,8 @@ export interface PlayerJourney {
   scope: ProxScope;
   player: { guid: string; name: string | null; team: string } | null;
   lives: JourneyLife[];
-  summary: { lives?: number; kills?: number; deaths?: number; avg_life_s?: number | null; objective_events?: number | null; objective_events_unavailable?: string | null };
+  elapsed_time_quality?: { basis: string; active_time_verified: boolean; reason: string; excludes: string };
+  summary: { lives?: number; kills?: number; deaths?: number; avg_life_s?: number | null; avg_raw_span_s?: number | null; raw_span_samples?: number; objective_events?: number | null; objective_events_unavailable?: string | null };
   message?: string | null;
 }
 
@@ -4000,9 +4006,11 @@ export interface ProxRoundTracks {
     name: string | null;
     team: string | null;
     class: string | null;
+    /** Raw source timestamps; no verified pause-excluding clock on this endpoint.
+     *  Do not derive active-life or reaction durations from these fields. */
     spawn_time: number;
-    /** Never null on the wire — the emitter coerces a missing death to 0
-     *  (int(r or 0)), so 0 is the survivor/unknown sentinel. */
+    /** Never null on the wire — the emitter coerces a missing end to 0.
+     *  Zero does not prove survival to the round end; consult death_type. */
     death_time: number;
     first_move_time: number | null;
     death_type: string | null;
@@ -4501,8 +4509,15 @@ export interface ProxMovers {
   limit: number;
   distance: (ProxMoversRow & { total_distance: number })[];
   sprint: (ProxMoversRow & { sprint_pct: number })[];
-  /** Fastest reaction (ms to the first move after a hit) and longest life, top N each (recorded 5). */
+  /** Optional only for older servers/recordings. These are raw elapsed values,
+   * not return-fire reflexes or verified active life time. */
+  elapsed_time_quality?: {
+    basis: string; active_time_verified: boolean; reason: string;
+    reaction_excludes: string; survival_excludes: string;
+  };
+  /** Mean raw spawn-to-first-movement delta over eligible tracks. */
   reaction: (ProxMoversRow & { reaction_ms: number })[];
+  /** Mean raw spawn-to-known-end delta over eligible tracks. */
   survival: (ProxMoversRow & { duration_ms: number })[];
 }
 

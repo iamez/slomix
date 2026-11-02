@@ -202,6 +202,8 @@ class SyncCog(commands.Cog, name="Sync Commands"):
                 content=f"📥 Downloading {len(files_to_process)} file(s)..."
             )
 
+            local_dir = os.fspath(getattr(self.bot.config, "stats_directory", "local_stats"))
+            os.makedirs(local_dir, exist_ok=True)
             downloaded_files = []
             download_failed = 0
 
@@ -209,7 +211,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
                 try:
                     # Download file
                     local_path = await self.bot.ssh_download_file(
-                        ssh_config, filename, "local_stats"
+                        ssh_config, filename, local_dir
                     )
 
                     if local_path:
@@ -233,7 +235,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
                 content=f"🔍 Verifying downloads... {len(downloaded_files)} files"
             )
 
-            local_files = set(os.listdir("local_stats"))
+            local_files = set(os.listdir(local_dir))
             verified_files = []
 
             for filename, local_path in downloaded_files:
@@ -417,7 +419,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
                     )
 
             # Check which files are missing from local_stats/
-            local_dir = "local_stats"
+            local_dir = os.fspath(getattr(self.bot.config, "stats_directory", "local_stats"))
             os.makedirs(local_dir, exist_ok=True)
             local_files = set(os.listdir(local_dir))
 
@@ -426,11 +428,11 @@ class SyncCog(commands.Cog, name="Sync Commands"):
             if not missing_files:
                 await status_msg.edit(
                     content=(
-                        f"✅ **local_stats/ is complete!**\n\n"
+                        f"✅ **Local stats are complete!**\n\n"
                         f"📊 Remote files: {len(remote_files)}\n"
                         f"📁 Local files: {len(local_files)}\n"
                         f"📥 Missing: 0\n\n"
-                        f"💡 Your local_stats/ directory is a complete mirror of the game server."
+                        f"💡 Your configured stats directory is a complete mirror of the game server."
                     )
                 )
                 return
@@ -507,7 +509,7 @@ class SyncCog(commands.Cog, name="Sync Commands"):
             embed.add_field(
                 name="💡 What's Next?",
                 value=(
-                    "Files are now in `local_stats/` directory.\n"
+                    "Files are now in the configured stats directory.\n"
                     "Use `postgresql_database_manager.py` to import them to the database,\n"
                     "or use `!sync_all` to process unimported files."
                 ),

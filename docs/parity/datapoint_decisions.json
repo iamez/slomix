@@ -83,5 +83,7 @@
  "/api/proximity/objective-focus players.total_time_ms": "duplicate: the same figure as total_time_s, which the row prints (fixture: 810400 ms = 810.4 s)",
  "/api/proximity/competitive/man-advantage teams.ALLIES": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)",
  "/api/proximity/competitive/man-advantage teams.AXIS": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)",
- "/api/live/feed oldest_seq": "Superseded loss heuristic: LivePage reads server gap metadata because sequence holes can be hidden telemetry. oldest_seq remains a compatibility transport field, not a displayed loss count."
+ "/api/live/feed oldest_seq": "Superseded loss heuristic: LivePage reads server gap metadata because sequence holes can be hidden telemetry. oldest_seq remains a compatibility transport field, not a displayed loss count.",
+ "/api/proximity/player-journey lives.duration_ms": "Legacy stored duration is retained on the wire for compatibility, not certified active life time. ProximityRoundCanvases renders qualified raw_duration_ms with an explicit raw-span label instead (proximity_journey.py; 2ffab126; PLAN Journey elapsed qualification, 2026-10-09).",
+ "/api/proximity/player-journey summary.avg_life_s": "Deprecated by proximity_journey.py, which now returns null: raw track spans do not certify active life time. The Journey UI reads avg_raw_span_s and raw_span_samples with a pause warning instead (2ffab126; PLAN Journey elapsed qualification, 2026-10-09)."
 }
