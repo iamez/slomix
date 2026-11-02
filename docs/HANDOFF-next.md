@@ -70,6 +70,26 @@ operational timing caller composition and complete immutable source packaging.
 Retain original R01-R04/M1-M5/D4-D5 and all wider improvements. One review worktree
 for this actual slice is under slomix-development/reviews/timing-lifecycle; do not
 create new worktrees per check. No new schema or historical data repair.
+## 2026-11-02 — Forward-only reconciliation of existing development PRs
+
+Refresh this PR against main0b24a989. Private proof verifies every main ledger
+line in order, all original branch insertion blocks and exact source three-way
+composition. Original heads are retained in a verified Git bundle; no deletion,
+force push, service action, database write or game update.
+
+Actual tip-to-tip source comparison finds1100 already incorporated: five files
+are byte-identical to main and the frontend manifest differs only by main's newer
+modern provenance build command. Preserve that improvement; do not treat a stale
+three-dot PR diff as missing code. Retain1100's branch/history and close it as
+superseded, rather than merging a documentation-only duplicate.
+
+Remaining order:1103 Python trust/crypto ->1104 Supply retention ->1105 R1 event
+clock ->1106 update safeguards ->1109 timing.1109 depends on already merged schema
+and proximity. Before EACH merge: latest-main refresh, exact-head CI/review, full
+420second cycle and independently matching reviewed/merged trees. The current
+request does not name PR numbers; obtain one explicit numbered decision for this
+five-PR queue.956 release automation and historical NEVER MERGE reviews stay held.
+Resume original runtime caller/package/D4/D5 gates after reconciliation.
 
 ## 2026-10-30 — Preserve strict legacy ingestion under declared policy opt-in
 
@@ -617,6 +637,162 @@ from final reviewed source. Original runtime/proximity/UI/D4/D5 plan preserved.
 Initial overly broad v1 mode restriction rejected legacy fixtures under host
 umask0002; corrected to versioned v2 guarantees instead of silently changing the
 historical format. Two existing websockets deprecation warnings remain.
+
+## 2026-10-28 — Keep complete update preimages private
+
+Full code/state backups contain private configuration and logs. Reviewedupdater
+now requires0700onbackup root beforecollectingthem, without changing the global
+umask(andthereforewithoutmakingnewPK3unreadabletolegitimatefastDL). Fullworkflow
+fixturestartsat0755andproves0700; disablingtheguardwasobservedfailing, restoredcmp.
+18focusedtests remain green. Noactualbackup/controlbranchhasbeenrunonPuran.
+
+## 2026-10-28 — Require current empty-server evidence before update controls
+
+Follow-up to PR1106: a short console-tail warning cannot prove emptiness. Updater
+now requires a current localhost UDPgetstatusresponse, including spectator slots,
+beforeconfirmationandagainimmediatelybeforestop. Occupied, malformed, missing or
+timedoutstatusrefuses; noauto-kick or game-state command. This is a bounded current
+check, not an atomic join lock; owner still selects an emptymaintenancewindow.
+
+18focusedtests pass, including occupied/spectator, unknown and malformed status,
+and the existing fullworkflow with controls/networkstubbed. Disabled occupiedguard
+was seenfailing, restored withcmp. ExistingSHAguardfailure/restoration proofretained.
+No actualgame/serverwas started/stopped or archivecodeexecuted. The readiness
+queryitselfisread-only; reviewedfilesarestaged separately, not installed live.
+
+## 2026-10-28 — Selected snapshot17 and reviewed existing Puran updater
+
+Owner selected the officialx86_64fullarchivev2.86.2-17-g74fdd6a, supersedingCOMP13
+as the current update target. Owner then required discovery/review of the existing
+Claude updater and actual environment before activation. No game/service action
+has been executed by this preparation.
+
+Actual /home/et/etl_update.sh is byte-identical to repo scripts/etl_update.sh,
+10381bytes,SHA256fd8ced43ce1fa6f32c269b156874bf512670fe985e8c832d6875809b93ff10b3.
+Olderetlupdate3copies/logs are historical. Activecwd/base is/home/et/etlegacy-v2.83.1-x86_64;
+homepath/home/et/.etlegacy,fs_gamelegacy, loadedqagamefrombaselegacy. Read-only
+RCONlua_status proves sixLua5.4VMs with the knownSep26incident hashes. lua_modules
+is sourced through etmain/configs/*.config profiles, not merely etmain/legacy.cfg.
+The compatibility versioncvar is spoofedET2.60b, so useactualELF/buildidentity.
+Puran is managedbycron/screen/etdaemon, not a dedicated game systemdunit.
+
+Officialarchive92529765bytes verified by streaming and independentGNUhash:
+e669d26b8b33212422cf6d483155fa014535d2a18e52205f5ef017202736506c.
+Private localstage3369members/192897448expandedbytes, no links/path escapes.
+Engine/qagame areELF64x86_64, exacttargetstrings andLua5.4present; requiredglibc/
+libstdc++symbolversions areavailable onPuran(glibc2.35). This is staticproof,
+not a newengine gameplay/round-transition certificate. Archiveoverlaywouldchange
+custometmain/legacy.cfg andbotnames; six customVMfiles are not overwritten.
+
+Reviewed existing updater adds read-only--inspect before anymutation, explicit
+SHA256gate andboundedtar/ELF/packagechecks, preserveslegacy.cfg andbotnames,
+refuses failedcriticalbackups/restores, snapshots completecodeandquiescedhome
+state beforeoverlay, and requires the exactsixmodule startupset instead of old
+five-module successheuristic. Operator remains responsible for game control;
+this source change is not permission to invokeitslegacycontrolbranch.
+14focusedtests pass, including fullshellflowwithstubbedcontrols/network and
+backupfailurebeforestop, ShellCheck/Ruff/bashsyntax/diffclean. Actualtargetarchive
+passesnativeinspection andactualboot6modulelogpasses. DisablingSHAguardwas seen
+failing, restored withcmp. Noactualnewbinary wasloaded, no service/game started.
+
+Private packet:/home/samba/share/slomix-et286-snapshot17-prep-20261028.
+Originalruntime roadmap remains in fullcandidate; sourcebranch's shorterPLANmust
+not replace it duringintegration. Supplyrecovery,frame-healthanalysisfixes and
+runtime1096/1097/D4/D5 remain. Owneractivation andpost-startnativeverification
+are distinct outstanding steps; productionSlomix is untouched.
+## 2026-10-27 — Bound R1 timestamp correlation to its event-clock contract
+
+Supply RCA identified the precise writer: proximity notification requested a600s
+window and merged a distinct reset R1 into the prior R1 at88s. Ordinary stats/Lua
+notifications use30s; the late orphan sweep requests1800s. This was not an88s
+merge by the stats R1 handler. Both stats and proximity Lua writers name files
+with their end-output event clock; delayed import does not move that timestamp.
+The nine imported R1s in the incident session have exact matching physical-start
+proximity sources, each with a3s filename-clock difference from stats.
+
+Cap only R1 timestamp proximity to the existing30s contract, including wide
+proximity/sweep callers. Preserve R2 windows, semantic linkage, exact identity
+reuse and the separate existing90s round-id strategy. A reset outside that R1
+window remains independently unmatched instead of donating completeness flags.
+This bounded fix does not resolve sub30s legacy identity ambiguity or the separate
+proximity round-linker1055s attachment; those need physical/source identity proof.
+
+48focused tests pass; removing the R1 cap caused4expected failures, restored with
+cmp. Read-only native DEV queries preserve9/9normal R1 baseline decisions and
+exact reset identity/retry behavior. Today's DB already has an exact reset row,
+so the historical false merge is separately reproduced with the logged event's
+older candidate fixture and real round clocks: old code merges, fixed code does
+not. The adapter exposes no writes. Native/current-state and historical replay
+proofs remain distinct in the private Supply packet. Ruff/diff pass. No service,
+DB repair/reimport, production, game-server, push or merge action occurred.
+Continue owner-reviewed source publication and source-backed repair preparation,
+then return to the preserved full runtime/UI/Spiderweb plan.
+## 2026-10-27 — Preserve the one-line malformed-header error contract
+
+Integration found an existing fullcandidate regression: a one-line malformed
+header must report insufficient lines, not invalid header format. Preserve that
+historical message while still classifying intact header-only reset boundaries.
+Two new cases distinguish one-line and multiline malformed input. Focused suite
+135passed; removing the compatibility branch caused1expected failure, restored
+with cmp. Native parsing confirms both the historical error and six retained
+Supply orphan records with no R0. Ruff/diff pass. No service or DB change.
+
+## 2026-10-27 — Preserve a header-only reset boundary during R2 parsing
+
+DEV retained sources exposed a valid nearest R1 header with no player rows after
+reset/surrender. R2 previously failed permanently because that selected R1 could
+not parse. The parser now classifies only intact header-only rounds; a valid R2
+is retained raw with is_orphan_r2 and header_only_r1 reason, preserving the selected
+R1 filename and creating no R0 match summary. Existing shared validity marks it
+invalid for aggregate statistics. It never falls back across the reset to an
+older R1 and never replaces missing counters with zeroes. Malformed/nonempty R1,
+wrong-map/wrong-round headers and invalid R2 remain failures. The sealed runtime
+pair adapter uses the same classification without reopening logical paths.
+
+Functional proof: actual retained Supply R2 now parses with all six player rows
+byte-for-value equal to regular raw parsing; all three source hashes remain
+unchanged. This is offline parser evidence, not an activated service or DB repair.
+Final focused suite133passed; disabling the retention branch made2targeted tests
+fail, then parser restoration passed cmp. Ruff and diff checks pass. Private
+incident evidence remains outside Git in the owner-accessible Supply packet.
+
+Read-only incident scope:17imported R1/R2 rounds and102player rows match retained
+sources;14rounds after Supply show no propagated four-minute loss. The prior R1
+counters/time were already reduced in source, including endstats; recovery of
+that missing segment is not proven. Reset correlation coalescing is a separate
+finding still requiring review. No data edit/reimport, service action, production
+or game-server change occurred. Original runtime consolidation and UI/Spiderweb
+plans remain preserved; this branch is not approved for merge. Next: review the
+bounded source fix, then prepare source-backed repair scope/backup/dry-run before
+any authorized database action; continue the saved runtime queue afterward.
+## 2026-10-27 — DEV Python security replacements prepared, activation pending
+
+Owner scope remains DEV/build tools; old slomix_vm and puran are excluded.
+New isolated role environments were created from the actual installed bot/web
+inventories, preserving current split payload revisions and database roles.
+Both use pip26.2.2, certifi2026.10.19 and cryptography50.0.2; bot additionally
+uses Pillow13.0.0 already pinned on main. Root now explicitly pins the deployed
+Starlette1.3.1 and both manifests declare their direct crypto/trust dependencies.
+Website's previously documented aiosqlite dependency is made explicit as well.
+
+Fresh complete installed-graph audits found0known vulnerabilities for both roles;
+pip check passed twice. New-role interpreters passed78bot and30web checks,
+including real screenshot fixtures and contact encryption. Native Ed25519 and
+bot Paramiko RSA-SHA2 signing/key serialization passed with bundled OpenSSL4.0.3.
+Actual loaded application and pip CA stores exclude distrusted emSign G3;
+the same assertion fails against both old role stores. Trusted pip bootstrap
+was independently hash checked; source-only trueskill0.4.5 required a cached
+wheel whose complete code was compared against hash-verified upstream sdist.
+No source build executed. Private evidence/operational preparation:
+/home/samba/share/slomix-dev-security-20261027.
+
+No active environment, source payload, unit, service, DB or game was changed.
+Copied Python binaries remain3.13.16 with shared system stdlib; Python3.13.18
+base update is still an owner-managed host step, not solved by replacing venvs.
+Role-specific activation readiness is tracked in the private packet; do not use
+the single-release pair generator for today's different bot/web payloads.
+Supply reset investigation and full original runtime plan remain separate,
+retained lanes.1096/1097 approvals persist; no new numbered merge permission.
 
 ## 2026-10-25 — Close remaining inherited settings, audit path and CLI bytecode gaps
 

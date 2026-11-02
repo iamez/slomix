@@ -613,7 +613,21 @@ class C0RNP0RN3StatsParser:
         round_1_result = self.parse_regular_stats_file(round_1_file_path)
         round_2_cumulative_result = self.parse_regular_stats_file(round_2_file_path)
 
-        if not round_1_result['success'] or not round_2_cumulative_result['success']:
+        # A reset/surrender can leave a valid R1 header with no player rows.
+        # Keep that nearest R1 as a boundary; an older R1 is not its baseline.
+        empty_r1 = round_1_result.get('header_only_round')
+        if (empty_r1 == {'map_name': round_2_cumulative_result.get('map_name'), 'round_num': 1}
+                and round_2_cumulative_result['success']
+                and round_2_cumulative_result.get('players')):
+            logger.warning("[R2] Header-only R1; retaining raw orphan R2 without a match summary")
+            round_2_cumulative_result.update(
+                round_num=2, is_orphan_r2=True, orphan_r2_reason='header_only_r1',
+                r1_filename=os.path.basename(round_1_file_path),
+            )
+            return round_2_cumulative_result
+
+        if (not round_1_result['success'] or not round_2_cumulative_result['success']
+                or not round_1_result.get('players') or not round_2_cumulative_result.get('players')):
             logger.error("Error parsing one of the round files")
             return self._get_error_result("failed to parse round files")
 
@@ -1048,7 +1062,7 @@ class C0RNP0RN3StatsParser:
             with open(file_path, encoding='utf-8', errors='ignore') as f:
                 lines = f.readlines()
 
-            if len(lines) < 2:
+            if not lines:
                 return self._get_error_result("insufficient lines")
 
             # Parse header
@@ -1056,7 +1070,9 @@ class C0RNP0RN3StatsParser:
             header_parts = header_line.split('\\')
 
             if len(header_parts) < 8:
-                return self._get_error_result("invalid header format")
+                return self._get_error_result(
+                    "insufficient lines" if len(lines) < 2 else "invalid header format"
+                )
 
             header_parts[0]
             map_name = header_parts[1]
@@ -1065,6 +1081,16 @@ class C0RNP0RN3StatsParser:
             defender_team, winner_team, side_parse_diagnostics = _parse_side_fields(header_parts)
             map_time = header_parts[6]
             actual_time = header_parts[7] if len(header_parts) > 7 else "Unknown"
+
+            if not any(line.strip() for line in lines[1:]):
+                result = self._get_error_result("insufficient lines")
+                # Classify only an intact header, not malformed/empty input or
+                # unparseable player rows. No missing counters become zeroes.
+                if (header_parts[3] in ('1', '2') and map_name
+                        and not side_parse_diagnostics['reasons']
+                        and all(re.fullmatch(r'\d+:[0-5]\d', value) for value in (map_time, actual_time))):
+                    result['header_only_round'] = {'map_name': map_name, 'round_num': round_num}
+                return result
 
             if side_parse_diagnostics["reasons"]:
                 logger.warning(
