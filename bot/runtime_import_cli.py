@@ -23,6 +23,14 @@ spool/lock contracts. Exit 0 means canonical success (including warnings),
 130 is interruption. JSON never includes raw importer messages or credentials.
 Retain both sources on every outcome. This command is not a daemon, a remote
 source verifier, a cross-host writer lock or an approved deployment procedure.
+
+Alternative TCP mode replaces --socket/--database/--user with --env-file PATH,
+--config-sha256 SHA256, --expected-target HOST PORT DATABASE USER and
+--writer-handover-confirmed. The private canonical file is read literally and
+must match both independent expectations. Inherited DB configuration is refused.
+This mode permits private/loopback literal IPs and localhost, with an explicit
+password and no TLS. It authenticates operator intent, not physical server
+identity or the absence of a legacy writer. No other consumer is enabled.
 """
 
 import argparse
@@ -43,7 +51,16 @@ def parser():
     result = argparse.ArgumentParser(description=__doc__)
     result.add_argument('--execute', action='store_true', required=True,
                         help='Explicitly authorize writes to the supplied database')
-    for name in ('socket', 'database', 'user', 'spool', 'lock-directory'):
+    target = result.add_mutually_exclusive_group(required=True)
+    target.add_argument('--socket', help='Explicit peer-authenticated Unix socket directory')
+    target.add_argument('--env-file', help='Explicit private external TCP configuration')
+    for name in ('database', 'user'):
+        result.add_argument('--' + name)
+    result.add_argument('--config-sha256')
+    result.add_argument('--expected-target', nargs=4, metavar=('HOST', 'PORT', 'DATABASE', 'USER'))
+    result.add_argument('--writer-handover-confirmed', action='store_true',
+                        help='Confirm independent legacy/manual writer handover; not a database fence')
+    for name in ('spool', 'lock-directory'):
         result.add_argument('--' + name, required=True)
     for number in (1, 2):
         result.add_argument(f'--r{number}', nargs=4, required=True,
@@ -71,6 +88,33 @@ def expected_pair(args):
     return first, second
 
 
+def validate_database_mode(args):
+    if args.env_file is None:
+        if not args.database or not args.user:
+            raise ValueError('Unix mode requires --database and --user')
+        if args.config_sha256 is not None or args.expected_target is not None or args.writer_handover_confirmed:
+            raise ValueError('External configuration options require --env-file')
+    elif (args.database is not None or args.user is not None or not args.config_sha256
+          or args.expected_target is None or not args.writer_handover_confirmed):
+        raise ValueError('TCP mode requires pinned configuration, expected target and confirmed writer handover')
+
+
+def database_from_arguments(args):
+    validate_database_mode(args)
+    if args.env_file is None:
+        return ImportDatabaseConfig(args.socket, args.database, args.user, '')
+    # Keep dotenv entirely outside the original Unix-only import closure.
+    from shared.runtime_import_config import load_import_database
+
+    host, port, database, user = args.expected_target
+    try:
+        port = int(port)
+    except ValueError:
+        raise ValueError('Invalid expected PostgreSQL port') from None
+    return load_import_database(Path(args.env_file), expected_digest=args.config_sha256,
+                                expected_target=(host, port, database, user))
+
+
 async def execute(args):
     """One bounded pair, serially imported under the existing cooperative lock.
 
@@ -80,7 +124,7 @@ No retries, cursor advancement, acknowledgements or removal of source files.
 All cooperating writers must use this same stable lock directory/inode.
 """
     expected_first, expected_second = expected_pair(args)
-    database = ImportDatabaseConfig(args.socket, args.database, args.user, '')
+    database = database_from_arguments(args)
     root = Path(args.spool)
     inputs = []
     for number, fields in enumerate((args.r1, args.r2), start=1):
@@ -104,6 +148,7 @@ def main(argv=None):
     args = arguments.parse_args(argv)
     try:
         expected_pair(args)
+        validate_database_mode(args)
     except ValueError as exc:
         arguments.error(str(exc))
     # Legacy importer logs can contain payloads, paths and DB exceptions. This

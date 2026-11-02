@@ -1,3 +1,38 @@
+## 2026-11-02 - Import target implementation evidence before native CI
+
+152focused local cases pass; the native CLI case is unexecuted locally because
+no disposable PostgreSQL was authorized. Two native cases now collect: complete
+pair/replay and R2-corruption preserving a committed R1. Actual PG execution is
+required from fresh CI before claiming them proved.
+
+Both real DEV external configuration files are accepted with their startup SHA
+and independently supplied target tuples. Actual asyncpg pools remain lazy at
+zero connections/capacity one and close. Separate readonly sessions confirm the
+expected database/user via SQL, read-only mode and two query paths; source config
+bytes are unchanged. No import, live data write, migration or service action.
+Observed mutations: removing target agreement fails4cases; removing config SHA
+fails1case. Both guards restored with external cmp and focused cases pass.
+Ruff and configured Bandit pass. No unrelated consumer config is relaxed.
+
+## 2026-11-02 - Explicit pinned TCP importer target
+
+Owner-approved1110 is merged as2c899728; API confirms merged and its complete
+Git tree equals reviewed1db71b59. No service/database action follows source merge.
+Continue the original runtime caller contract: existing one-shot importer gains
+an alternative private external TCP config, mandatory SHA256, independent target
+tuple and writer-handover declaration. Existing Unix mode remains unchanged.
+No ambient credential discovery, schema bootstrap, scheduler or source ACK.
+
+Initial143focused tests pass. Full-config inspection found known legacy DB_PATH,
+SSL and pool fields: only PostgreSQL mode permits legacy DB_PATH, importer pool
+remains0..1, and any requested TLS is refused rather than silently downgraded.
+Actual DEV config parsing, functional/mutation proof and native PG CI remain
+pending. The next timing caller still needs separate trusted source FD/identity,
+stage outcomes and an independent observer; this target slice is not that caller.
+Keep pending104/105, backup/restore, owner single-writer handover and D4/D5 explicit.
+Original runtime plan, all remaining source/improvement tracks and archives stay
+preserved. Dependabot139 remains open; do not downgrade or dismiss as a shortcut.
+
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
 > **Current routing — 2026-10-04.** Read the latest checkpoint in `docs/PLAN.md`

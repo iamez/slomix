@@ -11,7 +11,7 @@ from bot.runtime_completed_import import CompletedRoundInput, import_completed_r
 from bot.runtime_import_session import open_import_session, validate_team_policy
 from bot.runtime_round_mapping import StatsRoundBinding
 from bot.runtime_snapshot_pair import _identity, validate_pair_metadata
-from shared.runtime_import_pool import ImportDatabaseConfig, create_import_pool
+from shared.runtime_import_pool import ImportDatabaseConfig, TcpImportDatabaseConfig, create_import_pool
 from shared.runtime_round_identity import RoundIdentity
 from shared.runtime_spool import _validate_metadata
 
@@ -79,7 +79,7 @@ async def run_import_once(database, current, *, first=None, journal_enabled, tim
     """
     validate_team_policy(defer_team_assignment, journal_enabled)
     validate_attempt_policy(require_declared_identity, timeout)
-    if not isinstance(database, ImportDatabaseConfig):
+    if not isinstance(database, (ImportDatabaseConfig, TcpImportDatabaseConfig)):
         raise ValueError('Explicit ImportDatabaseConfig required')
     validate_import_envelope(current, first, expected_identity, journal_enabled=journal_enabled)
     budget = asyncio.timeout(timeout)
