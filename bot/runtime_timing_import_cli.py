@@ -29,7 +29,7 @@ import os
 import signal
 import stat
 import sys
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from pathlib import Path
 
 from bot.runtime_completed_import import CompletedRoundInput, import_completed_round
@@ -80,38 +80,39 @@ def _owned_descriptor(path, flags, *, dir_fd=None):
 
 
 @contextmanager
+def _timing_source(root_fd, fields, identity, map_name):
+    generation, filename, size, digest = fields
+    if not filename or Path(filename).name != filename or '\x00' in filename:
+        raise ValueError('One explicit timing filename component required')
+    with _owned_descriptor(filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                           dir_fd=root_fd) as fd:
+        info = os.fstat(fd)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_mode & 0o002 or info.st_nlink != 1):
+            # Lua commonly emits0664; the owned0700 directory bounds path
+            # access. Hash/sealed-copy validation, not chmod, binds bytes.
+            raise ValueError('Owned regular timing file without world writes or extra links required')
+        binding = dict(source_id=identity.source_id, generation=generation, filename=filename,
+                       expected_size=int(size), expected_sha256=digest, expected_identity=identity)
+        timing = parse_verified_gametime(fd, **binding)
+        if timing.map_name != map_name:
+            raise ValueError('Timing map conflicts with declared stats pair')
+        yield fd, binding
+
+
+@contextmanager
 def timing_sources(args, identities, map_name):
-    """Own no-follow regular descriptors; verify ALL timing bytes before SQL."""
+    """Own both explicit inputs lexically; verify ALL timing bytes before SQL."""
     root = Path(args.timing_directory)
     if not root.is_absolute() or root.resolve(strict=True) != root:
         raise ValueError('Canonical absolute timing directory required')
-    with ExitStack() as stack:
-        root_fd = stack.enter_context(_owned_descriptor(
-            root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC))
+    with _owned_descriptor(root, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC) as root_fd:
         info = os.fstat(root_fd)
         if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
             raise ValueError('Timing directory must be private and owned by the operator')
-        inputs = []
-        for fields, identity in zip((args.timing_r1, args.timing_r2), identities, strict=True):
-            generation, filename, size, digest = fields
-            if not filename or Path(filename).name != filename or '\x00' in filename:
-                raise ValueError('One explicit timing filename component required')
-            fd = stack.enter_context(_owned_descriptor(
-                filename, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
-                dir_fd=root_fd))
-            info = os.fstat(fd)
-            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
-                    or info.st_mode & 0o002 or info.st_nlink != 1):
-                # Lua commonly emits0664; the owned0700 directory bounds path
-                # access. Hash/sealed-copy validation, not chmod, binds bytes.
-                raise ValueError('Owned regular timing file without world writes or extra links required')
-            binding = dict(source_id=identity.source_id, generation=generation, filename=filename,
-                           expected_size=int(size), expected_sha256=digest, expected_identity=identity)
-            timing = parse_verified_gametime(fd, **binding)
-            if timing.map_name != map_name:
-                raise ValueError('Timing map conflicts with declared stats pair')
-            inputs.append((fd, binding))
-        yield inputs
+        with (_timing_source(root_fd, args.timing_r1, identities[0], map_name) as first,
+              _timing_source(root_fd, args.timing_r2, identities[1], map_name) as second):
+            yield first, second
 
 
 def initial_progress():

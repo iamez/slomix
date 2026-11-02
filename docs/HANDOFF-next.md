@@ -41,6 +41,19 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 `docs/design/` (lokalno; beri `README.md` → 16 → 05 → 06 → 08 → 07 → 09 → 11+12).
 
 
+## 2026-11-02 - Use lexical contexts for the fixed two-file intake
+
+The f35c6e72 refactor still produces two CodeQL alerts at ExitStack.enter_context
+calls, despite local FD-close evidence. Inspect the upstream FileNotAlwaysClosed
+query model: direct With context expressions are modeled as FileClose, whereas
+the dynamic ExitStack call is not connected here. Replace the dynamic stack by
+explicit nested contexts for the fixed two required timing files and directory.
+All16CLI cases pass, including exception/cancellation and actual fresh-process
+admission. No suppression or gate-policy change. Keep both earlier alert sets
+and replies; require fresh exact-head CodeQL/native execution before approval.
+Upstream docs/model pointers and full read-only research stay private evidence.
+
+
 ## 2026-11-02 - Make descriptor ownership explicit for CodeQL
 
 Initial1112head42a66bf3 reports two CodeQL warnings: File is opened but is not
