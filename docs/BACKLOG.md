@@ -1,3 +1,15 @@
+## 2026-11-02 — Native CI exposed and corrected an inbox fixture dependency
+
+Initial1110head2c555a65 passes all194focused local cases and all15selected native
+cases, but both PG engines fail two older inbox tests with exact error:
+AttributeError: 'types.SimpleNamespace' object has no attribute 'webhook_round_metadata_service'
+The actual bot already initializes this service. The old test double bypassed it
+and supplied empty/dictionary embed fields that only its patched parser accepted.
+Carry the existing preserved16line fixture delta: use the real decoder service
+and real serialized Discord field lists. Keep all original SQL retention, failure
+ordering and later-file progress assertions. No production source fallback or
+weakened assertion. Scope grows32->33paths; fresh native CI required before approval.
+
 ## 2026-11-02 — Preserve runtime handover guards on the current main
 
 Integrate the declared existing handover source/test delta from the full candidate:

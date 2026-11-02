@@ -203,6 +203,7 @@ def intake_bot(adapter):
     raw = {"map": "fixture", "round": 1, "lua_roundstart": 1700000000, "lua_playtime": "600 sec"}
     return SimpleNamespace(
         db_adapter=adapter,
+        webhook_round_metadata_service=service,
         _fields_to_metadata_map=lambda fields: raw,
         _build_round_metadata_from_map=service.build_round_metadata_from_map,
         _parse_spawn_stats_from_metadata=lambda fields: [],
@@ -260,7 +261,12 @@ async def test_gametime_retained_before_team_storage_failure(inbox_db, monkeypat
     monkeypatch.setenv("LUA_CORRECTION_INBOX_ENABLED", "true")
     monkeypatch.setenv("LUA_CORRECTION_SOURCE_KEY", "fixture-server")
     bot = intake_bot(adapter_for(writer))
-    file_data = json.dumps({"payload": {"embeds": [{"fields": []}]}})
+    file_data = json.dumps({"payload": {"embeds": [{"fields": [
+        {"name": key, "value": str(value)} for key, value in {
+            "map": "fixture", "round": 1, "lua_roundstart": 1700000000,
+            "lua_playtime": "600 sec",
+        }.items()
+    ]}]}})
     monkeypatch.setattr("builtins.open", mock_open(read_data=file_data))
     with pytest.raises(RuntimeError, match="fixture later failure"):
         await UltimateETLegacyBot._process_gametimes_file(bot, "fixture.json", "fixture.json")
@@ -302,9 +308,11 @@ async def test_invalid_gametime_does_not_starve_later_valid_file(inbox_db, monke
     names = ["gametime-1.json", "gametime-2.json"]
     monkeypatch.setattr("bot.ultimate_bot.SSHHandler.list_remote_files", AsyncMock(return_value=names))
     monkeypatch.setattr("bot.ultimate_bot.SSHHandler.download_file", AsyncMock(side_effect=names))
-    documents = {name: json.dumps({"payload": {"embeds": [{"fields": {
-        "map": "fixture", "round": 1, "lua_roundstart": start, "lua_playtime": "600 sec",
-    }}]}}) for name, start in zip(names, [0, 1700000000])}
+    documents = {name: json.dumps({"payload": {"embeds": [{"fields": [
+        {"name": key, "value": str(value)} for key, value in {
+            "map": "fixture", "round": 1, "lua_roundstart": start, "lua_playtime": "600 sec",
+        }.items()
+    ]}]}}) for name, start in zip(names, [0, 1700000000])}
     monkeypatch.setattr("builtins.open", lambda path, **kwargs: mock_open(read_data=documents[path])())
     await UltimateETLegacyBot._process_remote_gametimes_files(bot)
     bot._mark_gametime_processed.assert_called_once_with(names[1])
