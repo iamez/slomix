@@ -249,3 +249,13 @@ def test_find_position_single_sample_returns_it():
     assert _find_position_at_time(path, 0) == path[0]
     assert _find_position_at_time(path, 5000) == path[0]
     assert _find_position_at_time(path, 99999) == path[0]
+
+
+def test_capture_resume_cannot_supply_a_future_position_during_long_pause():
+    path = [
+        {'time': 200, 'x': 10, 'y': 0, 'z': 0, 'event': 'sample'},
+        {'time': 10600, 'x': 50, 'y': 0, 'z': 0, 'event': 'capture_resume'},
+    ]
+    assert _find_position_at_time(path, 8000) is None
+    assert _find_position_at_time(path, 200) == path[0]
+    assert _find_position_at_time(path, 10600) == path[1]

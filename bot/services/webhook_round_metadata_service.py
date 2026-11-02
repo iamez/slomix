@@ -16,8 +16,78 @@ from bot.core.round_contract import (
 )
 
 
+def normalize_lua_round_number(raw_round: Any) -> int:
+    """Legacy webhook/gametime convention: an explicit zero denotes R2."""
+    if raw_round is None:
+        return 0
+    raw_text = str(raw_round).strip()
+    if not raw_text:
+        return 0
+    try:
+        parsed = int(raw_text)
+    except (TypeError, ValueError):
+        return 0
+    if parsed == 0 and raw_text.lstrip("+-") == "0":
+        return 2
+    return max(0, parsed)
+
+
 class WebhookRoundMetadataService:
     """Parse and normalize STATS_READY / gametime webhook metadata payloads."""
+
+    def decode_gametime_document(self, document: Any) -> tuple[dict, dict, list]:
+        """Decode already-read JSON without bot, database, filesystem or network.
+
+        Returns embed fields, normalized round metadata and spawn rows. This
+        preserves LEGACY precedence/defaults, not strict runtime admission:
+        successful decoding does not authenticate a source, prove round ownership
+        or make missing measurements zero. Strict callers must check presence.
+        """
+        if not isinstance(document, dict):
+            raise ValueError("Gametime document must be an object")
+        payload = document.get("payload")
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        if not isinstance(payload, dict):
+            raise ValueError("Gametime payload must be an object")
+        embeds = payload.get("embeds")
+        if not isinstance(embeds, list) or not embeds or not isinstance(embeds[0], dict):
+            raise ValueError("Gametime payload requires an embed object")
+        embed = embeds[0]
+        fields = embed.get("fields", [])
+        if not isinstance(fields, list) or any(not isinstance(field, dict) for field in fields):
+            raise ValueError("Gametime embed fields must be a list of objects")
+        metadata = self.fields_to_metadata_map(fields)
+        footer = embed.get("footer")
+        footer_text = footer.get("text") if isinstance(footer, dict) else None
+        if footer_text is not None and not isinstance(footer_text, str):
+            raise ValueError("Gametime footer text must be a string")
+        round_metadata = self.build_round_metadata_from_map(
+            metadata, footer_text=footer_text, normalize_round_number=normalize_lua_round_number,
+        )
+        meta = document.get("meta")
+        if meta is None:
+            meta = {}
+        if not isinstance(meta, dict):
+            raise ValueError("Gametime meta must be an object")
+        if round_metadata.get("map_name") == "unknown" and meta.get("map"):
+            round_metadata["map_name"] = meta["map"]
+        if round_metadata.get("round_number", 0) == 0 and meta.get("round") is not None:
+            round_metadata["round_number"] = normalize_lua_round_number(meta["round"])
+        if round_metadata.get("round_end_unix", 0) == 0 and meta.get("round_end_unix"):
+            round_metadata["round_end_unix"] = int(meta["round_end_unix"])
+            round_metadata.setdefault("_correction_present_fields", []).append("round_end_unix")
+        spawn_stats = meta.get("spawn_stats")
+        if isinstance(spawn_stats, str):
+            try:
+                spawn_stats = json.loads(spawn_stats)
+            except json.JSONDecodeError:
+                spawn_stats = []
+        if not isinstance(spawn_stats, list):
+            spawn_stats = []
+        if round_metadata.get("map_name") == "unknown" or round_metadata.get("round_number", 0) <= 0:
+            raise ValueError("Gametime file missing map/round metadata")
+        return metadata, round_metadata, spawn_stats
 
     def fields_to_metadata_map(self, fields: Any) -> dict[str, str]:
         metadata: dict[str, str] = {}

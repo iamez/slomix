@@ -152,6 +152,32 @@ end
 
 local modname = "stats_discord_webhook"
 local version = "1.7.3"
+local runtime_timing_context, runtime_timing_binding
+local runtime_timing_invalidated = false
+
+function BindRuntimeGametime(identity, map_name)
+    -- Explicit trusted adapter API, not source authentication or ID allocation.
+    -- Observe InitGame first, before accepting a ticket for an active half.
+    assert(runtime_timing_binding == nil and runtime_timing_context ~= nil,
+        "runtime timing requires unbound observed InitGame")
+    local codec = require("runtime_round_identity")
+    local wire = codec.encode(identity)
+    local frozen = codec.decode(wire)
+    local counter = tonumber(et.trap_Cvar_Get("g_currentRound"))
+    local exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION)
+    assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
+        and runtime_timing_context.gamestate == 0 and tonumber(et.trap_Cvar_Get("gamestate")) == 0
+        and (exit_flag == "" or exit_flag == "0" or exit_flag == "1")
+        and exit_flag == runtime_timing_context.exit_flag, "runtime timing requires active stopwatch context")
+    assert((counter == 0 or counter == 1) and runtime_timing_context.counter == counter
+        and frozen.round_number == 2 - counter, "runtime timing start half mismatch")
+    assert(type(map_name) == "string" and #map_name >= 1 and #map_name <= 64
+        and map_name:match("^[A-Za-z0-9_.+%-]+$") and not map_name:find("..", 1, true)
+        and runtime_timing_context.map_name == map_name
+        and et.trap_Cvar_Get("mapname") == map_name, "runtime timing ticket map mismatch")
+    runtime_timing_binding = {wire=wire, map_name=map_name, half=frozen.round_number}
+    return wire -- Local acceptance only, not an artifact completion receipt.
+end
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -589,6 +615,11 @@ local function write_gametime_file(payload_json, meta)
         return false
     end
 
+    local identity_extension = ""
+    if meta.runtime_identity ~= nil then
+        require("runtime_round_identity").decode(meta.runtime_identity)
+        identity_extension = ',"runtime_identity":"' .. json_escape(meta.runtime_identity) .. '"'
+    end
     local dir = get_gametimes_dir()
     ensure_dir(dir)
 
@@ -607,7 +638,7 @@ local function write_gametime_file(payload_json, meta)
     end
     local spawn_stats_json = meta.spawn_stats_json or "[]"
     local meta_json = string.format(
-        '{"map":"%s","round":%d,"round_start_unix":%d,"round_end_unix":%d,"actual_duration_seconds":%d,"warmup_seconds":%d,"pause_seconds":%d,"pause_count":%d,"server_ip":"%s","server_port":"%s","match_id":"%s","spawn_stats":%s}',
+        '{"map":"%s","round":%d,"round_start_unix":%d,"round_end_unix":%d,"actual_duration_seconds":%d,"warmup_seconds":%d,"pause_seconds":%d,"pause_count":%d,"server_ip":"%s","server_port":"%s","match_id":"%s","spawn_stats":%s%s}',
         json_escape(meta.mapname or "unknown"),
         tonumber(meta.round or 0),
         tonumber(meta.round_start_unix or 0),
@@ -619,12 +650,13 @@ local function write_gametime_file(payload_json, meta)
         json_escape(server_ip),
         json_escape(server_port),
         json_escape(match_id),
-        spawn_stats_json
+        spawn_stats_json,
+        identity_extension
     )
     local gametime_payload = string.format('{"meta":%s,"payload":%s}', meta_json, payload_json)
     local write_ok, write_err = pcall(function()
-        f:write(gametime_payload)
-        f:close()
+        assert(f:write(gametime_payload))
+        assert(f:close())
     end)
     if not write_ok then
         pcall(function() f:close() end)
@@ -761,6 +793,9 @@ local function pending_buffer_drop_oldest()
 end
 
 local function execute_curl_async(payload_json)
+    if not configuration.enabled or #configured_webhook_urls() == 0 then
+        return false, "notifications disabled or no webhook target"
+    end
     if not payload_json or payload_json == "" then
         return false, "empty payload"
     end
@@ -803,6 +838,11 @@ local function execute_curl_async(payload_json)
 end
 
 local function pending_retry_sweep()
+    -- Preserve queued payloads without touching disk or launching deliveries
+    -- while this optional consumer is disabled or has no configured target.
+    if not configuration.enabled or #configured_webhook_urls() == 0 then
+        return
+    end
     -- Periodic sweep over `pending_dir`:
     --  1. payloads with .exit marker == "0" → send succeeded; clean up
     --  2. payloads with .exit marker != "0" → curl reported failure,
@@ -1397,13 +1437,9 @@ end
 -- ============================================================================
 
 local function send_webhook()
-    if not configuration.enabled then
-        log("Webhook disabled, skipping send")
-        return
-    end
-
-    if #configured_webhook_urls() == 0 then
-        et.G_Print(string.format("[%s] ERROR: Discord webhook URL not configured!\n", modname))
+    local notifications_enabled = configuration.enabled and #configured_webhook_urls() > 0
+    if not notifications_enabled and not configuration.gametimes_enabled then
+        log("Notifications and local gametime capture unavailable, skipping")
         return
     end
 
@@ -1415,7 +1451,17 @@ local function send_webhook()
 
     local ok_send, err = pcall(function()
         local mapname = get_mapname()
-        local round = get_current_round()
+        local round = runtime_timing_binding and runtime_timing_binding.half or get_current_round()
+        if runtime_timing_binding ~= nil then
+            assert(not runtime_timing_invalidated, "runtime timing binding invalidated by InitGame")
+            local counter = tonumber(et.trap_Cvar_Get("g_currentRound"))
+            assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
+                and tonumber(et.trap_Cvar_Get("gamestate")) == GS_INTERMISSION
+                and counter == (runtime_timing_binding.half - 1),
+                "runtime timing requires completed stopwatch half")
+            assert(runtime_timing_binding.map_name == mapname and runtime_timing_binding.half == round,
+                "runtime timing end context mismatch")
+        end
         local winner = get_winner_team()
         local defender = get_defender_team()
         local actual_duration = math.floor(round_end_unix - round_start_unix - total_pause_seconds)
@@ -1543,7 +1589,7 @@ local function send_webhook()
             version  -- footer
         )
 
-        log(string.format("Sending webhook for %s R%d (winner=%d, playtime=%ds, warmup=%ds, pauses=%d, reason=%s)",
+        log(string.format("Processing round for %s R%d (winner=%d, playtime=%ds, warmup=%ds, pauses=%d, reason=%s)",
             mapname, round, winner, actual_duration, warmup_seconds, pause_count, end_reason))
         if surrender_vote.active then
             log(string.format("Surrender called by %s (team %d, guid %s)",
@@ -1558,6 +1604,7 @@ local function send_webhook()
         log(string.format("Spawn summary: %s", spawn_summary))
 
         local gametime_meta = {
+            runtime_identity = runtime_timing_binding and runtime_timing_binding.wire or nil,
             mapname = mapname,
             round = round,
             round_end_unix = round_end_unix,
@@ -1571,21 +1618,28 @@ local function send_webhook()
         }
 
         local wrote = false
-        if configuration.gametimes_enabled and not configuration.gametimes_write_on_failure_only then
+        if configuration.gametimes_enabled
+            and (not notifications_enabled or not configuration.gametimes_write_on_failure_only) then
             wrote = write_gametime_file(payload, gametime_meta)
             if not wrote then
-                log("Gametime pre-write failed (continuing with webhook send)")
+                log("Local gametime capture failed")
             end
         end
 
-        local ok, msg = execute_curl_async(payload)
-        if not ok then
-            log(string.format("Webhook send failed: %s", msg or "unknown error"))
+        local ok, msg = false, nil
+        if notifications_enabled then
+            ok, msg = execute_curl_async(payload)
+            if not ok then
+                log(string.format("Webhook launch failed: %s", msg or "unknown error"))
+            else
+                log(string.format("Webhook send started: %s", msg or "ok"))
+            end
         else
-            log(string.format("Webhook send started: %s", msg or "ok"))
+            log("Notifications disabled or no webhook target; local capture only")
         end
 
-        if configuration.gametimes_enabled and configuration.gametimes_write_on_failure_only and not ok then
+        if configuration.gametimes_enabled and configuration.gametimes_write_on_failure_only
+            and notifications_enabled and not ok then
             wrote = write_gametime_file(payload, gametime_meta) or wrote
         end
 
@@ -1596,8 +1650,8 @@ local function send_webhook()
         local axis_count = count_names(axis_names)
         local allies_count = count_names(allies_names)
 
-        et.G_Print(string.format("[%s] Sent round notification: %s R%d (Axis: %d, Allies: %d players) Score: %d-%d\n",
-            modname, mapname, round,
+        et.G_Print(string.format("[%s] Round result (local_saved=%s, delivery_launched=%s): %s R%d (Axis: %d, Allies: %d players) Score: %d-%d\n",
+            modname, tostring(wrote), tostring(ok), mapname, round,
             axis_count,
             allies_count,
             match_score.axis_wins, match_score.allies_wins))
@@ -1731,6 +1785,8 @@ end
 -- ============================================================================
 
 function et_InitGame(levelTime, randomSeed, restart)
+    if runtime_timing_binding ~= nil then runtime_timing_invalidated = true end
+    runtime_timing_context = nil
     fh_init()
     et.RegisterModname(string.format("%s %s", modname, version))
 
@@ -1787,6 +1843,12 @@ function et_InitGame(levelTime, randomSeed, restart)
     for _, warning in ipairs(config_override_warnings) do
         et.G_Print(string.format("[%s] WARNING: %s\n", modname, warning))
     end
+    runtime_timing_context = {
+        gamestate = tonumber(et.trap_Cvar_Get("gamestate")),
+        counter = tonumber(et.trap_Cvar_Get("g_currentRound")),
+        map_name = et.trap_Cvar_Get("mapname"),
+        exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION),
+    }
     local active_urls = configured_webhook_urls()
     if #active_urls == 0 then
         et.G_Print(string.format("[%s] WARNING: Webhook URL not configured! Deploy stats_discord_webhook_config.lua next to this script.\n", modname))
@@ -1891,8 +1953,8 @@ function et_RunFrame(levelTime)
         end
     end
 
-    -- Send scheduled webhook
-    if send_pending and levelTime >= scheduled_send_time then
+    -- Compare on the deadline's clock; engine levelTime has a different origin.
+    if send_pending and et.trap_Milliseconds() >= scheduled_send_time then
         send_pending = false
         local fh_t0 = fh_now()
         send_webhook()

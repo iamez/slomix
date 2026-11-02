@@ -1,3 +1,323 @@
+## 2026-10-30 — Preserve strict legacy ingestion under declared policy opt-in
+
+Original runtime PLAN and its improvements remain the goal; the testing audit
+is recorded below and must not replace that roadmap. Prior2b29ab00 passes all
+26checks(25SUCCESS/1SKIPPED), PG14=12012/163skips, PG17=12016/159skips. Its direct
+legacy replay correction has full native proof. Tenth review identifies a genuine
+runtime policy composition bug: enabling support for declared captures also forces
+legacy captures through declared provenance and prevents their import/replay.
+
+Classify only source bytes verified against persisted admission size/hash, and
+only after matching sealed completion. Declared headers keep strict mapping;
+undeclared files keep existing strict canonical-parent/receipt checks. Malformed
+present declarations still fail; never infer or adopt declared provenance for
+legacy files. Observer only queries declared proof when source declares identity.
+Explicit parser binding semantics remain strict. No existing reconciliation hold
+is cleared, no completion/source is changed and no data is auto-repaired.
+
+Two regression cases fail before correction;146related local cases pass after.
+Reverting observer selection or import selection each yields1failure; both sources
+restore byte-identically with cmp. Ruff/Bandit pass. Extend actual canonical PG
+legacy import -> independent receipt -> replay for policy OFF/ON, requiring one
+track/strict digest/parent receipt, zero declared mappings and unchanged source.
+Fresh exact-head native PG14/17 and full CI remain required; no new local full run.
+
+After this runtime slice: numbered#1108merge permission, prescribed420secondcycle,
+exact-source release preparation and originalD4/D5 source/writer/recovery gates.
+Testing-quality lane retains70unexpected SQL skips, duplicated CI, missing runtime
+coverage measurement and separate real browser/game evidence. All old plans,
+features, Supply/frame-health/Spiderweb/UI/Stats/security/history stay preserved.
+No service/deploy/liveDB/migration/game action; original PLAN remains byte-contained.
+
+## 2026-10-30 — Testing audit remains part of the original runtime roadmap
+
+Owner reaffirms runtime development plus the improvements/fixes recorded in the
+original PLAN. Read-only audit of2b29ab00 measures12174collected Python cases,
+7145base names;990Reactcases. Both push/PR run two Python/PG jobs, yielding48056
+successful Python case executions and48.75summed CI job-minutes, excluding other
+workflows. These are repeated executions, not48056independent test definitions.
+
+Confirmed priority gaps:70plausibility SQL and2view cases skip because fixtures
+expect application POSTGRES_* while CI supplies isolated POSTGRES_TEST_*; broad
+exception/SystemExit handling hides it. Fix with isolated populated fixtures and
+fail when explicitly requested setup breaks, never application credentials.
+Coverage63% measures bot/backend only; shared runtime/parser are unmeasured there.
+Playwright/real ET asset gates remain separate; six Python e2e cases only test
+configuration. Deduplicate push/PR while retaining stacked PR/merge_group proof;
+track skipped behavioral coverage and avoid source-name-only confidence. Keep all
+history. Private report evidence/TESTING-AUDIT-20261030.md and measuredJSON.
+
+Audit ran no tests, DB connections, browsers, services or workflow changes.
+Return to current #1108 legacy-policy compatibility fix, then exact-source release
+and originalD4/D5 source/writer/recovery plan. No numbered1108merge approval.
+
+## 2026-10-29 — Close direct legacy replay capture-boundary dependency
+
+Priorheadbeb8b295 completes26checks:25SUCCESS/1SKIPPED(CodeRabbit), zero failures;
+fullPG14=11991passed/163skipped, PG17=11995passed/159skipped, React990cases pass.
+A ninth review finding then reopens the actual legacy replay UI: it consumes raw
+tracks directly, bypassing the corrected backend replay positions/paths readers.
+Do not treat earlier green CI/eight resolved findings as this new fix's proof.
+
+Carry the existing canonical replay.js capture-boundary context into both Canvas
+track drawing and event-position lookup. Withhold the explicit unobserved gap,
+reset trails before every coincident resume group, preserve coordinate-less and
+legacy tuple markers, and retain unmarked legacy nearest-position behavior.
+Execute the whole shipped module in a Node VM/recording Canvas, not a reimplemented
+position model. Actual Lua file -> parser -> Canvas proof is included. Pin the
+review's200ms/x10 ->10600ms/x50 case at8000/10600/10800ms with a life spanning it.
+
+Before restoration19cases fail/2pass; afterwards21pass. Removing the new actual
+Canvas gap guard yields one observed failure, then cmp verifies full restoration.
+Generated datapoint ledger remains current. Fresh exact-head PG14/17 and complete
+CI are still required. No numbered #1108 merge permission, live data write,
+service/game/deploy/migration action. Original plan/history and all broader
+runtime/D4/D5, Supply, frame-health, live/Spiderweb/UI/Stats/security lanes remain.
+
+## 2026-10-29 — Complete journey renderers and sanitized timing admission
+
+173d8c59 passes all checks, including both native PostgreSQL suites. Two new
+review findings remain actionable: old Canvas/SVG journey rendering connects
+across capture gaps, and timing admission compares sanitized filenames with
+unsanitized original map names. Carry the existing canonical segmented journey
+UI/shared marker helper and raw-clock labels, including nullable boundary types.
+Markers require a unique observed segment; unavailable coverage is not solitude.
+The actual legacy Canvas/HTTP harness exercises the shipped code without a browser.
+
+Timing admission now validates original metadata/embed map agreement, derives the
+producer filename sanitization separately, and keeps raw-byte/source identity
+checks. Actual whole-producer output for supply.te+test is admitted for both
+halves; conflicting original names that sanitize identically remain rejected.
+151 focused cases pass. Reverting filename normalization fails both whole-producer
+cases; removing the Canvas boundary guard fails its rendering case. Both guards
+are restored byte-for-byte. Changed-file Bandit is clean. Fresh exact-head CI,
+including Node22 React typecheck/tests and both PostgreSQL versions, is required.
+
+No live DB write, migration, service/game action or deployment. No numbered #1108
+merge permission exists. Full original PLAN, broader runtime/D4/D5, Supply,
+frame-health, Spiderweb/geometry and security work remain retained; README B+C
+presentation stays deferred and DPM attribution belongs to Superboyy.
+
+## 2026-10-29 — Complete producer/reader contract after second review
+
+81883578 passes all26checks, but three new review findings block merge: new timing/
+proximity bindings inverted the existing active-start counter contract; replay
+lookahead crosses suppressed capture gaps; legacy receipt inspection decodes names
+more strictly than the canonical parser. All three require fixes, not closure by
+old green CI. No numbered1108merge permission exists.
+
+Align BOTH producers with actual runtime_init_lease/c0rnp0rn8: active counter1=R1,
+0=R2; G_LogExit flips it before Lua end callbacks (pinned COMP13g_main.c3116).
+Freeze half labels from the binding, require the complementary end counter and
+fresh InitGame exit-flag agreement, including retained CS_INTERMISSION=1. Align
+map alphabet with the existing lease. The two producer fixtures now invoke the
+actual stats lease module and cross-check its requested half. Full dispatched
+stats/timing/proximity outputs agree for normal and retained-intermission profiles.
+
+Carry the already-developed complete capture-aware reader slice from the canonical
+candidate: segmented replay/trails, unavailable gap positions, conservative pressure,
+journey/time-quality and receipt-linked capture policy. This is required telemetry
+compatibility; all broader frontend/geometry plans remain preserved. Match canonical
+replacement decoding in legacy observation and declared-binding header inspection;
+keep hashes over unchanged raw bytes and ASCII identity/map validation strict.
+
+371related local cases pass; actual ASGI/Lua/file/parser paths execute. Reverting
+either producer counter causes2failures; reverting legacy decoding causes1; removing
+replay gap guard causes1. cmp restores all. Prepared actual PG legacy/declared
+non-UTF8 canonical import/replay cases still require fresh exact-head CI. Bandit,
+selected Ruff and tracked Lua parsing pass. No live DB write, migration, deployment,
+service, game or production action. Original PLAN and older features stay intact.
+
+## 2026-10-29 — Resolve final review lifecycle and transient-error findings
+
+Exact expanded heada5e2a8aa passes all26checks. Full PG14/Python3.11 reports11869
+passed/163skipped; PG17/Python3.13 reports11873passed/159skipped. Every six new
+configured-policy case passes on both. Review then identifies two real P2 bugs:
+capture_resume can hide terminal type from old readers, and parser False after
+a transient DB cancellation can persist a sticky reconciliation hold.
+
+Carry the existing authoritative lifecycle SQL helper and NARROW lifecycle changes
+in clock/competitive/journey/information-state readers; explicit unknown prevents
+legacy fallback. Do not copy the full pending UI/geometry/replay features or lose
+them from canonical current. The complete candidate already includes those reader
+semantics; preserve its larger files and append only new regression coverage.
+
+Recognized timeout/connection/serialization/deadlock/capacity failures now propagate
+through parser import/optional-column probes and enter the worker's bounded
+backoff. Programming/identity conflicts remain visible/reconciliation cases. Add
+actual PG statement-timeout -> rollback/no hold/cooldown -> committed recovery,
+and whole Lua paused/resume death -> native lifecycle SQL -> normal spawn tests.
+These three native cases still require fresh exact-head PG14/17 CI. Local parser/
+worker/UI tests and observed7/3failure guard mutations pass after cmp restoration.
+Remove unused serve re-export; cleanup test now exercises actual child _batch.
+
+Publication grows to79files because review proves reader dependency is required,
+above the75target but within the existing225hard ceiling; retain one cohesive PR
+and normal hooks, never bypass them. All original plans/features and deferred
+README B+C remain. #1108 still needs numbered merge permission. No live DB write,
+migration, service, Puran/production action, new worktree or source deletion.
+
+## 2026-10-29 — Native ingestion succeeds; repair remaining historical fixture closure
+
+First expanded CI346f75a0/PG14 proves all six new checkpoint/configured-entrypoint
+policy cases and actual Lua canonical mapping/aggregate tests PASS. The full job
+reports20failed/11848passed/163skipped: nineteen depend on an older linked_import
+fixture lacking migration096/its batch-dispatch keyword interface; one still
+asserts the old known-bug zero-origin duration of0instead of3000. Carry the existing
+canonical fixture/test updates without changing source or weakening schema guards.
+Current5a7d1323 Lua, security, frontend and CodeQL checks pass; the same obsolete
+PG fixture closure still needs correction and a fresh exact-head full CI run.
+
+Owner also requested a short player-facing Puran upgrade recap. Before-update
+native evidence says2.84.0; selected archive/native proof says2.86.0-13-g39c75a3.
+Primary upstream comparison confirms exactly13commits beyond v2.86.0, no behind
+commits. Private evidence/puran-community-comp13-recap.md records the ready draft
+and links. Do not attribute later Coming Soon antilag fixes or native-client-only
+OpenAL benefits to this server/PK3 upgrade; no Discord message was sent.
+
+Original runtime/D4/D5 and all retained incident/UI/history lanes remain intact.
+No service, production, game, live DB or migration action; no merge permission1108.
+
+## 2026-10-29 — Preserve full Lua CI contracts during ingestion publication
+
+#1108 expanded head346f75a0 is published,67paths, within the recorded75-file
+review target. Self-review confirms default-off policy and retained main schema;
+CodeQL Python/JS and security checks pass. Fresh full CI exposed an old Lua
+harness assertion: "a frozen levelTime for > 1 s must read paused=1". Pinned
+COMP13 upstream39c75a3 g_main.c4614+ proves timeCurrent freezes during pause while
+level.time advances; etmain/ui/menudef.h403 defines CV_SVS_PAUSE=16.
+
+Carry the existing corrected frame-health harness and fix the vehicle fixture's
+engine stubs: numeric unpaused CS_SERVERTOGGLES and an accepted-byte count from
+FS_Write. Movement/escort/destruction assertions remain intact. All four actual
+Lua CI harness commands now pass locally; all35tracked Lua files parse. Removing
+the real pause-bit guard causes the updated harness to fail; cmp restores source.
+This is a fixture/contract integration fix, not a reason to restore the incorrect
+clock inference. Actual engine source references stay in private evidence.
+
+Full original plan/features/history remain retained. PostgreSQL CI execution is
+still pending; no1108merge approval, activation, migration or service/game action.
+
+## 2026-10-29 — Complete proximity integration prepared for disposable-PG CI
+
+Existing #1108 now carries one cohesive source path: real Lua producer IDs and
+capture-quality headers, verified timing decoder, canonical parser, manifest-
+gated ingestion, independent commit observation, durable retry/queue/cursor and
+bounded worker/spawn supervisor. Explicit declaration policy remains default-off.
+No extra branch or worktree was created. Existing main migrations/bootstrap are
+preserved; unrelated website/config/community-parser changes are excluded.
+
+Local selected suite: 595 passed, 110 PostgreSQL cases explicitly skipped; XML
+and console counts agree. Sixteen frame-health compatibility cases also pass.
+The first composition exposed24failures from a missing decode_gametime_document
+prerequisite; carrying its existing stateless decoder resolves them. The changed
+subset then passes160cases and the final selected suite has zero failures.
+Three actual Lua/file/parser/receipt capture scenarios execute. Removing the gap
+distance guard causes two observed failures (1010units instead of20); restore
+is verified by cmp and all three runtime capture cases pass again. Selected
+Python sources lint clean apart from the same two pre-existing parser datetime
+warnings independently reproduced on main; no suppression or clock change.
+
+Four new opted-in PG cases exercise actual DEV configuration through an async
+worker or a freshly spawned native batch, with default-off and explicit-on policy,
+owned DB resources, independent exact canonical links and retained inputs. These
+and the two checkpoint-policy cases have not yet executed locally; actual PG14/17
+CI is required. The old green46b5cabb foundation proof cannot certify this update.
+#1108 has no numbered merge approval. No deployment, migration, live DB write,
+service action, Puran/production change or source deletion. Retain the complete
+original runtime/D4/D5, Supply/frame-health/Spiderweb/UI/Stats and README B+C plan.
+
+## 2026-10-29 — Publish the complete proximity ingestion path in existing #1108
+
+Fresh checks on46b5cabb completed without failures. Preserve that exact foundation
+checkpoint and extend the same review worktree/PR with the canonical parser,
+bounded ingest/commit/queue/batch/cursor/worker and explicit default-off policy.
+Carry actual Lua producer/harness and timing-admission prerequisites needed by
+the full stats + proximity identity proof. Keep existing migrations/bootstrap
+from main; the full candidate contains an older schema ordering and must not
+replace the already-published104/105 definitions. Do not copy unrelated config,
+community parser or website/UI changes merely because static imports reach them.
+
+Run selected local contracts and actual opted-in disposable PG14/17 CI, including
+the two new policy-through-batch canonical import cases. Check exact source and
+fixture dependencies, fresh processes, observer visibility, rollback/replay and
+mutation failures before a complete-ingestion claim. No deployment/activation
+claim follows. Preserve sticky reconciliation holds, source files and default-off.
+#1108 still requires its own numbered owner merge permission after fresh proof.
+
+All original runtime/D4/D5, Supply, frame-health, Spiderweb/UI/Stats work and
+README B+C remain retained. No live DB write, migration, service/Puran action,
+production change, new branch/worktree, source deletion or archival pruning.
+
+## 2026-10-29 — Extend existing proximity PR with retry and resource foundations
+
+Continue from the consolidated workspace; no new branch or worktree. #1107 at
+b46b3bae and #1108 at e12acdc8 both have green CI and no unresolved review threads.
+Neither has numbered merge permission. Extend #1108's existing caller-owned
+identity/receipt primitives with the existing durable retry and database-resource
+primitives instead of opening another PR for this closely related foundation.
+
+Retry charges before work, serializes cooperating processes with flock, retains
+backoff across restarts/cancellation/crashes, caps delay at 1800s and attempts at
+64, and never acknowledges or deletes a source. Resource borrowing uses distinct
+primary writer/observer backends, rejects database/schema mismatch and inherited
+transactions, and unwinds borrowed connections on cancellation. No new pool or
+service is implicitly started. Legacy writer exclusion remains the owner gate.
+
+Combined local contracts pass132cases;16real-PostgreSQL cases explicitly skip
+without a disposable DB. Native fresh-process retry/locking/crash tests execute;
+removing backoff causes one observed failure, dropping resource identity guard
+causes two; cmp verifies restoration. Actual PG resource fixture checks commit
+visibility and rollback through the real adapter; fresh CI execution is required.
+Its cleanup explicitly handles Exception and CancelledError. The worker/cursor
+integration test remains in the full candidate for its later dependency slice.
+An unused test import exposed by extracting that case was removed before publish.
+
+Keep new test output and temporary directories inside the existing evidence
+packet (workspace evidence link). Existing conftest unconditionally creates a
+slomix-test-logs directory per run, even when log variables are configured;
+set TMPDIR to the packet's test-tmp for these local runs instead of scattering
+new directories in /tmp. No cleanup/deletion of previous outputs is performed.
+
+Next remains parser integration and bounded ingest/commit/retry/dispatch/queue/
+batch, then D4/D5 trusted-source/exclusive-writer acceptance. Original full PLAN,
+Supply/frame-health/Spiderweb/UI/Stats and deferred README/About B+C survive.
+No migration, live DB write, deployment, service/Puran action or merge occurs.
+
+## 2026-10-29 — Publish declared proximity parent and receipt primitives
+
+App #1096 and state #1097 are merged (5c4ad123 and 70a94d35). Independent
+comparison proves the latter merge tree equals the exact reviewed 52189ee5 tree.
+#1101 now targets main at 6d3b5958; source bytes are unchanged by verified ancestry
+recording. #1107 at b08ced4e includes the timing declaration detection exemption
+and inherits all current state guards. Fresh CI is required; neither PR has
+numbered owner merge permission.
+
+The next dependency slice reuses existing header, declared parent resolution and
+receipt-link primitives from the full candidate, including the dot/plus map
+alphabet fix. Independent trusted source/hash/size/date binding precedes mapping,
+canonical round and initial-journal agreement. Legacy absence remains unbound;
+explicit contradictions refuse instead of clock fallback. Receipt prevalidation
+refuses historical completed/unlinked rows and reassignment; late link recording
+participates in the caller-owned transaction. No parser/Lua/consumer activation
+or ingest/queue wiring is included in this library slice.
+
+Local focused contracts: 95 passed, 15 PostgreSQL cases explicitly skipped.
+Native verified-source file proof covers both halves of five map spellings with
+exact identical library bytes and independent GNU/Python hashes. Digest guard
+removal causes one observed failure; actual journal-guard removal causes two,
+then cmp verifies restoration. An earlier inequality inversion was inconclusive:
+it rejected a different healthy half, masking the intended negative mutation.
+Do not call that result a proven guard. New disposable-PG cases exercise actual
+R1/R2 mapping/journal queries, contradictions, missing mapping without clock
+fallback, receipt rollback, legacy refusal and strict late-link prerequisites.
+Actual PostgreSQL CI proof remains required for these newly extracted cases.
+
+Next: review the identity primitives, then the existing bounded ingest/commit/
+retry/dispatch/queue/batch integration. Preserve D4/D5 trusted-source/exclusive
+writer gates and the original runtime/Supply/frame-health/Spiderweb/UI/Stats
+roadmap. No service, database write, new server, Puran or production action.
+
 ## 2026-10-29 — Verified forward schema and inherited state admission fix
 
 All 67 proximity schema cases at 428a0ee4 passed on both actual CI PostgreSQL 14
