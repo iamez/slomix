@@ -170,3 +170,20 @@ else
 end
 print(string.format('COUNTS launches=%d opens=%d shell=%d', launches, opens, shell_calls))
 print(table.concat(logs, '\n'))
+
+if binding_fault=='two-halves' then
+    local second=require('runtime_round_identity').decode(assert(arg[10]))
+    half=2
+    values.gamestate,values.g_currentRound='0','0'
+    exit_flag=''
+    et_InitGame(200,0,1)
+    assert(not pcall(BindRuntimeGametime,require('runtime_round_identity').decode(identity_wire),'supply'))
+    assert(BindRuntimeGametime(second,'supply')==arg[10])
+    values.gamestate,values.g_currentRound='3','1'
+    set('round_start_unix',1700000000)
+    set('round_end_unix',1700000610)
+    set('total_pause_seconds',10)
+    set('pause_count',1)
+    get('send_webhook')()
+    print('TWO_HALVES_REBOUND')
+end

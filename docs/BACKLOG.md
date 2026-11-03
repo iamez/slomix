@@ -1,3 +1,14 @@
+## 2026-11-03 — Timing lifecycle supports fresh R2 in a persistent Lua VM
+
+Found source binding fence also rejected a legitimate fresh timing ticket after
+new InitGame when Lua VM persists across halves. Allow replacement only after
+InitGame invalidated old binding, validate active map/half/context, reject same
+old identity, clear fence only on successful fresh bind. Original stale-binding
+reset/end-state tests retained. Actual source harness now runs R1 then freshR2 in
+one VM, rejects old identity and writes both declared identities.32producer tests
+pass. This does not provide automatic host-ticket transport into a separate Lua VM.
+No source activation. Full CI for updated head pending; original plan retained.
+
 ## 2026-11-03 — Corrected timing wait so it cannot block R2 statistics
 
 RCA: sequential shared-socket timing wait could stop R2 bootstrap when R1 timing

@@ -159,11 +159,13 @@ local runtime_timing_invalidated = false
 function BindRuntimeGametime(identity, map_name, completion)
     -- Explicit trusted adapter API, not source authentication or ID allocation.
     -- Observe InitGame first, before accepting a ticket for an active half.
-    assert(runtime_timing_binding == nil and runtime_timing_context ~= nil,
+    assert((runtime_timing_binding == nil or runtime_timing_invalidated) and runtime_timing_context ~= nil,
         "runtime timing requires unbound observed InitGame")
     local codec = require("runtime_round_identity")
     local wire = codec.encode(identity)
     local frozen = codec.decode(wire)
+    assert(runtime_timing_binding == nil or runtime_timing_binding.wire ~= wire,
+        "a new InitGame requires a fresh trusted timing identity")
     local counter = tonumber(et.trap_Cvar_Get("g_currentRound"))
     local exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION)
     assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
@@ -191,6 +193,7 @@ function BindRuntimeGametime(identity, map_name, completion)
         close_binding={generation=completion.generation, directory=completion.directory,
             completed=completion.completed, attempted=false}
     end
+    runtime_timing_invalidated = false -- Only a validated fresh binding clears InitGame fencing.
     runtime_timing_binding = {wire=wire, map_name=map_name, half=frozen.round_number,
         completion=close_binding}
     return wire -- Local acceptance only, not an artifact completion receipt.

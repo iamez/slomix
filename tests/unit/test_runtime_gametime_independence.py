@@ -141,3 +141,19 @@ def test_failed_checked_close_never_emits_completion(tmp_path):
     assert 'BIND=true' in output
     assert 'TIMING_CLOSED_AFTER_READ' not in output
     assert 'fixture close failure' in output
+
+
+def test_same_vm_accepts_fresh_second_half_after_new_initgame(tmp_path):
+    from tests.unit.test_runtime_stats_dispatch import setup_pair
+
+    _, _, pair = setup_pair(tmp_path / 'rounds')
+    result = subprocess.run([
+        shutil.which('lua5.4'), str(ROOT / 'tests/lua/gametime_independence_harness.lua'),
+        str(ROOT / 'vps_scripts/stats_discord_webhook.lua'), str(tmp_path), 'send',
+        '0', '0', '1', '0', pair.first.encode(), 'two-halves', pair.second.encode(),
+    ], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'TWO_HALVES_REBOUND' in result.stdout
+    for half, expected in ((1, pair.first), (2, pair.second)):
+        raw = (tmp_path / NAME.replace('R1', f'R{half}')).read_bytes()
+        assert json.loads(raw)['meta']['runtime_identity'] == expected.encode()
