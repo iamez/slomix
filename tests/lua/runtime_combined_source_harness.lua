@@ -1,8 +1,9 @@
 -- Whole shipped producers in one VM; synthetic ET observations/host transport.
 -- Real stats and timing files. No engine, listener, Discord or database.
 local root, directory, mode = arg[1], arg[2], arg[3]
-local native=mode=='native'
+local native=mode=='native' or mode=='supervisor'
 package.path=root..'/vps_scripts/?.lua;'..package.path
+if arg[12] then package.path=arg[12]..'/?.lua;'..package.path end
 local generation=string.rep('a',32)
 local round=string.rep('b',32)
 local identity={source_id='fixture-server',match_id=string.rep('c',32),
@@ -13,6 +14,7 @@ local state,counter,clock='0','1',1000
 local messages,logs={},{}
 local values={mapname='supply',g_gametype='3',timelimit='20',g_nextTimeLimit='10',
     sv_maxClients='0',sv_maxclients='0',fs_homepath=directory}
+if arg[13] then values.fs_homepath=arg[13] end
 et={CS_SERVERINFO=1,CS_MULTI_INFO=2,CS_MULTI_MAPWINNER=3,CS_REINFSEEDS=4,
     CS_INTERMISSION=5,GS_INTERMISSION=3,GS_WARMUP_COUNTDOWN=1,FS_WRITE=1}
 function et.trap_Cvar_Get(key)
@@ -64,6 +66,14 @@ if not native then package.loaded['runtime_host_channel']={open=function(path)
     end,receive_line=function() index=index+1;return replies[index] end,close=function() end}
 end}
 package.preload['socket.unix']=function() return {} end end
+if native and arg[14]=='missing-first-timing' then
+    local channel=require('runtime_host_channel')
+    local open=channel.open
+    channel.open=function(path,...)
+        if path==arg[5] then error('fixture timing transport unavailable') end
+        return open(path,...)
+    end
+end
 local function locate(fn,key,seen)
     seen=seen or {};if seen[fn] then return end;seen[fn]=true
     local children={}
@@ -74,7 +84,9 @@ local function locate(fn,key,seen)
     end
     for _,child in ipairs(children) do local value=locate(child,key,seen);if value~=nil then return value end end
 end
-local status=require('runtime_combined_host').configure({source_id=identity.source_id,
+local status
+if arg[11] then status=dofile(arg[11]) else
+status=require('runtime_combined_host').configure({source_id=identity.source_id,
     socket_path=native and arg[4] or '/private/stats',bootstrap_timeout_ms=5000,completion_timeout_ms=1000,
     producer_spool=directory,timing_sockets={[1]=native and arg[5] or '/private/t1',[2]=native and arg[6] or '/private/t2'}}, {
     stats=function() return require('runtime_c0rn_host') end,
@@ -83,13 +95,15 @@ local status=require('runtime_combined_host').configure({source_id=identity.sour
         local config=assert(locate(et_RunFrame,'configuration'))
         config.enabled=false;config.discord_webhook_urls={};config.debug=false
     end})
+end
 local wall=1700000000
 os.time=function() return wall end
 os.date=function() return '2026-09-25-120000-' end
 os.execute=function() error('unexpected shell execution') end
 io.popen=function() error('unexpected legacy queue scan') end
 if native then
-    print('READY');io.stdout:flush();assert(io.read('*l')=='start','host did not release init')
+    print('READY');io.stdout:flush()
+    assert(io.read('*l')==(mode=='supervisor' and 'map supply' or 'start'),'host did not release init')
     for half=1,2 do
         identity.round_number=half;counter=tostring(2-half);state='0'
         clock=1000;wall=1700000000+(half-1)*1200;started=timer.gettime()
@@ -102,12 +116,14 @@ if native then
             if phase=='context' or phase=='delivery' then timer.sleep(.001) end
         until phase~='context' and phase~='delivery'
         assert(phase=='accepted',tostring(phase)..':'..tostring(reason))
-        assert(io.read('*l')=='finish','host did not release writer')
+        if mode~='supervisor' then assert(io.read('*l')=='finish','host did not release writer') end
         clock=611000;wall=wall+610;state='3';counter=tostring(half-1)
         et_RunFrame(611000);et_RunFrame(614000);et_ShutdownGame(0)
         assert(opens==1 and stats_closed and status.completion_status()=='sent_unconfirmed')
         print('NATIVE WHOLE SOURCE half '..half..' closed');io.stdout:flush()
-        assert(io.read('*l')==(half==1 and 'next' or 'done'),'host did not complete half')
+        if mode~='supervisor' or half==2 then
+            assert(io.read('*l')==(half==1 and 'next' or 'done'),'host did not complete half')
+        end
     end
     for _,message in ipairs(logs) do assert(not message:find('crashed:',1,true),message) end
     return

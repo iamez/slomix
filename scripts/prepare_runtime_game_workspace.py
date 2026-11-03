@@ -37,6 +37,8 @@ ASSETS = {'etmain/pak0.pk3', 'etmain/pak1.pk3', 'etmain/pak2.pk3',
           'etmain/supply_sp.pk3', 'legacy/legacy_v2.85.0.pk3'}
 MARKER = 'workspace.json'
 EMPTY_CONFIG = b'// Isolated rehearsal: no inherited startup commands or automatic map.\n'
+TIMING_CONFIG = (b'return {enabled=false, gametimes_enabled=true, '
+                 b'gametimes_write_on_failure_only=false, debug=false}\n')
 
 
 def _canonical(path):
@@ -79,7 +81,7 @@ def _check_archive(path, name):
             raise ValueError('Asset archive entry count outside bound')
         names = [entry.filename.replace('\\', '/').lower() for entry in entries]
         reserved = {'autoexec.cfg', 'etconfig_server.cfg', 'slomix_runtime_entry.lua'}
-        reserved |= {module + '.lua' for module in game.MODULES}
+        reserved |= {module + '.lua' for module in game.TIMING_MODULES}
         if any(n in reserved or n.startswith(('lualibs/', '/'))
                or '..' in n.split('/') or '.' in n.split('/') for n in names):
             raise ValueError('Asset archive can shadow startup or runtime modules')
@@ -125,7 +127,7 @@ def _contract(bundle, executable, executable_sha256, assets, destination):
         if _hash(path, 512 * 1024 * 1024) != value['sha256']:
             raise ValueError('Asset differs from approved hash')
         _check_archive(path, name)
-    return {'version': 1, 'status': 'prepared_not_started', 'activation_ready': False,
+    record = {'version': 1, 'status': 'prepared_not_started', 'activation_ready': False,
             'directory': str(destination), 'uid': os.getuid(), 'bundle': str(bundle),
             'bundle_manifest_sha256': _hash(bundle / MANIFEST, 4 * 1024 * 1024),
             'source_commit': source['source_commit'], 'executable': str(executable),
@@ -137,13 +139,22 @@ def _contract(bundle, executable, executable_sha256, assets, destination):
                       'producer_spool': str(destination / 'home/legacy/gamestats/runtime-snapshots'),
                       'capture_root': str(destination / 'capture')},
             'fs_basepath': str(destination / 'base'), 'fs_homepath': str(destination / 'home')}
+    if contract['version'] == 2:
+        paths = {str(half): str(destination / f'control/t{half}.sock') for half in (1, 2)}
+        if (contract['producer_spool'] != record['roots']['producer_spool']
+                or contract['timing_sockets'] != paths):
+            raise ValueError('Timing bundle must target this exact workspace spool and channels')
+        record.update(version=2, timing_socket_paths=paths)
+        record['roots']['timing_capture_root'] = str(destination / 'timing-capture')
+    return record
 
 
 def _layout(record):
     bundle = Path(record['bundle'])
     # Preserve licenses and carrier source alongside every copied Lua/native file.
+    contract = json.loads(read_approved_file(bundle / game.CONTRACT, 4096))
     files = {'base/' + name: read_approved_file(bundle / name, 4 * 1024 * 1024)
-             for name in game.FILES}
+             for name in game.required_files(contract)}
     files.update({'home/legacy/autoexec.cfg': EMPTY_CONFIG,
                   'home/legacy/etconfig_server.cfg': EMPTY_CONFIG})
     # Keep the engine's actual inode/path: copying qagame would load a second
@@ -152,6 +163,9 @@ def _layout(record):
     links['base/legacy/qagame.mp.x86_64.so'] = record['engine_library']
     directories = {Path('.'), Path('control'), Path('authority'), Path('host-authority'),
                    Path('capture'), Path('home/legacy/gamestats/runtime-snapshots')}
+    if record['version'] == 2:
+        files['home/legacy/luascripts/stats_discord_webhook_config.lua'] = TIMING_CONFIG
+        directories.add(Path('timing-capture'))
     for name in (*files, *links):
         directories.update(Path(name).parents)
     for path in tuple(directories):

@@ -1,3 +1,40 @@
+## 2026-11-03 — PR1115 merged; versioned timing workspace/supervisor implemented
+
+Owner explicitly approved1115. Standard420-second merge cycle completed:
+failed0/threads0/behind0/pinned-head yes; REST merged true at
+8eb0c5fe95e59b9a7cf9d2b0cbb9a2d875754354. Reviewed eb19af6a tree equals merged
+3d1b97b7936dd759fc67f41de527e42da82fd26a. No game/service/DB deployment followed.
+
+Next branch feat/runtime-timing-workspace-20261103 adds explicit v2 timing profile
+alongside unchanged v1 stats-only packaging. Closed inventory includes both whole
+producers/bridge, distinct stats/R1/R2 sockets and exact producer spool; workspace
+creates fifth private timing-capture root and fixed disabled-Discord persistent
+capture config. Supervisor selects timing controller/listener only for v2, keeps
+stats independent of pending timing and reports timing captured_not_imported.
+Proof SQL import continues to accept stats separately; full timing SQL activation
+needs its own explicit writer/journal/team policy, not inferred from game profile.
+
+Functional/native proof executes GENERATED wrapper and actual PACKAGED Lua modules
+in a pinned standalone Lua process, real sockets/credentials, actual supervisor
+capture_process and console release. Both halves captured; injected R1 timing
+transport failure preserves both stats halves, both source timing files, R2 timing
+and pendingR1. ET APIs and ELF packaging fixture are synthetic: no actual ET engine
+or embedded ABI/exact updated-puran compatibility certified. Missing-timing native
+test verifies configured30-second policy, then shortens wait only in test fixture.
+250focused tests pass (independent verbose count250),1explicit engine-ABI skip.
+Ruff/diffcheck pass. Distinct-socket, exact-spool and supervisor-route mutations each
+observed failing, restored using externalcmp. Initial packaging tests correctly
+refused /tmp ancestry due existing /tmp/.git datedOct4; preserved it and used fresh
+private short outside-Git /home/samba/p6-* roots. Fixture initially omitted required
+nonblocking stdin; corrected test to match real supervisor, no guard weakening.
+
+Next: base this slice on merged main, exact-head CI/self-review/numbered PR decision;
+then explicit full timing import caller policy, actual owner-run contained engine
+rehearsal, UID/path/remote provisioning, residual57proof reconciliation, exclusive
+writers, complete restore/ACL/migration rehearsal, D4/D5 and observation. Existing
+ET2.85 rehearsal asset profile is retained; never downgrade/relabel updated puran.
+Original masterplan and parked KIS/proximity/security follow-ups retained in full.
+
 ## 2026-11-03 — PR1115 real Lua process/socket/controller proof
 
 Draft PR1115 adds explicit combined producers on top of merged1114. Whole shipped

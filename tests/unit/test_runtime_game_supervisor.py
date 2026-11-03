@@ -18,13 +18,19 @@ INVOCATION = 'a' * 32
 
 
 @pytest.mark.parametrize('deferred', [False, True])
-def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferred):
+@pytest.mark.parametrize('timing_state', [None, 'captured', 'pending'])
+def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferred, timing_state):
     from unittest.mock import AsyncMock, Mock, create_autospec
 
     from scripts import runtime_game_import
     captured = SimpleNamespace(first_identity=SimpleNamespace(match_id='match'),
                                first=SimpleNamespace(reference=SimpleNamespace(sha256='first')),
                                second=SimpleNamespace(reference=SimpleNamespace(sha256='second')))
+    handoff = captured
+    if timing_state is not None:
+        from shared.runtime_timing_listener import TimingListenerResult
+        handoff = TimingListenerResult(captured, object() if timing_state == 'captured' else None,
+                                       {1: timing_state, 2: 'captured'})
     pipe = Mock()
     child = SimpleNamespace(pid=123, stdin=pipe)
     monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
@@ -33,7 +39,7 @@ def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferr
     monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kw: dict(argv=[], cwd='/', env={}, workspace={'source_commit': 'b' * 40}))
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kw: child)
     monkeypatch.setattr(module.os, 'set_blocking', lambda *args: None)
-    monkeypatch.setattr(module, 'capture_process', lambda *args: captured)
+    monkeypatch.setattr(module, 'capture_process', lambda *args: handoff)
     monkeypatch.setattr(runtime_game_import, 'preflight_import',
                         create_autospec(runtime_game_import.preflight_import))
     importer = AsyncMock(return_value={'status': 'incomplete'})
@@ -44,6 +50,11 @@ def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferr
                                      defer_team_assignment=deferred)
     assert result['import']['status'] == 'incomplete'
     assert result['status'] == 'captured_import_attempted_shutdown_pending'
+    if timing_state is not None:
+        assert result['timing'] == {'status': 'captured_not_imported' if timing_state == 'captured' else 'incomplete',
+                                    'halves': {1: timing_state, 2: 'captured'}}
+    else:
+        assert 'timing' not in result
     pipe.close.assert_called_once()
 
 
