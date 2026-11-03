@@ -5,10 +5,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from shared.runtime_process_authority import reserve_process_epoch
 from shared.runtime_process_pin import pin_process
 from shared.runtime_timing_completion import TimingFilenamePolicy
 from shared.runtime_timing_controller import RuntimeTimingController
+from shared.runtime_timing_listener import serve_timing_match
 from tests.unit.test_runtime_gametime_independence import run as run_timing
 from tests.unit.test_runtime_gametime_source import NAME
 from tests.unit.test_runtime_identity_writer_path import run_writer
@@ -37,8 +40,10 @@ TIMING_PEER = TIMING_PEER.replace(
     "    name = config['stats_name']")
 
 
-def capture_native_timing_pair(tmp_path, listener):  # noqa: F811
+def capture_native_timing_pair(tmp_path, listener, *, bounded=False):  # noqa: F811
     server, path = listener
+    if bounded:
+        path = path.with_name('timed')
     authority, spool, pair, host, stats_capture = roots(tmp_path)
     timing_capture, fixture = tmp_path / 'captured-timing', tmp_path / 'lua-timing'
     timing_capture.mkdir(mode=0o700)
@@ -68,27 +73,59 @@ def capture_native_timing_pair(tmp_path, listener):  # noqa: F811
                     timing_filenames={half: TimingFilenamePolicy('supply', half) for half in (1, 2)},
                     match_id=pair.first.match_id, source_id=pair.first.source_id,
                     map_name='supply', pin=pin, epoch=epoch)
-                for half in (1, 2):
-                    dispatch = driver.prepare_half()
-                    name, payload = payloads[half]
-                    peer.stdin.write(json.dumps(dict(generation=dispatch.generation,
-                        directory=str(spool / dispatch.generation), timing_name=name,
-                        timing_hex=payload.hex(), stats_name=stats_payloads[half][0],
-                        stats_hex=stats_payloads[half][1].hex())) + '\n')
-                    peer.stdin.flush()
-                    connection, _ = server.accept()
-                    driver.bootstrap(connection)
-                    peer.stdin.write('finish\n')
-                    peer.stdin.flush()
-                    connection, _ = server.accept()
-                    driver.complete(connection)
-                    connection, _ = server.accept()
-                    timing = driver.complete_timing(half, connection)
-                    assert timing.sha256 == hashlib.sha256(payload).hexdigest()
-                    assert driver.timing_status()[half] == 'captured'
-                    peer.stdin.write('next\n')
-                    peer.stdin.flush()
-                handoff = driver.captured_timing_match()
+                if bounded:
+                    prepare = driver.prepare_half
+                    bootstrap = driver.bootstrap
+                    complete_timing = driver.complete_timing
+
+                    def announce():
+                        dispatch = prepare()
+                        half = dispatch.identity.round_number
+                        name, payload = payloads[half]
+                        peer.stdin.write(json.dumps(dict(generation=dispatch.generation,
+                            directory=str(spool / dispatch.generation), timing_name=name,
+                            timing_hex=payload.hex(), stats_name=stats_payloads[half][0],
+                            stats_hex=stats_payloads[half][1].hex())) + '\n')
+                        peer.stdin.flush()
+                        return dispatch
+
+                    def boot(connection, **options):
+                        accepted = bootstrap(connection, **options)
+                        peer.stdin.write('finish\n')
+                        peer.stdin.flush()
+                        return accepted
+
+                    def timing(half, connection, **options):
+                        result = complete_timing(half, connection, **options)
+                        peer.stdin.write('next\n')
+                        peer.stdin.flush()
+                        return result
+
+                    driver.prepare_half, driver.bootstrap, driver.complete_timing = announce, boot, timing
+                    handoff = serve_timing_match(driver, path, initial_readiness_wait=5,
+                        bootstrap_wait=5, completion_wait=5, timing_wait=5, exchange_timeout=3)
+                else:
+                    for half in (1, 2):
+                        dispatch = driver.prepare_half()
+                        name, payload = payloads[half]
+                        peer.stdin.write(json.dumps(dict(generation=dispatch.generation,
+                            directory=str(spool / dispatch.generation), timing_name=name,
+                            timing_hex=payload.hex(), stats_name=stats_payloads[half][0],
+                            stats_hex=stats_payloads[half][1].hex())) + '\n')
+                        peer.stdin.flush()
+                        connection, _ = server.accept()
+                        driver.bootstrap(connection)
+                        peer.stdin.write('finish\n')
+                        peer.stdin.flush()
+                        connection, _ = server.accept()
+                        driver.complete(connection)
+                        connection, _ = server.accept()
+                        timing = driver.complete_timing(half, connection)
+                        assert timing.sha256 == hashlib.sha256(payload).hexdigest()
+                        assert driver.timing_status()[half] == 'captured'
+                        peer.stdin.write('next\n')
+                        peer.stdin.flush()
+                    handoff = driver.captured_timing_match()
                 handoff.verify()
                 assert handoff.stats.first_identity == pair.first
                 assert handoff.timings[1].identity == pair.second
@@ -101,5 +138,6 @@ def capture_native_timing_pair(tmp_path, listener):  # noqa: F811
     return handoff
 
 
-def test_native_two_half_timing_controller_exports_bound_handoff(tmp_path, listener):  # noqa: F811
-    capture_native_timing_pair(tmp_path, listener).verify()
+@pytest.mark.parametrize('bounded', [False, True])
+def test_native_two_half_timing_controller_exports_bound_handoff(tmp_path, listener, bounded):  # noqa: F811
+    capture_native_timing_pair(tmp_path, listener, bounded=bounded).verify()

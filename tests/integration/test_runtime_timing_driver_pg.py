@@ -159,7 +159,8 @@ async def test_r2_interruption_retains_r1_and_timing_then_cli_resumes(full_impor
 
 
 @pytest.mark.timeout(180)
-async def test_native_controller_handoff_through_actual_import_and_replay(full_import_db, tmp_path, listener, monkeypatch):  # noqa: F811
+@pytest.mark.parametrize('bounded', [False, True])
+async def test_native_controller_handoff_through_actual_import_and_replay(full_import_db, tmp_path, listener, monkeypatch, bounded):  # noqa: F811
     from bot.runtime_captured_timing_import import import_captured_timing_match
     from tests.unit.test_runtime_timing_controller_native import capture_native_timing_pair
 
@@ -167,7 +168,7 @@ async def test_native_controller_handoff_through_actual_import_and_replay(full_i
     source = await prepare_target(reader, tmp_path)
     host_root = tmp_path / 'controller'
     host_root.mkdir(mode=0o700)
-    captured = await asyncio.to_thread(capture_native_timing_pair, host_root, listener)
+    captured = await asyncio.to_thread(capture_native_timing_pair, host_root, listener, bounded=bounded)
     options = cli.parser().parse_args(source.args)
     # Match the clean subprocess boundary used by invoke(). The explicit config
     # remains authoritative; production environment override guards stay intact.
