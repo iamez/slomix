@@ -1,3 +1,18 @@
+## 2026-11-03 — Native Unix/process timing completion proof passes
+
+New test_runtime_timing_native executes actual child process, kernel peer
+credentials, bootstrap handshake and timing-close channel with durable receipt.
+Four cases pass: accepted pinned peer; changed durable bootstrap rejected;
+wrong process epoch rejected; different process under same UID rejected.
+Each rejected case leaves no timing receipt; stats receipt remains absent.
+Child output collected and child exits within5seconds; sockets close. Combined
+codec/receiver/native27tests pass, Ruff passes. No running game, live listener,
+service change or DB use. This proves host protocol composition with Python
+fixture producer, not actual Lua timing writer integration or captured file bytes.
+Next bounded timing file capture with independent expected basename/generation,
+sealed hash/root/process validation, then controller handoff to existing1112CLI.
+Original runtime and parked findings retained. No deployment or merge authority.
+
 ## 2026-11-03 — Timing close receiver and durable verification implemented
 
 shared/runtime_host_timing_completion.py reuses process_channel and durable
