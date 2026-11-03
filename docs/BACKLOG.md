@@ -1,3 +1,24 @@
+## 2026-11-03 — Durable timing capture with native source proof
+
+capture_closed_timing reserves generation once in separate private capture root,
+publishes authenticated sealed bytes with hash/fsync/no-clobber and writes
+independent timing-capture.json carrying accepted identity/map. Returns typed
+CapturedTiming. All post-reservation failures retain claim/source; no disk adoption.
+Native Python child now writes/closes actual42byte source before separate timing
+notice; kernel peer/bootstrap/receipt -> snapshot -> durable capture succeeds.
+34focused tests pass incl capture replay and failed reservation retention. Ruff
+passes. Actual Lua JSON parsing, controller attachment/export and bounded importer
+handoff remain unfinished; do not claim complete runtime. Existing pure file
+snapshot and receiver guard mutations remain preserved; new publisher uses existing
+no-clobber/fsync primitive. No services/liveDB/game changes.
+
+Next cohesive slice must bind timing root/expected basename in controller BEFORE
+receiving, preserve per-half accepted context, expose pending timing without
+invalidating stats, export typed stats+timing handoff then adapt bounded1112caller.
+Original full app/modern/exclusive handover/restore/D4-D5/observation gates remain.
+Owner asked autonomous completion; continue implementation without repeated general
+permission requests. PR-specific merge and service activation boundaries still apply.
+
 ## 2026-11-03 — Authenticated timing snapshot boundary implemented
 
 runtime_timing_snapshot yields kernel-sealed stream plus SHA256 after verifying
