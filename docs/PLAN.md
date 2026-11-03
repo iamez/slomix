@@ -1,3 +1,26 @@
+## 2026-11-03 — Strict timing listener, producer close hook and CI isolation fix
+
+Added bounded six-exchange serve_timing_match and controller wait validation;
+missing timing terminates strict attempt retaining captures/claims, never declares
+stats failed or deletes rows. Timing status now distinguishes capturing/failed.
+Six injected fsync failures retain source/reservation and refuse reuse (8capture
+cases pass). Listener composition cases pass; actual listener+ET game still unproven.
+
+Optional BindRuntimeGametime third argument provisions trusted generation/output
+directory/close callback. Binding requires persistent local capture, writer consumes
+one attempt, writes only provisioned directory, callback runs only after successful
+checked close. Legacy behavior without provisioning unchanged.31producer tests pass,
+including close-error no-notice, disabled/failure-only policy rejection. Lua5.4 parse
+passes; Lua5.1 parse of whole existing webhook fails at pre-existing '<' syntax
+(line1786 before edits); not claimed supported. Separate timing sender has5.1/5.4
+stub-channel proof. Actual cross-Lua-VM authenticated ticket fanout still required.
+
+CI head7bec51d8 native controller/import case failed verbatim:
+ValueError: Inherited environment overrides explicit application configuration.
+Fixed TEST boundary to match existing clean subprocess environment after explicit
+CI config preparation; production override guard unchanged. CI rerun pending.
+No complete-runtime/ET integration or activation claim. Original plan retained.
+
 ## 2026-11-03 — Lua timing sender factory prepared, producer wiring pending
 
 Separate runtime_host_timing_completion.lua mirrors existing bounded one-attempt

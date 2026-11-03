@@ -159,7 +159,7 @@ async def test_r2_interruption_retains_r1_and_timing_then_cli_resumes(full_impor
 
 
 @pytest.mark.timeout(180)
-async def test_native_controller_handoff_through_actual_import_and_replay(full_import_db, tmp_path, listener):  # noqa: F811
+async def test_native_controller_handoff_through_actual_import_and_replay(full_import_db, tmp_path, listener, monkeypatch):  # noqa: F811
     from bot.runtime_captured_timing_import import import_captured_timing_match
     from tests.unit.test_runtime_timing_controller_native import capture_native_timing_pair
 
@@ -169,6 +169,12 @@ async def test_native_controller_handoff_through_actual_import_and_replay(full_i
     host_root.mkdir(mode=0o700)
     captured = await asyncio.to_thread(capture_native_timing_pair, host_root, listener)
     options = cli.parser().parse_args(source.args)
+    # Match the clean subprocess boundary used by invoke(). The explicit config
+    # remains authoritative; production environment override guards stay intact.
+    clean = clean_environment(os.environ)
+    for key in tuple(os.environ):
+        if key not in clean:
+            monkeypatch.delenv(key)
     for _ in range(2):
         report = cli.initial_progress()
         assert await import_captured_timing_match(options, captured, report)

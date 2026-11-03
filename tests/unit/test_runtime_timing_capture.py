@@ -53,3 +53,38 @@ def test_post_reservation_failure_retains_claim(tmp_path, timing_ready, pin):  #
     (source / 'round.json').write_bytes(b'{}' + b' ' * 40)
     with pytest.raises(FileExistsError):
         capture_closed_timing(host, pin, epoch, **kwargs)
+
+
+@pytest.mark.parametrize('fail_at', range(1, 7))
+def test_each_fsync_failure_retains_attempt_and_never_returns_success(
+        tmp_path, timing_ready, pin, monkeypatch, fail_at):  # noqa: F811
+    import os
+
+    host, epoch, accepted, _ = timing_ready
+    completed = receive(timing_ready, pin)
+    source, capture = tmp_path / 'source', tmp_path / 'capture'
+    source.mkdir(mode=0o700)
+    capture.mkdir(mode=0o700)
+    original = b'{}' + b' ' * 40
+    (source / 'round.json').write_bytes(original)
+    kwargs = dict(accepted=accepted, completed=completed, expected_filename='round.json',
+                  source_directory=source, capture_root=capture)
+    fsync, calls = os.fsync, []
+
+    def fail(fd):
+        calls.append(fd)
+        if len(calls) == fail_at:
+            raise OSError('fixture timing fsync failure')
+        fsync(fd)
+
+    monkeypatch.setattr(os, 'fsync', fail)
+    with pytest.raises(OSError, match='fixture timing fsync'):
+        capture_closed_timing(host, pin, epoch, **kwargs)
+    assert len(calls) == fail_at
+    assert (capture / completed.generation).is_dir()
+    assert (source / 'round.json').read_bytes() == original
+    monkeypatch.setattr(os, 'fsync', fsync)
+    before = {p: p.read_bytes() for p in capture.rglob('*') if p.is_file()}
+    with pytest.raises(FileExistsError):
+        capture_closed_timing(host, pin, epoch, **kwargs)
+    assert {p: p.read_bytes() for p in capture.rglob('*') if p.is_file()} == before

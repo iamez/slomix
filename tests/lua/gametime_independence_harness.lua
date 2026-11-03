@@ -69,6 +69,7 @@ config.gametimes_dir = directory
 config.pending_dir = directory .. '/pending'
 config.debug = true
 os.time = function() return 1700000610 end
+local output_closed = false
 local real_open = io.open
 io.open = function(path, flags)
     if identity_wire and path == directory .. '/legacy/luascripts/stats_discord_webhook_config.lua' then
@@ -79,7 +80,16 @@ io.open = function(path, flags)
     if mode == 'transport' or mode == 'sweep' then error('forbidden queue file access') end
     assert(path == directory .. (binding_fault == 'map-output' and '/gametime-supply_te_test-R' or '/gametime-supply-R') .. half .. '-1700000610.json', 'unexpected file path')
     if mode == 'write-fail' then return nil, 'fixture open failure' end
-    return real_open(path, flags)
+    local file, failure = real_open(path, flags)
+    if binding_fault and binding_fault:match('^completion') and file then
+        return {write=function(_,bytes) return file:write(bytes) end,
+            close=function()
+                local result=file:close()
+                if binding_fault=='completion-close-fail' then return nil,'fixture close failure' end
+                output_closed=true; return result
+            end}
+    end
+    return file, failure
 end
 os.execute = function(command)
     shell_calls = shell_calls + 1
@@ -101,7 +111,19 @@ if identity_wire then
     if binding_fault == 'wrong-half' then values.g_currentRound = tostring(half - 1) end
     if binding_fault == 'warmup' then values.gamestate = '2' end
     if binding_fault == 'wrong-map' then values.mapname = 'oasis' end
-    local accepted, reason = pcall(BindRuntimeGametime, identity, observed.map_name)
+    local completion
+    if binding_fault and binding_fault:match('^completion') then
+        completion={generation=string.rep('a',32), directory=directory, completed=function(receipt,generation)
+            assert(output_closed, 'callback ran before checked writer close')
+            assert(receipt.version==1 and receipt.state=='writer_closed')
+            assert(generation==string.rep('a',32))
+            local file=assert(real_open(directory .. '/' .. receipt.filename,'rb'))
+            local bytes=file:read('*a'); file:close()
+            assert(#bytes==receipt.bytes)
+            print('TIMING_CLOSED_AFTER_READ bytes=' .. #bytes)
+        end}
+    end
+    local accepted, reason = pcall(BindRuntimeGametime, identity, observed.map_name, completion)
     print('BIND=' .. tostring(accepted) .. ':' .. tostring(reason))
     if not accepted then
         print(string.format('COUNTS launches=%d opens=%d shell=%d', launches, opens, shell_calls))

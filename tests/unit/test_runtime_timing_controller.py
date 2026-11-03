@@ -74,3 +74,17 @@ def test_close_failure_cannot_export_timing_success(monkeypatch, tmp_path):
     assert value.timing_status() == {1: 'failed', 2: 'pending'}
     assert value.state == 'complete'
     socket.close.assert_called_once()
+
+
+
+def test_inflight_timing_is_not_misreported_as_failed(monkeypatch):
+    value = controller()
+
+    def receive(*args, **kwargs):
+        assert value.timing_status() == {1: 'capturing', 2: 'pending'}
+        raise ValueError('fixture capture interrupted')
+
+    monkeypatch.setattr(module, 'receive_timing_completion', receive)
+    with pytest.raises(ValueError):
+        value.complete_timing(1, Mock())
+    assert value.timing_status() == {1: 'failed', 2: 'pending'}

@@ -35,11 +35,24 @@ class RuntimeTimingController(RuntimeMatchController):
         self._timing_accepted = {}
         self._timing_attempted = set()
         self._timings = {}
+        self._timing_active = None
 
     def _record_bootstrap(self, accepted):
         # Invoked under the base controller lock, before publishing ready state.
         half = accepted.delivery.dispatch.identity.round_number
         self._timing_accepted[half] = accepted
+
+    def check_timing_waiting(self, half):
+        """Revalidate a bounded listener wait without consuming the timing attempt."""
+        if not self._lock.acquire(blocking=False):
+            raise ValueError('Controller operation is concurrent')
+        try:
+            if (type(half) is not int or self._state in ('busy', 'failed') or half not in self._timing_accepted
+                    or half in self._timing_attempted):
+                raise ValueError('Controller is not awaiting timing for this half')
+            self._verify_context()
+        finally:
+            self._lock.release()
 
     def complete_timing(self, half, connection, *, timeout=5.0):
         acquired = self._lock.acquire(blocking=False)
@@ -52,6 +65,7 @@ class RuntimeTimingController(RuntimeMatchController):
             self._verify_context()
             accepted = self._timing_accepted[half]
             self._timing_attempted.add(half)
+            self._timing_active = half
             completed = receive_timing_completion(connection, self._host, self._pin, self._epoch,
                 accepted=accepted, expected_filename=self._timing_names[half], timeout=timeout)
             result = capture_closed_timing(self._host, self._pin, self._epoch,
@@ -69,11 +83,13 @@ class RuntimeTimingController(RuntimeMatchController):
                     connection.close()
             finally:
                 if acquired:
+                    self._timing_active = None
                     self._lock.release()
 
     def timing_status(self):
         """Bounded diagnostic state; no file discovery or recovery adoption."""
-        return {half: ('captured' if half in self._timings else
+        return {half: ('capturing' if getattr(self, '_timing_active', None) == half else
+                       'captured' if half in self._timings else
                        'failed' if half in self._timing_attempted else 'pending') for half in (1, 2)}
 
     def captured_timing_match(self):
