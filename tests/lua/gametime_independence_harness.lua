@@ -99,6 +99,8 @@ os.execute = function(command)
 end
 io.popen = function() error('forbidden pending scan') end
 
+if mode=='required-unbound' or mode=='required-sweep' then RequireRuntimeGametimeBinding() end
+
 if identity_wire then
     if binding_fault == 'map-alphabet' or binding_fault == 'map-output' then values.mapname = 'supply.te+test' end
     values.gamestate, values.g_currentRound = '0', tostring(2 - half)
@@ -145,7 +147,7 @@ end
 if mode == 'transport' then
     local ok = get('execute_curl_async')('{}')
     assert(ok == false)
-elseif mode == 'sweep' then
+elseif mode == 'sweep' or mode == 'required-sweep' then
     get('pending_retry_sweep')()
 else
     set('execute_curl_async', function(payload)

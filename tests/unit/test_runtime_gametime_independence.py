@@ -14,6 +14,12 @@ from tests.unit.test_runtime_gametime_source import NAME
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_required_runtime_does_not_replay_legacy_notification_queue(tmp_path):
+    output = run(tmp_path, enabled=True, target=True, mode='required-sweep')
+    assert 'COUNTS launches=0 opens=0 shell=0' in output
+    assert not list(tmp_path.iterdir())
+
+
 def run(tmp_path, *, enabled, target, capture=True, failure_only=False, mode='send',
         identity=None, binding_fault='none'):
     lua = shutil.which('lua5.4')
@@ -157,3 +163,11 @@ def test_same_vm_accepts_fresh_second_half_after_new_initgame(tmp_path):
     for half, expected in ((1, pair.first), (2, pair.second)):
         raw = (tmp_path / NAME.replace('R1', f'R{half}')).read_bytes()
         assert json.loads(raw)['meta']['runtime_identity'] == expected.encode()
+
+
+
+def test_explicit_runtime_fence_prevents_unbound_legacy_fallback(tmp_path):
+    output = run(tmp_path, enabled=False, target=False, mode='required-unbound')
+    assert not (tmp_path / NAME).exists()
+    assert 'COUNTS launches=0 opens=0 shell=0' in output
+    assert 'Runtime timing unbound; no legacy capture or notification fallback' in output
