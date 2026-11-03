@@ -10,7 +10,7 @@ function M.configure(options)
     assert(not attempted, "runtime host adapter configuration is one-shot")
     attempted = true -- Failed configuration stays fenced; never retry in this VM.
     assert(type(options)=="table", "explicit runtime host options required")
-    local keys = {source_id=true, socket_path=true, bootstrap_timeout_ms=true, completion_timeout_ms=true}
+    local keys = {source_id=true, socket_path=true, bootstrap_timeout_ms=true, completion_timeout_ms=true, after_bound=true}
     for key in pairs(options) do assert(keys[key], "unknown runtime host option") end
     local source, path = options.source_id, options.socket_path
     local bootstrap_timeout, completion_timeout = options.bootstrap_timeout_ms, options.completion_timeout_ms
@@ -23,7 +23,7 @@ function M.configure(options)
     -- Validate before callbacks, including timeout/path and optional dependency.
     local sender = completion.sender(path, now, completion_timeout)
     ConfigureRuntimeStatsHostHooks({source_id=source, socket_path=path,
-        timeout_ms=bootstrap_timeout, completed_factory=function()
+        timeout_ms=bootstrap_timeout, after_bound=options.after_bound, completed_factory=function()
             sender = completion.sender(path, now, completion_timeout)
             return sender.completed
         end})

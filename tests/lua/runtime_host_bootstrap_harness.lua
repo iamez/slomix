@@ -47,7 +47,13 @@ local function open()
     if scenario=="open-error" then error("fixture open error") end
     return channel
 end
-local client=module.start(capture,open,expected_source,function() end)
+local callbacks=0
+local client=module.start(capture,open,expected_source,function() end,function(bound)
+    callbacks=callbacks+1
+    assert(applied==1 and #sends==1, "post-binding callback order incorrect")
+    assert(bound.generation==value.generation and bound.identity.round_id==value.identity.round_id)
+    if scenario=="after-bind-error" then error("fixture timing bind failure") end
+end)
 if scenario=="cancel" then
     client.close()
     assert(client.poll()=="cancelled" and applied==0 and #sends==1 and closed)
@@ -60,9 +66,9 @@ local final_reads=reads
 for _=1,5 do assert(client.poll()==status) end
 assert(reads==final_reads and applied<=1, "terminal state retried IO/application")
 if scenario=="ok" or scenario=="pending" then
-    assert(status=="accepted" and applied==1 and #sends==2 and closed)
+    assert(status=="accepted" and applied==1 and callbacks==1 and #sends==2 and closed)
     assert(sends[2]=="slomix_stats_ack_v1" .. wire:sub(#"slomix_stats_bind_v1"+1), "non-exact ACK")
-elseif scenario=="callback-error" or scenario=="bad-return" or scenario=="ack-error" then
+elseif scenario=="callback-error" or scenario=="bad-return" or scenario=="ack-error" or scenario=="after-bind-error" then
     assert(status=="unconfirmed" and applied==1 and #sends==1 and closed, "ambiguous bind accepted/retried")
 else
     assert(status=="failed" and applied==0 and #sends<=1, "invalid response reached binding")

@@ -1,3 +1,18 @@
+## 2026-11-03 — Trusted post-binding hook exposed before bootstrap ACK
+
+Runtime host bootstrap accepts optional after_bound callback only after exact
+stats binding confirmation, before sending ACK. A fresh decoded ticket copy is
+passed to trusted same-VM provisioning code; exceptions become unconfirmed and
+are never retried. Hook threaded through load-time host hooks/c0rn adapter; default
+nil preserves existing behavior. Enables caller to bind timing to accepted ticket
+without discovering identity from JSON. Does NOT implement cross-VM IPC transport.
+164bootstrap/completion tests pass (Lua5.1/5.4 and existing native peers), including
+new after-bind failure. Original plan and owner-run activation boundary retained.
+Full CI00b49153 and431807b2 successful on both PG14/17; changed heads still require
+exact-head review/CI. Native missing-timing SQL case fromc1074800 awaits its results.
+No game/service/liveDB changes. Do not mark full project complete before remaining
+producer deployment/writer handover/package/restore/D4-D5/observation gates.
+
 ## 2026-11-03 — Timing lifecycle supports fresh R2 in a persistent Lua VM
 
 Found source binding fence also rejected a legitimate fresh timing ticket after
