@@ -7,7 +7,7 @@ from shared.runtime_host_bootstrap import _write_once
 from shared.runtime_host_completion import _bootstrap_verifier
 from shared.runtime_manifest_reader import _read_private_manifest_bytes
 from shared.runtime_process_channel import process_channel
-from shared.runtime_timing_completion import TimingCompletion, decode_timing_completion
+from shared.runtime_timing_completion import TimingCompletion, TimingFilenamePolicy, decode_timing_completion
 
 RECEIPT = 'timing-writer-closed.txt'
 
@@ -17,6 +17,11 @@ def _require_expected(completed, accepted, expected_filename):
         raise ValueError('Explicit timing completion required')
     completed.encode()
     generation = accepted.delivery.dispatch.generation
+    if isinstance(expected_filename, TimingFilenamePolicy):
+        expected_filename.require(completed.filename, accepted.delivery.dispatch)
+        if completed.generation != generation:
+            raise ValueError('Timing completion disagrees with host generation')
+        return
     # Validate the host expectation independently, including basename safety.
     TimingCompletion(generation, expected_filename, 1).encode()
     if completed.generation != generation or completed.filename != expected_filename:

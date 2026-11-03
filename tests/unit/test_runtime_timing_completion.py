@@ -31,3 +31,27 @@ def test_invalid_sizes_rejected(size):
 def test_noncanonical_wire_size_rejected(size):
     with pytest.raises(ValueError):
         decode_timing_completion(f'slomix_timing_closed_v1|{"a" * 32}|round.json|{size}')
+
+
+@pytest.mark.parametrize('name', ['gametime-other-R1-123.json', 'gametime-supply-R2-123.json',
+                                  'gametime-supply-R1-0.json', 'gametime-supply-R1-0123.json',
+                                  '../gametime-supply-R1-123.json'])
+def test_provisioned_name_policy_rejects_wrong_map_half_and_path(name):
+    from types import SimpleNamespace
+
+    from shared.runtime_timing_completion import TimingFilenamePolicy
+
+    dispatch = SimpleNamespace(map_name='supply', identity=SimpleNamespace(round_number=1))
+    with pytest.raises(ValueError):
+        TimingFilenamePolicy('supply', 1).require(name, dispatch)
+
+
+def test_policy_does_not_require_predicting_end_clock():
+    from types import SimpleNamespace
+
+    from shared.runtime_timing_completion import TimingFilenamePolicy
+
+    dispatch = SimpleNamespace(map_name='supply', identity=SimpleNamespace(round_number=1))
+    policy = TimingFilenamePolicy('supply', 1)
+    for timestamp in ('123', '1700000610'):
+        policy.require(f'gametime-supply-R1-{timestamp}.json', dispatch)

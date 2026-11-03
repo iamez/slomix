@@ -1,3 +1,25 @@
+## 2026-11-03 — Native two-half controller and close-failure correction
+
+Native pinned peer now transports actual Lua-emitted stats AND timing bytes through
+R1/R2 controller bootstrap, authenticated closes, sealed/durable capture and typed
+export. Fixture transport is Python, not a running ET engine. Real PG test invokes
+this host flow in a worker thread then actual handoff importer and full replay;
+local4PG cases skip without disposable opt-in, CI execution pending.
+Found/fixed cleanup defect: timing success must not be exported if socket close
+raises. Close now precedes recording success; failing close leaves timing failed,
+retains durable bytes and valid stats, prevents retry. Added test. Handoff checks
+reject map disagreement. Combined suite initially97passed.
+
+Provisioning correction: producer filename suffix contains end clock unknowable
+before play. TimingFilenamePolicy now provisions trusted original map/half before
+IPC, admits canonical producer-asserted end suffix only after process/bootstrap
+validation, never treats suffix as trusted identity/clock. Exact-name mode retained.
+Importer independently validates JSON/meta against declared round identity. Native
+controller proof uses policy, without predicting end clock. Six policy cases added;
+latest103tests pass. No game/source service activation or live DB changes.
+Original full-runtime gates and parked findings retained. Continue CI/review and
+native SQL proof before marking slice ready; no project completion claim.
+
 ## 2026-11-03 — Timing adapter authorization and native generation replay prepared
 
 Adapter requires execute is True, rejecting bool-lookalike1/False/None before any

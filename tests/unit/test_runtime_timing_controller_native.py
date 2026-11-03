@@ -7,6 +7,7 @@ from pathlib import Path
 
 from shared.runtime_process_authority import reserve_process_epoch
 from shared.runtime_process_pin import pin_process
+from shared.runtime_timing_completion import TimingFilenamePolicy
 from shared.runtime_timing_controller import RuntimeTimingController
 from tests.unit.test_runtime_gametime_independence import run as run_timing
 from tests.unit.test_runtime_gametime_source import NAME
@@ -64,7 +65,7 @@ def capture_native_timing_pair(tmp_path, listener):  # noqa: F811
                 driver = RuntimeTimingController(authority=authority, host_authority=host,
                     producer_spool=spool, capture_root=stats_capture,
                     timing_capture_root=timing_capture,
-                    timing_filenames={half: item[0] for half, item in payloads.items()},
+                    timing_filenames={half: TimingFilenamePolicy('supply', half) for half in (1, 2)},
                     match_id=pair.first.match_id, source_id=pair.first.source_id,
                     map_name='supply', pin=pin, epoch=epoch)
                 for half in (1, 2):

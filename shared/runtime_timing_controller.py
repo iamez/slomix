@@ -3,7 +3,7 @@ from shared.runtime_host_timing_completion import receive_timing_completion
 from shared.runtime_match_controller import RuntimeMatchController
 from shared.runtime_stats_dispatch import _root_key
 from shared.runtime_timing_capture import capture_closed_timing
-from shared.runtime_timing_completion import TimingCompletion
+from shared.runtime_timing_completion import TimingCompletion, TimingFilenamePolicy
 
 
 class RuntimeTimingController(RuntimeMatchController):
@@ -18,8 +18,13 @@ class RuntimeTimingController(RuntimeMatchController):
         if set(timing_filenames) != {1, 2}:
             raise ValueError('Both independently expected timing basenames required')
         self._timing_names = dict(timing_filenames)
-        for name in self._timing_names.values():
-            TimingCompletion('a' * 32, name, 1).encode()
+        for half, name in self._timing_names.items():
+            if isinstance(name, TimingFilenamePolicy):
+                name.validate()
+                if name.map_name != self._map or name.half != half:
+                    raise ValueError('Timing policy disagrees with controller map/half')
+            else:
+                TimingCompletion('a' * 32, name, 1).encode()
         path = timing_capture_root.resolve(strict=True)
         if any(path.is_relative_to(root.resolve(strict=True))
                or root.resolve(strict=True).is_relative_to(path) for root in self._roots):

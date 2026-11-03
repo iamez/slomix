@@ -39,3 +39,29 @@ def decode_timing_completion(wire: str) -> TimingCompletion:
     if result.encode() != wire:
         raise ValueError('Noncanonical timing completion wire')
     return result
+
+
+@dataclass(frozen=True)
+class TimingFilenamePolicy:
+    """Trusted map/half expectation when end timestamp is unknown before close.
+
+    This admits a producer-asserted basename; it does not authenticate the suffix
+    as a clock or derive physical identity from it. The importer verifies JSON
+    against separately trusted round identity and the claimed filename.
+    """
+    map_name: str
+    half: int
+
+    def validate(self):
+        if (not isinstance(self.map_name, str)
+                or re.fullmatch(r'[A-Za-z0-9_.+-]{1,64}', self.map_name) is None
+                or '..' in self.map_name or type(self.half) is not int or self.half not in (1, 2)):
+            raise ValueError('Invalid timing filename policy')
+
+    def require(self, filename, dispatch):
+        self.validate()
+        if (dispatch.map_name != self.map_name or dispatch.identity.round_number != self.half):
+            raise ValueError('Timing filename policy disagrees with accepted dispatch')
+        sanitized = re.sub(r'[^A-Za-z0-9_-]', '_', self.map_name, flags=re.ASCII)
+        if re.fullmatch(r'gametime-' + re.escape(sanitized) + f'-R{self.half}-[1-9][0-9]{{0,18}}\\.json', filename) is None:
+            raise ValueError('Timing basename disagrees with provisioned map/half policy')
