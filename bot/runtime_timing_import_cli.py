@@ -50,6 +50,8 @@ def parser():
     result = stats_parser()
     result.description = __doc__
     result.add_argument('--timing-directory', required=True)
+    result.add_argument('--timing-generation-directories', action='store_true',
+                        help='Open each timing source inside its explicit generation directory')
     result.add_argument('--timing-writer-handover-confirmed', action='store_true', required=True)
     for half in (1, 2):
         result.add_argument(f'--timing-r{half}', nargs=4, required=True,
@@ -110,9 +112,31 @@ def timing_sources(args, identities, map_name):
         info = os.fstat(root_fd)
         if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
             raise ValueError('Timing directory must be private and owned by the operator')
-        with (_timing_source(root_fd, args.timing_r1, identities[0], map_name) as first,
-              _timing_source(root_fd, args.timing_r2, identities[1], map_name) as second):
+        with (_generation_timing_source(root_fd, args.timing_r1, identities[0], map_name,
+                                       getattr(args, 'timing_generation_directories', False)) as first,
+              _generation_timing_source(root_fd, args.timing_r2, identities[1], map_name,
+                                       getattr(args, 'timing_generation_directories', False)) as second):
             yield first, second
+
+
+@contextmanager
+def _generation_timing_source(root_fd, fields, identity, map_name, nested):
+    if not nested:
+        with _timing_source(root_fd, fields, identity, map_name) as source:
+            yield source
+        return
+    import re
+
+    if re.fullmatch('[0-9a-f]{32}', fields[0]) is None:
+        raise ValueError('Explicit timing generation directory required')
+    with _owned_descriptor(fields[0], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                           dir_fd=root_fd) as child:
+        info = os.fstat(child)
+        if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
+            raise ValueError('Timing generation directory must be private and owned')
+        with _timing_source(child, fields, identity, map_name) as source:
+            yield source
+
 
 
 def initial_progress():

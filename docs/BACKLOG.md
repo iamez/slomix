@@ -1,3 +1,19 @@
+## 2026-11-03 — Typed timing handoff binding and generation-layout CLI support
+
+Added bot/runtime_captured_timing_import.py: verify successful typed handoff and
+bind source references/expected identities into caller-supplied CLI options;
+validate existing DB/handover policy without inventing authorization. One-shot
+wrapper delegates existing execute (owns SIGTERM, not bot/web background task).
+CLI gains explicit --timing-generation-directories for durable capture layout;
+owned private child dir opened relative to rootFD with no symlink/traversal.
+24focused cases pass:4handoff structural guards,4directory boundary cases,
+16existingCLI tests. Ruff passes. Handoff structural tests inject stats verifier;
+not full native combined controller->SQL evidence. Initial nested-with lint fixed.
+Remaining before publish: adapter actual-call policy tests, map consistency and
+root replacement checks, native controller+realLuaJSON->CLI->PG14/17, concurrency
+and failure/mutation proofs. No complete runtime/import activation claimed.
+All source bytes retained; services/liveDB/game unchanged. Original plan retained.
+
 ## 2026-11-03 — Opt-in timing controller and typed handoff implemented locally
 
 RuntimeTimingController provisions private fifth root and both expected basenames
