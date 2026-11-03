@@ -466,3 +466,21 @@ async def resolve_round_id_with_reason(
             diag["best_diff_seconds"], diag["parsed_candidate_count"], diag["candidate_count"],
         )
     return None, diag
+
+
+async def fallback_source_start_conflict(adapter, round_id, map_name, round_number, source_start_unix):
+    """Return a diagnostic when a fallback candidate cannot support source identity.
+
+    A NULL start preserves legacy matching. A known different start is a distinct
+    physical round, even when both rounds share a map and stopwatch half.
+    """
+    candidate = await adapter.fetch_one(
+        'SELECT round_start_unix FROM rounds WHERE id = ? '
+        'AND LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) AND round_number = ?',
+        (round_id, map_name, round_number),
+    )
+    if candidate is None:
+        return 'source_start_candidate_unavailable'
+    if candidate[0] is not None and candidate[0] != source_start_unix:
+        return 'conflicting_source_start'
+    return None

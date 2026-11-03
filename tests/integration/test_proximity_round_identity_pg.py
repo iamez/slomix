@@ -70,3 +70,44 @@ async def test_relinker_preserves_duplicate_pg_identity(journal_db, monkeypatch,
     assert len(queries) == (1 if strict else 2)
     assert await observer.fetchval('SELECT count(*) FROM proof_links WHERE round_id IS NULL') == 1
     assert [tuple(row) for row in await observer.fetch('SELECT * FROM proof_links')] == [(None,)]
+
+
+async def test_conflicting_match_defers_then_late_exact_round_resolves(journal_db):  # noqa: F811
+    """Run actual fallback SQL and source guard across independent PG connections."""
+    from datetime import datetime, timezone
+
+    from proximity.parser.round_identity import resolve_proximity_round_id
+
+    writer, observer = journal_db
+    start = int(time.time()) - 600
+    previous = start - 600
+    await writer.execute('''ALTER TABLE rounds ADD COLUMN map_name TEXT,
+        ADD COLUMN round_start_unix BIGINT, ADD COLUMN round_date TEXT,
+        ADD COLUMN round_time TEXT, ADD COLUMN created_at TIMESTAMP,
+        ADD COLUMN round_canonical_id TEXT''')
+    day = datetime.fromtimestamp(start, tz=timezone.utc).astimezone().strftime('%Y-%m-%d')
+    await writer.execute('''INSERT INTO rounds
+        (id,round_number,map_name,round_start_unix,round_date,round_time,created_at)
+        VALUES (101,2,'fixture',$1,$2,$3,CURRENT_TIMESTAMP)''',
+                         previous, day, datetime.fromtimestamp(previous, tz=timezone.utc).astimezone().strftime('%H%M%S'))
+
+    async def fetch_all(query, params=None):
+        return await writer.fetch(pg_query(query), *(params or ()))
+
+    async def fetch_one(query, params=None):
+        return await writer.fetchrow(pg_query(query), *(params or ()))
+
+    adapter = SimpleNamespace(fetch_all=fetch_all, fetch_one=fetch_one)
+    options = dict(source_start_unix=start, target_dt=datetime.fromtimestamp(start + 200, tz=timezone.utc),
+                   round_date=day)
+    result, diag = await resolve_proximity_round_id(adapter, 'fixture', 2, **options)
+    assert result is None
+    assert diag['reason_code'] == 'conflicting_source_start'
+    assert await observer.fetchval('SELECT count(*) FROM rounds') == 1
+    await writer.execute('''INSERT INTO rounds
+        (id,round_number,map_name,round_start_unix) VALUES (102,2,'fixture',$1)''', start)
+    result, diag = await resolve_proximity_round_id(adapter, 'fixture', 2, **options)
+    assert result == 102
+    assert diag['reason_code'] == 'resolved_source_start'
+    assert [tuple(r) for r in await observer.fetch(
+        'SELECT id,round_start_unix FROM rounds ORDER BY id')] == [(101, previous), (102, start)]

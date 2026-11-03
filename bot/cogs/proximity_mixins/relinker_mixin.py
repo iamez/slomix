@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from discord.ext import tasks
 
 from bot.core.dead_hours import awake_cutoff
+from bot.core.round_linker import fallback_source_start_conflict
 from bot.services.lua_round_storage_mixin import _lua_exact_source_lock_key
 
 logger = logging.getLogger("bot.cogs.proximity")
@@ -470,6 +471,13 @@ class _ProximityRelinkerMixin:
                             window_minutes=120,
                             quiet=True,
                         )
+                        if round_id is not None:
+                            conflict = await fallback_source_start_conflict(
+                                db, round_id, map_name, round_number, exact_start_unix,
+                            )
+                            if conflict:
+                                logger.debug("Re-linker: reason=%s; deferring source identity", conflict)
+                                round_id = None
                 else:
                     round_id = await resolve_round_id(
                         db,
