@@ -1,3 +1,17 @@
+## 2026-11-03 — Resume original runtime after explicitly parked statistics detour
+
+Owner restored runtime priority. Existing1112bounded stats+timing CLI is merged;
+next separate authenticated timing-close admission bound to accepted process epoch,
+lifecycle and dispatch. Reuse peer/process/bootstrap verification; never infer
+trusted timing identity from JSON or stats-close. Missing timing remains pending.
+Then controller-owned captured handoff -> bounded caller; preserve raw sources.
+Producer policy may currently omit timing JSON after successful Discord send;
+explicit persistent capture provisioning is an owner activation requirement.
+Original full app/modern package, exclusive writer handover, complete isolated
+restore/migration rehearsal and D4/D5 remain. No live/service/Lua changes.
+Parked findings index stays private at evidence/incident-20261103/PARKED-FINDINGS.md;
+all old branches retained. Active branch feat/runtime-timing-close-20261103.
+
 ## 2026-11-02 - Use lexical contexts for the fixed two-file intake
 
 The f35c6e72 refactor still produces two CodeQL alerts at ExitStack.enter_context
