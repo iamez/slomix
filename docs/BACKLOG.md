@@ -1,3 +1,15 @@
+## 2026-11-03 — Lua timing sender factory prepared, producer wiring pending
+
+Separate runtime_host_timing_completion.lua mirrors existing bounded one-attempt
+stats sender with timing-only JSON basename/protocol. Lua5.1/5.4 stub-channel tests
+pass; malformed names consume attempt, sent_unconfirmed never claims host ACK.
+Not connected to live gametime writer or running Lua modules. Producer bootstrap
+fanout across ET Lua VMs and writer-close callback provisioning remain explicit
+unfinished requirements. No implication that same-PID Python fixture proves ET
+Lua VM integration. Native controller and SQL tests pending CI at7659a217.
+Owner requested quiet autonomous work; no periodic user-facing status updates.
+Original plan and parked findings retained. No services/production/liveDB changes.
+
 ## 2026-11-03 — Native two-half controller and close-failure correction
 
 Native pinned peer now transports actual Lua-emitted stats AND timing bytes through
