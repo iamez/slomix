@@ -11,7 +11,7 @@ from shared.runtime_timing_capture import CapturedTiming
 from tests.unit.test_runtime_stats_dispatch import setup_pair
 
 
-@pytest.mark.parametrize('fault', ['none', 'halves', 'generation', 'root'])
+@pytest.mark.parametrize('fault', ['none', 'halves', 'generation', 'root', 'map'])
 def test_handoff_rejects_identity_generation_and_root_drift(tmp_path, fault):
     _, _, pair = setup_pair(tmp_path / 'rounds')
     root = tmp_path / 'timings'
@@ -26,6 +26,8 @@ def test_handoff_rejects_identity_generation_and_root_drift(tmp_path, fault):
         first, second = second, first
     elif fault == 'generation':
         second = replace(second, generation='f' * 32)
+    elif fault == 'map':
+        second = replace(second, map_name='other')
     elif fault == 'root':
         key = (0, 0)
     captured = CapturedTimingMatch(stats, (first, second), key)

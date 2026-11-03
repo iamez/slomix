@@ -38,6 +38,7 @@ class RuntimeTimingController(RuntimeMatchController):
 
     def complete_timing(self, half, connection, *, timeout=5.0):
         acquired = self._lock.acquire(blocking=False)
+        close_attempted = False
         try:
             if (not acquired or self._state in ('busy', 'failed')
                     or type(half) is not int or half not in self._timing_accepted
@@ -53,11 +54,14 @@ class RuntimeTimingController(RuntimeMatchController):
                 source_directory=self._spool / accepted.delivery.dispatch.generation,
                 capture_root=self._timing_root)
             self._verify_context()
+            close_attempted = True
+            connection.close()
             self._timings[half] = result
             return result
         finally:
             try:
-                connection.close()
+                if not close_attempted:
+                    connection.close()
             finally:
                 if acquired:
                     self._lock.release()

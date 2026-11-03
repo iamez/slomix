@@ -58,3 +58,19 @@ def test_successful_timing_capture_is_recorded(monkeypatch, tmp_path):
     assert value.timing_status() == {1: 'captured', 2: 'pending'}
     assert publish.call_args.kwargs['completed'] is completed
     assert value.state == 'complete'
+
+
+
+def test_close_failure_cannot_export_timing_success(monkeypatch, tmp_path):
+    value = controller()
+    value._spool = tmp_path  # noqa: SLF001
+    value._timing_root = tmp_path / 'capture'  # noqa: SLF001
+    monkeypatch.setattr(module, 'receive_timing_completion', Mock(return_value=object()))
+    monkeypatch.setattr(module, 'capture_closed_timing', Mock(return_value=object()))
+    socket = Mock()
+    socket.close.side_effect = OSError('fixture close failure')
+    with pytest.raises(OSError, match='fixture close'):
+        value.complete_timing(1, socket)
+    assert value.timing_status() == {1: 'failed', 2: 'pending'}
+    assert value.state == 'complete'
+    socket.close.assert_called_once()

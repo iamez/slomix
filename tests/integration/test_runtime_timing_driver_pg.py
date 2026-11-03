@@ -12,6 +12,7 @@ import pytest
 from bot import runtime_timing_import_cli as cli
 from tests.integration.test_runtime_events_pg import connection_options
 from tests.integration.test_runtime_full_import_pg import full_import_db as _full_import_db
+from tests.unit.test_runtime_process_channel import listener  # noqa: F401
 from tests.unit.test_runtime_timing_import_cli import pipeline_inputs
 
 full_import_db = _full_import_db
@@ -155,3 +156,33 @@ async def test_r2_interruption_retains_r1_and_timing_then_cli_resumes(full_impor
         assert path.read_bytes() == raw
     print('Actual R1 committed + both timing sources retained, cancellation at R2 propagated with unknown stage; '
           'resources closed, second CLI lifetime resumes without duplicate stats/player effects')
+
+
+@pytest.mark.timeout(180)
+async def test_native_controller_handoff_through_actual_import_and_replay(full_import_db, tmp_path, listener):  # noqa: F811
+    from bot.runtime_captured_timing_import import import_captured_timing_match
+    from tests.unit.test_runtime_timing_controller_native import capture_native_timing_pair
+
+    _, reader = full_import_db
+    source = await prepare_target(reader, tmp_path)
+    host_root = tmp_path / 'controller'
+    host_root.mkdir(mode=0o700)
+    captured = await asyncio.to_thread(capture_native_timing_pair, host_root, listener)
+    options = cli.parser().parse_args(source.args)
+    for _ in range(2):
+        report = cli.initial_progress()
+        assert await import_captured_timing_match(options, captured, report)
+        assert report['effect_state'] == 'observed_complete'
+        assert report['source_acknowledged'] is False
+        current = await snapshot(reader)
+        if _ == 0:
+            committed = current
+            assert len(current['runtime_round_mappings']) == 2
+            assert len(current['runtime_gametime_sources']) == 2
+            assert len(current['runtime_gametime_applications']) == 2
+            assert len(current['runtime_events']) == 4
+        else:
+            assert current == committed
+    for timing in captured.timings:
+        path = timing.root / timing.generation / timing.filename
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == timing.sha256

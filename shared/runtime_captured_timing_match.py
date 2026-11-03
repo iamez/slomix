@@ -17,6 +17,8 @@ class CapturedTimingMatch:
         if len(self.timings) != 2 or not all(isinstance(t, CapturedTiming) for t in self.timings):
             raise ValueError('Both successful timing captures required')
         first, second = self.timings
+        if first.map_name != second.map_name:
+            raise ValueError('Timing halves disagree on map')
         if first.root != second.root:
             raise ValueError('Timing halves must share bound capture root')
         if tuple(_root_key(first.root, self.stats.first_identity.match_id)) != self.timing_root_key:
