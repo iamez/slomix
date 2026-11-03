@@ -166,8 +166,12 @@ class RuntimeMatchController:
                 connection, self._host, self._pin, self._epoch,
                 dispatch=self._dispatch, timeout=timeout,
             )
+            self._record_bootstrap(self._accepted)
             self._state = 'awaiting_completion'
             return self._accepted
+
+    def _record_bootstrap(self, accepted):
+        """Extension hook under the controller lock; base has no extra state."""
 
     def complete(self, connection, *, timeout=5.0):
         with self._operation('awaiting_completion', connection):

@@ -1,3 +1,19 @@
+## 2026-11-03 — Opt-in timing controller and typed handoff implemented locally
+
+RuntimeTimingController provisions private fifth root and both expected basenames
+before IPC; bootstrap hook records per-half context under existing base lock.
+complete_timing consumes each timing attempt, authenticates and durably captures,
+records success without invalidating completed stats on timing failure. Full export
+requires both timing captures and verifies roots plus stats/timing identity and
+generation alignment. Stats-only base behavior retained.23controller tests pass
+(20existing+3new), prior34timing tests pass, Ruff/diffcheck pass.
+New controller tests use injected receiver/publisher; native two-half combined
+controller/export proof and handoff importer adapter remain pending. Typed handoff
+implementation requires additional focused adversarial tests before publication.
+No completed-runtime claim, service/deploy/DB change. Autonomous permission noted;
+production remains owner-run. Next full host/controller->bounded1112import proof,
+then package/handover/restore/D4-D5. Parked statistics findings stay parked.
+
 ## 2026-11-03 — Durable timing capture with native source proof
 
 capture_closed_timing reserves generation once in separate private capture root,
