@@ -1,3 +1,18 @@
+## 2026-11-03 — Authenticated timing snapshot boundary implemented
+
+runtime_timing_snapshot yields kernel-sealed stream plus SHA256 after verifying
+persisted timing receipt, pinned context, private producer directory, regular
+single-link exact-size source and unchanged named inode/root. Lua0664 allowed
+inside owned0700 directory; world-write refused. Lexical ownership closes all
+FDs; originals retained. This is volatile sealed capture, NOT durable publication.
+Five real-file cases and four native IPC cases pass (9total). Removing single-link
+guard causes observed hardlink failure; externalcmp restoration and5pass. Ruff
+passes. JSON identity validation/durable capture/controller handoff remain next.
+Whole-plan order: durable timing capture -> authenticated controller handoff ->
+bounded1112import -> full app/modern package -> exclusive writer handover ->
+isolated full restore/migrations -> D4/D5 and observation -> owner activation.
+No service/game/DB changes. Original plan and parked statistics work retained.
+
 ## 2026-11-03 — Native Unix/process timing completion proof passes
 
 New test_runtime_timing_native executes actual child process, kernel peer
