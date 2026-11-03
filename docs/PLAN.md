@@ -1,3 +1,20 @@
+## 2026-11-03 — PR1115 real Lua process/socket/controller proof
+
+Draft PR1115 adds explicit combined producers on top of merged1114. Whole shipped
+stats+timing modules now run in ONE actual pinned Lua5.4 process across two fresh
+InitGame leases. Real Unix sockets/credentials/bootstrap ACK and both completion
+senders feed bounded RuntimeTimingController listener, with durable stats/timing
+handoff for both halves. Timing identities/hash checked independently from files.
+This supersedes the synthetic-transport-only limitation of the earlier new slice;
+ET bindings/observations remain synthetic, not actual engine activation. Child
+output collected and process reaped; no daemon/service/browser/live SQL started.
+172focused tests pass, independent verbose count172, including native log proof.
+Ruff passes. Draft PR1115 needs exact updated-head CI/review and its own merge
+permission. Producer/operator provisioning, remote UID/path mapping, full candidate
+reconciliation, writer handover, restore/ACL/migrations, D4/D5/observation remain.
+No legacy findings discarded; original masterplan preserved. Next continue here,
+not parked KIS/proximity changes. Private log runtime1115-native-producer-cohort.log.
+
 ## 2026-11-03 — PR1114 merged; explicit same-VM producer composition implemented
 
 Owner explicitly approved PR1114. Merge cycle completed at ee2132a991302cce198f3f79638370edd423de0c;
