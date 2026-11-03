@@ -1,3 +1,15 @@
+## 2026-11-03 — Separate timing-close wire codec implemented
+
+Runtime slice adds TimingCompletion/decode_timing_completion with distinct
+slomix_timing_closed_v1 prefix, bounded JSON basename, generation and byte count.
+19focused tests and Ruff pass; fresh process roundtrip passes. Size guard removal
+produces6failures; externalcmp restoration and19pass. Prefix-only mutation passed
+because canonical re-encoding independently rejects changed prefix; not counted
+as an observed guard failure. No peer authentication, receipt persistence or
+controller hookup claimed yet. Next bind codec to accepted bootstrap/process
+through existing authenticated channel, then capture/handoff. No service or data
+changes. Parked findings stay parked; original runtime plan preserved.
+
 ## 2026-11-03 — Resume original runtime after explicitly parked statistics detour
 
 Owner restored runtime priority. Existing1112bounded stats+timing CLI is merged;
