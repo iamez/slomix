@@ -12,6 +12,7 @@ import pytest
 from bot import runtime_timing_import_cli as cli
 from tests.integration.test_runtime_events_pg import connection_options
 from tests.integration.test_runtime_full_import_pg import full_import_db as _full_import_db
+from tests.unit.test_runtime_process_channel import listener  # noqa: F401
 from tests.unit.test_runtime_timing_import_cli import pipeline_inputs
 
 full_import_db = _full_import_db
@@ -82,9 +83,23 @@ async def snapshot(reader):
 
 
 @pytest.mark.timeout(180)
-async def test_actual_cli_complete_declared_pair_and_fresh_process_replay(full_import_db, tmp_path):
+@pytest.mark.parametrize('generation_layout', [False, True])
+async def test_actual_cli_complete_declared_pair_and_fresh_process_replay(full_import_db, tmp_path, generation_layout):
     _, reader = full_import_db
     source = await prepare_target(reader, tmp_path)
+    if generation_layout:
+        root = Path(source.args[source.args.index('--timing-directory') + 1])
+        for half in (1, 2):
+            offset = source.args.index(f'--timing-r{half}')
+            generation, filename = source.args[offset + 1:offset + 3]
+            directory = root / generation
+            directory.mkdir(mode=0o700)
+            payload = (root / filename).read_bytes()
+            path = directory / filename
+            path.write_bytes(payload)
+            path.chmod(0o600)
+            source.original[path] = payload
+        source.args.append('--timing-generation-directories')
     await invoke(source)
     committed = await snapshot(reader)
     assert [row['round_number'] for row in committed['rounds']].count(0) == 1
@@ -141,3 +156,67 @@ async def test_r2_interruption_retains_r1_and_timing_then_cli_resumes(full_impor
         assert path.read_bytes() == raw
     print('Actual R1 committed + both timing sources retained, cancellation at R2 propagated with unknown stage; '
           'resources closed, second CLI lifetime resumes without duplicate stats/player effects')
+
+
+@pytest.mark.timeout(180)
+@pytest.mark.parametrize('bounded', [False, True])
+async def test_native_controller_handoff_through_actual_import_and_replay(full_import_db, tmp_path, listener, monkeypatch, bounded):  # noqa: F811
+    from bot.runtime_captured_timing_import import import_captured_timing_match
+    from tests.unit.test_runtime_timing_controller_native import capture_native_timing_pair
+
+    _, reader = full_import_db
+    source = await prepare_target(reader, tmp_path)
+    host_root = tmp_path / 'controller'
+    host_root.mkdir(mode=0o700)
+    captured = await asyncio.to_thread(capture_native_timing_pair, host_root, listener, bounded=bounded)
+    options = cli.parser().parse_args(source.args)
+    # Match the clean subprocess boundary used by invoke(). The explicit config
+    # remains authoritative; production environment override guards stay intact.
+    clean = clean_environment(os.environ)
+    for key in tuple(os.environ):
+        if key not in clean:
+            monkeypatch.delenv(key)
+    for _ in range(2):
+        report = cli.initial_progress()
+        assert await import_captured_timing_match(options, captured, report)
+        assert report['effect_state'] == 'observed_complete'
+        assert report['source_acknowledged'] is False
+        current = await snapshot(reader)
+        if _ == 0:
+            committed = current
+            assert len(current['runtime_round_mappings']) == 2
+            assert len(current['runtime_gametime_sources']) == 2
+            assert len(current['runtime_gametime_applications']) == 2
+            assert len(current['runtime_events']) == 4
+        else:
+            assert current == committed
+    for timing in captured.timings:
+        path = timing.root / timing.generation / timing.filename
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == timing.sha256
+
+
+@pytest.mark.timeout(180)
+async def test_missing_first_timing_preserves_both_canonical_stats_halves(
+        full_import_db, tmp_path, listener, monkeypatch):  # noqa: F811
+    from bot.runtime_captured_import import import_captured_match
+    from bot.runtime_import_cli import database_from_arguments
+    from tests.unit.test_runtime_timing_controller_native import capture_native_timing_pair
+
+    _, reader = full_import_db
+    source = await prepare_target(reader, tmp_path)
+    host_root = tmp_path / 'controller'
+    host_root.mkdir(mode=0o700)
+    captured = await asyncio.to_thread(capture_native_timing_pair, host_root, listener,
+                                       bounded=True, missing_timing=True)
+    options = cli.parser().parse_args(source.args)
+    clean = clean_environment(os.environ)
+    for key in tuple(os.environ):
+        if key not in clean:
+            monkeypatch.delenv(key)
+    assert captured.timing_match is None
+    await import_captured_match(database_from_arguments(options), captured.stats,
+                               lock_directory=source.lock, defer_team_assignment=True)
+    assert await reader.fetchval('SELECT count(*) FROM rounds WHERE round_number IN (1,2)') == 2
+    assert await reader.fetchval('SELECT count(*) FROM runtime_round_mappings') == 2
+    assert await reader.fetchval('SELECT count(*) FROM runtime_events') == 2
+    assert await reader.fetchval('SELECT count(*) FROM runtime_gametime_applications') == 0

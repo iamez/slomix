@@ -72,7 +72,7 @@ function M.attach()
             attempted = true -- A failed dependency/config attempt cannot be retried.
             phase, reason = "configuration_failed", "configuration did not finish"
             assert(type(options) == "table", "host hooks options required")
-            local keys = {source_id=true, socket_path=true, timeout_ms=true, completed=true, completed_factory=true}
+            local keys = {source_id=true, socket_path=true, timeout_ms=true, completed=true, completed_factory=true, after_bound=true}
             for key in pairs(options) do assert(keys[key], "unknown host hooks option") end
             local source, path, timeout, completed = options.source_id, options.socket_path,
                 options.timeout_ms, options.completed
@@ -82,6 +82,8 @@ function M.attach()
                 and not path:find("%z"), "explicit local socket path required")
             assert(type(timeout) == "number" and timeout > 0 and timeout <= 10000,
                 "bounded channel deadline required")
+            local after_bound = options.after_bound
+            assert(after_bound==nil or type(after_bound)=="function", "invalid post-binding callback")
             local factory = options.completed_factory
             assert((type(completed) == "function" and factory == nil)
                 or (completed == nil and type(factory) == "function"), "explicit completion sink required")
@@ -98,7 +100,7 @@ function M.attach()
                 local sink = factory and factory() or completed
                 assert(type(sink) == "function", "explicit completion sink required")
                 return bootstrap.start(capture, function() return channel.open(path, now, timeout) end,
-                    source, sink)
+                    source, sink, after_bound)
             end
             phase, reason = "waiting_init", nil
         end,

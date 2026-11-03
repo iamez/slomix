@@ -1,3 +1,266 @@
+## 2026-11-03 — Trusted post-binding hook exposed before bootstrap ACK
+
+Runtime host bootstrap accepts optional after_bound callback only after exact
+stats binding confirmation, before sending ACK. A fresh decoded ticket copy is
+passed to trusted same-VM provisioning code; exceptions become unconfirmed and
+are never retried. Hook threaded through load-time host hooks/c0rn adapter; default
+nil preserves existing behavior. Enables caller to bind timing to accepted ticket
+without discovering identity from JSON. Does NOT implement cross-VM IPC transport.
+164bootstrap/completion tests pass (Lua5.1/5.4 and existing native peers), including
+new after-bind failure. Original plan and owner-run activation boundary retained.
+Full CI00b49153 and431807b2 successful on both PG14/17; changed heads still require
+exact-head review/CI. Native missing-timing SQL case fromc1074800 awaits its results.
+No game/service/liveDB changes. Do not mark full project complete before remaining
+producer deployment/writer handover/package/restore/D4-D5/observation gates.
+
+## 2026-11-03 — Timing lifecycle supports fresh R2 in a persistent Lua VM
+
+Found source binding fence also rejected a legitimate fresh timing ticket after
+new InitGame when Lua VM persists across halves. Allow replacement only after
+InitGame invalidated old binding, validate active map/half/context, reject same
+old identity, clear fence only on successful fresh bind. Original stale-binding
+reset/end-state tests retained. Actual source harness now runs R1 then freshR2 in
+one VM, rejects old identity and writes both declared identities.32producer tests
+pass. This does not provide automatic host-ticket transport into a separate Lua VM.
+No source activation. Full CI for updated head pending; original plan retained.
+
+## 2026-11-03 — Corrected timing wait so it cannot block R2 statistics
+
+RCA: sequential shared-socket timing wait could stop R2 bootstrap when R1 timing
+was missing, contrary to original no-round-loss contract. Supersedes earlier strict
+six-exchange listener checkpoint. New listener provisions separate stats + per-half
+timing sockets BEFORE producer activation, captures both stats halves first, then
+admits queued timing closes with bounded waits. Missing timing returns pending in
+TimingListenerResult with independently usable CapturedMatch; full typed timing
+handoff absent, no fabricated success or dropped stats. Consumed bad timing leaves
+stats intact. Producer stays pinned/live through delayed timing authentication.
+
+Actual native child/Lua bytes proof now covers independent listeners and missing
+R1 notice: R2 stats still captured, R1 timing pending, R2 timing captured. Added
+native PG test that imports both stats halves without timing applications. Existing
+complete/import/replay PG case parameterized to actual bounded listener too; latest
+variants pendingCI.166localfocused passed1CI-onlyskip; Ruff/diffcheck pass.
+00b49153 PG17 full CI successful; current changed head requires fresh CI.
+
+Full candidate residual inventory: actual main-vs-candidate tree81paths =57tests,
+13source/config,11docs; three-dot ancestry misleadingly reports578paths because
+squash history differs. Private runtime-residual-inventory-20261103.json pins both
+heads/blobIDs. Reconcile approved residuals before any full-package deployment;
+never copy whole old candidate over main or discard it. Original masterplan retained.
+No live services/SQL/game changes. Native ET wrapper/provisioning and original
+package/handover/restore/D4-D5/observation remain outstanding.
+
+## 2026-11-03 — Native host/controller/import/replay proven on both PG engines
+
+CI ba5a4871 native test_native_controller_handoff_through_actual_import_and_replay
+PASSED on PG17/Python3.13 and PG14/Python3.11: real Lua-emitted R1/R2+JSON bytes,
+pinned Python transport peer, bootstrap/stats/timing closes, durable controller
+handoff -> actual bounded importer -> independent SQL observer -> full unchanged
+replay. Not a live ET engine or multi-Lua-VM activation certificate.
+Whole CI failed2configuration introspection tests because moving local configuration
+declaration broke the established probe. Restored literal local config declaration
+and use forward-declared policy validator closure; production override behavior
+unchanged. Local50tests pass1CI-onlyskip; Lua5.4 parse/diffcheck pass. Fresh fullCI
+still required. Errors retained in evidence/runtime1114-ba5-ci.log. No green-all
+claim, merge or deploy. Owner wants autonomous work, ongoing updates in files.
+Original plan and parked findings retained. Next CI/review and actual producer
+bootstrap IPC wiring, bounded listener native proof, then full package/rehearsal.
+
+## 2026-11-03 — Strict timing listener, producer close hook and CI isolation fix
+
+Added bounded six-exchange serve_timing_match and controller wait validation;
+missing timing terminates strict attempt retaining captures/claims, never declares
+stats failed or deletes rows. Timing status now distinguishes capturing/failed.
+Six injected fsync failures retain source/reservation and refuse reuse (8capture
+cases pass). Listener composition cases pass; actual listener+ET game still unproven.
+
+Optional BindRuntimeGametime third argument provisions trusted generation/output
+directory/close callback. Binding requires persistent local capture, writer consumes
+one attempt, writes only provisioned directory, callback runs only after successful
+checked close. Legacy behavior without provisioning unchanged.31producer tests pass,
+including close-error no-notice, disabled/failure-only policy rejection. Lua5.4 parse
+passes; Lua5.1 parse of whole existing webhook fails at pre-existing '<' syntax
+(line1786 before edits); not claimed supported. Separate timing sender has5.1/5.4
+stub-channel proof. Actual cross-Lua-VM authenticated ticket fanout still required.
+
+CI head7bec51d8 native controller/import case failed verbatim:
+ValueError: Inherited environment overrides explicit application configuration.
+Fixed TEST boundary to match existing clean subprocess environment after explicit
+CI config preparation; production override guard unchanged. CI rerun pending.
+No complete-runtime/ET integration or activation claim. Original plan retained.
+
+## 2026-11-03 — Lua timing sender factory prepared, producer wiring pending
+
+Separate runtime_host_timing_completion.lua mirrors existing bounded one-attempt
+stats sender with timing-only JSON basename/protocol. Lua5.1/5.4 stub-channel tests
+pass; malformed names consume attempt, sent_unconfirmed never claims host ACK.
+Not connected to live gametime writer or running Lua modules. Producer bootstrap
+fanout across ET Lua VMs and writer-close callback provisioning remain explicit
+unfinished requirements. No implication that same-PID Python fixture proves ET
+Lua VM integration. Native controller and SQL tests pending CI at7659a217.
+Owner requested quiet autonomous work; no periodic user-facing status updates.
+Original plan and parked findings retained. No services/production/liveDB changes.
+
+## 2026-11-03 — Native two-half controller and close-failure correction
+
+Native pinned peer now transports actual Lua-emitted stats AND timing bytes through
+R1/R2 controller bootstrap, authenticated closes, sealed/durable capture and typed
+export. Fixture transport is Python, not a running ET engine. Real PG test invokes
+this host flow in a worker thread then actual handoff importer and full replay;
+local4PG cases skip without disposable opt-in, CI execution pending.
+Found/fixed cleanup defect: timing success must not be exported if socket close
+raises. Close now precedes recording success; failing close leaves timing failed,
+retains durable bytes and valid stats, prevents retry. Added test. Handoff checks
+reject map disagreement. Combined suite initially97passed.
+
+Provisioning correction: producer filename suffix contains end clock unknowable
+before play. TimingFilenamePolicy now provisions trusted original map/half before
+IPC, admits canonical producer-asserted end suffix only after process/bootstrap
+validation, never treats suffix as trusted identity/clock. Exact-name mode retained.
+Importer independently validates JSON/meta against declared round identity. Native
+controller proof uses policy, without predicting end clock. Six policy cases added;
+latest103tests pass. No game/source service activation or live DB changes.
+Original full-runtime gates and parked findings retained. Continue CI/review and
+native SQL proof before marking slice ready; no project completion claim.
+
+## 2026-11-03 — Timing adapter authorization and native generation replay prepared
+
+Adapter requires execute is True, rejecting bool-lookalike1/False/None before any
+executor call. Options copied, source metadata bound from verified typed handoff;
+caller DB/handover policy untouched.4adapter tests pass. Existing native PG CLI
+complete/replay test parameterized for flat and generation-directory layout using
+actual Lua fixture bytes, preserving originals. Native new variant awaits CI.
+65combined timing tests pass; Ruff/diffcheck pass. Preparing draft PR of accumulated
+runtime intake/controller/adapter slice. Remaining: review, full native controller
+through SQL proof, timing expectations provisioning from actual producer lifecycle,
+concurrency/file replacement and fsync failures, final package/restore/D4-D5 gates.
+No deploy/liveDB/service changes. Parked findings and original masterplan retained.
+
+## 2026-11-03 — Typed timing handoff binding and generation-layout CLI support
+
+Added bot/runtime_captured_timing_import.py: verify successful typed handoff and
+bind source references/expected identities into caller-supplied CLI options;
+validate existing DB/handover policy without inventing authorization. One-shot
+wrapper delegates existing execute (owns SIGTERM, not bot/web background task).
+CLI gains explicit --timing-generation-directories for durable capture layout;
+owned private child dir opened relative to rootFD with no symlink/traversal.
+24focused cases pass:4handoff structural guards,4directory boundary cases,
+16existingCLI tests. Ruff passes. Handoff structural tests inject stats verifier;
+not full native combined controller->SQL evidence. Initial nested-with lint fixed.
+Remaining before publish: adapter actual-call policy tests, map consistency and
+root replacement checks, native controller+realLuaJSON->CLI->PG14/17, concurrency
+and failure/mutation proofs. No complete runtime/import activation claimed.
+All source bytes retained; services/liveDB/game unchanged. Original plan retained.
+
+## 2026-11-03 — Opt-in timing controller and typed handoff implemented locally
+
+RuntimeTimingController provisions private fifth root and both expected basenames
+before IPC; bootstrap hook records per-half context under existing base lock.
+complete_timing consumes each timing attempt, authenticates and durably captures,
+records success without invalidating completed stats on timing failure. Full export
+requires both timing captures and verifies roots plus stats/timing identity and
+generation alignment. Stats-only base behavior retained.23controller tests pass
+(20existing+3new), prior34timing tests pass, Ruff/diffcheck pass.
+New controller tests use injected receiver/publisher; native two-half combined
+controller/export proof and handoff importer adapter remain pending. Typed handoff
+implementation requires additional focused adversarial tests before publication.
+No completed-runtime claim, service/deploy/DB change. Autonomous permission noted;
+production remains owner-run. Next full host/controller->bounded1112import proof,
+then package/handover/restore/D4-D5. Parked statistics findings stay parked.
+
+## 2026-11-03 — Durable timing capture with native source proof
+
+capture_closed_timing reserves generation once in separate private capture root,
+publishes authenticated sealed bytes with hash/fsync/no-clobber and writes
+independent timing-capture.json carrying accepted identity/map. Returns typed
+CapturedTiming. All post-reservation failures retain claim/source; no disk adoption.
+Native Python child now writes/closes actual42byte source before separate timing
+notice; kernel peer/bootstrap/receipt -> snapshot -> durable capture succeeds.
+34focused tests pass incl capture replay and failed reservation retention. Ruff
+passes. Actual Lua JSON parsing, controller attachment/export and bounded importer
+handoff remain unfinished; do not claim complete runtime. Existing pure file
+snapshot and receiver guard mutations remain preserved; new publisher uses existing
+no-clobber/fsync primitive. No services/liveDB/game changes.
+
+Next cohesive slice must bind timing root/expected basename in controller BEFORE
+receiving, preserve per-half accepted context, expose pending timing without
+invalidating stats, export typed stats+timing handoff then adapt bounded1112caller.
+Original full app/modern/exclusive handover/restore/D4-D5/observation gates remain.
+Owner asked autonomous completion; continue implementation without repeated general
+permission requests. PR-specific merge and service activation boundaries still apply.
+
+## 2026-11-03 — Authenticated timing snapshot boundary implemented
+
+runtime_timing_snapshot yields kernel-sealed stream plus SHA256 after verifying
+persisted timing receipt, pinned context, private producer directory, regular
+single-link exact-size source and unchanged named inode/root. Lua0664 allowed
+inside owned0700 directory; world-write refused. Lexical ownership closes all
+FDs; originals retained. This is volatile sealed capture, NOT durable publication.
+Five real-file cases and four native IPC cases pass (9total). Removing single-link
+guard causes observed hardlink failure; externalcmp restoration and5pass. Ruff
+passes. JSON identity validation/durable capture/controller handoff remain next.
+Whole-plan order: durable timing capture -> authenticated controller handoff ->
+bounded1112import -> full app/modern package -> exclusive writer handover ->
+isolated full restore/migrations -> D4/D5 and observation -> owner activation.
+No service/game/DB changes. Original plan and parked statistics work retained.
+
+## 2026-11-03 — Native Unix/process timing completion proof passes
+
+New test_runtime_timing_native executes actual child process, kernel peer
+credentials, bootstrap handshake and timing-close channel with durable receipt.
+Four cases pass: accepted pinned peer; changed durable bootstrap rejected;
+wrong process epoch rejected; different process under same UID rejected.
+Each rejected case leaves no timing receipt; stats receipt remains absent.
+Child output collected and child exits within5seconds; sockets close. Combined
+codec/receiver/native27tests pass, Ruff passes. No running game, live listener,
+service change or DB use. This proves host protocol composition with Python
+fixture producer, not actual Lua timing writer integration or captured file bytes.
+Next bounded timing file capture with independent expected basename/generation,
+sealed hash/root/process validation, then controller handoff to existing1112CLI.
+Original runtime and parked findings retained. No deployment or merge authority.
+
+## 2026-11-03 — Timing close receiver and durable verification implemented
+
+shared/runtime_host_timing_completion.py reuses process_channel and durable
+bootstrap/process verifier, checks independently provisioned expected_filename
+and accepted dispatch generation, writes timing-writer-closed.txt once and
+revalidates it. Separate verify_timing_completion supports subsequent capture.
+Receipt asserts writer close, not file bytes/hash/durability or import success.
+23focused tests pass with simulated channel and real local receipt files/process
+fixtures. Mismatched generation/name/protocol rejected; replay preserves inode
+and bytes. Removing expectation guard gives2failures, externalcmp restore and
+23pass. Initial Ruff fixture import/shadow findings fixed; final Ruff passes.
+Next actual credentialed peer/process transport proof (not yet exercised for
+this receiver), stale bootstrap/epoch tests, capture bytes and controller handoff.
+No runtime listener/service/game activation or DB operation. Original plan and
+parked statistics findings retained.
+
+## 2026-11-03 — Separate timing-close wire codec implemented
+
+Runtime slice adds TimingCompletion/decode_timing_completion with distinct
+slomix_timing_closed_v1 prefix, bounded JSON basename, generation and byte count.
+19focused tests and Ruff pass; fresh process roundtrip passes. Size guard removal
+produces6failures; externalcmp restoration and19pass. Prefix-only mutation passed
+because canonical re-encoding independently rejects changed prefix; not counted
+as an observed guard failure. No peer authentication, receipt persistence or
+controller hookup claimed yet. Next bind codec to accepted bootstrap/process
+through existing authenticated channel, then capture/handoff. No service or data
+changes. Parked findings stay parked; original runtime plan preserved.
+
+## 2026-11-03 — Resume original runtime after explicitly parked statistics detour
+
+Owner restored runtime priority. Existing1112bounded stats+timing CLI is merged;
+next separate authenticated timing-close admission bound to accepted process epoch,
+lifecycle and dispatch. Reuse peer/process/bootstrap verification; never infer
+trusted timing identity from JSON or stats-close. Missing timing remains pending.
+Then controller-owned captured handoff -> bounded caller; preserve raw sources.
+Producer policy may currently omit timing JSON after successful Discord send;
+explicit persistent capture provisioning is an owner activation requirement.
+Original full app/modern package, exclusive writer handover, complete isolated
+restore/migration rehearsal and D4/D5 remain. No live/service/Lua changes.
+Parked findings index stays private at evidence/incident-20261103/PARKED-FINDINGS.md;
+all old branches retained. Active branch feat/runtime-timing-close-20261103.
+
 ## 2026-11-02 - Use lexical contexts for the fixed two-file intake
 
 The f35c6e72 refactor still produces two CodeQL alerts at ExitStack.enter_context

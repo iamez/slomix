@@ -152,17 +152,20 @@ end
 
 local modname = "stats_discord_webhook"
 local version = "1.7.3"
+local runtime_timing_policy
 local runtime_timing_context, runtime_timing_binding
 local runtime_timing_invalidated = false
 
-function BindRuntimeGametime(identity, map_name)
+function BindRuntimeGametime(identity, map_name, completion)
     -- Explicit trusted adapter API, not source authentication or ID allocation.
     -- Observe InitGame first, before accepting a ticket for an active half.
-    assert(runtime_timing_binding == nil and runtime_timing_context ~= nil,
+    assert((runtime_timing_binding == nil or runtime_timing_invalidated) and runtime_timing_context ~= nil,
         "runtime timing requires unbound observed InitGame")
     local codec = require("runtime_round_identity")
     local wire = codec.encode(identity)
     local frozen = codec.decode(wire)
+    assert(runtime_timing_binding == nil or runtime_timing_binding.wire ~= wire,
+        "a new InitGame requires a fresh trusted timing identity")
     local counter = tonumber(et.trap_Cvar_Get("g_currentRound"))
     local exit_flag = et.trap_GetConfigstring(et.CS_INTERMISSION)
     assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
@@ -175,7 +178,24 @@ function BindRuntimeGametime(identity, map_name)
         and map_name:match("^[A-Za-z0-9_.+%-]+$") and not map_name:find("..", 1, true)
         and runtime_timing_context.map_name == map_name
         and et.trap_Cvar_Get("mapname") == map_name, "runtime timing ticket map mismatch")
-    runtime_timing_binding = {wire=wire, map_name=map_name, half=frozen.round_number}
+    local close_binding
+    if completion ~= nil then
+        assert(type(completion)=="table", "explicit timing completion provisioning required")
+        local allowed={generation=true, directory=true, completed=true}
+        for key in pairs(completion) do assert(allowed[key], "unknown timing completion option") end
+        assert(type(completion.generation)=="string" and #completion.generation==32
+            and completion.generation:match("^[0-9a-f]+$"), "invalid timing completion generation")
+        assert(type(completion.directory)=="string" and completion.directory:sub(1,1)=="/"
+            and not completion.directory:find("%z") and not completion.directory:find("..",1,true),
+            "explicit private timing output directory required")
+        assert(type(completion.completed)=="function", "timing close callback required")
+        runtime_timing_policy()
+        close_binding={generation=completion.generation, directory=completion.directory,
+            completed=completion.completed, attempted=false}
+    end
+    runtime_timing_invalidated = false -- Only a validated fresh binding clears InitGame fencing.
+    runtime_timing_binding = {wire=wire, map_name=map_name, half=frozen.round_number,
+        completion=close_binding}
     return wire -- Local acceptance only, not an artifact completion receipt.
 end
 
@@ -270,6 +290,11 @@ local configuration = {
     -- own wording is already human-readable.
     objective_live_ping_enabled = false,
 }
+
+runtime_timing_policy = function()
+    assert(configuration.gametimes_enabled and not configuration.gametimes_write_on_failure_only,
+        "runtime timing completion requires persistent local capture policy")
+end
 
 -- ============================================================================
 -- LOCAL CONFIG OVERRIDES (secrets live OUTSIDE the repository)
@@ -620,8 +645,13 @@ local function write_gametime_file(payload_json, meta)
         require("runtime_round_identity").decode(meta.runtime_identity)
         identity_extension = ',"runtime_identity":"' .. json_escape(meta.runtime_identity) .. '"'
     end
-    local dir = get_gametimes_dir()
-    ensure_dir(dir)
+    local completion = runtime_timing_binding and runtime_timing_binding.completion
+    if completion then
+        assert(not completion.attempted, "runtime timing write already attempted")
+        completion.attempted = true -- Retain failed attempts; never overwrite on retry.
+    end
+    local dir = completion and completion.directory or get_gametimes_dir()
+    if not completion then ensure_dir(dir) end -- Runtime directory is provisioned by host.
 
     local safe_map = (meta.mapname or "unknown"):gsub("[^%w_%-]", "_")
     local ts = (meta.round_end_unix and meta.round_end_unix > 0) and meta.round_end_unix or os.time()
@@ -662,6 +692,14 @@ local function write_gametime_file(payload_json, meta)
         pcall(function() f:close() end)
         log(string.format("Failed to write gametime data: %s", tostring(write_err)))
         return false
+    end
+    if completion then
+        local basename = filename:match("([^/]+)$")
+        local sent, failure = pcall(completion.completed, {version=1, filename=basename,
+            bytes=#gametime_payload, state="writer_closed"}, completion.generation)
+        if not sent then
+            log("Runtime timing close notification failed (source retained): " .. tostring(failure))
+        end
     end
     log(string.format("Gametime file written: %s", filename))
     return true

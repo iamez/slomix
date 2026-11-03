@@ -284,7 +284,7 @@ def test_native_bootstrap_to_whole_writer(tmp_path, listener, lua, fault):
 @pytest.mark.parametrize('lua', ['lua5.1', 'lua5.4'])
 @pytest.mark.parametrize('fault', ['ok', 'pending', 'cancel', 'open-error', 'hello-error', 'bad-context',
     'wrong-process', 'wrong-life', 'wrong-source', 'malformed', 'time', 'map', 'half',
-    'callback-error', 'bad-return', 'ack-error'])
+    'callback-error', 'bad-return', 'ack-error', 'after-bind-error'])
 def test_source_state_machine_is_one_shot_and_exact(tmp_path, lua, fault):
     from shared.runtime_stats_delivery import StatsDelivery
     authority, spool, pair = setup_pair(tmp_path)

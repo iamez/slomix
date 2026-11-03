@@ -1,3 +1,12 @@
+## 2026-11-03 — Timing failure must not hold the stats bootstrap channel
+
+A shared sequential stats/timing listener can block R2 if R1 timing is absent.
+Independent per-half timing queues let both stats halves complete first; native
+missing-notice proof preserves both halves and returns pending timing. Timing
+partial state is never permission to delete a played round. Also test persistent
+Lua VM rebinding: a fresh validated R2 ticket may clear an InitGame fence, while
+an old ticket remains rejected. Source tests and native fixtures are in PR1114.
+
 ## 2026-11-02 - Use lexical contexts for the fixed two-file intake
 
 The f35c6e72 refactor still produces two CodeQL alerts at ExitStack.enter_context

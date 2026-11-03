@@ -107,3 +107,53 @@ def test_local_write_failure_never_claims_retention(tmp_path):
     assert 'local_saved=true' not in output
     assert 'COUNTS launches=0 opens=1 shell=1' in output
     assert not (tmp_path / NAME).exists()
+
+
+def test_provisioned_close_callback_runs_after_actual_writer_close(tmp_path):
+    from tests.unit.test_runtime_stats_dispatch import setup_pair
+
+    _, _, pair = setup_pair(tmp_path / 'rounds')
+    output = run(tmp_path, enabled=False, target=False, mode='frame',
+                 identity=pair.first, binding_fault='completion')
+    assert 'BIND=true' in output
+    assert output.count('TIMING_CLOSED_AFTER_READ bytes=') == 1
+    verify_file(tmp_path)
+
+
+@pytest.mark.parametrize(('capture', 'failure_only'), [(False, False), (True, True)])
+def test_runtime_completion_requires_persistent_capture_policy(tmp_path, capture, failure_only):
+    from tests.unit.test_runtime_stats_dispatch import setup_pair
+
+    _, _, pair = setup_pair(tmp_path / 'rounds')
+    output = run(tmp_path, enabled=False, target=False, capture=capture,
+                 failure_only=failure_only, identity=pair.first, binding_fault='completion')
+    assert 'BIND=false' in output
+    assert 'TIMING_CLOSED_AFTER_READ' not in output
+    assert not (tmp_path / NAME).exists()
+
+
+def test_failed_checked_close_never_emits_completion(tmp_path):
+    from tests.unit.test_runtime_stats_dispatch import setup_pair
+
+    _, _, pair = setup_pair(tmp_path / 'rounds')
+    output = run(tmp_path, enabled=False, target=False, mode='frame', identity=pair.first,
+                 binding_fault='completion-close-fail')
+    assert 'BIND=true' in output
+    assert 'TIMING_CLOSED_AFTER_READ' not in output
+    assert 'fixture close failure' in output
+
+
+def test_same_vm_accepts_fresh_second_half_after_new_initgame(tmp_path):
+    from tests.unit.test_runtime_stats_dispatch import setup_pair
+
+    _, _, pair = setup_pair(tmp_path / 'rounds')
+    result = subprocess.run([
+        shutil.which('lua5.4'), str(ROOT / 'tests/lua/gametime_independence_harness.lua'),
+        str(ROOT / 'vps_scripts/stats_discord_webhook.lua'), str(tmp_path), 'send',
+        '0', '0', '1', '0', pair.first.encode(), 'two-halves', pair.second.encode(),
+    ], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'TWO_HALVES_REBOUND' in result.stdout
+    for half, expected in ((1, pair.first), (2, pair.second)):
+        raw = (tmp_path / NAME.replace('R1', f'R{half}')).read_bytes()
+        assert json.loads(raw)['meta']['runtime_identity'] == expected.encode()

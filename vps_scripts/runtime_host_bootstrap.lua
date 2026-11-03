@@ -16,9 +16,10 @@ local function context(wire, expected_source)
     return process, lifecycle
 end
 
-function M.start(capture, open_channel, expected_source, completed)
+function M.start(capture, open_channel, expected_source, completed, after_bound)
     assert(type(capture) == "function" and type(open_channel) == "function"
         and type(completed) == "function" and source(expected_source), "invalid bootstrap adapter")
+    assert(after_bound==nil or type(after_bound)=="function", "invalid post-binding callback")
     -- Claim source context BEFORE connection; failed connect cannot be retried
     -- with another lease for the same InitGame. No timestamp identity.
     local observed, consume = capture()
@@ -57,6 +58,7 @@ function M.start(capture, open_channel, expected_source, completed)
                 local round, generation = consume(value, completed)
                 assert(round == value.identity.round_id and generation == value.generation,
                     "bootstrap binding not confirmed")
+                if after_bound then after_bound(delivery.decode(wire)) end
                 channel.send_line("slomix_stats_ack_v1" .. wire:sub(#"slomix_stats_bind_v1" + 1))
                 phase = "accepted" -- Local bind + ACK sent, NOT host durability or writer completion.
                 close()
