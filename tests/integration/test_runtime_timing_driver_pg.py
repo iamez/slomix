@@ -193,3 +193,30 @@ async def test_native_controller_handoff_through_actual_import_and_replay(full_i
     for timing in captured.timings:
         path = timing.root / timing.generation / timing.filename
         assert hashlib.sha256(path.read_bytes()).hexdigest() == timing.sha256
+
+
+@pytest.mark.timeout(180)
+async def test_missing_first_timing_preserves_both_canonical_stats_halves(
+        full_import_db, tmp_path, listener, monkeypatch):  # noqa: F811
+    from bot.runtime_captured_import import import_captured_match
+    from bot.runtime_import_cli import database_from_arguments
+    from tests.unit.test_runtime_timing_controller_native import capture_native_timing_pair
+
+    _, reader = full_import_db
+    source = await prepare_target(reader, tmp_path)
+    host_root = tmp_path / 'controller'
+    host_root.mkdir(mode=0o700)
+    captured = await asyncio.to_thread(capture_native_timing_pair, host_root, listener,
+                                       bounded=True, missing_timing=True)
+    options = cli.parser().parse_args(source.args)
+    clean = clean_environment(os.environ)
+    for key in tuple(os.environ):
+        if key not in clean:
+            monkeypatch.delenv(key)
+    assert captured.timing_match is None
+    await import_captured_match(database_from_arguments(options), captured.stats,
+                               lock_directory=source.lock, defer_team_assignment=True)
+    assert await reader.fetchval('SELECT count(*) FROM rounds WHERE round_number IN (1,2)') == 2
+    assert await reader.fetchval('SELECT count(*) FROM runtime_round_mappings') == 2
+    assert await reader.fetchval('SELECT count(*) FROM runtime_events') == 2
+    assert await reader.fetchval('SELECT count(*) FROM runtime_gametime_applications') == 0

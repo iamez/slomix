@@ -1,3 +1,29 @@
+## 2026-11-03 — Corrected timing wait so it cannot block R2 statistics
+
+RCA: sequential shared-socket timing wait could stop R2 bootstrap when R1 timing
+was missing, contrary to original no-round-loss contract. Supersedes earlier strict
+six-exchange listener checkpoint. New listener provisions separate stats + per-half
+timing sockets BEFORE producer activation, captures both stats halves first, then
+admits queued timing closes with bounded waits. Missing timing returns pending in
+TimingListenerResult with independently usable CapturedMatch; full typed timing
+handoff absent, no fabricated success or dropped stats. Consumed bad timing leaves
+stats intact. Producer stays pinned/live through delayed timing authentication.
+
+Actual native child/Lua bytes proof now covers independent listeners and missing
+R1 notice: R2 stats still captured, R1 timing pending, R2 timing captured. Added
+native PG test that imports both stats halves without timing applications. Existing
+complete/import/replay PG case parameterized to actual bounded listener too; latest
+variants pendingCI.166localfocused passed1CI-onlyskip; Ruff/diffcheck pass.
+00b49153 PG17 full CI successful; current changed head requires fresh CI.
+
+Full candidate residual inventory: actual main-vs-candidate tree81paths =57tests,
+13source/config,11docs; three-dot ancestry misleadingly reports578paths because
+squash history differs. Private runtime-residual-inventory-20261103.json pins both
+heads/blobIDs. Reconcile approved residuals before any full-package deployment;
+never copy whole old candidate over main or discard it. Original masterplan retained.
+No live services/SQL/game changes. Native ET wrapper/provisioning and original
+package/handover/restore/D4-D5/observation remain outstanding.
+
 ## 2026-11-03 — Native host/controller/import/replay proven on both PG engines
 
 CI ba5a4871 native test_native_controller_handoff_through_actual_import_and_replay

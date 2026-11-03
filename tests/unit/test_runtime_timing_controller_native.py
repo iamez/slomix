@@ -25,10 +25,11 @@ TIMING_PEER = PEER.replace(
     """    timing = bytes.fromhex(config['timing_hex'])
     with (Path(config['directory']) / config['timing_name']).open('xb') as output:
         output.write(timing)
-    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
-        sock.connect(sys.argv[1])
-        sock.sendall(('slomix_timing_closed_v1|' + fields[5] + '|'
-                      + config['timing_name'] + '|' + str(len(timing)) + chr(10)).encode())
+    if not config.get('omit_timing'):
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as sock:
+            sock.connect(config.get('timing_socket', sys.argv[1]))
+            sock.sendall(('slomix_timing_closed_v1|' + fields[5] + '|'
+                          + config['timing_name'] + '|' + str(len(timing)) + chr(10)).encode())
     print('CLOSED ' + name, flush=True)""")
 
 
@@ -40,7 +41,7 @@ TIMING_PEER = TIMING_PEER.replace(
     "    name = config['stats_name']")
 
 
-def capture_native_timing_pair(tmp_path, listener, *, bounded=False):  # noqa: F811
+def capture_native_timing_pair(tmp_path, listener, *, bounded=False, missing_timing=False):  # noqa: F811
     server, path = listener
     if bounded:
         path = path.with_name('timed')
@@ -77,6 +78,8 @@ def capture_native_timing_pair(tmp_path, listener, *, bounded=False):  # noqa: F
                     prepare = driver.prepare_half
                     bootstrap = driver.bootstrap
                     complete_timing = driver.complete_timing
+                    complete_stats = driver.complete
+                    stats_done = [0]
 
                     def announce():
                         dispatch = prepare()
@@ -84,7 +87,9 @@ def capture_native_timing_pair(tmp_path, listener, *, bounded=False):  # noqa: F
                         name, payload = payloads[half]
                         peer.stdin.write(json.dumps(dict(generation=dispatch.generation,
                             directory=str(spool / dispatch.generation), timing_name=name,
-                            timing_hex=payload.hex(), stats_name=stats_payloads[half][0],
+                            timing_hex=payload.hex(), omit_timing=missing_timing and half == 1,
+                            timing_socket=str(path.with_name('timed-r' + str(half))),
+                            stats_name=stats_payloads[half][0],
                             stats_hex=stats_payloads[half][1].hex())) + '\n')
                         peer.stdin.flush()
                         return dispatch
@@ -97,13 +102,33 @@ def capture_native_timing_pair(tmp_path, listener, *, bounded=False):  # noqa: F
 
                     def timing(half, connection, **options):
                         result = complete_timing(half, connection, **options)
-                        peer.stdin.write('next\n')
-                        peer.stdin.flush()
+                        if half == 2:
+                            peer.stdin.write('next\n')
+                            peer.stdin.flush()
+                        return result
+
+                    def stats(connection, **options):
+                        result = complete_stats(connection, **options)
+                        stats_done[0] += 1
+                        if stats_done[0] == 1:
+                            peer.stdin.write('next\n')
+                            peer.stdin.flush()
                         return result
 
                     driver.prepare_half, driver.bootstrap, driver.complete_timing = announce, boot, timing
-                    handoff = serve_timing_match(driver, path, initial_readiness_wait=5,
-                        bootstrap_wait=5, completion_wait=5, timing_wait=5, exchange_timeout=3)
+                    driver.complete = stats
+                    outcome = serve_timing_match(driver, path,
+                        timing_socket_paths={h: path.with_name('timed-r' + str(h)) for h in (1, 2)},
+                        initial_readiness_wait=5,
+                        bootstrap_wait=5, completion_wait=5, timing_wait=0.2 if missing_timing else 5, exchange_timeout=3)
+                    if missing_timing:
+                        assert outcome.timing_match is None
+                        assert outcome.timing_status == {1: 'pending', 2: 'captured'}
+                        outcome.stats.verify()
+                        assert outcome.stats.second_identity == pair.second
+                        return outcome
+                    assert outcome.timing_match is not None
+                    handoff = outcome.timing_match
                 else:
                     for half in (1, 2):
                         dispatch = driver.prepare_half()
@@ -141,3 +166,10 @@ def capture_native_timing_pair(tmp_path, listener, *, bounded=False):  # noqa: F
 @pytest.mark.parametrize('bounded', [False, True])
 def test_native_two_half_timing_controller_exports_bound_handoff(tmp_path, listener, bounded):  # noqa: F811
     capture_native_timing_pair(tmp_path, listener, bounded=bounded).verify()
+
+
+
+def test_missing_first_timing_does_not_block_second_stats_half(tmp_path, listener):  # noqa: F811
+    result = capture_native_timing_pair(tmp_path, listener, bounded=True, missing_timing=True)
+    assert result.timing_match is None
+    assert result.stats.first.reference.generation != result.stats.second.reference.generation
