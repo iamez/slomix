@@ -1,3 +1,14 @@
+## 2026-11-03 — Compose whole Lua modules without inherited callbacks
+
+Loading a second module overwrites shared et_* globals; callbacks it does not
+implement still point to the first module. Clear callbacks between trusted loads,
+capture each whole module, reject duplicates/unknown events and compose explicit
+callbacks. Run both lifecycle handlers before rethrowing an error. A stub loader
+that defines every callback cannot expose inheritance: the whole-source mutation
+must fail too. Keep runtime timing unbound until accepted-ticket binding; do not
+replay legacy pending notifications from a runtime VM. Real ET activation and
+peer/process proof remain separate from the actual-source synthetic harness.
+
 ## 2026-11-03 — Timing failure must not hold the stats bootstrap channel
 
 A shared sequential stats/timing listener can block R2 if R1 timing is absent.

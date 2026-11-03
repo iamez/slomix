@@ -155,6 +155,12 @@ local version = "1.7.3"
 local runtime_timing_policy
 local runtime_timing_context, runtime_timing_binding
 local runtime_timing_invalidated = false
+local runtime_timing_required, runtime_timing_seen_init = false, false
+
+function RequireRuntimeGametimeBinding()
+    assert(not runtime_timing_seen_init, "runtime timing fence is load-time only")
+    runtime_timing_required = true
+end
 
 function BindRuntimeGametime(identity, map_name, completion)
     -- Explicit trusted adapter API, not source authentication or ID allocation.
@@ -178,6 +184,8 @@ function BindRuntimeGametime(identity, map_name, completion)
         and map_name:match("^[A-Za-z0-9_.+%-]+$") and not map_name:find("..", 1, true)
         and runtime_timing_context.map_name == map_name
         and et.trap_Cvar_Get("mapname") == map_name, "runtime timing ticket map mismatch")
+    assert(not runtime_timing_required or completion~=nil,
+        "runtime timing mode requires an explicit close callback")
     local close_binding
     if completion ~= nil then
         assert(type(completion)=="table", "explicit timing completion provisioning required")
@@ -876,6 +884,9 @@ local function execute_curl_async(payload_json)
 end
 
 local function pending_retry_sweep()
+    -- Legacy queued notifications have no accepted runtime generation. Keep
+    -- them untouched; the runtime consumer owns any later delivery decision.
+    if runtime_timing_required then return end
     -- Preserve queued payloads without touching disk or launching deliveries
     -- while this optional consumer is disabled or has no configured target.
     if not configuration.enabled or #configured_webhook_urls() == 0 then
@@ -1475,6 +1486,10 @@ end
 -- ============================================================================
 
 local function send_webhook()
+    if runtime_timing_required and (runtime_timing_binding==nil or runtime_timing_invalidated) then
+        log("Runtime timing unbound; no legacy capture or notification fallback")
+        return
+    end
     local notifications_enabled = configuration.enabled and #configured_webhook_urls() > 0
     if not notifications_enabled and not configuration.gametimes_enabled then
         log("Notifications and local gametime capture unavailable, skipping")
@@ -1823,6 +1838,7 @@ end
 -- ============================================================================
 
 function et_InitGame(levelTime, randomSeed, restart)
+    runtime_timing_seen_init = true
     if runtime_timing_binding ~= nil then runtime_timing_invalidated = true end
     runtime_timing_context = nil
     fh_init()
