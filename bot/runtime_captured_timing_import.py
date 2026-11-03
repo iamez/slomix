@@ -11,6 +11,8 @@ def bind_captured_timing_arguments(options, captured):
     Caller supplies parsed CLI options and explicit writer handover confirmations.
     No credentials, target configuration or activation flags derive from payloads.
     """
+    if getattr(options, 'execute', None) is not True:
+        raise ValueError('Explicit execution authorization required')
     if not isinstance(captured, CapturedTimingMatch):
         raise ValueError('Successful captured timing match required')
     captured.verify()

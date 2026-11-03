@@ -1,3 +1,16 @@
+## 2026-11-03 — Timing adapter authorization and native generation replay prepared
+
+Adapter requires execute is True, rejecting bool-lookalike1/False/None before any
+executor call. Options copied, source metadata bound from verified typed handoff;
+caller DB/handover policy untouched.4adapter tests pass. Existing native PG CLI
+complete/replay test parameterized for flat and generation-directory layout using
+actual Lua fixture bytes, preserving originals. Native new variant awaits CI.
+65combined timing tests pass; Ruff/diffcheck pass. Preparing draft PR of accumulated
+runtime intake/controller/adapter slice. Remaining: review, full native controller
+through SQL proof, timing expectations provisioning from actual producer lifecycle,
+concurrency/file replacement and fsync failures, final package/restore/D4-D5 gates.
+No deploy/liveDB/service changes. Parked findings and original masterplan retained.
+
 ## 2026-11-03 — Typed timing handoff binding and generation-layout CLI support
 
 Added bot/runtime_captured_timing_import.py: verify successful typed handoff and

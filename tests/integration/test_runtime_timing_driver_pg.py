@@ -82,9 +82,23 @@ async def snapshot(reader):
 
 
 @pytest.mark.timeout(180)
-async def test_actual_cli_complete_declared_pair_and_fresh_process_replay(full_import_db, tmp_path):
+@pytest.mark.parametrize('generation_layout', [False, True])
+async def test_actual_cli_complete_declared_pair_and_fresh_process_replay(full_import_db, tmp_path, generation_layout):
     _, reader = full_import_db
     source = await prepare_target(reader, tmp_path)
+    if generation_layout:
+        root = Path(source.args[source.args.index('--timing-directory') + 1])
+        for half in (1, 2):
+            offset = source.args.index(f'--timing-r{half}')
+            generation, filename = source.args[offset + 1:offset + 3]
+            directory = root / generation
+            directory.mkdir(mode=0o700)
+            payload = (root / filename).read_bytes()
+            path = directory / filename
+            path.write_bytes(payload)
+            path.chmod(0o600)
+            source.original[path] = payload
+        source.args.append('--timing-generation-directories')
     await invoke(source)
     committed = await snapshot(reader)
     assert [row['round_number'] for row in committed['rounds']].count(0) == 1
