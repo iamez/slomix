@@ -1,3 +1,19 @@
+## 2026-11-03 — Timing close receiver and durable verification implemented
+
+shared/runtime_host_timing_completion.py reuses process_channel and durable
+bootstrap/process verifier, checks independently provisioned expected_filename
+and accepted dispatch generation, writes timing-writer-closed.txt once and
+revalidates it. Separate verify_timing_completion supports subsequent capture.
+Receipt asserts writer close, not file bytes/hash/durability or import success.
+23focused tests pass with simulated channel and real local receipt files/process
+fixtures. Mismatched generation/name/protocol rejected; replay preserves inode
+and bytes. Removing expectation guard gives2failures, externalcmp restore and
+23pass. Initial Ruff fixture import/shadow findings fixed; final Ruff passes.
+Next actual credentialed peer/process transport proof (not yet exercised for
+this receiver), stale bootstrap/epoch tests, capture bytes and controller handoff.
+No runtime listener/service/game activation or DB operation. Original plan and
+parked statistics findings retained.
+
 ## 2026-11-03 — Separate timing-close wire codec implemented
 
 Runtime slice adds TimingCompletion/decode_timing_completion with distinct
