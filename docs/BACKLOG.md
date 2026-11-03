@@ -1,3 +1,19 @@
+## 2026-11-03 — Native host/controller/import/replay proven on both PG engines
+
+CI ba5a4871 native test_native_controller_handoff_through_actual_import_and_replay
+PASSED on PG17/Python3.13 and PG14/Python3.11: real Lua-emitted R1/R2+JSON bytes,
+pinned Python transport peer, bootstrap/stats/timing closes, durable controller
+handoff -> actual bounded importer -> independent SQL observer -> full unchanged
+replay. Not a live ET engine or multi-Lua-VM activation certificate.
+Whole CI failed2configuration introspection tests because moving local configuration
+declaration broke the established probe. Restored literal local config declaration
+and use forward-declared policy validator closure; production override behavior
+unchanged. Local50tests pass1CI-onlyskip; Lua5.4 parse/diffcheck pass. Fresh fullCI
+still required. Errors retained in evidence/runtime1114-ba5-ci.log. No green-all
+claim, merge or deploy. Owner wants autonomous work, ongoing updates in files.
+Original plan and parked findings retained. Next CI/review and actual producer
+bootstrap IPC wiring, bounded listener native proof, then full package/rehearsal.
+
 ## 2026-11-03 — Strict timing listener, producer close hook and CI isolation fix
 
 Added bounded six-exchange serve_timing_match and controller wait validation;

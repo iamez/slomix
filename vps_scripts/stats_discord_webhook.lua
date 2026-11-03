@@ -152,7 +152,7 @@ end
 
 local modname = "stats_discord_webhook"
 local version = "1.7.3"
-local configuration
+local runtime_timing_policy
 local runtime_timing_context, runtime_timing_binding
 local runtime_timing_invalidated = false
 
@@ -187,8 +187,7 @@ function BindRuntimeGametime(identity, map_name, completion)
             and not completion.directory:find("%z") and not completion.directory:find("..",1,true),
             "explicit private timing output directory required")
         assert(type(completion.completed)=="function", "timing close callback required")
-        assert(configuration.gametimes_enabled and not configuration.gametimes_write_on_failure_only,
-            "runtime timing completion requires persistent local capture policy")
+        runtime_timing_policy()
         close_binding={generation=completion.generation, directory=completion.directory,
             completed=completion.completed, attempted=false}
     end
@@ -201,7 +200,7 @@ end
 -- CONFIGURATION - EDIT THESE VALUES
 -- ============================================================================
 
-configuration = {
+local configuration = {
     -- Discord webhook URL - create one in your control channel
     -- Format: https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN
     discord_webhook_url = "REPLACE_WITH_YOUR_WEBHOOK_URL",
@@ -288,6 +287,11 @@ configuration = {
     -- own wording is already human-readable.
     objective_live_ping_enabled = false,
 }
+
+runtime_timing_policy = function()
+    assert(configuration.gametimes_enabled and not configuration.gametimes_write_on_failure_only,
+        "runtime timing completion requires persistent local capture policy")
+end
 
 -- ============================================================================
 -- LOCAL CONFIG OVERRIDES (secrets live OUTSIDE the repository)
