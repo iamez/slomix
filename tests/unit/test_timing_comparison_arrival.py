@@ -3,6 +3,8 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import pytest
+
 from bot.services.timing_comparison_service import TimingComparisonService
 
 
@@ -104,3 +106,21 @@ async def test_pending_edit_capacity_is_bounded():
     current.fetch_lua_data.return_value = LUA
     assert not await current.on_lua_data_stored(0)
     assert sum([await current.on_lua_data_stored(round_id) for round_id in range(1, 65)]) == 64
+
+
+@pytest.mark.parametrize("neighbour_half", [1, 2])
+async def test_initial_publication_does_not_borrow_a_nearby_played_half(neighbour_half):
+    current, channel, message = service()
+    current.fetch_stats_file_data.return_value.update(round_number=2)
+    neighbour = (2848, '2026-11-03-225138', neighbour_half, 'et_brewdog',
+                 1793742516, 1793742698, 182, 0, 0, 'NORMAL', 2, 1, 10,
+                 0, None, None, 0, None, 0, 1, None)
+
+    async def candidates(query, params):
+        return [neighbour] if len(params) == 1 or params[1] == neighbour_half else []
+
+    current.db_adapter.fetch_all.side_effect = candidates
+    assert await current.post_timing_comparison(11957, 7)
+    assert 'PENDING' in channel.send.call_args.kwargs['embed'].description
+    message.edit.assert_not_awaited()
+    current.db_adapter.fetch_all.assert_not_awaited()

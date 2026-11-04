@@ -1,3 +1,47 @@
+## 2026-11-04 — Expanded timing RCA finds false-positive half matching
+
+The earlier arrival-race explanation was incomplete. Read-only corpus and retained
+journal/source checks now distinguish observed defects from unknown history.
+Journal sinceOct26:69 posts for69 distinct round IDs,49 direct-link misses,
+24 explicit relaxed fallback hits requested R2/matched R1,25 relaxed misses.
+All69 rounds are currently linked. Each of the24 wrong displayed halves now has
+its own correct R2 Lua link; no data repair follows from a display defect.
+
+All2547 canonical halves and1469 Lua rows were inspected. The1389 linked halves
+have no map/half/positive-start/duration mismatch and no duplicate round/source
+links. SQL JOIN/EXISTS and Python snapshots independently agree on scope and
+anomalies. Equality inside the DB is not independent producer proof: therefore
+also examined1454 retained local JSON files.1447 uniquely match DB captures with
+no differences in present raw-meta start/end/duration/pause fields or normalized
+payload fields. Six minimal legacy documents lack a DB capture; one file is zero
+bytes (its filename end DOES have a DB capture). These are retained exceptions,
+not seven proven gameplay losses. Of four unlinked rounds sinceAug1, candidate
+Lua data exists for all; only two corresponding local JSON files are retained.
+No guessed links or automatic deduplication of repeated maps.
+
+Fix: initial TimingComparison publication now requires direct linkage too,
+preventing both opposite-half and previous-play borrowing. TimingDebug requires
+a direct link for known canonical rounds, rechecks after its send window and
+keeps failed edits until a successful edit. No edit occurs while linked Lua is
+still absent. Five added regressions first failed;54 focused tests now pass,
+independently counted. Four additional guard mutations failed and externalcmp
+restored source. Actual read-only DEV R2 data through BOTH display services:
+one simulated send/edit each, correct half2, zero fuzzy reads/Discord requests.
+
+Limits:1,428 Discord search results are still not an independently exported
+historical message corpus. In-memory handles do not survive restart/eviction.
+The existing storage API also conflates an unlinked result with swallowed write
+failure; journal examined here has no such write-failure line. Fault-inject and
+resolve acknowledgement/retry semantics in a separate persistence slice before
+claiming capture-loss protection; do not mix it with display fixes or live repair.
+Wall-clock identity is within3seconds for1468/1469 Lua captures; the remaining
+unlinked testmap row is a distinct fixture anomaly, not game-lag proof.
+
+Continue PR1118 on the same feature branch; exact NEW-head CI is required again.
+No merge permission/activation, service/game change, live DB write or Discord
+history edit. Runtime1117 remains independently green and preserved; the original
+runtime masterplan and all parked findings remain authoritative.
+
 ## 2026-11-04 — Systemic timing diagnostic arrival race; runtime lane retained
 
 Owner reports 1,428 Discord search results for NO LUA DATA; this is a reported

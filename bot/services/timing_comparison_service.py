@@ -15,7 +15,7 @@ Usage:
 NOTE: match_id linking issue exists:
     - rounds table: match_id from filename timestamp
     - lua_round_teams: match_id from round_end_unix
-    These don't match! We prefer round_id when available, otherwise map_name + round_number + time window.
+    These differ. Published comparisons and late edits require a canonical round_id link.
 """
 
 import logging
@@ -95,13 +95,14 @@ class TimingComparisonService:
                 logger.warning(f"No stats file data found for round {round_id}")
                 return False
 
-            # Fetch Lua webhook data (fuzzy match on map + round + time)
+            # A published comparison needs confirmed identity, not a nearby half.
             lua_data = await self.fetch_lua_data(
                 round_id,
                 stats_data['map_name'],
                 stats_data['round_number'],
                 stats_data['round_date'],
-                stats_data['round_time']
+                stats_data['round_time'],
+                linked_only=True,
             )
 
             # Build comparison embed

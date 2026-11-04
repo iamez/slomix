@@ -3051,3 +3051,13 @@ canonical linkage. Pass canonical correlation match/half to TimingDebugService,
 not Lua end-time match_id; the clocks differ even when both sources are correct.
 Keep historical unlinked-data repair separate and require independent source
 proof. In-memory edits do not survive restart and do not fix old Discord history.
+
+## 2026-11-04 — Fuzzy timing diagnostics can hide an arrival race
+
+Fact:24 retained journal events display R1 Lua for R2 while all24 currently have
+correct linked R2 captures. Absence-only audits miss false-positive matches.
+Apply: publish and edit known canonical rounds only from direct links; a nearby
+same-map/half is not the same played match. Audit source JSON separately because
+DB agreement may reflect copied values. Failed edits retain handles; send-window
+callbacks need a post-send recheck in BOTH diagnostic services. Bounded memory
+is not durable delivery, and lack of a link is not proof of capture loss.
