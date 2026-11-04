@@ -1,3 +1,15 @@
+## 2026-11-04 — Keep timing handover and Unix/TCP mode selection separate
+
+The CLI writer_handover_confirmed field selects external TCP configuration and
+must befalse in Unix mode. A Unix-only supervised timing proof still needs separate
+explicit operator statistics/timing ownership claims; validate them before launch,
+encode both in the exact unit argv, then pass only permitted Unix CLI options.
+Do not infer ownership from a game profile or payload. Missing timing cannot erase
+successful stats, but full timing request remains incomplete. Mark complete only
+after fresh SQL observation and resource cleanup, preserving unknown/interrupted
+progress and source bytes. CI transport bridging must be labeled separately from
+production peer-only target admission.
+
 ## 2026-11-03 — Extend the closed game bundle and supervisor together
 
 Adding Lua modules alone cannot enable capture: the bundle inventory, generated

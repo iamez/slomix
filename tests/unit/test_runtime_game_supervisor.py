@@ -17,9 +17,10 @@ UNIT = 'slomix-et-proof-1234abcd.service'
 INVOCATION = 'a' * 32
 
 
-@pytest.mark.parametrize('deferred', [False, True])
-@pytest.mark.parametrize('timing_state', [None, 'captured', 'pending'])
-def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferred, timing_state):
+@pytest.mark.parametrize('deferred,timing_state,full_timing',
+    [(deferred, state, False) for deferred in (False, True) for state in (None, 'captured', 'pending')]
+    + [(True, 'captured', True), (True, 'pending', True)])
+def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferred, timing_state, full_timing):
     from unittest.mock import AsyncMock, Mock, create_autospec
 
     from scripts import runtime_game_import
@@ -36,24 +37,37 @@ def test_live_capture_passed_once_to_opt_in_import(monkeypatch, tmp_path, deferr
     monkeypatch.setattr(module, 'require_containment', lambda unit: {'InvocationID': INVOCATION})
     monkeypatch.setattr(module, 'validate_launch_commands', lambda *args: None)
     monkeypatch.setattr(module, 'verify_source', lambda *args: None)
-    monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kw: dict(argv=[], cwd='/', env={}, workspace={'source_commit': 'b' * 40}))
+    monkeypatch.setattr(module, 'startup_recipe', lambda *args, **kw: dict(argv=[], cwd='/', env={}, workspace={'source_commit': 'b' * 40, 'version': 2}))
     monkeypatch.setattr(module.subprocess, 'Popen', lambda *args, **kw: child)
     monkeypatch.setattr(module.os, 'set_blocking', lambda *args: None)
     monkeypatch.setattr(module, 'capture_process', lambda *args: handoff)
     monkeypatch.setattr(runtime_game_import, 'preflight_import',
                         create_autospec(runtime_game_import.preflight_import))
-    importer = AsyncMock(return_value={'status': 'incomplete'})
+    importer = AsyncMock(return_value={'status': 'completed' if full_timing else 'incomplete'})
     monkeypatch.setattr(runtime_game_import, 'import_live_capture', importer)
+    timing_importer = AsyncMock(return_value={'status': 'completed'})
+    monkeypatch.setattr(runtime_game_import, 'import_live_timing_capture', timing_importer)
     result = module.run(tmp_path, UNIT, 'b' * 40, proof_socket=tmp_path,
-                        proof_database_name='explicit', import_lock_directory=tmp_path, defer_team_assignment=deferred)
-    importer.assert_awaited_once_with(captured, socket=tmp_path, database='explicit', lock_directory=tmp_path,
-                                     defer_team_assignment=deferred)
-    assert result['import']['status'] == 'incomplete'
+                        proof_database_name='explicit', import_lock_directory=tmp_path, defer_team_assignment=deferred,
+                        writer_handover_confirmed=full_timing, timing_writer_handover_confirmed=full_timing)
+    if full_timing and timing_state == 'captured':
+        importer.assert_not_awaited()
+        timing_importer.assert_awaited_once_with(handoff.timing_match, socket=tmp_path, database='explicit',
+            lock_directory=tmp_path, defer_team_assignment=True, writer_handover_confirmed=True,
+            timing_writer_handover_confirmed=True)
+        assert result['import']['status'] == result['timing']['status'] == 'completed'
+    else:
+        timing_importer.assert_not_awaited()
+        importer.assert_awaited_once_with(captured, socket=tmp_path, database='explicit', lock_directory=tmp_path,
+                                         defer_team_assignment=deferred)
+        assert result['import']['status'] == 'incomplete'
+        if full_timing:
+            assert result['import']['stats']['status'] == 'completed'
     assert result['status'] == 'captured_import_attempted_shutdown_pending'
-    if timing_state is not None:
+    if timing_state is not None and not (full_timing and timing_state == 'captured'):
         assert result['timing'] == {'status': 'captured_not_imported' if timing_state == 'captured' else 'incomplete',
                                     'halves': {1: timing_state, 2: 'captured'}}
-    else:
+    elif timing_state is None:
         assert 'timing' not in result
     pipe.close.assert_called_once()
 

@@ -12,6 +12,7 @@ import pwd
 import re
 import stat
 from pathlib import Path
+from types import SimpleNamespace
 
 from bot.runtime_captured_import import import_captured_match
 from scripts.dev_schema_preflight import inspect_database, migration_checksums
@@ -92,3 +93,50 @@ async def import_live_capture(captured, *, socket, database, lock_directory, def
                 'partial_commits_possible': True, 'source_acknowledged': False}
     finally:
         logging.disable(previous)
+
+
+async def import_live_timing_capture(captured, *, socket, database, lock_directory,
+                                    defer_team_assignment=False, writer_handover_confirmed=False,
+                                    timing_writer_handover_confirmed=False):
+    """Owned one-shot timing pipeline; explicit private target and operator claims.
+
+    Handovers are claims, not a writer fence. Journal-enabled/deferred-team mode
+    is the fixed contract of this opt-in path. No authority comes from JSON.
+    """
+    from bot.runtime_captured_timing_import import import_captured_timing_match
+    from bot.runtime_timing_import_cli import initial_progress
+    from scripts.runtime_game_supervisor import validate_import_policy
+    from shared.runtime_captured_timing_match import CapturedTimingMatch
+
+    validate_import_policy(defer_team_assignment, socket, database, lock_directory,
+        writer_handover_confirmed=writer_handover_confirmed,
+        timing_writer_handover_confirmed=timing_writer_handover_confirmed)
+    if not writer_handover_confirmed or not timing_writer_handover_confirmed:
+        raise ValueError('Both independent writer handovers required')
+    if not isinstance(captured, CapturedTimingMatch):
+        raise ValueError('Successful live captured timing match required')
+    captured.verify()
+    progress = initial_progress()
+    previous = logging.root.manager.disable
+    logging.disable(logging.CRITICAL)
+    try:
+        await preflight_import(socket=socket, database=database, lock_directory=lock_directory)
+        target = proof_database(socket, database)
+        args = SimpleNamespace(execute=True, socket=target.socket, database=target.database, user=target.user,
+            env_file=None, config_sha256=None, expected_target=None,
+            # CLI's writer flag selects external TCP configuration, forbidden
+            # in Unix mode. Operator claims were checked separately above.
+            writer_handover_confirmed=False, timing_writer_handover_confirmed=True,
+            lock_directory=str(lock_directory), attempt_timeout=60.0, pipeline_timeout=180.0,
+            journal='enabled', defer_team_assignment=True, require_declared_identity=True)
+        success = await import_captured_timing_match(args, captured, progress)
+        complete = (success is True and progress['effect_state'] == 'observed_complete'
+                    and progress['active_stage'] == 'finished')
+        progress['status'] = 'completed' if complete else 'incomplete'
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        progress.update(status='interrupted', partial_commits_possible=True)
+    except Exception as exc:
+        progress.update(status='outcome_unknown', error_type=type(exc).__name__, partial_commits_possible=True)
+    finally:
+        logging.disable(previous)
+    return progress
