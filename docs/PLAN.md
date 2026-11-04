@@ -1,3 +1,31 @@
+## 2026-11-04 — Real Comp13 run exposes active/end half counter inversion
+
+Owner starts USER unit dd2c6c582ab93ca1 at21:21:34. Actual2.86.0-13/embeddedLua
+and Omni-bot0.93 load and six players join. Warmup restart enters active InitGame
+at10450, then supervisor exits1/ValueError before any capture. No bootstrap-issued
+record exists. Generic error log does not retain exact message or wire; preserve
+that uncertainty rather than inventing a directly observed exception string.
+
+Native stopwatch start counter0=R1,1=R2; G_LogExit flips before intermission so
+end1=R1,0=R2. Runtime InitGame lease and stats/timing/proximity binding incorrectly
+used end-phase2-counter at START, while timing/proximity close guards used the
+opposite counter. Existing fixtures corroborated the same wrong assumption.
+Fix runtime start tocounter+1 and close to2-half; leave legacy completed-round
+conversion untouched. Correct fixture counters only, not timestamp/restart inputs.
+New direct native-counter cases both fail before correction;349focused cases
+pass afterwards (independent verbose count349). Mutation restoring old lease
+mapping fails both cases; externalcmp restores. All sources parse with Lua5.4.
+Attempted full webhookLua5.1 parse fails near '<' on unchanged baseline too;
+this runtime bundle requires5.4, no newly introduced Lua5.1 regression claimed.
+
+Independent after-exit cleanup verifies original PID2527277 absent, MainPID0,
+emptyControlGroup and no27962 listener. Supervisor shutdown_verified:false remains
+a failed in-process result, not overwritten by later cleanup. No live SQL/import
+or agent service action. Used workspace/bots/logs retained, never reset/reused.
+Private RCA evidence/comp13-first-game-20261104/FINDINGS.md. Prepare a NEW attempt
+with corrected whole shipped modules and source before owner start; do not claim
+real R1/R2 acceptance until that run. Preserve1117/1120 and original runtime plan.
+
 ## 2026-11-04 — Resume runtime with explicit Comp13 rehearsal profile
 
 Owner directs keeping local2.85 and replacing the older test lane with2.86.0-13.
