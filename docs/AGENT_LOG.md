@@ -3053,3 +3053,10 @@ A runtime handover proof also compared a symlink-alias root with its resolved
 current root; actual copied bytes were correct. Apply: observe outbound attempts
 independently of logger severity and compare canonical storage paths plus file
 bytes. Separate DEV/PROD env files do not isolate shared Discord destinations.
+
+## 2026-11-04 — Engine versions require native identity and separate profiles
+
+Local directory named2.83.1 holds an actual2.84.0 binary. Keep2.85 rehearsal
+separate and select Comp13 by explicit pinned engine/executable/mod hashes and
+matching mod inventory. A declared profile is not embedded-Lua/gameplay proof.
+Preserve old inputs and independently verify native snapshots before activation.

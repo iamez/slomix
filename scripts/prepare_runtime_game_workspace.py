@@ -35,6 +35,9 @@ from shared.release_manifest import MANIFEST  # noqa: E402
 
 ASSETS = {'etmain/pak0.pk3', 'etmain/pak1.pk3', 'etmain/pak2.pk3',
           'etmain/supply_sp.pk3', 'legacy/legacy_v2.85.0.pk3'}
+COMP13_ASSETS = (ASSETS - {'legacy/legacy_v2.85.0.pk3'}) | {'legacy/legacy_v2.86.0-13-g39c75a3.pk3'}
+COMP13_MOD_SHA256 = '40e8c028bab2b9fabaf9b528f94d1095c9d931c07317249bedc58dee3ebb2368'
+COMP13_EXECUTABLE_SHA256 = 'c9a0f0745ca7eb192d6bc9ee0e566762ac5b193b1dc758cfaa27cac100d75100'
 MARKER = 'workspace.json'
 EMPTY_CONFIG = b'// Isolated rehearsal: no inherited startup commands or automatic map.\n'
 TIMING_CONFIG = (b'return {enabled=false, gametimes_enabled=true, '
@@ -117,11 +120,18 @@ def _contract(bundle, executable, executable_sha256, assets, destination):
     require_hash(executable_sha256, 64)
     if _hash(executable, 64 * 1024 * 1024, executable=True) != executable_sha256:
         raise ValueError('Dedicated executable differs from approved hash')
-    if type(assets) is not dict or set(assets) != ASSETS:
+    expected_assets = COMP13_ASSETS if contract.get('engine_profile') == 'et286-comp13' else ASSETS
+    if contract.get('engine_profile') == 'et286-comp13' and executable_sha256 != COMP13_EXECUTABLE_SHA256:
+        raise ValueError('Comp13 executable differs from pinned snapshot hash')
+    if type(assets) is not dict or set(assets) != expected_assets:
         raise ValueError('Explicit five-asset rehearsal inventory required')
     for name, value in assets.items():
         if type(value) is not dict or set(value) != {'path', 'sha256'} or not isinstance(value['path'], str):
             raise ValueError('Invalid approved asset record')
+        if (contract.get('engine_profile') == 'et286-comp13'
+                and name == 'legacy/legacy_v2.86.0-13-g39c75a3.pk3'
+                and value['sha256'] != COMP13_MOD_SHA256):
+            raise ValueError('Comp13 mod differs from pinned snapshot hash')
         path = Path(value['path'])
         require_hash(value['sha256'], 64)
         if _hash(path, 512 * 1024 * 1024) != value['sha256']:

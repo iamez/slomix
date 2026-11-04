@@ -38,6 +38,7 @@ CONTRACT = 'game-contract.json'
 FILES = {f'legacy/{name}.lua' for name in MODULES} | {
     ENTRY, NATIVE, UNIX, LINK_SOURCE, CONTRACT, 'LICENSE', 'LuaSocket-COPYRIGHT',
 }
+COMP13_ENGINE_SHA256 = '11eed8fe11e20f6861b9aa63962d601a54655e5d88e2b944f046e6faf248cbe4'
 TOOL_ENV = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C'}
 
 
@@ -52,7 +53,7 @@ def _sha(value, length):
 
 
 def _contract(source_id, socket_path, bootstrap_ms, completion_ms, unix_sha256,
-              engine_library, engine_sha256, *, producer_spool=None, timing_sockets=None):
+              engine_library, engine_sha256, *, producer_spool=None, timing_sockets=None, engine_profile='et285'):
     if not isinstance(source_id, str) or re.fullmatch(r'[a-z0-9][a-z0-9_.-]{0,63}', source_id) is None:
         raise ValueError('Invalid explicit game source ID')
     validate_socket_path(socket_path)
@@ -64,6 +65,10 @@ def _contract(source_id, socket_path, bootstrap_ms, completion_ms, unix_sha256,
             or PurePosixPath(engine_library).as_posix() != engine_library
             or len(engine_library) > 1024):
         raise ValueError('Explicit canonical ASCII engine library path required')
+    if engine_profile not in ('et285', 'et286-comp13'):
+        raise ValueError('Unknown explicit engine profile')
+    if engine_profile == 'et286-comp13' and engine_sha256 != COMP13_ENGINE_SHA256:
+        raise ValueError('Comp13 engine differs from pinned snapshot hash')
     record = {'version': 1, 'kind': 'et285-runtime-lua', 'lua_version': 'Lua 5.4',
             'source_id': source_id, 'socket_path': socket_path,
             'bootstrap_timeout_ms': bootstrap_ms, 'completion_timeout_ms': completion_ms,
@@ -86,6 +91,9 @@ def _contract(source_id, socket_path, bootstrap_ms, completion_ms, unix_sha256,
             raise ValueError('Stats and timing sockets must be distinct')
         record.update(version=2, kind='et285-runtime-lua-timing',
                       producer_spool=producer_spool, timing_sockets=dict(timing_sockets))
+    if engine_profile != 'et285':
+        record['engine_profile'] = engine_profile
+        record['kind'] = record['kind'].replace('et285-', 'et286-comp13-', 1)
     return record
 
 
@@ -234,7 +242,8 @@ def verify(directory):
     expected = _contract(value['source_id'], value['socket_path'], value['bootstrap_timeout_ms'],
                          value['completion_timeout_ms'], value['socket_unix_sha256'],
                          value['engine_library'], value['engine_sha256'],
-                         producer_spool=value.get('producer_spool'), timing_sockets=value.get('timing_sockets'))
+                         producer_spool=value.get('producer_spool'), timing_sockets=value.get('timing_sockets'),
+                         engine_profile=value.get('engine_profile', 'et285'))
     required = required_files(expected)
     _private_inventory(directory, required)
     files = payload_files(directory)
@@ -269,7 +278,8 @@ def verify(directory):
 
 def prepare(*, source, revision, destination, unix_library, unix_sha256, unix_license,
             engine_library, engine_sha256, source_id, socket_path,
-            bootstrap_ms=5000, completion_ms=1000, producer_spool=None, timing_sockets=None):
+            bootstrap_ms=5000, completion_ms=1000, producer_spool=None, timing_sockets=None,
+            engine_profile='et285'):
     """Copy only approved inputs into a fresh private outside-Git directory.
 
     Stable trusted ancestors/owner are required, as for other runtime bundles.
@@ -279,7 +289,7 @@ def prepare(*, source, revision, destination, unix_library, unix_sha256, unix_li
     _sha(revision, 40)
     contract = _contract(source_id, socket_path, bootstrap_ms, completion_ms, unix_sha256,
                          str(engine_library), engine_sha256, producer_spool=producer_spool,
-                         timing_sockets=timing_sockets)
+                         timing_sockets=timing_sockets, engine_profile=engine_profile)
     source = source.resolve(strict=True)
     if _git(source, 'rev-parse', '--verify', revision + '^{commit}').decode().strip() != revision:
         raise ValueError('Expected exact committed source revision')
@@ -349,6 +359,7 @@ def main(argv=None):
         build.add_argument('--' + name, required=True)
     build.add_argument('--bootstrap-ms', type=int, default=5000)
     build.add_argument('--completion-ms', type=int, default=1000)
+    build.add_argument('--engine-profile', choices=('et285', 'et286-comp13'), default='et285')
     build.add_argument('--producer-spool')
     build.add_argument('--timing-socket-r1')
     build.add_argument('--timing-socket-r2')
