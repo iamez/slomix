@@ -27,6 +27,8 @@ MODULES = (
     'runtime_host_completion', 'runtime_init_lease', 'runtime_completed_stats',
     'runtime_stats_delivery', 'runtime_round_identity',
 )
+TIMING_MODULES = MODULES + ('runtime_combined_hooks', 'runtime_combined_host',
+    'runtime_gametime_binding', 'runtime_host_timing_completion', 'stats_discord_webhook')
 ENTRY = 'legacy/slomix_runtime_entry.lua'
 NATIVE = 'legacy/lualibs/socket/unix.so'
 UNIX = 'legacy/lualibs/socket/liblua5.4-socket-unix.so.2'
@@ -50,7 +52,7 @@ def _sha(value, length):
 
 
 def _contract(source_id, socket_path, bootstrap_ms, completion_ms, unix_sha256,
-              engine_library, engine_sha256):
+              engine_library, engine_sha256, *, producer_spool=None, timing_sockets=None):
     if not isinstance(source_id, str) or re.fullmatch(r'[a-z0-9][a-z0-9_.-]{0,63}', source_id) is None:
         raise ValueError('Invalid explicit game source ID')
     validate_socket_path(socket_path)
@@ -62,17 +64,49 @@ def _contract(source_id, socket_path, bootstrap_ms, completion_ms, unix_sha256,
             or PurePosixPath(engine_library).as_posix() != engine_library
             or len(engine_library) > 1024):
         raise ValueError('Explicit canonical ASCII engine library path required')
-    return {'version': 1, 'kind': 'et285-runtime-lua', 'lua_version': 'Lua 5.4',
+    record = {'version': 1, 'kind': 'et285-runtime-lua', 'lua_version': 'Lua 5.4',
             'source_id': source_id, 'socket_path': socket_path,
             'bootstrap_timeout_ms': bootstrap_ms, 'completion_timeout_ms': completion_ms,
             'socket_unix_sha256': _sha(unix_sha256, 64), 'entrypoint': ENTRY,
             'engine_library': engine_library, 'engine_sha256': _sha(engine_sha256, 64),
             'native_link_scope': 'local-explicit-engine-dependency',
             'activation_ready': False}
+    if producer_spool is not None or timing_sockets is not None:
+        if (not isinstance(producer_spool, str) or producer_spool == '/' or producer_spool.startswith('//')
+                or len(producer_spool) > 1024
+                or re.fullmatch(r'/[A-Za-z0-9_./-]+', producer_spool) is None
+                or '..' in PurePosixPath(producer_spool).parts
+                or PurePosixPath(producer_spool).as_posix() != producer_spool):
+            raise ValueError('Explicit canonical producer spool required for timing profile')
+        if type(timing_sockets) is not dict or set(timing_sockets) != {'1', '2'}:
+            raise ValueError('Both independent timing sockets required')
+        for path in timing_sockets.values():
+            validate_socket_path(path)
+        if len({socket_path, *timing_sockets.values()}) != 3:
+            raise ValueError('Stats and timing sockets must be distinct')
+        record.update(version=2, kind='et285-runtime-lua-timing',
+                      producer_spool=producer_spool, timing_sockets=dict(timing_sockets))
+    return record
+
+
+def required_files(contract):
+    return FILES | {f'legacy/{name}.lua' for name in (
+        TIMING_MODULES if contract['version'] == 2 else MODULES)}
 
 
 def wrapper(contract):
     # Contract restricts strings to plain ASCII without quoting/escape syntax.
+    if contract['version'] == 2:
+        return ('-- Generated offline: REPLACE both old stats and webhook entries.\n'
+            'assert(_VERSION == "Lua 5.4", "Runtime bundle requires Lua 5.4")\n'
+            'return require("runtime_combined_host").configure({\n'
+            f'    source_id="{contract["source_id"]}", socket_path="{contract["socket_path"]}",\n'
+            f'    bootstrap_timeout_ms={contract["bootstrap_timeout_ms"]},\n'
+            f'    completion_timeout_ms={contract["completion_timeout_ms"]},\n'
+            f'    producer_spool="{contract["producer_spool"]}",\n'
+            f'    timing_sockets={{[1]="{contract["timing_sockets"]["1"]}", [2]="{contract["timing_sockets"]["2"]}"}}\n'
+            '}, {stats=function() return require("runtime_c0rn_host") end,\n'
+            '    timing=function() return require("stats_discord_webhook") end})\n').encode('ascii')
     return ('-- Generated offline: REPLACE c0rnp0rn8 in lua_modules, NEVER add a second writer.\n'
             '-- Trusted search paths and separately verified engine ABI are required.\n'
             'assert(_VERSION == "Lua 5.4", "Runtime bundle requires Lua 5.4")\n'
@@ -159,7 +193,7 @@ def _blob(source, revision, name):
     return data
 
 
-def _private_inventory(directory):
+def _private_inventory(directory, required=FILES):
     """Game-only placement gate, including directories and the manifest.
 
     Check a fixed shallow tree before the generic byte verifier traverses it.
@@ -167,7 +201,7 @@ def _private_inventory(directory):
     This is point-in-time evidence, not protection against hostile same-UID
     changes. Stable trusted ancestors remain an operator precondition.
     """
-    files = {Path(name) for name in FILES | {MANIFEST}}
+    files = {Path(name) for name in required | {MANIFEST}}
     directories = {parent for name in files for parent in name.parents}
     for relative in sorted(directories):
         path = directory / relative
@@ -195,9 +229,16 @@ def verify(directory):
     """Point-in-time byte/contract check, NOT provenance signature or ABI proof."""
     if not directory.is_absolute() or directory.resolve(strict=True) != directory:
         raise ValueError('Explicit canonical game bundle directory required')
-    _private_inventory(directory)
+    raw = _read_file(directory / CONTRACT, 4096)
+    value = json.loads(raw)
+    expected = _contract(value['source_id'], value['socket_path'], value['bootstrap_timeout_ms'],
+                         value['completion_timeout_ms'], value['socket_unix_sha256'],
+                         value['engine_library'], value['engine_sha256'],
+                         producer_spool=value.get('producer_spool'), timing_sockets=value.get('timing_sockets'))
+    required = required_files(expected)
+    _private_inventory(directory, required)
     files = payload_files(directory)
-    if set(files) != FILES:
+    if set(files) != required:
         raise ValueError('Game bundle inventory differs from required closed set')
     for name, path in files.items():
         limit = 4 * 1024 * 1024 if name in (NATIVE, UNIX) else 2 * 1024 * 1024
@@ -206,13 +247,8 @@ def verify(directory):
             raise ValueError('Game bundle payload is oversized or writable by another user')
     record = verify_release(directory)
     if (set(record) != {'version', 'source_commit', 'files'} or type(record['version']) is not int
-            or set(record['files']) != FILES):
+            or set(record['files']) != required):
         raise ValueError('Game bundle inventory differs from required closed set')
-    raw = _read_file(directory / CONTRACT, 4096)
-    value = json.loads(raw)
-    expected = _contract(value['source_id'], value['socket_path'], value['bootstrap_timeout_ms'],
-                         value['completion_timeout_ms'], value['socket_unix_sha256'],
-                         value['engine_library'], value['engine_sha256'])
     if (raw != (json.dumps(expected, sort_keys=True, indent=2) + '\n').encode('ascii')
             or (directory / ENTRY).read_bytes() != wrapper(expected)):
         raise ValueError('Game wrapper disagrees with fixed contract')
@@ -233,7 +269,7 @@ def verify(directory):
 
 def prepare(*, source, revision, destination, unix_library, unix_sha256, unix_license,
             engine_library, engine_sha256, source_id, socket_path,
-            bootstrap_ms=5000, completion_ms=1000):
+            bootstrap_ms=5000, completion_ms=1000, producer_spool=None, timing_sockets=None):
     """Copy only approved inputs into a fresh private outside-Git directory.
 
     Stable trusted ancestors/owner are required, as for other runtime bundles.
@@ -242,7 +278,8 @@ def prepare(*, source, revision, destination, unix_library, unix_sha256, unix_li
     """
     _sha(revision, 40)
     contract = _contract(source_id, socket_path, bootstrap_ms, completion_ms, unix_sha256,
-                         str(engine_library), engine_sha256)
+                         str(engine_library), engine_sha256, producer_spool=producer_spool,
+                         timing_sockets=timing_sockets)
     source = source.resolve(strict=True)
     if _git(source, 'rev-parse', '--verify', revision + '^{commit}').decode().strip() != revision:
         raise ValueError('Expected exact committed source revision')
@@ -263,7 +300,8 @@ def prepare(*, source, revision, destination, unix_library, unix_sha256, unix_li
         raise ValueError('Expected Linux x86_64 ELF shared native dependency')
     _unix_metadata(unix_library)
     _engine(engine_library, engine_sha256)
-    payload = {f'legacy/{name}.lua': _blob(source, revision, f'vps_scripts/{name}.lua') for name in MODULES}
+    modules = TIMING_MODULES if contract['version'] == 2 else MODULES
+    payload = {f'legacy/{name}.lua': _blob(source, revision, f'vps_scripts/{name}.lua') for name in modules}
     payload.update({ENTRY: wrapper(contract), UNIX: native, LINK_SOURCE: LINK_CODE,
                     'LICENSE': _blob(source, revision, 'LICENSE'),
                     'LuaSocket-COPYRIGHT': _read_file(unix_license, 256 * 1024),
@@ -311,10 +349,16 @@ def main(argv=None):
         build.add_argument('--' + name, required=True)
     build.add_argument('--bootstrap-ms', type=int, default=5000)
     build.add_argument('--completion-ms', type=int, default=1000)
+    build.add_argument('--producer-spool')
+    build.add_argument('--timing-socket-r1')
+    build.add_argument('--timing-socket-r2')
     check = commands.add_parser('verify', help='Read-only inventory/hash/contract check')
     check.add_argument('--directory', type=Path, required=True)
     args = vars(parser.parse_args(argv))
     command = args.pop('command')
+    if command == 'prepare':
+        first, second = args.pop('timing_socket_r1'), args.pop('timing_socket_r2')
+        args['timing_sockets'] = {'1': first, '2': second} if first is not None or second is not None else None
     try:
         result = prepare(**args) if command == 'prepare' else verify(**args)
         print(json.dumps(result, sort_keys=True))

@@ -259,18 +259,36 @@ def capture_process(record, pid, stdin_fd):
     from shared.runtime_process_pin import pin_process
 
     roots = {k: Path(v) for k, v in record['roots'].items()}
+    timed = record.get('version', 1) == 2
+    if record.get('version', 1) not in (1, 2):
+        raise ValueError('Unsupported capture workspace profile')
+    if timed:
+        from shared.runtime_timing_completion import TimingFilenamePolicy
+        from shared.runtime_timing_controller import RuntimeTimingController
+        from shared.runtime_timing_listener import serve_timing_match
     with pin_process(pid, expected_uid=record['uid'],
                      expected_executable=Path(record['executable']),
                      expected_sha256=record['executable_sha256']) as pin:
         epoch = reserve_process_epoch(roots['host_authority'], pin, source_id=record['source_id'])
         pair = allocate_round_pair(roots['authority'], record['source_id'])
-        driver = RuntimeMatchController(**roots, match_id=pair.first.match_id,
-                                        source_id=record['source_id'], map_name=record['map_name'],
-                                        pin=pin, epoch=epoch)
+        options = dict(roots, match_id=pair.first.match_id, source_id=record['source_id'],
+                       map_name=record['map_name'], pin=pin, epoch=epoch)
+        driver = (RuntimeTimingController(**options,
+                    timing_filenames={half: TimingFilenamePolicy(record['map_name'], half) for half in (1, 2)})
+                  if timed else RuntimeMatchController(**options))
         with map_release(pin, stdin_fd) as release:
-            result = serve_match(driver, Path(record['socket_path']), on_ready=release,
-                                 initial_readiness_wait=1800, bootstrap_wait=1800, completion_wait=3600)
-        result.verify()
+            if timed:
+                result = serve_timing_match(driver, Path(record['socket_path']),
+                    timing_socket_paths={half: Path(record['timing_socket_paths'][str(half)]) for half in (1, 2)},
+                    on_ready=release, initial_readiness_wait=1800, bootstrap_wait=1800,
+                    completion_wait=3600, timing_wait=30)
+                result.stats.verify()
+                if result.timing_match is not None:
+                    result.timing_match.verify()
+            else:
+                result = serve_match(driver, Path(record['socket_path']), on_ready=release,
+                                     initial_readiness_wait=1800, bootstrap_wait=1800, completion_wait=3600)
+                result.verify()
         return result
 
 
@@ -319,10 +337,18 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
     try:
         os.set_blocking(child.stdin.fileno(), False)
         captured = capture_process(recipe['workspace'], child.pid, child.stdin.fileno())
+        from shared.runtime_timing_listener import TimingListenerResult
+        timing_report = None
+        if isinstance(captured, TimingListenerResult):
+            timing_report = {'status': 'captured_not_imported' if captured.timing_match else 'incomplete',
+                             'halves': captured.timing_status}
+            captured = captured.stats
         report = {'status': 'captured_not_imported_shutdown_pending', 'pid': child.pid,
                 'unit': unit, 'invocation_id': admitted['InvocationID'],
                 'match_id': captured.first_identity.match_id,
                 'sha256': [captured.first.reference.sha256, captured.second.reference.sha256]}
+        if timing_report is not None:
+            report['timing'] = timing_report
         if proof_socket is not None:
             from scripts.runtime_game_import import import_live_capture
             report['import'] = asyncio.run(import_live_capture(

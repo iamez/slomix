@@ -1,3 +1,14 @@
+## 2026-11-03 — Extend the closed game bundle and supervisor together
+
+Adding Lua modules alone cannot enable capture: the bundle inventory, generated
+wrapper, workspace roots/config/asset shadow guard and supervisor controller must
+share an explicit versioned profile. Keep timing pending separate from successful
+stats. Test the generated wrapper against real packaged Lua and actual process/socket
+admission, including a missing timing notice. A standalone Lua/ELF fixture does not
+prove the game's embedded ABI. If /tmp contains an existing .git, preserve it and
+move disposable packaging tests to a fresh short private outside-Git root; never
+weaken the outside-checkout guard. Nonblocking private stdin remains mandatory.
+
 ## 2026-11-03 — Compose whole Lua modules without inherited callbacks
 
 Loading a second module overwrites shared et_* globals; callbacks it does not
