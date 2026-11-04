@@ -1,3 +1,37 @@
+## 2026-11-04 — Systemic timing diagnostic arrival race; runtime lane retained
+
+Owner reports 1,428 Discord search results for NO LUA DATA; this is a reported
+message count, not independently verified distinct rounds. Read-only DEV queries
+confirm all 19 supplied R1 round IDs have linked Lua rows and matching current
+canonical/Lua durations. Nov3 has16/16 linked actual halves, cross-checked by
+JOIN and EXISTS; November has30/30. Historical unlinked captures remain a separate
+investigation; proximity in time is not permission to attach or rewrite data.
+
+Mechanism: stats-ready must import stats before storing/linking Lua, but that
+import synchronously posts TimingComparisonService before Lua storage. The old
+message never refreshed. Add bounded64 pending message handles, a post-send
+recheck and canonical-round storage callback to edit the SAME message. Late
+refresh requires a direct round_id link; it never guesses another played match.
+Initial absence is LUA DATA PENDING, not a claim the webhook failed. Preserve
+failed edit state for a later callback; restart/eviction loses in-memory handles.
+A second defect passed Lua timestamp match_id to TimingDebugService; use the
+already resolved canonical match/half that its pending-message key requires.
+
+Proof:48 focused tests plus1 existing timing-debug test pass; send-window and storage-hook mutations failed and
+externalcmp restored source. Canonical-ID regression first failed with225138
+instead of225141, then passed. Actual DEV data through the display service gives
+PENDING -> ALIGNED, one simulated send/edit and zero actual Discord requests.
+No live data writes, Discord edits, service action or deployment. Old messages
+are not retroactively corrected by this source change. Private evidence remains
+outside Git. Merge and activation require their own explicit owner decisions.
+
+Runtime work is preserved on feat/runtime-timing-proof-import-20261104 at
+e28bbbef23fa110b6ba194708d43ea9e9c32d2e8, draft PR1117. Its exact-head checks are
+successful; the full PG integration proof is being reviewed. PR1116 is merged at
+608319949eb0ae63987e9b6c99c31ab4438a2b64. Return to runtime import caller,
+contained-engine/provisioning, writer ownership, complete restore/ACL/migrations,
+D4/D5 and observation after this diagnostic slice; retain original masterplan.
+
 ## 2026-11-03 — PR1115 merged; versioned timing workspace/supervisor implemented
 
 Owner explicitly approved1115. Standard420-second merge cycle completed:

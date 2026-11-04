@@ -3041,3 +3041,13 @@ A runtime handover proof also compared a symlink-alias root with its resolved
 current root; actual copied bytes were correct. Apply: observe outbound attempts
 independently of logger severity and compare canonical storage paths plus file
 bytes. Separate DEV/PROD env files do not isolate shared Discord destinations.
+
+## 2026-11-04 — Timing diagnostic absence can be a publication race
+
+Fact: stats-ready imports/publishes stats before linked Lua storage. All19 owner
+examples currently have Lua; an early NO LUA message is not capture-loss proof.
+Apply: retain a bounded handle, recheck after sending and edit only after direct
+canonical linkage. Pass canonical correlation match/half to TimingDebugService,
+not Lua end-time match_id; the clocks differ even when both sources are correct.
+Keep historical unlinked-data repair separate and require independent source
+proof. In-memory edits do not survive restart and do not fix old Discord history.

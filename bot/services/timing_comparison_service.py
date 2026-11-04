@@ -43,6 +43,8 @@ class TimingComparisonService:
         """
         self.db_adapter = db_adapter
         self.bot = bot
+        self._pending_lua_edits: dict[int, Any] = {}
+        self._posting: set[int] = set()
 
     @staticmethod
     def _derive_player_side(axis_rows: Any, allies_rows: Any) -> tuple[int, str, str]:
@@ -81,6 +83,11 @@ class TimingComparisonService:
         Returns:
             True if successfully posted, False otherwise
         """
+        if round_id in self._posting:
+            return False
+        if round_id in self._pending_lua_edits:
+            return await self.on_lua_data_stored(round_id)
+        self._posting.add(round_id)
         try:
             # Fetch stats file data
             stats_data = await self.fetch_stats_file_data(round_id)
@@ -104,7 +111,15 @@ class TimingComparisonService:
             if self.bot:
                 channel = self.bot.get_channel(dev_channel_id)
                 if channel:
-                    await channel.send(embed=embed)
+                    sent = await channel.send(embed=embed)
+                    if lua_data is None:
+                        self._pending_lua_edits[round_id] = sent
+                        while len(self._pending_lua_edits) > 64:
+                            oldest = next(iter(self._pending_lua_edits))
+                            self._pending_lua_edits.pop(oldest)
+                            logger.warning("Timing comparison late-edit capacity reached: round_id=%s", oldest)
+                        # Storage may have completed while Discord send yielded.
+                        await self.on_lua_data_stored(round_id)
                     logger.info(f"Posted timing comparison for round {round_id} to dev channel")
                     return True
                 else:
@@ -116,6 +131,34 @@ class TimingComparisonService:
 
         except Exception as e:
             logger.error(f"Error posting timing comparison: {e}", exc_info=True)
+            return False
+        finally:
+            self._posting.discard(round_id)
+
+    async def on_lua_data_stored(self, round_id: int) -> bool:
+        """Refresh only an existing diagnostic after a confirmed round link.
+
+        No new message, task, database write or fuzzy round-number fallback.
+        Retain failed edits for a later storage notification; memory is bounded.
+        """
+        message = self._pending_lua_edits.get(round_id)
+        if message is None:
+            return False
+        try:
+            stats = await self.fetch_stats_file_data(round_id)
+            if stats is None:
+                return False
+            lua = await self.fetch_lua_data(round_id, stats['map_name'], stats['round_number'],
+                                            stats['round_date'], stats['round_time'], linked_only=True)
+            if lua is None:
+                return False
+            await message.edit(embed=self._build_comparison_embed(stats, lua))
+            if self._pending_lua_edits.get(round_id) is message:
+                self._pending_lua_edits.pop(round_id)
+            logger.info("Refreshed timing comparison after Lua storage: round_id=%s", round_id)
+            return True
+        except Exception as exc:
+            logger.warning("Timing comparison refresh failed: round_id=%s error_type=%s", round_id, type(exc).__name__)
             return False
 
     async def fetch_stats_file_data(self, round_id: int) -> dict[str, Any] | None:
@@ -202,7 +245,8 @@ class TimingComparisonService:
         map_name: str,
         round_number: int,
         round_date: str,
-        round_time: str
+        round_time: str,
+        *, linked_only: bool = False,
     ) -> dict[str, Any] | None:
         """
         Fetch Lua webhook timing data with fuzzy match.
@@ -229,7 +273,7 @@ class TimingComparisonService:
                 LIMIT 1
             """
             row = await self.db_adapter.fetch_one(direct_query, (round_id,))
-            if not row:
+            if not row and not linked_only:
                 logger.info(
                     "round_id join miss: round_id=%d map=%s rn=%d — falling back to fuzzy match",
                     round_id, map_name, round_number,
@@ -263,6 +307,9 @@ class TimingComparisonService:
                     'captured_at': captured_at,
                     'match_confidence': 'direct'
                 }
+
+        if linked_only:
+            return None
 
         # Parse round_time to datetime for comparison (supports multiple formats)
         round_datetime = self._parse_round_datetime(round_date, round_time)
@@ -556,7 +603,7 @@ class TimingComparisonService:
                 status = "✅ ALIGNED"
         else:
             color = discord.Color.greyple()
-            status = "❓ NO LUA DATA"
+            status = "⏳ LUA DATA PENDING"
 
         embed = discord.Embed(
             title=f"📊 TIMING COMPARISON - {map_name} R{round_number}",
@@ -621,8 +668,8 @@ class TimingComparisonService:
         else:
             embed.add_field(
                 name="🎮 Lua Webhook",
-                value="❌ No matching Lua data found\n"
-                      "(Webhook may not have fired or data not stored)",
+                value="Not available at comparison time.\n"
+                      "Delivery or a confirmed round link may still be pending.",
                 inline=True
             )
             embed.add_field(

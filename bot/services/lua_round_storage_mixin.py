@@ -864,10 +864,17 @@ class _LuaRoundStorageMixin:
             svc = getattr(self, 'timing_debug_service', None)
             if svc and getattr(svc, 'enabled', False):
                 try:
-                    await svc.on_lua_data_stored(match_id, round_number)
+                    await svc.on_lua_data_stored(corr_match_id, corr_round_number)
                 except Exception:
                     webhook_logger.debug("timing debug late-edit failed (non-critical)",
                                          exc_info=True)
+
+            comparison = getattr(self, 'timing_comparison_service', None)
+            if comparison and round_id is not None:
+                try:
+                    await comparison.on_lua_data_stored(round_id)
+                except Exception:
+                    webhook_logger.debug("timing comparison late-edit failed (non-critical)", exc_info=True)
 
             # 🔗 CORRELATION: notify of lua teams arrival
             if hasattr(self, 'correlation_service') and self.correlation_service:
