@@ -1,3 +1,26 @@
+## 2026-11-04 — Lua persistence acknowledgement fix implemented
+
+Separate branch fix/lua-persistence-ack-20261104 stacks on display PR1118.
+LuaRoundStorageError distinguishes unconfirmed storage from successful-unlinked
+None. The actual stats-ready worker now propagates persistence failure before
+message deletion, allowing existing queue failure/dedup handling. Gametime intake
+catches that typed failure and returnsFalse so the poll retains the file and
+continues to later files. Missing round-end is rejected instead of acknowledged.
+Optional timing diagnostic failures remain caught; existing regressions verify
+capture still succeeds if a diagnostic edit fails. Source upsert stays idempotent.
+
+Two composed regressions first failed on actual store+worker/store+gametime paths;
+64 focused tests now pass, independently counted. Recovery retry and per-file
+poll progress tested. Reintroducing swallowed failure causes observed failures;
+externalcmp restores source. Actual functions execute in a bounded offline fault
+probe: failed write produces typed failure, no simulated message deletion and
+one error-tracking call; successful control deletes once. No actual DB/Discord
+requests. This is failure-control proof, not live DB recovery certification.
+
+No service activation/merge/data repair. PR1118 must precede this slice;1117
+runtime remains separately preserved. Exact new-head CI and numbered permission
+are required before merging. Original runtime plan and historical findings retained.
+
 ## 2026-11-04 — Expanded timing RCA finds false-positive half matching
 
 The earlier arrival-race explanation was incomplete. Read-only corpus and retained
