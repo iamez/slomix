@@ -5,6 +5,7 @@ Exercise actual ASGI responses, not a fake connection interpreting SQL text.
 Never connect to the application database as fallback.
 """
 
+import json
 import uuid
 
 import asyncpg
@@ -98,6 +99,26 @@ async def test_raw_first_move_wire_preserves_zero_and_absence(private_pg, first_
     assert result.status_code == 200, result.text
     expected = await private_pg.fetchval('SELECT first_move_time_ms FROM player_track')
     assert result.json()['tracks'][0]['first_move_time'] == expected == first_move
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('parent,event,expected', [
+    (None, None, None),
+    ('unknown', 'killed', 'unknown'),
+    ('world', 'capture_resume', 'world'),
+    (None, 'shutdown', 'shutdown'),
+    (None, 'round_end', 'round_end'),
+    (None, 'capture_resume', None),
+    (None, 'sample', None),
+])
+async def test_tracks_preserve_declared_ends_without_inventing_deaths(private_pg, parent, event, expected):
+    await track(private_pg, 1)
+    path = [] if event is None else [{'time': 200, 'event': event}]
+    await private_pg.execute(
+        'UPDATE player_track SET death_type=$1, path=$2::jsonb', parent, json.dumps(path))
+    response = await request(private_pg, 1)
+    assert response.status_code == 200, response.text
+    assert response.json()['tracks'][0]['death_type'] == expected
 
 
 @pytest.mark.asyncio
