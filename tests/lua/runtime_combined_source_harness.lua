@@ -10,7 +10,7 @@ local identity={source_id='fixture-server',match_id=string.rep('c',32),
     round_id=round,first_round_id=round,round_number=1}
 if native then identity.source_id=arg[7];identity.match_id=arg[8];identity.round_id=arg[9];identity.first_round_id=arg[9] end
 local wire=require('runtime_round_identity').encode(identity)
-local state,counter,clock='0','1',1000
+local state,counter,clock='0','0',1000
 local messages,logs={},{}
 local values={mapname='supply',g_gametype='3',timelimit='20',g_nextTimeLimit='10',
     sv_maxClients='0',sv_maxclients='0',fs_homepath=directory}
@@ -105,7 +105,7 @@ if native then
     print('READY');io.stdout:flush()
     assert(io.read('*l')==(mode=='supervisor' and 'map supply' or 'start'),'host did not release init')
     for half=1,2 do
-        identity.round_number=half;counter=tostring(2-half);state='0'
+        identity.round_number=half;counter=tostring(half - 1);state='0'
         clock=1000;wall=1700000000+(half-1)*1200;started=timer.gettime()
         opens=0;stats_closed=false
         et_InitGame(half*100,1,half-1)
@@ -117,8 +117,21 @@ if native then
         until phase~='context' and phase~='delivery'
         assert(phase=='accepted',tostring(phase)..':'..tostring(reason))
         if mode~='supervisor' then assert(io.read('*l')=='finish','host did not release writer') end
-        clock=611000;wall=wall+610;state='3';counter=tostring(half-1)
-        et_RunFrame(611000);et_RunFrame(614000);et_ShutdownGame(0)
+        clock=611000;wall=wall+610;state='3';counter=tostring(2-half)
+        et_RunFrame(611000)
+        if arg[15]=='with-players' then
+            local found=false
+            for index=1,100 do
+                local name,value=debug.getupvalue(SaveStats,index)
+                if not name then break end
+                if name=='stats' then
+                    value['12345678']='12345678\\Player\\1\\1\\1 '..half..' '..half..' '..half..' '..half..' '..half..'\n'
+                    found=true;break
+                end
+            end
+            assert(found,'actual producer stats observations unavailable')
+        end
+        et_RunFrame(614000);et_ShutdownGame(0)
         assert(opens==1 and stats_closed and status.completion_status()=='sent_unconfirmed')
         print('NATIVE WHOLE SOURCE half '..half..' closed');io.stdout:flush()
         if mode~='supervisor' or half==2 then
@@ -133,7 +146,7 @@ et_RunFrame(1000);et_RunFrame(1050)
 local phase,reason=status.bootstrap_status()
 if mode=='no-delivery' then
     assert(phase=='delivery',tostring(phase)..':'..tostring(reason))
-    clock=611000;wall=1700000610;state='3';counter='0'
+    clock=611000;wall=1700000610;state='3';counter='1'
     et_RunFrame(611000);et_RunFrame(614000);et_ShutdownGame(0)
     assert(opens==0 and #messages==1,'unbound producer escaped runtime fence')
     print('WHOLE COMBINED SOURCE: no ticket, no ACK, no legacy files')
@@ -142,7 +155,7 @@ end
 assert(phase=='accepted',tostring(phase)..':'..tostring(reason))
 assert(messages[2].wire==delivery:gsub('^slomix_stats_bind_v1','slomix_stats_ack_v1'))
 -- Real callback transition and both real writers; no extracted function bodies.
-clock=611000;wall=1700000610;state='3';counter='0'
+clock=611000;wall=1700000610;state='3';counter='1'
 et_RunFrame(611000);et_RunFrame(614000);et_ShutdownGame(0)
 assert(opens==1 and stats_closed and status.completion_status()=='sent_unconfirmed')
 local stats_notice,timing_notice=0,0

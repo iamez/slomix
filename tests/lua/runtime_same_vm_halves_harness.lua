@@ -66,7 +66,7 @@ local status=require('runtime_c0rn_host').configure({source_id='fixture',socket_
     bootstrap_timeout_ms=1000,completion_timeout_ms=1000})
 os.date=function() return '2026-09-25-120000-' end
 for current=1,2 do
-    half=current; counter=2-half; state='2'
+    half=current; counter=half - 1; state='2'
     et_InitGame(half*1000-1,1,1)
     assert(status.bootstrap_status()=='waiting_playing_init')
     assert(not pcall(SaveStats), 'warmup inherited old ticket')

@@ -998,7 +998,7 @@ function BindRuntimeProximity(identity, map_name)
         and (exit_flag == "" or exit_flag == "0" or exit_flag == "1")
         and exit_flag == runtime_proximity_context.exit_flag, "runtime proximity requires active stopwatch context")
     assert((counter == 0 or counter == 1) and counter == runtime_proximity_context.counter
-        and frozen.round_number == 2 - counter, "runtime proximity start half mismatch")
+        and frozen.round_number == counter + 1, "runtime proximity start half mismatch")
     assert(type(map_name) == "string" and #map_name >= 1 and #map_name <= 64
         and map_name:match("^[A-Za-z0-9_.+%-]+$") and not map_name:find("..", 1, true)
         and map_name == runtime_proximity_context.map_name
@@ -3412,7 +3412,7 @@ local function outputDataInner()
         assert(not runtime_proximity_invalidated, "runtime proximity binding invalidated")
         assert(tonumber(et.trap_Cvar_Get("g_gametype")) == 3
             and tonumber(et.trap_Cvar_Get("gamestate")) == 3
-            and tonumber(et.trap_Cvar_Get("g_currentRound")) == (binding.half - 1)
+            and tonumber(et.trap_Cvar_Get("g_currentRound")) == (2 - binding.half)
             and getMapName() == binding.map_name
             and tracker.round.map_name == binding.map_name
             and tracker.round.round_num == binding.half, "runtime proximity end context mismatch")
