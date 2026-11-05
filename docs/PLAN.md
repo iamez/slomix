@@ -1,3 +1,13 @@
+## 2026-11-05 — Comp13 profile refreshed after authorized timing merge
+
+PR1117 merged as4e3abad3. Owner explicitly approves1120 and the remaining
+numbered queue1118/1119/1121/1122/1123/1124. Comp13 profile branch now includes
+main; both documentation conflicts retained original bytes, and its entire tree
+matched217efead before this checkpoint. Source behavior remains unchanged.
+Retarget to main before this push so both push and PR checks validate this head.
+Later preserved candidate proof includes actual six-bot R1/R2 capture/import and
+dated full DEV restore/migrations; sustained D4/D5 and deployment remain separate.
+
 ## 2026-11-05 — Remove reverse supervisor import from timing-only admission
 
 Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
