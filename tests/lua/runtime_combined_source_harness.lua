@@ -118,7 +118,20 @@ if native then
         assert(phase=='accepted',tostring(phase)..':'..tostring(reason))
         if mode~='supervisor' then assert(io.read('*l')=='finish','host did not release writer') end
         clock=611000;wall=wall+610;state='3';counter=tostring(half-1)
-        et_RunFrame(611000);et_RunFrame(614000);et_ShutdownGame(0)
+        et_RunFrame(611000)
+        if arg[15]=='with-players' then
+            local found=false
+            for index=1,100 do
+                local name,value=debug.getupvalue(SaveStats,index)
+                if not name then break end
+                if name=='stats' then
+                    value['12345678']='12345678\\Player\\1\\1\\1 '..half..' '..half..' '..half..' '..half..' '..half..'\n'
+                    found=true;break
+                end
+            end
+            assert(found,'actual producer stats observations unavailable')
+        end
+        et_RunFrame(614000);et_ShutdownGame(0)
         assert(opens==1 and stats_closed and status.completion_status()=='sent_unconfirmed')
         print('NATIVE WHOLE SOURCE half '..half..' closed');io.stdout:flush()
         if mode~='supervisor' or half==2 then

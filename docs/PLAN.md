@@ -1,3 +1,63 @@
+## 2026-11-05 — Remove reverse supervisor import from timing-only admission
+
+Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
+runtime_game_import -> runtime_game_supervisor. General supervisor policy must stay
+pure before verified project-source admission under isolated Python. Do not move
+it to an eagerly imported project module. Instead the timing-only helper enforces
+its own narrower contract directly: deferred teams and both handovers must each be
+exactTrue; socket/database/lock must all be supplied. It no longer imports its
+caller. Broader capture-only supervisor admission remains unchanged.
+
+Seven new policy rejection cases plus a runtime import-hook guard reject reverse
+supervisor loading during actual helper invocation.126focused cases pass. Deliberate
+reverse-import mutation fails that guard, restored with external cmp. Ruff/diff
+checks pass. New exact-head native PostgreSQL/CodeQL CI still required; do not claim
+review annotations resolved until the rescan confirms. Previous captured Comp13
+native SQL/consumer and local coherent package proofs remain separately preserved;
+that candidate predates this follow-up and is not a deployed/CI-approved release.
+No service action, source ACK/delete, production or live DEV mutation. No merge.
+Original runtime/masterplan and residual proof reconciliation remain authoritative.
+
+## 2026-11-04 — PR1116 merged; explicit full timing proof import implemented
+
+Owner explicitly approved1116.420-second cycle completed failed0/threads0/behind0
+with pinned headd9926d6c. REST confirms merge608319949eb0ae63987e9b6c99c31ab4438a2b64;
+merged/reviewed tree botha45db92c3172019d4f52abec1a5ae63201db3622. No activation.
+
+Next feat/runtime-timing-proof-import-20261104 connects explicit operator claims
+through unit render/prepare, exact supervisor argv/CLI and pre-launch admission.
+Full timing import requires BOTH statistics/timing writer handover confirmations,
+deferred teams and the complete private proof target, plus verified v2 workspace.
+Capture-only/statistics-only defaults preserved. Handovers are operator claims,
+not a writer fence; actual exclusive writer/restore gates remain original work.
+
+Successful CapturedTimingMatch passes directly into existing bounded timing CLI
+engine, journal-enabled/deferred-team, same explicit Unix-only proof admission and
+read-only schema preflight. No payload-derived target/identity or disk adoption.
+Unix CLI writer_handover_confirmed remainsfalse because that low-level field
+selects external TCP config (forbidden in Unix mode); independent operator claims
+are checked before binding options. No production target rule weakened.
+Completion requires observed_complete AND finished after resource cleanup. Partial,
+unknown and interrupted progress remain redacted, source ACK false. Missing timing
+still imports successful stats separately, but requested whole timing result is
+incomplete even if those stats committed. No duplicate stats import on full path.
+
+188focused local tests pass, independent verbose count188; Ruff/diffcheck pass.
+Handover, observed-completion and generated-unit flag mutations each fail, restored
+with externalcmp. Real generated-wrapper/supervisor native fixture extended with
+synthetic player observations through actual producer state; actual parser accepts
+one player per emitted file. No ET/server/DB service started. CI-only PG test adds
+whole packaged Lua -> actual supervisor -> new helper -> actual timing SQL/readonly
+observation -> unchanged full replay. Its CI TCP target/readiness bridge is explicit;
+it does NOT certify owner Unix-peer namespace admission. Real resource/SQL operations
+are not mocked. Exact-head PG14/17 CI remains pending; do not claim SQL proof yet.
+
+Next: base on merged main, CI/review/numbered PR decision, explicit approved ET2.86
+profile alignment, owner-run real gameplay, complete isolated restore/ACL/migration
+rehearsal, exclusive writers, residual57proof reconciliation, D4/D5 and observation.
+Original masterplan, old artifacts and parked KIS/proximity/security/README retained.
+Prepared d9926d6c package remains capture-only with its original provenance.
+
 ## 2026-11-03 — PR1115 merged; versioned timing workspace/supervisor implemented
 
 Owner explicitly approved1115. Standard420-second merge cycle completed:
