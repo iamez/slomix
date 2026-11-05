@@ -29,6 +29,10 @@ class CacheWorkerState:
     unsupported_pending: int | None = None
     last_success_monotonic: float | None = None
     error_type: str | None = None
+    # Bounded in-memory history for this worker object, not current DB health.
+    # Recovery, stop and disable clear current error but retain the last failure.
+    last_failure_type: str | None = None
+    last_failure_monotonic: float | None = None
 
 
 class RuntimeCacheWorker:
@@ -85,7 +89,9 @@ class RuntimeCacheWorker:
                                     raise ConnectionError("Runtime cache connection closed") from None
                                 raise
                 except (asyncpg.PostgresError, OSError, TimeoutError) as error:
-                    self.state = replace(self.state, status="unavailable", error_type=type(error).__name__)
+                    self.state = replace(self.state, status="unavailable", error_type=type(error).__name__,
+                                         last_failure_type=type(error).__name__,
+                                         last_failure_monotonic=time.monotonic())
                     logger.warning("Runtime cache consumer unavailable (%s)", type(error).__name__)
                     await self._wait(stop)
                     continue
@@ -95,8 +101,10 @@ class RuntimeCacheWorker:
                 status = "unsupported" if result.unsupported_pending else (
                     "catching_up" if result.processed == self.batch_size else "idle"
                 )
-                self.state = CacheWorkerState(
-                    status, result.generation, result.unsupported_pending, time.monotonic(), None,
+                self.state = replace(
+                    self.state, status=status, generation=result.generation,
+                    unsupported_pending=result.unsupported_pending,
+                    last_success_monotonic=time.monotonic(), error_type=None,
                 )
                 if result.processed == self.batch_size:
                     await asyncio.sleep(0)  # Yield even on a continuously full backlog.
@@ -105,7 +113,9 @@ class RuntimeCacheWorker:
         except asyncio.CancelledError:
             raise
         except Exception as error:
-            self.state = replace(self.state, status="failed", error_type=type(error).__name__)
+            self.state = replace(self.state, status="failed", error_type=type(error).__name__,
+                                 last_failure_type=type(error).__name__,
+                                 last_failure_monotonic=time.monotonic())
             raise
         finally:
             self._running = False

@@ -267,3 +267,25 @@ async def test_cleanup_cancellation_remains_visible(config_env, phase):
     assert worker.cleaned and pool.released
     pool.close.assert_awaited_once()
     assert pool.terminate.call_count == (phase == 'close')
+
+
+@pytest.mark.parametrize('status', ['idle', 'stopped', 'disabled'])
+def test_report_keeps_last_failure_separate_from_current_health(monkeypatch, capsys, status):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(entry, 'time', SimpleNamespace(monotonic=lambda: 100.0))
+    entry.report(CacheWorkerState(status=status, generation=7, error_type=None,
+                                  last_success_monotonic=95.0,
+                                  last_failure_type='OSError', last_failure_monotonic=80.0))
+    output = json.loads(capsys.readouterr().out)
+    assert output['status'] == status and output['error_type'] is None
+    assert output['last_failure_type'] == 'OSError'
+    assert output['last_failure_age_seconds'] == 20.0
+    assert output['last_success_age_seconds'] == 5.0
+
+
+def test_report_without_failure_has_no_invented_history(capsys):
+    entry.report(CacheWorkerState())
+    output = json.loads(capsys.readouterr().out)
+    assert output['last_failure_type'] is None
+    assert output['last_failure_age_seconds'] is None

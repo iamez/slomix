@@ -9,6 +9,75 @@ Native SQL proof must execute in explicit disposable CI, not silently skip behin
 an expired private socket or assume the production role is named samba.
 All original branches, older artifacts, full masterplan and residual proofs remain.
 
+## 2026-11-05 — Retain cache consumer last-failure diagnostics independently of current health
+
+M4/D5 observability improvement: cache intentionally clears current error on
+recovery/stop/disable, but previously discarded the last failure. Preserve that
+current-error policy; add bounded in-memory last_failure_type and monotonic time
+to the worker snapshot. Success updates existing state rather than replacing its
+history. Normal JSON reports add last_failure_type/last_failure_age_seconds; no
+error message, payload, credentials or producer-health claim. History lasts only
+for this worker object's lifetime, not restart-persistent audit storage.
+
+Seven new cases fail before source change, then all67worker/main unit cases pass.
+Two existing native PG recovery cases now verify history after actual SQL receipt
+failure/closed connection recovery and stop; both pass against explicit owner
+private socket. Deliberate history-erasing success mutation fails/restoredcmp.
+Ruff/diff checks pass. Additional bounded native serve proof closes ONLY its own
+borrowed connection, recovers through a fresh pooled connection and emits stopped
+with currenterrorNone/lastfailureConnectionError.3acquires/3releases; pool size and
+pg_stat_activity both confirm no remaining owned backend. Existing fixture receipts
+unchanged. This is not a server outage, new daemon, deployment or completeD5 proof.
+
+1117, refreshed1120/1121 and1123 now have green completed CI at their current heads;
+1123 can become ready after review. No numbered merge permission is inferred.
+New cache change is a separate source review before integration into the preserved
+7f302a47 candidate. Original plans, historical proof paths and all prior inputs kept.
+No Puran/prod/activeDEV change, migration or service lifecycle command occurred.
+
+## 2026-11-05 — Reconcile retained webhook deadline regression proof
+
+Recover exact original tests/unit/test_lua_webhook_deadline_clock.py blob
+ a784decea8b515715f324bf6ca7f28fb08609003 from canonical preserved development.
+Current main already compares/schedules on trap_Milliseconds, so no Lua runtime
+change is needed. Four cases execute the entire shipped et_RunFrame callback with
+independent wall/level origins, frame-clock reset, immediate sends and no duplicate
+send. This is synthetic callback execution, not HTTP delivery or a new game proof.
+
+4pass; deliberately replace only deadline comparison with levelTime: delayed2cases
+fail and immediate2remain passing. Restore Lua source/externalcmp. Ruff/diff pass.
+Local exact Comp13 upstream39c75a3 confirms G_MILLISECONDS -> Sys_Milliseconds,
+GAME_RUN_FRAME uses sv.time and configured server-time reset may zero that clock.
+No new upstream compatibility guarantee, source service action or Puran change.
+
+Separate retained frame-health Python wrapper is already covered by direct
+frame_health_harness.lua execution in current CI; do not add redundant wrapper.
+Original57path inventory stays intact; this publishes one reviewed proof, not a
+claim that absent paths imply absent features. All other original runtime and
+parked Spiderweb/statistics obligations remain. No deployment or PR merge.
+
+## 2026-11-05 — Publish preserved offline private proof preparer separately
+
+Original residual inventory classified prepare_runtime_proof.py as one pending
+source review, with test_prepare_runtime_proof.py among57proof paths. Restore
+EXACT canonical blob3af1c757 into a separate small source PR; no behavior changes,
+source deletion or rewriting of original work. Tool prepares NEW initdb state and
+owner-started USER unit, never activates services. Fixed sanitized environment,
+peer-only local auth/host reject, private Unix socket, noTCP and bounded lifetime.
+21tests pass, independently counted; TCP-enabling mutation fails then externalcmp
+restores source. Actual canonical tool of identical bytes already prepared private
+PG14 root1jzu0tbm successfully; unit/binary/0700manifests verified, not started.
+Preparation is not actual DB application or backup/migration rehearsal proof.
+
+While the real corrected Comp13 R1 plays, reconcile this directly needed original
+plan prerequisite. Full historical57file refresh against2c76fbbf gives45absent
+same paths and12changed; these are paths, not proven missing features/coverage.
+Do not bulk-copy them or discard newer native tests. Exact original data is
+retained in private runtime-residual-test-refresh-20261105.json for review.
+Owner authorization for local service actions exists, but PreToolUse still blocks
+start/link. No bypass, process launch or live DB changes. Preserve masterplan and
+continue actual R1/R2 capture, explicit private SQL proof and originalD4/D5 gates.
+
 ## 2026-11-04 — Lua persistence acknowledgement fix implemented
 
 Separate branch fix/lua-persistence-ack-20261104 stacks on display PR1118.

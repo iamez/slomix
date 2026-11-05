@@ -1,3 +1,50 @@
+## 2026-11-05 — Retain cache consumer last-failure diagnostics independently of current health
+
+M4/D5 observability improvement: cache intentionally clears current error on
+recovery/stop/disable, but previously discarded the last failure. Preserve that
+current-error policy; add bounded in-memory last_failure_type and monotonic time
+to the worker snapshot. Success updates existing state rather than replacing its
+history. Normal JSON reports add last_failure_type/last_failure_age_seconds; no
+error message, payload, credentials or producer-health claim. History lasts only
+for this worker object's lifetime, not restart-persistent audit storage.
+
+Seven new cases fail before source change, then all67worker/main unit cases pass.
+Two existing native PG recovery cases now verify history after actual SQL receipt
+failure/closed connection recovery and stop; both pass against explicit owner
+private socket. Deliberate history-erasing success mutation fails/restoredcmp.
+Ruff/diff checks pass. Additional bounded native serve proof closes ONLY its own
+borrowed connection, recovers through a fresh pooled connection and emits stopped
+with currenterrorNone/lastfailureConnectionError.3acquires/3releases; pool size and
+pg_stat_activity both confirm no remaining owned backend. Existing fixture receipts
+unchanged. This is not a server outage, new daemon, deployment or completeD5 proof.
+
+1117, refreshed1120/1121 and1123 now have green completed CI at their current heads;
+1123 can become ready after review. No numbered merge permission is inferred.
+New cache change is a separate source review before integration into the preserved
+7f302a47 candidate. Original plans, historical proof paths and all prior inputs kept.
+No Puran/prod/activeDEV change, migration or service lifecycle command occurred.
+
+## 2026-11-05 — Reconcile retained webhook deadline regression proof
+
+Recover exact original tests/unit/test_lua_webhook_deadline_clock.py blob
+ a784decea8b515715f324bf6ca7f28fb08609003 from canonical preserved development.
+Current main already compares/schedules on trap_Milliseconds, so no Lua runtime
+change is needed. Four cases execute the entire shipped et_RunFrame callback with
+independent wall/level origins, frame-clock reset, immediate sends and no duplicate
+send. This is synthetic callback execution, not HTTP delivery or a new game proof.
+
+4pass; deliberately replace only deadline comparison with levelTime: delayed2cases
+fail and immediate2remain passing. Restore Lua source/externalcmp. Ruff/diff pass.
+Local exact Comp13 upstream39c75a3 confirms G_MILLISECONDS -> Sys_Milliseconds,
+GAME_RUN_FRAME uses sv.time and configured server-time reset may zero that clock.
+No new upstream compatibility guarantee, source service action or Puran change.
+
+Separate retained frame-health Python wrapper is already covered by direct
+frame_health_harness.lua execution in current CI; do not add redundant wrapper.
+Original57path inventory stays intact; this publishes one reviewed proof, not a
+claim that absent paths imply absent features. All other original runtime and
+parked Spiderweb/statistics obligations remain. No deployment or PR merge.
+
 ## 2026-11-05 — Remove reverse supervisor import from timing-only admission
 
 Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
@@ -3073,6 +3120,13 @@ A runtime handover proof also compared a symlink-alias root with its resolved
 current root; actual copied bytes were correct. Apply: observe outbound attempts
 independently of logger severity and compare canonical storage paths plus file
 bytes. Separate DEV/PROD env files do not isolate shared Discord destinations.
+
+## 2026-11-05 — Reconcile retained proof tools by exact source, not broad copying
+
+The canonical offline PG preparer was absent from main while already retained and
+used locally. Promote its exact known blob together with21tests in a small PR;
+actual preparation and noTCP mutation evidence stay private. Fresh private initdb
+state is not a restore/migration certificate and does not authorize a service start.
 
 ## 2026-11-04 — Timing diagnostic absence can be a publication race
 

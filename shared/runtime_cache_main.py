@@ -73,10 +73,15 @@ def report(state):
     age = None if state.last_success_monotonic is None else max(
         0, time.monotonic() - state.last_success_monotonic,
     )
+    # Historical failure is separate from current error; it may precede recovery.
+    failure_age = None if state.last_failure_monotonic is None else max(
+        0, time.monotonic() - state.last_failure_monotonic,
+    )
     emit_status(dict(
         component="runtime_cache_consumer", status=state.status,
         generation=state.generation, unsupported_pending=state.unsupported_pending,
         last_success_age_seconds=age, error_type=state.error_type,
+        last_failure_type=state.last_failure_type, last_failure_age_seconds=failure_age,
     ))
 
 
