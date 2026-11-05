@@ -1,3 +1,25 @@
+## 2026-11-05 — Publish preserved offline private proof preparer separately
+
+Original residual inventory classified prepare_runtime_proof.py as one pending
+source review, with test_prepare_runtime_proof.py among57proof paths. Restore
+EXACT canonical blob3af1c757 into a separate small source PR; no behavior changes,
+source deletion or rewriting of original work. Tool prepares NEW initdb state and
+owner-started USER unit, never activates services. Fixed sanitized environment,
+peer-only local auth/host reject, private Unix socket, noTCP and bounded lifetime.
+21tests pass, independently counted; TCP-enabling mutation fails then externalcmp
+restores source. Actual canonical tool of identical bytes already prepared private
+PG14 root1jzu0tbm successfully; unit/binary/0700manifests verified, not started.
+Preparation is not actual DB application or backup/migration rehearsal proof.
+
+While the real corrected Comp13 R1 plays, reconcile this directly needed original
+plan prerequisite. Full historical57file refresh against2c76fbbf gives45absent
+same paths and12changed; these are paths, not proven missing features/coverage.
+Do not bulk-copy them or discard newer native tests. Exact original data is
+retained in private runtime-residual-test-refresh-20261105.json for review.
+Owner authorization for local service actions exists, but PreToolUse still blocks
+start/link. No bypass, process launch or live DB changes. Preserve masterplan and
+continue actual R1/R2 capture, explicit private SQL proof and originalD4/D5 gates.
+
 ## 2026-11-03 — PR1115 merged; versioned timing workspace/supervisor implemented
 
 Owner explicitly approved1115. Standard420-second merge cycle completed:

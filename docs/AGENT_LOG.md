@@ -3041,3 +3041,10 @@ A runtime handover proof also compared a symlink-alias root with its resolved
 current root; actual copied bytes were correct. Apply: observe outbound attempts
 independently of logger severity and compare canonical storage paths plus file
 bytes. Separate DEV/PROD env files do not isolate shared Discord destinations.
+
+## 2026-11-05 — Reconcile retained proof tools by exact source, not broad copying
+
+The canonical offline PG preparer was absent from main while already retained and
+used locally. Promote its exact known blob together with21tests in a small PR;
+actual preparation and noTCP mutation evidence stay private. Fresh private initdb
+state is not a restore/migration certificate and does not authorize a service start.
