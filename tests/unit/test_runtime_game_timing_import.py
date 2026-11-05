@@ -78,3 +78,37 @@ def test_complete_target_does_not_replace_either_handover(flags):
     with pytest.raises(ValueError, match='both handovers'):
         supervisor.validate_import_policy(True, '/private/socket', 'explicit', '/private/lock',
             writer_handover_confirmed=flags[0], timing_writer_handover_confirmed=flags[1])
+
+
+@pytest.mark.parametrize('field,value', [
+    ('defer_team_assignment', False), ('defer_team_assignment', 1),
+    ('writer_handover_confirmed', 1), ('timing_writer_handover_confirmed', 1),
+    ('socket', None), ('database', None), ('lock_directory', None),
+])
+async def test_timing_only_admission_requires_exact_claims_and_complete_target(monkeypatch, field, value):
+    probe = AsyncMock()
+    monkeypatch.setattr(importer, 'preflight_import', probe)
+    options = dict(socket=Path('/unused'), database='unused', lock_directory=Path('/unused'),
+                   defer_team_assignment=True, writer_handover_confirmed=True,
+                   timing_writer_handover_confirmed=True)
+    options[field] = value
+    with pytest.raises(ValueError, match='both handovers'):
+        await importer.import_live_timing_capture(object(), **options)
+    probe.assert_not_awaited()
+
+
+async def test_timing_admission_does_not_import_supervisor(monkeypatch):
+    import builtins
+
+    original = builtins.__import__
+
+    def without_supervisor(name, *args, **kwargs):
+        if name == 'scripts.runtime_game_supervisor':
+            raise AssertionError('Timing importer must not import its supervisor')
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, '__import__', without_supervisor)
+    with pytest.raises(ValueError, match='Successful live captured timing match required'):
+        await importer.import_live_timing_capture(object(), socket=Path('/unused'), database='unused',
+            lock_directory=Path('/unused'), defer_team_assignment=True,
+            writer_handover_confirmed=True, timing_writer_handover_confirmed=True)

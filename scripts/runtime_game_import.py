@@ -105,14 +105,15 @@ async def import_live_timing_capture(captured, *, socket, database, lock_directo
     """
     from bot.runtime_captured_timing_import import import_captured_timing_match
     from bot.runtime_timing_import_cli import initial_progress
-    from scripts.runtime_game_supervisor import validate_import_policy
     from shared.runtime_captured_timing_match import CapturedTimingMatch
 
-    validate_import_policy(defer_team_assignment, socket, database, lock_directory,
-        writer_handover_confirmed=writer_handover_confirmed,
-        timing_writer_handover_confirmed=timing_writer_handover_confirmed)
-    if not writer_handover_confirmed or not timing_writer_handover_confirmed:
-        raise ValueError('Both independent writer handovers required')
+    # This timing-only boundary requires all three exact boolean claims. Keep
+    # it independent of the supervisor: its broader capture-only admission must
+    # remain pure before verified source imports become available under -I.
+    if (defer_team_assignment is not True or writer_handover_confirmed is not True
+            or timing_writer_handover_confirmed is not True
+            or any(value is None for value in (socket, database, lock_directory))):
+        raise ValueError('Timing import requires both handovers, deferred teams and complete proof target')
     if not isinstance(captured, CapturedTimingMatch):
         raise ValueError('Successful live captured timing match required')
     captured.verify()
