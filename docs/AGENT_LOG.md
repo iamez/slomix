@@ -24,6 +24,59 @@ New cache change is a separate source review before integration into the preserv
 7f302a47 candidate. Original plans, historical proof paths and all prior inputs kept.
 No Puran/prod/activeDEV change, migration or service lifecycle command occurred.
 
+## 2026-11-05 — Reconcile retained webhook deadline regression proof
+
+Recover exact original tests/unit/test_lua_webhook_deadline_clock.py blob
+ a784decea8b515715f324bf6ca7f28fb08609003 from canonical preserved development.
+Current main already compares/schedules on trap_Milliseconds, so no Lua runtime
+change is needed. Four cases execute the entire shipped et_RunFrame callback with
+independent wall/level origins, frame-clock reset, immediate sends and no duplicate
+send. This is synthetic callback execution, not HTTP delivery or a new game proof.
+
+4pass; deliberately replace only deadline comparison with levelTime: delayed2cases
+fail and immediate2remain passing. Restore Lua source/externalcmp. Ruff/diff pass.
+Local exact Comp13 upstream39c75a3 confirms G_MILLISECONDS -> Sys_Milliseconds,
+GAME_RUN_FRAME uses sv.time and configured server-time reset may zero that clock.
+No new upstream compatibility guarantee, source service action or Puran change.
+
+Separate retained frame-health Python wrapper is already covered by direct
+frame_health_harness.lua execution in current CI; do not add redundant wrapper.
+Original57path inventory stays intact; this publishes one reviewed proof, not a
+claim that absent paths imply absent features. All other original runtime and
+parked Spiderweb/statistics obligations remain. No deployment or PR merge.
+
+## 2026-11-05 — Remove reverse supervisor import from timing-only admission
+
+Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
+runtime_game_import -> runtime_game_supervisor. General supervisor policy must stay
+pure before verified project-source admission under isolated Python. Do not move
+it to an eagerly imported project module. Instead the timing-only helper enforces
+its own narrower contract directly: deferred teams and both handovers must each be
+exactTrue; socket/database/lock must all be supplied. It no longer imports its
+caller. Broader capture-only supervisor admission remains unchanged.
+
+Seven new policy rejection cases plus a runtime import-hook guard reject reverse
+supervisor loading during actual helper invocation.126focused cases pass. Deliberate
+reverse-import mutation fails that guard, restored with external cmp. Ruff/diff
+checks pass. New exact-head native PostgreSQL/CodeQL CI still required; do not claim
+review annotations resolved until the rescan confirms. Previous captured Comp13
+native SQL/consumer and local coherent package proofs remain separately preserved;
+that candidate predates this follow-up and is not a deployed/CI-approved release.
+No service action, source ACK/delete, production or live DEV mutation. No merge.
+Original runtime/masterplan and residual proof reconciliation remain authoritative.
+
+## 2026-11-04 — Keep timing handover and Unix/TCP mode selection separate
+
+The CLI writer_handover_confirmed field selects external TCP configuration and
+must befalse in Unix mode. A Unix-only supervised timing proof still needs separate
+explicit operator statistics/timing ownership claims; validate them before launch,
+encode both in the exact unit argv, then pass only permitted Unix CLI options.
+Do not infer ownership from a game profile or payload. Missing timing cannot erase
+successful stats, but full timing request remains incomplete. Mark complete only
+after fresh SQL observation and resource cleanup, preserving unknown/interrupted
+progress and source bytes. CI transport bridging must be labeled separately from
+production peer-only target admission.
+
 ## 2026-11-03 — Extend the closed game bundle and supervisor together
 
 Adding Lua modules alone cannot enable capture: the bundle inventory, generated
@@ -3067,3 +3120,52 @@ A runtime handover proof also compared a symlink-alias root with its resolved
 current root; actual copied bytes were correct. Apply: observe outbound attempts
 independently of logger severity and compare canonical storage paths plus file
 bytes. Separate DEV/PROD env files do not isolate shared Discord destinations.
+
+## 2026-11-05 — Reconcile retained proof tools by exact source, not broad copying
+
+The canonical offline PG preparer was absent from main while already retained and
+used locally. Promote its exact known blob together with21tests in a small PR;
+actual preparation and noTCP mutation evidence stay private. Fresh private initdb
+state is not a restore/migration certificate and does not authorize a service start.
+
+## 2026-11-04 — Timing diagnostic absence can be a publication race
+
+Fact: stats-ready imports/publishes stats before linked Lua storage. All19 owner
+examples currently have Lua; an early NO LUA message is not capture-loss proof.
+Apply: retain a bounded handle, recheck after sending and edit only after direct
+canonical linkage. Pass canonical correlation match/half to TimingDebugService,
+not Lua end-time match_id; the clocks differ even when both sources are correct.
+Keep historical unlinked-data repair separate and require independent source
+proof. In-memory edits do not survive restart and do not fix old Discord history.
+
+## 2026-11-04 — Fuzzy timing diagnostics can hide an arrival race
+
+Fact:24 retained journal events display R1 Lua for R2 while all24 currently have
+correct linked R2 captures. Absence-only audits miss false-positive matches.
+Apply: publish and edit known canonical rounds only from direct links; a nearby
+same-map/half is not the same played match. Audit source JSON separately because
+DB agreement may reflect copied values. Failed edits retain handles; send-window
+callbacks need a post-send recheck in BOTH diagnostic services. Bounded memory
+is not durable delivery, and lack of a link is not proof of capture loss.
+
+## 2026-11-04 — Failed Lua persistence must not share the unlinked success value
+
+Use a typed failure to retain input when persistence is unconfirmed; None means
+a stored capture without a canonical link. Compose actual store with webhook and
+gametime handlers in fault tests, and verify later files progress after failure.
+A successful optional display callback is not a prerequisite for capture storage.
+
+## 2026-11-04 — Engine versions require native identity and separate profiles
+
+Local directory named2.83.1 holds an actual2.84.0 binary. Keep2.85 rehearsal
+separate and select Comp13 by explicit pinned engine/executable/mod hashes and
+matching mod inventory. A declared profile is not embedded-Lua/gameplay proof.
+Preserve old inputs and independently verify native snapshots before activation.
+
+## 2026-11-04 — ET counter meaning depends on lifecycle phase
+
+Actual Comp13 start uses0/1 forR1/R2; G_LogExit flips before intermission. Runtime
+binding must usecounter+1 at InitGame; completed-phase identity uses2-counter.
+Synthetic tests used reversed active counters and masked the defect until real
+owner-run gameplay. Check exact engine source and both phases independently;
+never reuse a failed first-use workspace or infer completed capture from ABI load.

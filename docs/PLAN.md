@@ -24,6 +24,274 @@ New cache change is a separate source review before integration into the preserv
 7f302a47 candidate. Original plans, historical proof paths and all prior inputs kept.
 No Puran/prod/activeDEV change, migration or service lifecycle command occurred.
 
+## 2026-11-05 — Reconcile retained webhook deadline regression proof
+
+Recover exact original tests/unit/test_lua_webhook_deadline_clock.py blob
+ a784decea8b515715f324bf6ca7f28fb08609003 from canonical preserved development.
+Current main already compares/schedules on trap_Milliseconds, so no Lua runtime
+change is needed. Four cases execute the entire shipped et_RunFrame callback with
+independent wall/level origins, frame-clock reset, immediate sends and no duplicate
+send. This is synthetic callback execution, not HTTP delivery or a new game proof.
+
+4pass; deliberately replace only deadline comparison with levelTime: delayed2cases
+fail and immediate2remain passing. Restore Lua source/externalcmp. Ruff/diff pass.
+Local exact Comp13 upstream39c75a3 confirms G_MILLISECONDS -> Sys_Milliseconds,
+GAME_RUN_FRAME uses sv.time and configured server-time reset may zero that clock.
+No new upstream compatibility guarantee, source service action or Puran change.
+
+Separate retained frame-health Python wrapper is already covered by direct
+frame_health_harness.lua execution in current CI; do not add redundant wrapper.
+Original57path inventory stays intact; this publishes one reviewed proof, not a
+claim that absent paths imply absent features. All other original runtime and
+parked Spiderweb/statistics obligations remain. No deployment or PR merge.
+
+## 2026-11-05 — Publish preserved offline private proof preparer separately
+
+Original residual inventory classified prepare_runtime_proof.py as one pending
+source review, with test_prepare_runtime_proof.py among57proof paths. Restore
+EXACT canonical blob3af1c757 into a separate small source PR; no behavior changes,
+source deletion or rewriting of original work. Tool prepares NEW initdb state and
+owner-started USER unit, never activates services. Fixed sanitized environment,
+peer-only local auth/host reject, private Unix socket, noTCP and bounded lifetime.
+21tests pass, independently counted; TCP-enabling mutation fails then externalcmp
+restores source. Actual canonical tool of identical bytes already prepared private
+PG14 root1jzu0tbm successfully; unit/binary/0700manifests verified, not started.
+Preparation is not actual DB application or backup/migration rehearsal proof.
+
+While the real corrected Comp13 R1 plays, reconcile this directly needed original
+plan prerequisite. Full historical57file refresh against2c76fbbf gives45absent
+same paths and12changed; these are paths, not proven missing features/coverage.
+Do not bulk-copy them or discard newer native tests. Exact original data is
+retained in private runtime-residual-test-refresh-20261105.json for review.
+Owner authorization for local service actions exists, but PreToolUse still blocks
+start/link. No bypass, process launch or live DB changes. Preserve masterplan and
+continue actual R1/R2 capture, explicit private SQL proof and originalD4/D5 gates.
+
+## 2026-11-04 — Lua persistence acknowledgement fix implemented
+
+Separate branch fix/lua-persistence-ack-20261104 stacks on display PR1118.
+LuaRoundStorageError distinguishes unconfirmed storage from successful-unlinked
+None. The actual stats-ready worker now propagates persistence failure before
+message deletion, allowing existing queue failure/dedup handling. Gametime intake
+catches that typed failure and returnsFalse so the poll retains the file and
+continues to later files. Missing round-end is rejected instead of acknowledged.
+Optional timing diagnostic failures remain caught; existing regressions verify
+capture still succeeds if a diagnostic edit fails. Source upsert stays idempotent.
+
+Two composed regressions first failed on actual store+worker/store+gametime paths;
+64 focused tests now pass, independently counted. Recovery retry and per-file
+poll progress tested. Reintroducing swallowed failure causes observed failures;
+externalcmp restores source. Actual functions execute in a bounded offline fault
+probe: failed write produces typed failure, no simulated message deletion and
+one error-tracking call; successful control deletes once. No actual DB/Discord
+requests. This is failure-control proof, not live DB recovery certification.
+
+No service activation/merge/data repair. PR1118 must precede this slice;1117
+runtime remains separately preserved. Exact new-head CI and numbered permission
+are required before merging. Original runtime plan and historical findings retained.
+
+## 2026-11-04 — Expanded timing RCA finds false-positive half matching
+
+The earlier arrival-race explanation was incomplete. Read-only corpus and retained
+journal/source checks now distinguish observed defects from unknown history.
+Journal sinceOct26:69 posts for69 distinct round IDs,49 direct-link misses,
+24 explicit relaxed fallback hits requested R2/matched R1,25 relaxed misses.
+All69 rounds are currently linked. Each of the24 wrong displayed halves now has
+its own correct R2 Lua link; no data repair follows from a display defect.
+
+All2547 canonical halves and1469 Lua rows were inspected. The1389 linked halves
+have no map/half/positive-start/duration mismatch and no duplicate round/source
+links. SQL JOIN/EXISTS and Python snapshots independently agree on scope and
+anomalies. Equality inside the DB is not independent producer proof: therefore
+also examined1454 retained local JSON files.1447 uniquely match DB captures with
+no differences in present raw-meta start/end/duration/pause fields or normalized
+payload fields. Six minimal legacy documents lack a DB capture; one file is zero
+bytes (its filename end DOES have a DB capture). These are retained exceptions,
+not seven proven gameplay losses. Of four unlinked rounds sinceAug1, candidate
+Lua data exists for all; only two corresponding local JSON files are retained.
+No guessed links or automatic deduplication of repeated maps.
+
+Fix: initial TimingComparison publication now requires direct linkage too,
+preventing both opposite-half and previous-play borrowing. TimingDebug requires
+a direct link for known canonical rounds, rechecks after its send window and
+keeps failed edits until a successful edit. No edit occurs while linked Lua is
+still absent. Five added regressions first failed;54 focused tests now pass,
+independently counted. Four additional guard mutations failed and externalcmp
+restored source. Actual read-only DEV R2 data through BOTH display services:
+one simulated send/edit each, correct half2, zero fuzzy reads/Discord requests.
+
+Limits:1,428 Discord search results are still not an independently exported
+historical message corpus. In-memory handles do not survive restart/eviction.
+The existing storage API also conflates an unlinked result with swallowed write
+failure; journal examined here has no such write-failure line. Fault-inject and
+resolve acknowledgement/retry semantics in a separate persistence slice before
+claiming capture-loss protection; do not mix it with display fixes or live repair.
+Wall-clock identity is within3seconds for1468/1469 Lua captures; the remaining
+unlinked testmap row is a distinct fixture anomaly, not game-lag proof.
+
+Continue PR1118 on the same feature branch; exact NEW-head CI is required again.
+No merge permission/activation, service/game change, live DB write or Discord
+history edit. Runtime1117 remains independently green and preserved; the original
+runtime masterplan and all parked findings remain authoritative.
+
+## 2026-11-04 — Systemic timing diagnostic arrival race; runtime lane retained
+
+Owner reports 1,428 Discord search results for NO LUA DATA; this is a reported
+message count, not independently verified distinct rounds. Read-only DEV queries
+confirm all 19 supplied R1 round IDs have linked Lua rows and matching current
+canonical/Lua durations. Nov3 has16/16 linked actual halves, cross-checked by
+JOIN and EXISTS; November has30/30. Historical unlinked captures remain a separate
+investigation; proximity in time is not permission to attach or rewrite data.
+
+Mechanism: stats-ready must import stats before storing/linking Lua, but that
+import synchronously posts TimingComparisonService before Lua storage. The old
+message never refreshed. Add bounded64 pending message handles, a post-send
+recheck and canonical-round storage callback to edit the SAME message. Late
+refresh requires a direct round_id link; it never guesses another played match.
+Initial absence is LUA DATA PENDING, not a claim the webhook failed. Preserve
+failed edit state for a later callback; restart/eviction loses in-memory handles.
+A second defect passed Lua timestamp match_id to TimingDebugService; use the
+already resolved canonical match/half that its pending-message key requires.
+
+Proof:48 focused tests plus1 existing timing-debug test pass; send-window and storage-hook mutations failed and
+externalcmp restored source. Canonical-ID regression first failed with225138
+instead of225141, then passed. Actual DEV data through the display service gives
+PENDING -> ALIGNED, one simulated send/edit and zero actual Discord requests.
+No live data writes, Discord edits, service action or deployment. Old messages
+are not retroactively corrected by this source change. Private evidence remains
+outside Git. Merge and activation require their own explicit owner decisions.
+
+Runtime work is preserved on feat/runtime-timing-proof-import-20261104 at
+e28bbbef23fa110b6ba194708d43ea9e9c32d2e8, draft PR1117. Its exact-head checks are
+successful; the full PG integration proof is being reviewed. PR1116 is merged at
+608319949eb0ae63987e9b6c99c31ab4438a2b64. Return to runtime import caller,
+contained-engine/provisioning, writer ownership, complete restore/ACL/migrations,
+D4/D5 and observation after this diagnostic slice; retain original masterplan.
+
+## 2026-11-05 — Comp13 profile refreshed after authorized timing merge
+
+PR1117 merged as4e3abad3. Owner explicitly approves1120 and the remaining
+numbered queue1118/1119/1121/1122/1123/1124. Comp13 profile branch now includes
+main; both documentation conflicts retained original bytes, and its entire tree
+matched217efead before this checkpoint. Source behavior remains unchanged.
+Retarget to main before this push so both push and PR checks validate this head.
+Later preserved candidate proof includes actual six-bot R1/R2 capture/import and
+dated full DEV restore/migrations; sustained D4/D5 and deployment remain separate.
+
+## 2026-11-05 — Remove reverse supervisor import from timing-only admission
+
+Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
+runtime_game_import -> runtime_game_supervisor. General supervisor policy must stay
+pure before verified project-source admission under isolated Python. Do not move
+it to an eagerly imported project module. Instead the timing-only helper enforces
+its own narrower contract directly: deferred teams and both handovers must each be
+exactTrue; socket/database/lock must all be supplied. It no longer imports its
+caller. Broader capture-only supervisor admission remains unchanged.
+
+Seven new policy rejection cases plus a runtime import-hook guard reject reverse
+supervisor loading during actual helper invocation.126focused cases pass. Deliberate
+reverse-import mutation fails that guard, restored with external cmp. Ruff/diff
+checks pass. New exact-head native PostgreSQL/CodeQL CI still required; do not claim
+review annotations resolved until the rescan confirms. Previous captured Comp13
+native SQL/consumer and local coherent package proofs remain separately preserved;
+that candidate predates this follow-up and is not a deployed/CI-approved release.
+No service action, source ACK/delete, production or live DEV mutation. No merge.
+Original runtime/masterplan and residual proof reconciliation remain authoritative.
+
+## 2026-11-04 — Real Comp13 run exposes active/end half counter inversion
+
+Owner starts USER unit dd2c6c582ab93ca1 at21:21:34. Actual2.86.0-13/embeddedLua
+and Omni-bot0.93 load and six players join. Warmup restart enters active InitGame
+at10450, then supervisor exits1/ValueError before any capture. No bootstrap-issued
+record exists. Generic error log does not retain exact message or wire; preserve
+that uncertainty rather than inventing a directly observed exception string.
+
+Native stopwatch start counter0=R1,1=R2; G_LogExit flips before intermission so
+end1=R1,0=R2. Runtime InitGame lease and stats/timing/proximity binding incorrectly
+used end-phase2-counter at START, while timing/proximity close guards used the
+opposite counter. Existing fixtures corroborated the same wrong assumption.
+Fix runtime start tocounter+1 and close to2-half; leave legacy completed-round
+conversion untouched. Correct fixture counters only, not timestamp/restart inputs.
+New direct native-counter cases both fail before correction;349focused cases
+pass afterwards (independent verbose count349). Mutation restoring old lease
+mapping fails both cases; externalcmp restores. All sources parse with Lua5.4.
+Attempted full webhookLua5.1 parse fails near '<' on unchanged baseline too;
+this runtime bundle requires5.4, no newly introduced Lua5.1 regression claimed.
+
+Independent after-exit cleanup verifies original PID2527277 absent, MainPID0,
+emptyControlGroup and no27962 listener. Supervisor shutdown_verified:false remains
+a failed in-process result, not overwritten by later cleanup. No live SQL/import
+or agent service action. Used workspace/bots/logs retained, never reset/reused.
+Private RCA evidence/comp13-first-game-20261104/FINDINGS.md. Prepare a NEW attempt
+with corrected whole shipped modules and source before owner start; do not claim
+real R1/R2 acceptance until that run. Preserve1117/1120 and original runtime plan.
+
+## 2026-11-04 — Resume runtime with explicit Comp13 rehearsal profile
+
+Owner directs keeping local2.85 and replacing the older test lane with2.86.0-13.
+Read-only inventory confirms /home/et/etlegacy-v2.83.1-x86_64 actually declares
+ET Legacy v2.84.0; do not infer binary version from directory. No game UDP listener
+observed and no game/service activation performed. Preserve both old directories.
+
+Branch feat/runtime-game-engine-profile-20261104 stacks on runtime1117/e28bbbef.
+Explicit et286-comp13 profile pins retained snapshot qagame/executable/mod hashes
+and requires the Comp13 five-asset inventory. Default2.85 contract bytes/inventory
+remain compatible. Bundle verification reconstructs the selected explicit profile;
+workspace rejects old mod naming, different executable or mod hashes. No auto
+binary discovery, downloads, install or relabeling of the existing2.85 workspace.
+
+114 focused bundle/workspace/native transport tests pass;1explicit2.85 embedded
+engine ABI case skipped. Four new profile cases use synthetic ELF/assets and pin
+substitution only inside fixtures; they are NOT actual Comp13 ABI/gameplay proof.
+Profile hash guard removal fails a regression; externalcmp restores source.
+Initial default/tmp tests refused due existing/tmp/.git; preserved it and used
+short fresh outside-Git /home/samba roots. New zip fixture initially inherited
+writable umask; fixed fixture0600 instead of weakening input guards. Ruff passes.
+Next prepare a NEW Comp13 bundle/workspace from retained independently hashed
+native snapshot; separately attest embedded Lua ABI before owner-run contained
+gameplay. Full runtime1117 import, exclusive writers, residual reconciliation,
+complete restore/ACL/migrations, D4/D5 and observation remain retained gates.
+
+## 2026-11-04 — PR1116 merged; explicit full timing proof import implemented
+
+Owner explicitly approved1116.420-second cycle completed failed0/threads0/behind0
+with pinned headd9926d6c. REST confirms merge608319949eb0ae63987e9b6c99c31ab4438a2b64;
+merged/reviewed tree botha45db92c3172019d4f52abec1a5ae63201db3622. No activation.
+
+Next feat/runtime-timing-proof-import-20261104 connects explicit operator claims
+through unit render/prepare, exact supervisor argv/CLI and pre-launch admission.
+Full timing import requires BOTH statistics/timing writer handover confirmations,
+deferred teams and the complete private proof target, plus verified v2 workspace.
+Capture-only/statistics-only defaults preserved. Handovers are operator claims,
+not a writer fence; actual exclusive writer/restore gates remain original work.
+
+Successful CapturedTimingMatch passes directly into existing bounded timing CLI
+engine, journal-enabled/deferred-team, same explicit Unix-only proof admission and
+read-only schema preflight. No payload-derived target/identity or disk adoption.
+Unix CLI writer_handover_confirmed remainsfalse because that low-level field
+selects external TCP config (forbidden in Unix mode); independent operator claims
+are checked before binding options. No production target rule weakened.
+Completion requires observed_complete AND finished after resource cleanup. Partial,
+unknown and interrupted progress remain redacted, source ACK false. Missing timing
+still imports successful stats separately, but requested whole timing result is
+incomplete even if those stats committed. No duplicate stats import on full path.
+
+188focused local tests pass, independent verbose count188; Ruff/diffcheck pass.
+Handover, observed-completion and generated-unit flag mutations each fail, restored
+with externalcmp. Real generated-wrapper/supervisor native fixture extended with
+synthetic player observations through actual producer state; actual parser accepts
+one player per emitted file. No ET/server/DB service started. CI-only PG test adds
+whole packaged Lua -> actual supervisor -> new helper -> actual timing SQL/readonly
+observation -> unchanged full replay. Its CI TCP target/readiness bridge is explicit;
+it does NOT certify owner Unix-peer namespace admission. Real resource/SQL operations
+are not mocked. Exact-head PG14/17 CI remains pending; do not claim SQL proof yet.
+
+Next: base on merged main, CI/review/numbered PR decision, explicit approved ET2.86
+profile alignment, owner-run real gameplay, complete isolated restore/ACL/migration
+rehearsal, exclusive writers, residual57proof reconciliation, D4/D5 and observation.
+Original masterplan, old artifacts and parked KIS/proximity/security/README retained.
+Prepared d9926d6c package remains capture-only with its original provenance.
+
 ## 2026-11-03 — PR1115 merged; versioned timing workspace/supervisor implemented
 
 Owner explicitly approved1115. Standard420-second merge cycle completed:

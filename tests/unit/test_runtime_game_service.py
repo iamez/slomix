@@ -39,9 +39,10 @@ def test_expansion_paths_rejected(value):
 
 
 @pytest.mark.parametrize('bots', [False, True])
-@pytest.mark.parametrize('import_requested,defer_team_assignment', [(False, False), (True, False), (True, True)])
+@pytest.mark.parametrize('import_requested,defer_team_assignment,full_timing',
+                         [(False, False, False), (True, False, False), (True, True, False), (True, True, True)])
 def test_offline_unit_parser_and_exclusive_output(
-        tmp_path, monkeypatch, bots, import_requested, defer_team_assignment):
+        tmp_path, monkeypatch, bots, import_requested, defer_team_assignment, full_timing):
     source = tmp_path / 'source'
     source.mkdir()
     (source / 'scripts').mkdir()
@@ -51,12 +52,13 @@ def test_offline_unit_parser_and_exclusive_output(
     tmp_path.chmod(0o700)
     checks = []
     monkeypatch.setattr(module, 'verify_source', lambda *a: checks.append('source'))
-    monkeypatch.setattr(module, 'startup_recipe', lambda *a, **k: (checks.append('workspace') or {'workspace': {'source_commit': 'a' * 40}}))
+    monkeypatch.setattr(module, 'startup_recipe', lambda *a, **k: (checks.append('workspace') or {'workspace': {'source_commit': 'a' * 40, 'version': 2}}))
     artifact = (source / 'scripts/runtime_game_supervisor.py').read_bytes()
     monkeypatch.setattr(module, 'committed_supervisor', lambda *args: artifact)
     args = dict(source=source, interpreter=Path(sys.executable), workspace=workspace,
                 destination=tmp_path / 'unit', commit='a' * 40,
-                defer_team_assignment=defer_team_assignment)
+                defer_team_assignment=defer_team_assignment, writer_handover_confirmed=full_timing,
+                timing_writer_handover_confirmed=full_timing)
     if bots:
         args.update(bot_fixture=tmp_path / 'bots', bot_manifest_sha256='b' * 64)
     if import_requested:
@@ -72,6 +74,9 @@ def test_offline_unit_parser_and_exclusive_output(
     assert record['import_requested'] == import_requested
     assert ('--defer-team-assignment' in text) is defer_team_assignment
     assert record['defer_team_assignment'] is defer_team_assignment
+    assert record['timing_import_requested'] is full_timing
+    assert ('--writer-handover-confirmed' in text) is full_timing
+    assert ('--timing-writer-handover-confirmed' in text) is full_timing
     assert json.loads((args['destination'] / 'service.json').read_text()) == record
     assert record['database_readiness_verified'] is False
     for line in ('Restart=no', 'RuntimeMaxSec=60min', 'KillMode=control-group',
@@ -86,7 +91,8 @@ def test_offline_unit_parser_and_exclusive_output(
         bot_fixture=args.get('bot_fixture'), bot_manifest_sha256=args.get('bot_manifest_sha256'),
         proof_socket=args.get('proof_socket'), proof_database_name=args.get('proof_database_name'),
         import_lock_directory=args.get('import_lock_directory'), defer_team_assignment=defer_team_assignment,
-        evidence_log=args['destination'] / 'service.log', supervisor_sha256=hashlib.sha256(artifact).hexdigest())
+        evidence_log=args['destination'] / 'service.log', supervisor_sha256=hashlib.sha256(artifact).hexdigest(),
+        writer_handover_confirmed=full_timing, timing_writer_handover_confirmed=full_timing)
     assert actual == expected
     pinned = args['destination'] / ('supervisor-' + record['supervisor_sha256'] + '.py')
     assert pinned.read_bytes() == artifact and pinned.stat().st_mode & 0o777 == 0o600

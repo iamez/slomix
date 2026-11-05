@@ -573,7 +573,7 @@ bind_runtime_stats = function(ticket)
 		and (exit_flag == "" or exit_flag == "0" or exit_flag == "1")
 		and exit_flag == runtime_init_context.exit_flag, "runtime stats require active stopwatch context")
 	assert((counter == 0 or counter == 1) and runtime_init_context.counter == counter
-		and frozen.identity.round_number == 2 - counter, "runtime stats start half mismatch")
+		and frozen.identity.round_number == counter + 1, "runtime stats start half mismatch")
 	assert(runtime_init_context.map_name == mapname and frozen.map_name == mapname,
 		"runtime stats ticket map mismatch")
 	runtime_binding_invalidated = false -- Only a newly validated binding clears the old fence.

@@ -45,7 +45,7 @@ from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
 from bot.services.error_streak_store import ErrorStreakStore
 from bot.services.lua_correction_inbox import retain_lua_correction_if_enabled
 from bot.services.lua_correction_service import apply_atomic_lua_correction, lua_correction_events_enabled
-from bot.services.lua_round_storage_mixin import _LuaRoundStorageMixin
+from bot.services.lua_round_storage_mixin import LuaRoundStorageError, _LuaRoundStorageMixin
 from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
 from bot.services.round_publisher_service import RoundPublisherService
 from bot.services.stats_import_mixin import _StatsImportMixin
@@ -1876,7 +1876,11 @@ class UltimateETLegacyBot(
         if allies_names:
             webhook_logger.info(f"   Allies: {allies_names}")
 
-        stored_round_id = await self._store_lua_round_teams(round_metadata)
+        try:
+            stored_round_id = await self._store_lua_round_teams(round_metadata)
+        except LuaRoundStorageError:
+            webhook_logger.warning("Gametime capture not persisted; retaining file for retry: %s", filename)
+            return False
         if spawn_stats_meta:
             await self._store_lua_spawn_stats(round_metadata, spawn_stats_meta)
 
