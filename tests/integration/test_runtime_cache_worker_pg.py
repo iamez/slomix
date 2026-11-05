@@ -164,6 +164,8 @@ async def test_receipt_failure_reports_unavailable_then_recovers(cache_db, monke
         await reader.execute("ALTER TABLE runtime_consumer_receipts DROP CONSTRAINT reject_worker")
         await until(lambda: worker.state.generation == 1)
         assert worker.state.error_type is None
+        assert worker.state.last_failure_type == "CheckViolationError"
+        assert worker.state.last_success_monotonic >= worker.state.last_failure_monotonic
         assert await reader.fetchval("SELECT count(*) FROM runtime_consumer_receipts") == 1
     finally:
         stop.set()
@@ -192,8 +194,14 @@ async def test_closed_connection_is_reacquired(cache_db, monkeypatch):  # noqa: 
         await until(lambda: worker.state.generation == 1)
         assert calls[1].status == "unavailable"
         assert calls[1].error_type == "ConnectionError"
+        assert worker.state.error_type is None
+        assert worker.state.last_failure_type == "ConnectionError"
+        assert worker.state.last_success_monotonic >= worker.state.last_failure_monotonic
         assert await reader.fetchval("SELECT count(*) FROM runtime_consumer_receipts") == 1
     finally:
         stop.set()
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
+    assert worker.state.status == "stopped"
+    assert worker.state.error_type is None
+    assert worker.state.last_failure_type == "ConnectionError"
