@@ -1,3 +1,13 @@
+## 2026-11-05 — Comp13 profile refreshed after authorized timing merge
+
+PR1117 merged as4e3abad3. Owner explicitly approves1120 and the remaining
+numbered queue1118/1119/1121/1122/1123/1124. Comp13 profile branch now includes
+main; both documentation conflicts retained original bytes, and its entire tree
+matched217efead before this checkpoint. Source behavior remains unchanged.
+Retarget to main before this push so both push and PR checks validate this head.
+Later preserved candidate proof includes actual six-bot R1/R2 capture/import and
+dated full DEV restore/migrations; sustained D4/D5 and deployment remain separate.
+
 ## 2026-11-05 — Remove reverse supervisor import from timing-only admission
 
 Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
@@ -17,6 +27,32 @@ native SQL/consumer and local coherent package proofs remain separately preserve
 that candidate predates this follow-up and is not a deployed/CI-approved release.
 No service action, source ACK/delete, production or live DEV mutation. No merge.
 Original runtime/masterplan and residual proof reconciliation remain authoritative.
+
+## 2026-11-04 — Resume runtime with explicit Comp13 rehearsal profile
+
+Owner directs keeping local2.85 and replacing the older test lane with2.86.0-13.
+Read-only inventory confirms /home/et/etlegacy-v2.83.1-x86_64 actually declares
+ET Legacy v2.84.0; do not infer binary version from directory. No game UDP listener
+observed and no game/service activation performed. Preserve both old directories.
+
+Branch feat/runtime-game-engine-profile-20261104 stacks on runtime1117/e28bbbef.
+Explicit et286-comp13 profile pins retained snapshot qagame/executable/mod hashes
+and requires the Comp13 five-asset inventory. Default2.85 contract bytes/inventory
+remain compatible. Bundle verification reconstructs the selected explicit profile;
+workspace rejects old mod naming, different executable or mod hashes. No auto
+binary discovery, downloads, install or relabeling of the existing2.85 workspace.
+
+114 focused bundle/workspace/native transport tests pass;1explicit2.85 embedded
+engine ABI case skipped. Four new profile cases use synthetic ELF/assets and pin
+substitution only inside fixtures; they are NOT actual Comp13 ABI/gameplay proof.
+Profile hash guard removal fails a regression; externalcmp restores source.
+Initial default/tmp tests refused due existing/tmp/.git; preserved it and used
+short fresh outside-Git /home/samba roots. New zip fixture initially inherited
+writable umask; fixed fixture0600 instead of weakening input guards. Ruff passes.
+Next prepare a NEW Comp13 bundle/workspace from retained independently hashed
+native snapshot; separately attest embedded Lua ABI before owner-run contained
+gameplay. Full runtime1117 import, exclusive writers, residual reconciliation,
+complete restore/ACL/migrations, D4/D5 and observation remain retained gates.
 
 ## 2026-11-04 — PR1116 merged; explicit full timing proof import implemented
 
