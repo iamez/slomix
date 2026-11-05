@@ -1,3 +1,23 @@
+## 2026-11-05 — Remove reverse supervisor import from timing-only admission
+
+Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
+runtime_game_import -> runtime_game_supervisor. General supervisor policy must stay
+pure before verified project-source admission under isolated Python. Do not move
+it to an eagerly imported project module. Instead the timing-only helper enforces
+its own narrower contract directly: deferred teams and both handovers must each be
+exactTrue; socket/database/lock must all be supplied. It no longer imports its
+caller. Broader capture-only supervisor admission remains unchanged.
+
+Seven new policy rejection cases plus a runtime import-hook guard reject reverse
+supervisor loading during actual helper invocation.126focused cases pass. Deliberate
+reverse-import mutation fails that guard, restored with external cmp. Ruff/diff
+checks pass. New exact-head native PostgreSQL/CodeQL CI still required; do not claim
+review annotations resolved until the rescan confirms. Previous captured Comp13
+native SQL/consumer and local coherent package proofs remain separately preserved;
+that candidate predates this follow-up and is not a deployed/CI-approved release.
+No service action, source ACK/delete, production or live DEV mutation. No merge.
+Original runtime/masterplan and residual proof reconciliation remain authoritative.
+
 ## 2026-11-04 — Resume runtime with explicit Comp13 rehearsal profile
 
 Owner directs keeping local2.85 and replacing the older test lane with2.86.0-13.
