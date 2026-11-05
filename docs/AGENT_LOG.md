@@ -3080,3 +3080,11 @@ Local directory named2.83.1 holds an actual2.84.0 binary. Keep2.85 rehearsal
 separate and select Comp13 by explicit pinned engine/executable/mod hashes and
 matching mod inventory. A declared profile is not embedded-Lua/gameplay proof.
 Preserve old inputs and independently verify native snapshots before activation.
+
+## 2026-11-04 — ET counter meaning depends on lifecycle phase
+
+Actual Comp13 start uses0/1 forR1/R2; G_LogExit flips before intermission. Runtime
+binding must usecounter+1 at InitGame; completed-phase identity uses2-counter.
+Synthetic tests used reversed active counters and masked the defect until real
+owner-run gameplay. Check exact engine source and both phases independently;
+never reuse a failed first-use workspace or infer completed capture from ABI load.
