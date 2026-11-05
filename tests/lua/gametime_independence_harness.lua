@@ -103,14 +103,14 @@ if mode=='required-unbound' or mode=='required-sweep' then RequireRuntimeGametim
 
 if identity_wire then
     if binding_fault == 'map-alphabet' or binding_fault == 'map-output' then values.mapname = 'supply.te+test' end
-    values.gamestate, values.g_currentRound = '0', tostring(2 - half)
+    values.gamestate, values.g_currentRound = '0', tostring(half - 1)
     if binding_fault ~= 'noinit' then et_InitGame(100, 0, 0) end
     local observed = {init_time=100, map_name=values.mapname, counter=tonumber(values.g_currentRound),
         gamestate=0, exit_flag=exit_flag}
     local lease = require('runtime_init_lease').capture(et, function() return observed end, function() end)
     assert(lease:match('|(%d+)$') == tostring(half), 'timing profile disagrees with actual stats lease')
     print('STATS_LEASE_PROFILE half=' .. half .. ' counter=' .. values.g_currentRound)
-    if binding_fault == 'wrong-half' then values.g_currentRound = tostring(half - 1) end
+    if binding_fault == 'wrong-half' then values.g_currentRound = tostring(2 - half) end
     if binding_fault == 'warmup' then values.gamestate = '2' end
     if binding_fault == 'wrong-map' then values.mapname = 'oasis' end
     local completion
@@ -136,8 +136,8 @@ if identity_wire then
     identity.round_id = string.rep('f', 32) -- Caller mutation must not change frozen wire.
     if binding_fault == 'reset' then et_InitGame(200, 0, 0) end
     if binding_fault == 'replace' then assert(not pcall(BindRuntimeGametime, identity, 'supply')) end
-    values.gamestate, values.g_currentRound = '3', tostring(half - 1)
-    if binding_fault == 'end-half' then values.g_currentRound = tostring(2 - half) end
+    values.gamestate, values.g_currentRound = '3', tostring(2 - half)
+    if binding_fault == 'end-half' then values.g_currentRound = tostring(half - 1) end
     if binding_fault == 'end-map' then values.mapname = 'oasis' end
     if binding_fault == 'end-counter' then values.g_currentRound = '2' end
     if binding_fault == 'end-state' then values.gamestate = '0' end
@@ -176,12 +176,12 @@ print(table.concat(logs, '\n'))
 if binding_fault=='two-halves' then
     local second=require('runtime_round_identity').decode(assert(arg[10]))
     half=2
-    values.gamestate,values.g_currentRound='0','0'
+    values.gamestate,values.g_currentRound='0','1'
     exit_flag=''
     et_InitGame(200,0,1)
     assert(not pcall(BindRuntimeGametime,require('runtime_round_identity').decode(identity_wire),'supply'))
     assert(BindRuntimeGametime(second,'supply')==arg[10])
-    values.gamestate,values.g_currentRound='3','1'
+    values.gamestate,values.g_currentRound='3','0'
     set('round_start_unix',1700000000)
     set('round_end_unix',1700000610)
     set('total_pause_seconds',10)
