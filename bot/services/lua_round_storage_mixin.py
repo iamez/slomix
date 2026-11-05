@@ -50,6 +50,10 @@ def _lua_exact_source_lock_key(
     return int.from_bytes(digest, byteorder="big", signed=True)
 
 
+class LuaRoundStorageError(RuntimeError):
+    """Capture persistence was not confirmed; the caller must retain its input."""
+
+
 class _LuaRoundStorageMixin:
     """Lua webhook round-data persistence (teams, spawn stats) for UltimateETLegacyBot."""
 
@@ -600,8 +604,7 @@ class _LuaRoundStorageMixin:
             round_number = round_metadata.get('round_number', 0)
 
             if round_end == 0:
-                webhook_logger.warning("Cannot store Lua teams: missing round_end_unix")
-                return None
+                raise LuaRoundStorageError("Lua capture requires round_end_unix")
 
             # Create match_id in same format as rounds table
             # Format: YYYY-MM-DD-HHMMSS (timestamp only, NO map name)
@@ -897,10 +900,10 @@ class _LuaRoundStorageMixin:
             return round_id
 
         except Exception as e:
-            # Non-fatal: log warning but don't fail the webhook processing
-            # This could fail if table doesn't exist (migration not run)
-            webhook_logger.warning(f"⚠️ Could not store Lua team data: {e}")
-            return None
+            # None is reserved for a persisted capture awaiting a canonical link.
+            # Raising preserves webhook/JSON retry instead of acknowledging loss.
+            webhook_logger.warning("Lua capture persistence unconfirmed: %s", type(e).__name__)
+            raise LuaRoundStorageError("Lua capture persistence unconfirmed") from e
 
     async def _store_lua_spawn_stats(self, round_metadata: dict, spawn_stats: list) -> None:
         """

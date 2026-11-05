@@ -3094,6 +3094,13 @@ DB agreement may reflect copied values. Failed edits retain handles; send-window
 callbacks need a post-send recheck in BOTH diagnostic services. Bounded memory
 is not durable delivery, and lack of a link is not proof of capture loss.
 
+## 2026-11-04 — Failed Lua persistence must not share the unlinked success value
+
+Use a typed failure to retain input when persistence is unconfirmed; None means
+a stored capture without a canonical link. Compose actual store with webhook and
+gametime handlers in fault tests, and verify later files progress after failure.
+A successful optional display callback is not a prerequisite for capture storage.
+
 ## 2026-11-04 — Engine versions require native identity and separate profiles
 
 Local directory named2.83.1 holds an actual2.84.0 binary. Keep2.85 rehearsal
