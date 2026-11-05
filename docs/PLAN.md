@@ -1,3 +1,24 @@
+## 2026-11-05 — Reconcile retained webhook deadline regression proof
+
+Recover exact original tests/unit/test_lua_webhook_deadline_clock.py blob
+ a784decea8b515715f324bf6ca7f28fb08609003 from canonical preserved development.
+Current main already compares/schedules on trap_Milliseconds, so no Lua runtime
+change is needed. Four cases execute the entire shipped et_RunFrame callback with
+independent wall/level origins, frame-clock reset, immediate sends and no duplicate
+send. This is synthetic callback execution, not HTTP delivery or a new game proof.
+
+4pass; deliberately replace only deadline comparison with levelTime: delayed2cases
+fail and immediate2remain passing. Restore Lua source/externalcmp. Ruff/diff pass.
+Local exact Comp13 upstream39c75a3 confirms G_MILLISECONDS -> Sys_Milliseconds,
+GAME_RUN_FRAME uses sv.time and configured server-time reset may zero that clock.
+No new upstream compatibility guarantee, source service action or Puran change.
+
+Separate retained frame-health Python wrapper is already covered by direct
+frame_health_harness.lua execution in current CI; do not add redundant wrapper.
+Original57path inventory stays intact; this publishes one reviewed proof, not a
+claim that absent paths imply absent features. All other original runtime and
+parked Spiderweb/statistics obligations remain. No deployment or PR merge.
+
 ## 2026-11-03 — PR1115 merged; versioned timing workspace/supervisor implemented
 
 Owner explicitly approved1115. Standard420-second merge cycle completed:
