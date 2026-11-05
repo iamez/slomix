@@ -295,3 +295,43 @@ async def test_unsupported_pending_stays_visible_after_successful_batch(monkeypa
     finally:
         stop.set()
         await asyncio.wait_for(task, timeout=1)
+
+
+@pytest.mark.parametrize('recover', [False, True])
+async def test_last_failure_survives_recovery_and_stop(monkeypatch, recover):
+    worker = module.RuntimeCacheWorker(poll_seconds=0.001)
+    stop = asyncio.Event()
+    calls = 0
+    before = module.time.monotonic()
+
+    async def consume(conn, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            if not recover:
+                stop.set()
+            raise OSError('PRIVATE transport detail')
+        stop.set()
+        return CacheConsumption('idle', 0, 7, 0)
+
+    monkeypatch.setattr(module, 'consume_http_cache_events', consume)
+    await asyncio.wait_for(worker.run(connection, stop), 1)
+    assert worker.state.status == 'stopped'
+    assert worker.state.error_type is None  # Existing current-error policy.
+    assert worker.state.last_failure_type == 'OSError'
+    assert before <= worker.state.last_failure_monotonic <= module.time.monotonic()
+    if recover:
+        assert worker.state.last_success_monotonic >= worker.state.last_failure_monotonic
+    else:
+        assert worker.state.last_success_monotonic is None
+
+
+async def test_fatal_failure_is_retained_with_current_error(monkeypatch):
+    worker = module.RuntimeCacheWorker()
+    monkeypatch.setattr(module, 'consume_http_cache_events',
+                        AsyncMock(side_effect=ValueError('PRIVATE contract detail')))
+    with pytest.raises(ValueError):
+        await worker.run(connection, asyncio.Event())
+    assert worker.state.status == 'failed'
+    assert worker.state.error_type == worker.state.last_failure_type == 'ValueError'
+    assert worker.state.last_failure_monotonic is not None
