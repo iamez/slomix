@@ -126,7 +126,7 @@ class TimingDebugService:
         round_time: str
     ) -> dict[str, Any] | None:
         """
-        Fetch Lua webhook timing data with fuzzy match.
+        Fetch a known round by confirmed link; unkeyed legacy calls use proximity.
         """
         if round_id:
             direct_query = """
@@ -174,6 +174,10 @@ class TimingDebugService:
                     'captured_at': captured_at,
                     'match_confidence': 'direct'
                 }
+
+            # A known canonical round must not borrow a nearby played match.
+            # Lack of a direct link is pending/unavailable evidence, not identity.
+            return None
 
         round_datetime = self._parse_round_datetime(round_date, round_time)
         if not round_datetime:
@@ -307,7 +311,7 @@ class TimingDebugService:
         *,
         _attempt: int = 0,
         edit_message: Any = None,
-    ) -> None:
+    ) -> bool:
         """
         Compare and post timing debug embed for a single round.
 
@@ -320,11 +324,11 @@ class TimingDebugService:
             round_number: Optional round number (fetched from DB if not provided)
         """
         if not self.enabled:
-            return
+            return False
 
         channel = await self._get_channel()
         if not channel:
-            return
+            return False
 
         try:
             # Query rounds table (Lua matched separately to avoid match_id mismatch)
@@ -345,7 +349,7 @@ class TimingDebugService:
 
             if not row:
                 logger.warning(f"⚠️ No round data found for round_id={round_id}")
-                return
+                return False
 
             # Unpack results
             _, db_match_id, db_round_num, map_name, round_date, round_time, time_limit, actual_time = row
@@ -362,9 +366,12 @@ class TimingDebugService:
                     "timing debug: round %s belongs to match %s but caller "
                     "asked about %s — stale round resolution, skipping",
                     round_id, db_match_id, match_id)
-                return
+                return False
 
             lua_data = await self.fetch_lua_data(round_id, map_name, db_round_num, round_date, round_time)
+
+            if lua_data is None and edit_message is not None:
+                return False
 
             if lua_data is None and _attempt == 0 and edit_message is None:
                 # Owner call (2026-08-18): don't announce "No Lua data" the
@@ -376,7 +383,7 @@ class TimingDebugService:
                     round_id, db_match_id, db_round_num))
                 logger.info("timing debug: lua not yet stored for round %s — "
                             "queued (waiting up to 90 s)", round_id)
-                return
+                return False
             lua_duration = lua_data.get('lua_duration_seconds') if lua_data else None
             lua_start_unix = lua_data.get('round_start_unix') if lua_data else None
             lua_end_unix = lua_data.get('round_end_unix') if lua_data else None
@@ -542,10 +549,14 @@ class TimingDebugService:
                     self._pending_lua_edit[(str(db_match_id), int(db_round_num))] = (sent, round_id)
                     while len(self._pending_lua_edit) > 12:
                         self._pending_lua_edit.pop(next(iter(self._pending_lua_edit)))
+                    # Storage can finish while the initial Discord send yields.
+                    await self.on_lua_data_stored(str(db_match_id), int(db_round_num))
                 logger.debug(f"📤 Posted timing debug for {map_name} R{db_round_num}")
+            return True
 
         except Exception as e:
             logger.error(f"❌ Error posting round timing comparison: {e}", exc_info=True)
+            return False
 
     async def _wait_for_lua_then_post(
         self, round_id: int, match_id: str | None, round_number: int | None,
@@ -574,14 +585,16 @@ class TimingDebugService:
             logger.error(f"❌ timing debug wait-for-lua failed: {e}", exc_info=True)
 
     async def on_lua_data_stored(self, match_id: str, round_number: int) -> None:
-        """Called by the Lua storage path: a straggler webhook landed —
-        edit the already-posted 'No Lua data' embed in place."""
-        pending = self._pending_lua_edit.pop((str(match_id), int(round_number)), None)
+        """Edit the pending message after a direct link; retain failed edits."""
+        key = (str(match_id), int(round_number))
+        pending = self._pending_lua_edit.get(key)
         if not pending:
             return
         message, round_id = pending
-        await self.post_round_timing_comparison(
+        refreshed = await self.post_round_timing_comparison(
             round_id, match_id, round_number, _attempt=2, edit_message=message)
+        if refreshed and self._pending_lua_edit.get(key) is pending:
+            self._pending_lua_edit.pop(key)
 
     async def post_session_timing_comparison(
         self,

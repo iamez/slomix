@@ -3074,6 +3074,26 @@ current root; actual copied bytes were correct. Apply: observe outbound attempts
 independently of logger severity and compare canonical storage paths plus file
 bytes. Separate DEV/PROD env files do not isolate shared Discord destinations.
 
+## 2026-11-04 — Timing diagnostic absence can be a publication race
+
+Fact: stats-ready imports/publishes stats before linked Lua storage. All19 owner
+examples currently have Lua; an early NO LUA message is not capture-loss proof.
+Apply: retain a bounded handle, recheck after sending and edit only after direct
+canonical linkage. Pass canonical correlation match/half to TimingDebugService,
+not Lua end-time match_id; the clocks differ even when both sources are correct.
+Keep historical unlinked-data repair separate and require independent source
+proof. In-memory edits do not survive restart and do not fix old Discord history.
+
+## 2026-11-04 — Fuzzy timing diagnostics can hide an arrival race
+
+Fact:24 retained journal events display R1 Lua for R2 while all24 currently have
+correct linked R2 captures. Absence-only audits miss false-positive matches.
+Apply: publish and edit known canonical rounds only from direct links; a nearby
+same-map/half is not the same played match. Audit source JSON separately because
+DB agreement may reflect copied values. Failed edits retain handles; send-window
+callbacks need a post-send recheck in BOTH diagnostic services. Bounded memory
+is not durable delivery, and lack of a link is not proof of capture loss.
+
 ## 2026-11-04 — Engine versions require native identity and separate profiles
 
 Local directory named2.83.1 holds an actual2.84.0 binary. Keep2.85 rehearsal
