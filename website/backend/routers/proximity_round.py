@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.routers.proximity_helpers import _parse_json_field, logger
+from website.backend.services.track_lifecycle import track_end_sql
 
 router = APIRouter()
 
@@ -143,30 +144,39 @@ async def get_proximity_round_tracks(
     try:
         # Try direct round_id match first, then fallback to metadata match
         tracks = await db.fetch_all(
-            """
+            f"""
             SELECT pt.player_guid, MAX(pt.player_name) AS name, pt.team, pt.player_class,
-                   pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, NULL AS death_type,
+                   pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, {track_end_sql('pt.')} AS death_type,
                    pt.path
             FROM player_track pt
             WHERE pt.round_id = $1
-            GROUP BY pt.player_guid, pt.team, pt.player_class, pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, pt.path
+            GROUP BY pt.player_guid, pt.team, pt.player_class, pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, pt.path, pt.death_type
             ORDER BY pt.spawn_time_ms
             """,
             (round_id,),
         )
         if not tracks:
-            # Fallback: match via round metadata (session_date, map_name, round_number)
+            # Legacy fallback only: never borrow an explicitly linked track or
+            # guess among repeated day/map/half keys. Keep direct-first behaviour.
             tracks = await db.fetch_all(
-                """
+                f"""
                 SELECT pt.player_guid, MAX(pt.player_name) AS name, pt.team, pt.player_class,
-                       pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, NULL AS death_type,
+                       pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, {track_end_sql('pt.')} AS death_type,
                        pt.path
                 FROM player_track pt
                 JOIN rounds r ON r.id = $1
                 WHERE pt.session_date = r.round_date::date
                   AND pt.round_number = r.round_number
                   AND pt.map_name = r.map_name
-                GROUP BY pt.player_guid, pt.team, pt.player_class, pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, pt.path
+                  AND pt.round_id IS NULL
+                  AND NOT EXISTS (
+                      SELECT 1 FROM rounds other
+                      WHERE other.id <> r.id
+                        AND other.round_date::date = r.round_date::date
+                        AND other.round_number = r.round_number
+                        AND other.map_name = r.map_name
+                  )
+                GROUP BY pt.player_guid, pt.team, pt.player_class, pt.spawn_time_ms, pt.death_time_ms, pt.first_move_time_ms, pt.path, pt.death_type
                 ORDER BY pt.spawn_time_ms
                 """,
                 (round_id,),
@@ -200,7 +210,7 @@ async def get_proximity_round_tracks(
                 {
                     "guid": r[0], "name": r[1], "team": r[2], "class": r[3],
                     "spawn_time": int(r[4] or 0), "death_time": int(r[5] or 0),
-                    "first_move_time": int(r[6] or 0) if r[6] else None,
+                    "first_move_time": int(r[6]) if r[6] is not None else None,
                     "death_type": r[7],
                     "path": _decode_path(r[8]),
                 }

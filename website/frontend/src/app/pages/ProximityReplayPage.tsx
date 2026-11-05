@@ -72,39 +72,31 @@ export function ProximityReplayPage() {
   const tracks = useProxRoundTracks(roundId);
   const [typeFilter, setTypeFilter] = useState<ReplayTimelineEvent['type'] | 'all'>('all');
 
-  const roundEndMs = timeline.data?.duration_ms ?? 0;
   const trackStats = useMemo(() => {
     const rows = tracks.data?.tracks;
     if (!rows || rows.length === 0) return null;
-    const byTeam = new Map<string, { lives: number; alive_ms: number }>();
+    const byTeam = new Map<string, number>();
     for (const t of rows) {
       const key = (t.team ?? 'unknown').toLowerCase();
-      const cur = byTeam.get(key) ?? { lives: 0, alive_ms: 0 };
-      cur.lives += 1;
-      // death_time 0 is the wire's survivor sentinel (the emitter coerces a
-      // missing death to 0) -- a survivor's life runs to the round end, it
-      // is not zero seconds long (review on #879).
-      const end = t.death_time > t.spawn_time ? t.death_time : roundEndMs;
-      if (end > t.spawn_time) cur.alive_ms += end - t.spawn_time;
-      byTeam.set(key, cur);
+      byTeam.set(key, (byTeam.get(key) ?? 0) + 1);
     }
-    // what else the tracks carry (ledger 2026-09-09): the class mix, how the
-    // lives ended, and the median time to the first move after a spawn
+    // Counts and declared endings do not require an active-clock conversion.
+    // Raw level-time includes pauses; /tracks supplies no verified active clock.
+    // A missing capture_resume marker cannot certify pause-free historical data.
+    // Never substitute the round duration for an absent/zero track end either:
+    // those timestamps can have different clock bases and lifecycle meanings.
     const classes = new Map<string, number>();
     const endings = new Map<string, number>();
-    const firstMoves: number[] = [];
     for (const t of rows) {
       classes.set((t.class ?? 'unknown').toLowerCase(), (classes.get((t.class ?? 'unknown').toLowerCase()) ?? 0) + 1);
-      endings.set(t.death_type ?? (t.death_time > t.spawn_time ? 'died' : 'round end'), (endings.get(t.death_type ?? (t.death_time > t.spawn_time ? 'died' : 'round end')) ?? 0) + 1);
-      if (t.first_move_time != null && t.first_move_time > t.spawn_time) firstMoves.push(t.first_move_time - t.spawn_time);
+      const ending = t.death_type ?? 'unknown';
+      endings.set(ending, (endings.get(ending) ?? 0) + 1);
     }
-    firstMoves.sort((a, b) => a - b);
     return {
       total: rows.length, reported: tracks.data?.track_count ?? rows.length, byTeam: [...byTeam.entries()],
       classes: [...classes.entries()], endings: [...endings.entries()],
-      medianFirstMove: firstMoves.length > 0 ? firstMoves[Math.floor(firstMoves.length / 2)] : null,
     };
-  }, [tracks.data, roundEndMs]);
+  }, [tracks.data]);
 
   if (roundId == null) {
     return <Absent block reason="no round named — open a replay from a round's engagement panel" />;
@@ -180,12 +172,10 @@ export function ProximityReplayPage() {
                 <ProxRow name="lives tracked" mid={trackStats.reported !== trackStats.total ? `${figure(trackStats.reported)} reported by the endpoint` : undefined} val={figure(trackStats.total)} />
                 <ProxRow name="classes" val={trackStats.classes.map(([c, n]) => `${c} ${figure(n)}`).join(' · ')} />
                 <ProxRow name="lives ended by" val={trackStats.endings.map(([c, n]) => `${c.replace(/_/g, ' ')} ${figure(n)}`).join(' · ')} />
-                {trackStats.medianFirstMove != null && <ProxRow name="first move after a spawn" mid="median over the lives" val={`${figure(trackStats.medianFirstMove)} ms`} />}
-                {trackStats.byTeam.map(([team, v]) => (
-                  <ProxRow key={team} name={team}
-                    mid={`${figure(Math.round(v.alive_ms / 1000 / 60))} min alive total`}
-                    val={`${figure(v.lives)} lives`} />
+                {trackStats.byTeam.map(([team, lives]) => (
+                  <ProxRow key={team} name={team} val={`${figure(lives)} lives`} />
                 ))}
+                <Absent reason="active life time and spawn-to-first-move delay are not available — track timestamps may include pauses and have no verified active clock" />
               </Stack>
             )}
           </div>

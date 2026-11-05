@@ -31,6 +31,15 @@ async def get_proximity_movers(
     Movement and reaction leaders from scoped player_track rows.
     """
     payload = _proximity_stub_meta(range_days)
+    # Legacy public keys remain for compatibility, but neither average is an
+    # active-time/reflex measurement. Historical rows have no exact pause clock.
+    payload['elapsed_time_quality'] = {
+        'basis': 'raw_source_timestamps',
+        'active_time_verified': False,
+        'reason': 'Raw elapsed times may include pauses; not active life time or return-fire reaction.',
+        'reaction_excludes': 'Missing/negative spawn, missing/reversed first move, or first move after a known end.',
+        'survival_excludes': 'Missing/negative spawn, missing/zero end sentinel, or reversed end.',
+    }
     safe_limit = max(1, min(int(limit or 5), 25))
     player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
@@ -41,6 +50,8 @@ async def get_proximity_movers(
         round_start_unix,
         player_guid=player_guid, player_guid_columns=["player_guid"],
     )
+    # Movement tracks describe played halves, never R0 match summaries.
+    where_sql += " AND round_number IN (1, 2)"
 
     try:
         base_params = list(params)
@@ -51,28 +62,33 @@ async def get_proximity_movers(
         # 4 × RTT down to 1 × RTT. Matches the player profile / radar /
         # round-timeline pattern landed in PR #130.
         distance_query = (
-            "SELECT player_guid, player_name, SUM(total_distance) AS total_distance, COUNT(*) AS tracks "
+            "SELECT player_guid, MAX(player_name), SUM(total_distance) AS total_distance, COUNT(*) AS tracks "
             f"FROM player_track {where_sql} "
-            "GROUP BY player_guid, player_name "
-            f"ORDER BY total_distance DESC NULLS LAST LIMIT ${limit_placeholder}"
+            "GROUP BY player_guid "
+            f"ORDER BY total_distance DESC NULLS LAST, player_guid LIMIT ${limit_placeholder}"
         )
         sprint_query = (
-            "SELECT player_guid, player_name, AVG(sprint_percentage) AS sprint_pct, COUNT(*) AS tracks "
+            "SELECT player_guid, MAX(player_name), AVG(sprint_percentage) AS sprint_pct, COUNT(*) AS tracks "
             f"FROM player_track {where_sql} AND sprint_percentage IS NOT NULL "
-            "GROUP BY player_guid, player_name "
-            f"ORDER BY sprint_pct DESC NULLS LAST LIMIT ${limit_placeholder}"
+            "GROUP BY player_guid "
+            f"ORDER BY sprint_pct DESC NULLS LAST, player_guid LIMIT ${limit_placeholder}"
         )
         reaction_query = (
-            "SELECT player_guid, player_name, AVG(time_to_first_move_ms) AS reaction_ms, COUNT(*) AS tracks "
-            f"FROM player_track {where_sql} AND time_to_first_move_ms IS NOT NULL AND spawn_time_ms >= 0 "
-            "GROUP BY player_guid, player_name "
-            f"ORDER BY reaction_ms ASC NULLS LAST LIMIT ${limit_placeholder}"
+            "SELECT player_guid, MAX(player_name), "
+            "AVG(first_move_time_ms::bigint - spawn_time_ms::bigint) AS reaction_ms, COUNT(*) AS tracks "
+            f"FROM player_track {where_sql} AND spawn_time_ms >= 0 "
+            "AND first_move_time_ms >= spawn_time_ms "
+            "AND (death_time_ms IS NULL OR death_time_ms = 0 OR first_move_time_ms <= death_time_ms) "
+            "GROUP BY player_guid "
+            f"ORDER BY reaction_ms ASC NULLS LAST, player_guid LIMIT ${limit_placeholder}"
         )
         survival_query = (
-            "SELECT player_guid, player_name, AVG(duration_ms) AS duration_ms, COUNT(*) AS tracks "
-            f"FROM player_track {where_sql} AND duration_ms IS NOT NULL "
-            "GROUP BY player_guid, player_name "
-            f"ORDER BY duration_ms DESC NULLS LAST LIMIT ${limit_placeholder}"
+            "SELECT player_guid, MAX(player_name), "
+            "AVG(death_time_ms::bigint - spawn_time_ms::bigint) AS duration_ms, COUNT(*) AS tracks "
+            f"FROM player_track {where_sql} AND spawn_time_ms >= 0 "
+            "AND death_time_ms > 0 AND death_time_ms >= spawn_time_ms "
+            "GROUP BY player_guid "
+            f"ORDER BY duration_ms DESC NULLS LAST, player_guid LIMIT ${limit_placeholder}"
         )
         distance_rows, sprint_rows, reaction_rows, survival_rows = await asyncio.gather(
             db.fetch_all(distance_query, query_params),

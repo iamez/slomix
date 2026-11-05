@@ -189,9 +189,9 @@
   "/api/voice-activity/history": "19 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3482,
+  "read": 3479,
   "unread": 6,
-  "dropped": 201,
+  "dropped": 204,
   "endpoints": 180,
   "endpoints_fully_read": 176,
   "unmeasured": 3
@@ -628,9 +628,9 @@
    "dropped": 0
   },
   "/api/proximity/round/{round_id}/tracks": {
-   "read": 13,
+   "read": 10,
    "unread": 0,
-   "dropped": 0
+   "dropped": 3
   },
   "/api/proximity/scopes": {
    "read": 17,
@@ -9802,7 +9802,8 @@
   {
    "endpoint": "/api/proximity/round/{round_id}/tracks",
    "key": "tracks.death_time",
-   "status": "read"
+   "status": "dropped",
+   "reason": "Raw source endpoint, with zero meaning an unknown end, not proof of survival until round end. ProximityReplayPage deliberately withholds derived active-life totals, keeps declared death_type/counts and names the unavailable active clock (f1cebe10; PLAN Replay elapsed eligibility, 2026-10-09)."
   },
   {
    "endpoint": "/api/proximity/round/{round_id}/tracks",
@@ -9812,7 +9813,8 @@
   {
    "endpoint": "/api/proximity/round/{round_id}/tracks",
    "key": "tracks.first_move_time",
-   "status": "read"
+   "status": "dropped",
+   "reason": "Raw first-movement timestamp has no verified pause-excluding clock on this endpoint. ProximityReplayPage deliberately withholds spawn-to-first-move delay rather than label a raw delta as active time, and displays the reason (f1cebe10; PLAN Replay elapsed eligibility, 2026-10-09)."
   },
   {
    "endpoint": "/api/proximity/round/{round_id}/tracks",
@@ -9832,7 +9834,8 @@
   {
    "endpoint": "/api/proximity/round/{round_id}/tracks",
    "key": "tracks.spawn_time",
-   "status": "read"
+   "status": "dropped",
+   "reason": "Raw spawn timestamp is not a verified active-clock origin. ProximityReplayPage no longer subtracts it from raw/missing ends or a differently based round duration for active-life and first-move aggregates; counts and explicit timing unavailability remain (f1cebe10; PLAN Replay elapsed eligibility, 2026-10-09)."
   },
   {
    "endpoint": "/api/proximity/round/{round_id}/tracks",

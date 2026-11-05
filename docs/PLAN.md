@@ -1,3 +1,34 @@
+## 2026-11-05 — Preserve deployed web behavior before runtime cutover
+
+Comparing the immutable runtime candidate31260cf4 with the active DEV web release
+da69e923 finds two deployed API fixes absent from main: scoped tracks/lifecycle
+and qualified raw movers clocks. The preserved canonical Replay/legacy labels
+also withhold unsupported active-time/reflex claims. A valid package manifest
+alone does not establish deployed-feature parity. Keep deployment gated until
+this separate source slice is reviewed; numbered merge permission is required.
+
+Port the exact preserved source blobs for these routes and views.
+Never borrow another round's linked tracks or ambiguous repeated day/map/half
+keys. Preserve explicit zero timestamps, declared end causes, GUID aggregation
+and R1/R2 eligibility. Keep legacy keys but identify raw clocks and exclusions;
+Replay withholds unsupported active metrics and states why. Retain parity rows
+with explicit reasons for the three intentionally withheld elapsed fields.
+
+Three API state regressions and five rendered Replay cases fail on the main
+baseline. After transfer, three API cases, ten Replay cases, typecheck, Ruff and
+18 ledger/keymap/API contracts pass. Deliberately claiming active-clock verification
+fails all three API cases; restore is confirmed with external cmp. Native SQL
+cases are retained but use the existing explicit disposable connection guard,
+including CI;29cases correctly skip locally without an opted-in private database.
+Native PG14/17 execution remains required before approval.
+
+Read-only DEV runtime proof: movers returns200/ok with raw clock qualification;
+the actual served Replay asset returns200 and carries the withheld-clock message.
+Both transferred API blobs equal installed files, whose mtimes precede web PID
+1642178. No browser, restart, source ACK/delete, migration or live database write.
+This is behavior preservation, not completion of sustained D4/D5 or the wider
+parked statistics roadmap. The eight authorized runtime PR merges continue.
+
 ## 2026-11-05 — Comp13 profile refreshed after authorized timing merge
 
 PR1117 merged as4e3abad3. Owner explicitly approves1120 and the remaining

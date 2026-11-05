@@ -1,3 +1,14 @@
+## 2026-11-05 — Deployed web parity is a runtime release prerequisite
+
+Keep the approved1117-1124 queue moving independently. Before a subsequent DEV
+package is activated, preserve the already deployed scoped tracks/raw movers and
+Replay/legacy timing qualification from the canonical worktree. This separate
+slice restores source parity; it does not authorize deployment or its own merge.
+See PLAN for observed failing guards, restored cases and live read-only evidence.
+Native SQL proof must execute in explicit disposable CI, not silently skip behind
+an expired private socket or assume the production role is named samba.
+All original branches, older artifacts, full masterplan and residual proofs remain.
+
 ## 2026-11-05 — Remove reverse supervisor import from timing-only admission
 
 Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
