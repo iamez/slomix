@@ -9,6 +9,107 @@ Native SQL proof must execute in explicit disposable CI, not silently skip behin
 an expired private socket or assume the production role is named samba.
 All original branches, older artifacts, full masterplan and residual proofs remain.
 
+## 2026-11-04 — Lua persistence acknowledgement fix implemented
+
+Separate branch fix/lua-persistence-ack-20261104 stacks on display PR1118.
+LuaRoundStorageError distinguishes unconfirmed storage from successful-unlinked
+None. The actual stats-ready worker now propagates persistence failure before
+message deletion, allowing existing queue failure/dedup handling. Gametime intake
+catches that typed failure and returnsFalse so the poll retains the file and
+continues to later files. Missing round-end is rejected instead of acknowledged.
+Optional timing diagnostic failures remain caught; existing regressions verify
+capture still succeeds if a diagnostic edit fails. Source upsert stays idempotent.
+
+Two composed regressions first failed on actual store+worker/store+gametime paths;
+64 focused tests now pass, independently counted. Recovery retry and per-file
+poll progress tested. Reintroducing swallowed failure causes observed failures;
+externalcmp restores source. Actual functions execute in a bounded offline fault
+probe: failed write produces typed failure, no simulated message deletion and
+one error-tracking call; successful control deletes once. No actual DB/Discord
+requests. This is failure-control proof, not live DB recovery certification.
+
+No service activation/merge/data repair. PR1118 must precede this slice;1117
+runtime remains separately preserved. Exact new-head CI and numbered permission
+are required before merging. Original runtime plan and historical findings retained.
+
+## 2026-11-04 — Expanded timing RCA finds false-positive half matching
+
+The earlier arrival-race explanation was incomplete. Read-only corpus and retained
+journal/source checks now distinguish observed defects from unknown history.
+Journal sinceOct26:69 posts for69 distinct round IDs,49 direct-link misses,
+24 explicit relaxed fallback hits requested R2/matched R1,25 relaxed misses.
+All69 rounds are currently linked. Each of the24 wrong displayed halves now has
+its own correct R2 Lua link; no data repair follows from a display defect.
+
+All2547 canonical halves and1469 Lua rows were inspected. The1389 linked halves
+have no map/half/positive-start/duration mismatch and no duplicate round/source
+links. SQL JOIN/EXISTS and Python snapshots independently agree on scope and
+anomalies. Equality inside the DB is not independent producer proof: therefore
+also examined1454 retained local JSON files.1447 uniquely match DB captures with
+no differences in present raw-meta start/end/duration/pause fields or normalized
+payload fields. Six minimal legacy documents lack a DB capture; one file is zero
+bytes (its filename end DOES have a DB capture). These are retained exceptions,
+not seven proven gameplay losses. Of four unlinked rounds sinceAug1, candidate
+Lua data exists for all; only two corresponding local JSON files are retained.
+No guessed links or automatic deduplication of repeated maps.
+
+Fix: initial TimingComparison publication now requires direct linkage too,
+preventing both opposite-half and previous-play borrowing. TimingDebug requires
+a direct link for known canonical rounds, rechecks after its send window and
+keeps failed edits until a successful edit. No edit occurs while linked Lua is
+still absent. Five added regressions first failed;54 focused tests now pass,
+independently counted. Four additional guard mutations failed and externalcmp
+restored source. Actual read-only DEV R2 data through BOTH display services:
+one simulated send/edit each, correct half2, zero fuzzy reads/Discord requests.
+
+Limits:1,428 Discord search results are still not an independently exported
+historical message corpus. In-memory handles do not survive restart/eviction.
+The existing storage API also conflates an unlinked result with swallowed write
+failure; journal examined here has no such write-failure line. Fault-inject and
+resolve acknowledgement/retry semantics in a separate persistence slice before
+claiming capture-loss protection; do not mix it with display fixes or live repair.
+Wall-clock identity is within3seconds for1468/1469 Lua captures; the remaining
+unlinked testmap row is a distinct fixture anomaly, not game-lag proof.
+
+Continue PR1118 on the same feature branch; exact NEW-head CI is required again.
+No merge permission/activation, service/game change, live DB write or Discord
+history edit. Runtime1117 remains independently green and preserved; the original
+runtime masterplan and all parked findings remain authoritative.
+
+## 2026-11-04 — Systemic timing diagnostic arrival race; runtime lane retained
+
+Owner reports 1,428 Discord search results for NO LUA DATA; this is a reported
+message count, not independently verified distinct rounds. Read-only DEV queries
+confirm all 19 supplied R1 round IDs have linked Lua rows and matching current
+canonical/Lua durations. Nov3 has16/16 linked actual halves, cross-checked by
+JOIN and EXISTS; November has30/30. Historical unlinked captures remain a separate
+investigation; proximity in time is not permission to attach or rewrite data.
+
+Mechanism: stats-ready must import stats before storing/linking Lua, but that
+import synchronously posts TimingComparisonService before Lua storage. The old
+message never refreshed. Add bounded64 pending message handles, a post-send
+recheck and canonical-round storage callback to edit the SAME message. Late
+refresh requires a direct round_id link; it never guesses another played match.
+Initial absence is LUA DATA PENDING, not a claim the webhook failed. Preserve
+failed edit state for a later callback; restart/eviction loses in-memory handles.
+A second defect passed Lua timestamp match_id to TimingDebugService; use the
+already resolved canonical match/half that its pending-message key requires.
+
+Proof:48 focused tests plus1 existing timing-debug test pass; send-window and storage-hook mutations failed and
+externalcmp restored source. Canonical-ID regression first failed with225138
+instead of225141, then passed. Actual DEV data through the display service gives
+PENDING -> ALIGNED, one simulated send/edit and zero actual Discord requests.
+No live data writes, Discord edits, service action or deployment. Old messages
+are not retroactively corrected by this source change. Private evidence remains
+outside Git. Merge and activation require their own explicit owner decisions.
+
+Runtime work is preserved on feat/runtime-timing-proof-import-20261104 at
+e28bbbef23fa110b6ba194708d43ea9e9c32d2e8, draft PR1117. Its exact-head checks are
+successful; the full PG integration proof is being reviewed. PR1116 is merged at
+608319949eb0ae63987e9b6c99c31ab4438a2b64. Return to runtime import caller,
+contained-engine/provisioning, writer ownership, complete restore/ACL/migrations,
+D4/D5 and observation after this diagnostic slice; retain original masterplan.
+
 ## 2026-11-05 — Remove reverse supervisor import from timing-only admission
 
 Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->

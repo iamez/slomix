@@ -6,10 +6,42 @@ for both with-round_id and without-round_id code paths.
 
 import re
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
 from bot.ultimate_bot import UltimateETLegacyBot
+
+
+@pytest.mark.parametrize('edit_fails', [False, True])
+async def test_lua_storage_notifies_comparison_after_persisting_link(edit_fails):
+    bot = _FakeBot(has_round_id=True, resolved_round_id=11957)
+    metadata = _sample_round_metadata()
+    metadata.pop('round_start_unix')
+
+    async def refresh(round_id):
+        assert round_id == 11957
+        assert any('INSERT INTO lua_round_teams' in query for query, _ in bot.db_adapter.calls)
+        if edit_fails:
+            raise RuntimeError('fixture edit unavailable')
+
+    refresh_call = AsyncMock(side_effect=refresh)
+    bot.timing_comparison_service = SimpleNamespace(on_lua_data_stored=refresh_call)
+    assert await UltimateETLegacyBot._store_lua_round_teams(bot, metadata) == 11957
+    refresh_call.assert_awaited_once_with(11957)
+
+
+async def test_timing_debug_refresh_uses_canonical_match_not_lua_end_timestamp():
+    bot = _FakeBot(has_round_id=True, resolved_round_id=11957)
+    metadata = _sample_round_metadata()
+    metadata.update(round_end_unix=1793742698, map_name='et_brewdog', round_number=1)
+    metadata.pop('round_start_unix')
+    bot._resolve_round_correlation_context = AsyncMock(return_value=('2026-11-03-225141', 'et_brewdog', 1))
+    refresh = AsyncMock()
+    bot.timing_debug_service = SimpleNamespace(enabled=True, on_lua_data_stored=refresh)
+    assert await UltimateETLegacyBot._store_lua_round_teams(bot, metadata) == 11957
+    refresh.assert_awaited_once_with('2026-11-03-225141', 1)
 
 
 class _FakeDB:
