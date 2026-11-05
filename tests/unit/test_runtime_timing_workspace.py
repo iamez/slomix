@@ -124,8 +124,7 @@ def test_rehashed_timing_bundle_cannot_change_inventory(timed_placement, fault):
         game.verify(root)
 
 
-@pytest.mark.parametrize('missing_timing', [False, True])
-def test_generated_wrapper_runs_both_halves_through_actual_supervisor_capture(timed_placement, monkeypatch, missing_timing):
+def capture_packaged_pair(timed_placement, monkeypatch, missing_timing=False, with_players=False):
     record = workspace.prepare(**timed_placement)
     if missing_timing:
         from shared import runtime_timing_listener
@@ -143,7 +142,7 @@ def test_generated_wrapper_runs_both_halves_through_actual_supervisor_capture(ti
         record['source_id'], 'c' * 32, 'b' * 32, 'd' * 32,
         str(timed_placement['bundle'] / game.ENTRY),
         str(timed_placement['bundle'] / 'legacy'), record['fs_homepath'],
-        'missing-first-timing' if missing_timing else 'none']
+        'missing-first-timing' if missing_timing else 'none', 'with-players' if with_players else 'none']
     with subprocess.Popen(command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, text=True, umask=0o077) as peer:
         try:
@@ -169,3 +168,18 @@ def test_generated_wrapper_runs_both_halves_through_actual_supervisor_capture(ti
     assert 'half 1 closed' in stdout and 'half 2 closed' in stdout
     print('GENERATED TIMING WRAPPER: whole packaged Lua, real peer credentials, actual supervisor, '
           f'both stats halves captured; missing first timing={missing_timing}')
+    return result
+
+
+@pytest.mark.parametrize('missing_timing', [False, True])
+def test_generated_wrapper_runs_both_halves_through_actual_supervisor_capture(timed_placement, monkeypatch, missing_timing):
+    capture_packaged_pair(timed_placement, monkeypatch, missing_timing)
+
+
+def test_packaged_player_observations_are_accepted_by_actual_parser(timed_placement, monkeypatch):
+    from bot.community_stats_parser import C0RNP0RN3StatsParser
+    result = capture_packaged_pair(timed_placement, monkeypatch, with_players=True)
+    for stats in (result.stats.first, result.stats.second):
+        ref = stats.reference
+        parsed = C0RNP0RN3StatsParser().parse_regular_stats_file(str(stats.root / ref.generation / ref.filename))
+        assert len(parsed['players']) == 1

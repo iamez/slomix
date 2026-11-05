@@ -76,6 +76,130 @@ successful; the full PG integration proof is being reviewed. PR1116 is merged at
 contained-engine/provisioning, writer ownership, complete restore/ACL/migrations,
 D4/D5 and observation after this diagnostic slice; retain original masterplan.
 
+## 2026-11-05 — Comp13 profile refreshed after authorized timing merge
+
+PR1117 merged as4e3abad3. Owner explicitly approves1120 and the remaining
+numbered queue1118/1119/1121/1122/1123/1124. Comp13 profile branch now includes
+main; both documentation conflicts retained original bytes, and its entire tree
+matched217efead before this checkpoint. Source behavior remains unchanged.
+Retarget to main before this push so both push and PR checks validate this head.
+Later preserved candidate proof includes actual six-bot R1/R2 capture/import and
+dated full DEV restore/migrations; sustained D4/D5 and deployment remain separate.
+
+## 2026-11-05 — Remove reverse supervisor import from timing-only admission
+
+Two unresolved CodeQL review annotations682/684 expose runtime_game_supervisor ->
+runtime_game_import -> runtime_game_supervisor. General supervisor policy must stay
+pure before verified project-source admission under isolated Python. Do not move
+it to an eagerly imported project module. Instead the timing-only helper enforces
+its own narrower contract directly: deferred teams and both handovers must each be
+exactTrue; socket/database/lock must all be supplied. It no longer imports its
+caller. Broader capture-only supervisor admission remains unchanged.
+
+Seven new policy rejection cases plus a runtime import-hook guard reject reverse
+supervisor loading during actual helper invocation.126focused cases pass. Deliberate
+reverse-import mutation fails that guard, restored with external cmp. Ruff/diff
+checks pass. New exact-head native PostgreSQL/CodeQL CI still required; do not claim
+review annotations resolved until the rescan confirms. Previous captured Comp13
+native SQL/consumer and local coherent package proofs remain separately preserved;
+that candidate predates this follow-up and is not a deployed/CI-approved release.
+No service action, source ACK/delete, production or live DEV mutation. No merge.
+Original runtime/masterplan and residual proof reconciliation remain authoritative.
+
+## 2026-11-04 — Real Comp13 run exposes active/end half counter inversion
+
+Owner starts USER unit dd2c6c582ab93ca1 at21:21:34. Actual2.86.0-13/embeddedLua
+and Omni-bot0.93 load and six players join. Warmup restart enters active InitGame
+at10450, then supervisor exits1/ValueError before any capture. No bootstrap-issued
+record exists. Generic error log does not retain exact message or wire; preserve
+that uncertainty rather than inventing a directly observed exception string.
+
+Native stopwatch start counter0=R1,1=R2; G_LogExit flips before intermission so
+end1=R1,0=R2. Runtime InitGame lease and stats/timing/proximity binding incorrectly
+used end-phase2-counter at START, while timing/proximity close guards used the
+opposite counter. Existing fixtures corroborated the same wrong assumption.
+Fix runtime start tocounter+1 and close to2-half; leave legacy completed-round
+conversion untouched. Correct fixture counters only, not timestamp/restart inputs.
+New direct native-counter cases both fail before correction;349focused cases
+pass afterwards (independent verbose count349). Mutation restoring old lease
+mapping fails both cases; externalcmp restores. All sources parse with Lua5.4.
+Attempted full webhookLua5.1 parse fails near '<' on unchanged baseline too;
+this runtime bundle requires5.4, no newly introduced Lua5.1 regression claimed.
+
+Independent after-exit cleanup verifies original PID2527277 absent, MainPID0,
+emptyControlGroup and no27962 listener. Supervisor shutdown_verified:false remains
+a failed in-process result, not overwritten by later cleanup. No live SQL/import
+or agent service action. Used workspace/bots/logs retained, never reset/reused.
+Private RCA evidence/comp13-first-game-20261104/FINDINGS.md. Prepare a NEW attempt
+with corrected whole shipped modules and source before owner start; do not claim
+real R1/R2 acceptance until that run. Preserve1117/1120 and original runtime plan.
+
+## 2026-11-04 — Resume runtime with explicit Comp13 rehearsal profile
+
+Owner directs keeping local2.85 and replacing the older test lane with2.86.0-13.
+Read-only inventory confirms /home/et/etlegacy-v2.83.1-x86_64 actually declares
+ET Legacy v2.84.0; do not infer binary version from directory. No game UDP listener
+observed and no game/service activation performed. Preserve both old directories.
+
+Branch feat/runtime-game-engine-profile-20261104 stacks on runtime1117/e28bbbef.
+Explicit et286-comp13 profile pins retained snapshot qagame/executable/mod hashes
+and requires the Comp13 five-asset inventory. Default2.85 contract bytes/inventory
+remain compatible. Bundle verification reconstructs the selected explicit profile;
+workspace rejects old mod naming, different executable or mod hashes. No auto
+binary discovery, downloads, install or relabeling of the existing2.85 workspace.
+
+114 focused bundle/workspace/native transport tests pass;1explicit2.85 embedded
+engine ABI case skipped. Four new profile cases use synthetic ELF/assets and pin
+substitution only inside fixtures; they are NOT actual Comp13 ABI/gameplay proof.
+Profile hash guard removal fails a regression; externalcmp restores source.
+Initial default/tmp tests refused due existing/tmp/.git; preserved it and used
+short fresh outside-Git /home/samba roots. New zip fixture initially inherited
+writable umask; fixed fixture0600 instead of weakening input guards. Ruff passes.
+Next prepare a NEW Comp13 bundle/workspace from retained independently hashed
+native snapshot; separately attest embedded Lua ABI before owner-run contained
+gameplay. Full runtime1117 import, exclusive writers, residual reconciliation,
+complete restore/ACL/migrations, D4/D5 and observation remain retained gates.
+
+## 2026-11-04 — PR1116 merged; explicit full timing proof import implemented
+
+Owner explicitly approved1116.420-second cycle completed failed0/threads0/behind0
+with pinned headd9926d6c. REST confirms merge608319949eb0ae63987e9b6c99c31ab4438a2b64;
+merged/reviewed tree botha45db92c3172019d4f52abec1a5ae63201db3622. No activation.
+
+Next feat/runtime-timing-proof-import-20261104 connects explicit operator claims
+through unit render/prepare, exact supervisor argv/CLI and pre-launch admission.
+Full timing import requires BOTH statistics/timing writer handover confirmations,
+deferred teams and the complete private proof target, plus verified v2 workspace.
+Capture-only/statistics-only defaults preserved. Handovers are operator claims,
+not a writer fence; actual exclusive writer/restore gates remain original work.
+
+Successful CapturedTimingMatch passes directly into existing bounded timing CLI
+engine, journal-enabled/deferred-team, same explicit Unix-only proof admission and
+read-only schema preflight. No payload-derived target/identity or disk adoption.
+Unix CLI writer_handover_confirmed remainsfalse because that low-level field
+selects external TCP config (forbidden in Unix mode); independent operator claims
+are checked before binding options. No production target rule weakened.
+Completion requires observed_complete AND finished after resource cleanup. Partial,
+unknown and interrupted progress remain redacted, source ACK false. Missing timing
+still imports successful stats separately, but requested whole timing result is
+incomplete even if those stats committed. No duplicate stats import on full path.
+
+188focused local tests pass, independent verbose count188; Ruff/diffcheck pass.
+Handover, observed-completion and generated-unit flag mutations each fail, restored
+with externalcmp. Real generated-wrapper/supervisor native fixture extended with
+synthetic player observations through actual producer state; actual parser accepts
+one player per emitted file. No ET/server/DB service started. CI-only PG test adds
+whole packaged Lua -> actual supervisor -> new helper -> actual timing SQL/readonly
+observation -> unchanged full replay. Its CI TCP target/readiness bridge is explicit;
+it does NOT certify owner Unix-peer namespace admission. Real resource/SQL operations
+are not mocked. Exact-head PG14/17 CI remains pending; do not claim SQL proof yet.
+
+Next: base on merged main, CI/review/numbered PR decision, explicit approved ET2.86
+profile alignment, owner-run real gameplay, complete isolated restore/ACL/migration
+rehearsal, exclusive writers, residual57proof reconciliation, D4/D5 and observation.
+Original masterplan, old artifacts and parked KIS/proximity/security/README retained.
+Prepared d9926d6c package remains capture-only with its original provenance.
+
 ## 2026-11-03 — PR1115 merged; versioned timing workspace/supervisor implemented
 
 Owner explicitly approved1115. Standard420-second merge cycle completed:

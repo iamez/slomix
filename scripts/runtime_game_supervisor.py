@@ -76,7 +76,8 @@ SUPERVISOR_BOOTSTRAP = "exec(bytes.fromhex('696d706f727420686173686c69622c6f732c
 def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture=None,
                     bot_manifest_sha256=None, proof_socket=None, proof_database_name=None,
                     import_lock_directory=None, defer_team_assignment=False, evidence_log=None,
-                    supervisor_sha256=None):
+                    supervisor_sha256=None, writer_handover_confirmed=False,
+                    timing_writer_handover_confirmed=False):
     """One unambiguous argv shared by offline generation and live admission."""
     digest = supervisor_sha256 or globals().get('_SUPERVISOR_SHA256') or hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
     if re.fullmatch(r'[a-f0-9]{64}', digest) is None:
@@ -92,6 +93,10 @@ def supervisor_argv(source, interpreter, directory, unit, commit, *, bot_fixture
                  '--import-lock-directory', str(import_lock_directory)]
     if defer_team_assignment:
         argv += ['--defer-team-assignment']
+    if writer_handover_confirmed:
+        argv += ['--writer-handover-confirmed']
+    if timing_writer_handover_confirmed:
+        argv += ['--timing-writer-handover-confirmed']
     if evidence_log is not None:
         argv += ['--evidence-log', str(evidence_log)]
     if any(not isinstance(value, str) or (value != SUPERVISOR_BOOTSTRAP and re.fullmatch(r'[A-Za-z0-9_./=:-]+', value) is None)
@@ -292,23 +297,39 @@ def capture_process(record, pid, stdin_fd):
         return result
 
 
+def validate_import_policy(deferred, socket, database, lock, *, writer_handover_confirmed=False,
+                           timing_writer_handover_confirmed=False):
+    if type(deferred) is not bool:
+        raise ValueError('Explicit boolean team ownership policy required')
+    if any(type(flag) is not bool for flag in (writer_handover_confirmed, timing_writer_handover_confirmed)):
+        raise ValueError('Explicit boolean import ownership policy required')
+    target = (socket, database, lock)
+    if deferred and any(value is None for value in target):
+        raise ValueError('Deferred team assignment requires the complete proof import target')
+    if writer_handover_confirmed or timing_writer_handover_confirmed:
+        if (not writer_handover_confirmed or not timing_writer_handover_confirmed
+                or not deferred or any(value is None for value in target)):
+            raise ValueError('Timing import requires both handovers, deferred teams and complete proof target')
+
+
 def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha256=None,
         proof_socket=None, proof_database_name=None, import_lock_directory=None,
-        defer_team_assignment=False, evidence_log=None):
+        defer_team_assignment=False, evidence_log=None, writer_handover_confirmed=False,
+        timing_writer_handover_confirmed=False):
     if __name__ == '__main__' and not globals().get('_SUPERVISOR_SHA256'):
         raise ValueError('Verified external supervisor bootstrap required')
-    if type(defer_team_assignment) is not bool:
-        raise ValueError('Explicit boolean team ownership policy required')
-    if defer_team_assignment and any(value is None for value in
-                                    (proof_socket, proof_database_name, import_lock_directory)):
-        raise ValueError('Deferred team assignment requires the complete proof import target')
+    validate_import_policy(defer_team_assignment, proof_socket, proof_database_name, import_lock_directory,
+        writer_handover_confirmed=writer_handover_confirmed,
+        timing_writer_handover_confirmed=timing_writer_handover_confirmed)
     # No game side effect before all admission checks. Environment flags alone
     # do not prove service membership; ask the manager AND inspect kernel cgroup.
     expected_argv = supervisor_argv(Path(__file__).resolve().parents[1], sys.executable,
         directory, unit, expected_commit, bot_fixture=bot_fixture,
         bot_manifest_sha256=bot_manifest_sha256, proof_socket=proof_socket,
         proof_database_name=proof_database_name, import_lock_directory=import_lock_directory,
-        defer_team_assignment=defer_team_assignment, evidence_log=evidence_log)
+        defer_team_assignment=defer_team_assignment, evidence_log=evidence_log,
+        writer_handover_confirmed=writer_handover_confirmed,
+        timing_writer_handover_confirmed=timing_writer_handover_confirmed)
     admitted = require_containment(unit)
     validate_launch_commands(admitted, expected_argv)
     verify_source(Path(__file__).resolve().parents[1], expected_commit)
@@ -322,6 +343,8 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
                                     lock_directory=import_lock_directory))
     recipe = startup_recipe(directory, port=REHEARSAL_PORT,
                             bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256)
+    if timing_writer_handover_confirmed and recipe['workspace'].get('version') != 2:
+        raise ValueError('Timing import requires the verified v2 workspace profile')
     rechecked = require_containment(unit)
     validate_launch_commands(rechecked, expected_argv)
     if rechecked['InvocationID'] != admitted['InvocationID']:
@@ -339,7 +362,9 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
         captured = capture_process(recipe['workspace'], child.pid, child.stdin.fileno())
         from shared.runtime_timing_listener import TimingListenerResult
         timing_report = None
+        timed_match = None
         if isinstance(captured, TimingListenerResult):
+            timed_match = captured.timing_match
             timing_report = {'status': 'captured_not_imported' if captured.timing_match else 'incomplete',
                              'halves': captured.timing_status}
             captured = captured.stats
@@ -350,10 +375,19 @@ def run(directory, unit, expected_commit, *, bot_fixture=None, bot_manifest_sha2
         if timing_report is not None:
             report['timing'] = timing_report
         if proof_socket is not None:
-            from scripts.runtime_game_import import import_live_capture
-            report['import'] = asyncio.run(import_live_capture(
-                captured, socket=proof_socket, database=proof_database_name,
-                lock_directory=import_lock_directory, defer_team_assignment=defer_team_assignment))
+            from scripts.runtime_game_import import import_live_capture, import_live_timing_capture
+            if timing_writer_handover_confirmed and timed_match is not None:
+                report['import'] = asyncio.run(import_live_timing_capture(timed_match,
+                    socket=proof_socket, database=proof_database_name, lock_directory=import_lock_directory,
+                    defer_team_assignment=defer_team_assignment, writer_handover_confirmed=writer_handover_confirmed,
+                    timing_writer_handover_confirmed=timing_writer_handover_confirmed))
+                report['timing']['status'] = report['import']['status']
+            else:
+                stats_result = asyncio.run(import_live_capture(
+                    captured, socket=proof_socket, database=proof_database_name,
+                    lock_directory=import_lock_directory, defer_team_assignment=defer_team_assignment))
+                report['import'] = (dict(status='incomplete', stats=stats_result, timing='unavailable',
+                                         source_acknowledged=False) if timing_writer_handover_confirmed else stats_result)
             report['status'] = 'captured_import_attempted_shutdown_pending'
         return report
     finally:
@@ -405,6 +439,8 @@ def main(argv=None):
     launch.add_argument('--import-lock-directory', type=Path)
     launch.add_argument('--defer-team-assignment', action='store_true',
                         help='Defer team effects to the consumer; requires the complete proof import target')
+    launch.add_argument('--writer-handover-confirmed', action='store_true')
+    launch.add_argument('--timing-writer-handover-confirmed', action='store_true')
     check = actions.add_parser('verify-stopped')
     check.add_argument('--unit', required=True)
     check.add_argument('--port', type=int, default=REHEARSAL_PORT)
@@ -415,7 +451,9 @@ def main(argv=None):
                       bot_manifest_sha256=args.bot_manifest_sha256,
                       proof_socket=args.proof_socket, proof_database_name=args.proof_database_name,
                       import_lock_directory=args.import_lock_directory,
-                      defer_team_assignment=args.defer_team_assignment, evidence_log=args.evidence_log) if args.action == 'run'
+                      defer_team_assignment=args.defer_team_assignment, evidence_log=args.evidence_log,
+                      writer_handover_confirmed=args.writer_handover_confirmed,
+                      timing_writer_handover_confirmed=args.timing_writer_handover_confirmed) if args.action == 'run'
                   else verify_stopped(args.unit, args.port, args.invocation_id))
         print(json.dumps(result, sort_keys=True), flush=True)
         return 0 if result.get('import', {}).get('status', 'completed') == 'completed' else 1

@@ -26,6 +26,7 @@ from scripts.runtime_game_supervisor import (
     SUPERVISOR_BOOTSTRAP,
     require_workspace_commit,
     supervisor_argv,
+    validate_import_policy,
     verify_source,
 )  # noqa: E402
 
@@ -39,19 +40,19 @@ def safe_path(path):
 
 
 def _validate_team_policy(defer_team_assignment, proof_socket, proof_database_name,
-                          import_lock_directory):
-    if type(defer_team_assignment) is not bool:
-        raise ValueError('Explicit boolean team ownership policy required')
-    if defer_team_assignment and any(value is None for value in
-                                    (proof_socket, proof_database_name, import_lock_directory)):
-        raise ValueError('Deferred team assignment requires the complete proof import target')
+                          import_lock_directory, writer_handover_confirmed=False,
+                          timing_writer_handover_confirmed=False):
+    validate_import_policy(defer_team_assignment, proof_socket, proof_database_name, import_lock_directory,
+        writer_handover_confirmed=writer_handover_confirmed,
+        timing_writer_handover_confirmed=timing_writer_handover_confirmed)
 
 
 def render(*, source, interpreter, workspace, destination, unit, commit,
            bot_fixture=None, bot_manifest_sha256=None, proof_socket=None,
-           proof_database_name=None, import_lock_directory=None, defer_team_assignment=False, supervisor_sha256=None):
+           proof_database_name=None, import_lock_directory=None, defer_team_assignment=False, supervisor_sha256=None,
+           writer_handover_confirmed=False, timing_writer_handover_confirmed=False):
     _validate_team_policy(defer_team_assignment, proof_socket, proof_database_name,
-                          import_lock_directory)
+                          import_lock_directory, writer_handover_confirmed, timing_writer_handover_confirmed)
     for path in (source, interpreter, workspace, destination):
         safe_path(path)
     if (re.fullmatch(r'slomix-et-proof-[a-f0-9]{16}\.service', unit) is None
@@ -75,7 +76,9 @@ def render(*, source, interpreter, workspace, destination, unit, commit,
         bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256,
         proof_socket=proof_socket, proof_database_name=proof_database_name,
         import_lock_directory=import_lock_directory, defer_team_assignment=defer_team_assignment,
-        evidence_log=destination / 'service.log', supervisor_sha256=supervisor_sha256)
+        evidence_log=destination / 'service.log', supervisor_sha256=supervisor_sha256,
+        writer_handover_confirmed=writer_handover_confirmed,
+        timing_writer_handover_confirmed=timing_writer_handover_confirmed)
     return f'''[Unit]
 Description=Slomix isolated ET capture rehearsal (owner activation only)
 
@@ -119,14 +122,17 @@ def committed_supervisor(source, commit):
 
 def prepare(*, source, interpreter, workspace, destination, commit,
             bot_fixture=None, bot_manifest_sha256=None, proof_socket=None,
-            proof_database_name=None, import_lock_directory=None, defer_team_assignment=False):
+            proof_database_name=None, import_lock_directory=None, defer_team_assignment=False,
+            writer_handover_confirmed=False, timing_writer_handover_confirmed=False):
     _validate_team_policy(defer_team_assignment, proof_socket, proof_database_name,
-                          import_lock_directory)
+                          import_lock_directory, writer_handover_confirmed, timing_writer_handover_confirmed)
     for path in (source, interpreter, workspace, destination):
         safe_path(path)
     verify_source(source, commit)
     recipe = startup_recipe(workspace, bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256)
     require_workspace_commit(recipe, commit)
+    if timing_writer_handover_confirmed and recipe['workspace'].get('version') != 2:
+        raise ValueError('Timing import requires the verified v2 workspace profile')
     # Preserve lexical venv interpreter path; resolving its symlink would lose
     # pyvenv.cfg lookup and may silently select a different Python environment.
     if (not interpreter.is_file() or not os.access(interpreter, os.X_OK)
@@ -150,7 +156,9 @@ def prepare(*, source, interpreter, workspace, destination, commit,
                      bot_fixture=bot_fixture, bot_manifest_sha256=bot_manifest_sha256,
                      proof_socket=proof_socket, proof_database_name=proof_database_name,
                      import_lock_directory=import_lock_directory,
-                     defer_team_assignment=defer_team_assignment, supervisor_sha256=digest).encode('ascii')
+                     defer_team_assignment=defer_team_assignment, supervisor_sha256=digest,
+                     writer_handover_confirmed=writer_handover_confirmed,
+                     timing_writer_handover_confirmed=timing_writer_handover_confirmed).encode('ascii')
     destination.mkdir(mode=0o700)
     _write_new(destination / ('supervisor-' + digest + '.py'), raw)
     _write_new(destination / unit, content)
@@ -169,6 +177,9 @@ def prepare(*, source, interpreter, workspace, destination, commit,
               'bot_manifest_sha256': bot_manifest_sha256,
               'import_requested': proof_socket is not None,
               'defer_team_assignment': defer_team_assignment,
+              'timing_import_requested': timing_writer_handover_confirmed,
+              'writer_handover_confirmed': writer_handover_confirmed,
+              'timing_writer_handover_confirmed': timing_writer_handover_confirmed,
               'database_readiness_verified': False,
               'unit_sha256': hashlib.sha256(content).hexdigest(),
               'supervisor_sha256': digest,
@@ -193,6 +204,8 @@ def main():
     parser.add_argument('--defer-team-assignment', action='store_true',
                         help='Request journal-owned team assignment for the explicit proof import; '
                              'does not start a team consumer or authorize activation')
+    parser.add_argument('--writer-handover-confirmed', action='store_true')
+    parser.add_argument('--timing-writer-handover-confirmed', action='store_true')
     try:
         print(json.dumps(prepare(**vars(parser.parse_args())), sort_keys=True))
         return 0
