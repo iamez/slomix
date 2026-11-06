@@ -1,3 +1,30 @@
+## 2026-11-06 — Retry already closed native connections before consumer access
+
+A controlled connection-loss proof with the actual asyncpg driver reproduces
+AttributeError: native terminate() clears the protocol, and is_in_transaction()
+then dereferences None before consumer SQL. Existing InterfaceError recovery
+covers detached pool proxies but misses that native path in both workers.
+
+Add a native-class closed-state check before invoking either consumer. Use the
+concrete inheritance check because asyncpg's isinstance also accepts pooled
+proxies, whose existing InterfaceError handling must remain intact. No broad
+AttributeError catch: programming errors on usable connections still fail.
+
+Six new unit cases cover raw native state, real detached proxy and usable-connection
+programming errors for both workers.63targeted local cases pass;2native fixture
+cases correctly skip without explicit disposable PG. Removing both new guards
+makes2native cases fail while4proxy/programming cases pass; restored externalcmp.
+Two new native CI cases create actual connections, terminate only the first owned
+client, observe unavailable, reacquire a different backend and close every lease.
+
+Actual private PG/captured-data clone: candidate cache worker recovers from a
+terminated client, advances generation1->2 for one explicitly synthetic event,
+creates one receipt, then a fresh Python worker process leaves all114tables
+unchanged. Other111tables remain equal to the preserved original source snapshot.
+This is connection-loss recovery, NOT a DB service outage or full D5 acceptance.
+No deployed payload, app service, game, production or live database is changed.
+Original D4/D5/57-path obligations and deferred work remain authoritative.
+
 ## 2026-11-06 — Native SIGTERM commit/replay companion prepared
 
 Add an opt-in disposable PostgreSQL companion: actual R1 commit and both timing
