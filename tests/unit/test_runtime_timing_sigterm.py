@@ -17,7 +17,6 @@ source = _source
 
 CHILD = r'''
 import asyncio
-import json
 import os
 import sys
 from contextlib import asynccontextmanager
@@ -52,7 +51,9 @@ async def retain(adapter, fd, **binding):
 async def stats(manager, current, **binding):
     if binding['expected_identity'].round_number == 1:
         return True, 'stubbed stage; no database commit is claimed'
-    (root / 'ready').write_text(str(os.getpid()))
+    marker = root / 'ready.tmp'
+    marker.write_text(str(os.getpid()))
+    marker.rename(root / 'ready')  # Publish only the complete PID.
     await asyncio.Event().wait()
 
 cli.timing_import_resources = resources
