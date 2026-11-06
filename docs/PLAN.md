@@ -1,3 +1,33 @@
+## 2026-11-06 — Private service outage passes; restore retained capture identity SQL coverage
+
+Owner ran the pinned worker recovery packet. Actual private PG14 service stop /
+start changed backend PID; both candidate cache/team workers observed unavailable
+and resumed successful pages. Complete114table/211row snapshots remain identical,
+including5consumer receipts. Independent decoded-row comparison and captured bot
+sums82/40kills,10638/5198damage agree. Full PGlog has two readiness/two clean
+shutdown cycles; control file says shut down; private unit inactive/PID0/success.
+FileNotFoundError is the deliberately absent private socket; CannotConnectNowError
+is the bounded restart phase, followed by success with current error cleared.
+No existing app/service/database changed. This is a graceful private service
+outage, not host crash, uncertain commit loss or sustained independence proof.
+
+Next original D5 retained-proof reconciliation restores exactly Git blob
+ee1e3fc53193b787c8b51beba48de7b65e406d34 at
+tests/integration/test_capture_policy_identity_pg.py. The seven original test
+definitions expand to22native SQL cases: canonical epoch collisions, distinct
+legacy epochs, invalid identity, explicit links, ambiguous unbound siblings,
+parent metadata edits and null manifests. The current load_capture_policy SQL
+already implements the conservative ownership guards, but this original file
+was absent from publishedmain; its old blob remains preserved. No application
+code, migration, policy or historical source is changed by this test slice.
+Local146related unit cases pass;22native cases correctly skip without a configured
+disposable PG. Exact-head CI onPG14/17 must actually execute/pass those22 cases
+before acceptance; skip is not evidence. No numbered PR merge permission yet.
+
+Full original plan/57path registry remains. This restores one original proof path,
+not automatic closure of the57 obligations. Live source delivery, captured-human
+DOM, remaining effect/writer handover and independent sustained runtime remain.
+
 ## 2026-11-06 — Retry already closed native connections before consumer access
 
 A controlled connection-loss proof with the actual asyncpg driver reproduces
