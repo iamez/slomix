@@ -1,3 +1,18 @@
+## 2026-11-06 — Native SIGTERM commit/replay companion prepared
+
+Add an opt-in disposable PostgreSQL companion: actual R1 commit and both timing
+sources, controlled wait before R2, real SIGTERM to the owned CLI child, independent
+backend disappearance, fresh CLI completion and another unchanged replay. Preserve
+R1 player/weapon rows and all original source bytes. Only the R2 scheduling barrier
+is injected; database methods and import/replay operations remain real.
+
+Local admission correctly SKIPS without an explicitly approved disposable PG;
+this native case is NOT yet claimed passing. CI on the new PR head must execute
+it on both PostgreSQL versions. Seventeen local caller tests pass, negative control
+and cmp restoration are retained. No private cluster was started, no services or
+live data changed. Native success still does not establish host/DB outage recovery
+or sustained D5 acceptance.
+
 ## 2026-11-06 — Real SIGTERM acceptance for the timing caller
 
 Add a focused process regression for the existing SIGTERM handler. The parent
