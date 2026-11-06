@@ -1,3 +1,36 @@
+## 2026-11-06 — Native SIGTERM commit/replay companion prepared
+
+Add an opt-in disposable PostgreSQL companion: actual R1 commit and both timing
+sources, controlled wait before R2, real SIGTERM to the owned CLI child, independent
+backend disappearance, fresh CLI completion and another unchanged replay. Preserve
+R1 player/weapon rows and all original source bytes. Only the R2 scheduling barrier
+is injected; database methods and import/replay operations remain real.
+
+Local admission correctly SKIPS without an explicitly approved disposable PG;
+this native case is NOT yet claimed passing. CI on the new PR head must execute
+it on both PostgreSQL versions. Seventeen local caller tests pass, negative control
+and cmp restoration are retained. No private cluster was started, no services or
+live data changed. Native success still does not establish host/DB outage recovery
+or sustained D5 acceptance.
+
+## 2026-11-06 — Real SIGTERM acceptance for the timing caller
+
+Add a focused process regression for the existing SIGTERM handler. The parent
+signals only its own disposable CLI child after an R2 readiness marker. Actual
+Lua stats/timing files, descriptors and cooperative writer lease are used;
+database operations are explicitly stubbed. Verify exit130, truthful interrupted /
+possibly_partial state, R1 accepted / R2 unknown, both timing sources retained,
+no timing application or source acknowledgement, resource cleanup while the lease
+is held, descriptor closure and lease reacquisition in child and parent. All four
+source files remain byte-identical.
+
+Local targeted suite:17 passed. Negative control removes only signal registration:
+actual child exits with signal15 and the test fails (-15 versus130). Restore is
+verified by cmp; all17 cases pass again. This is actual OS-signal coverage of the
+caller and cleanup, not native database commit recovery or full D5 acceptance.
+No production code, service, game, config or live database was changed. No merge
+permission is inferred. Continue the original runtime D4/D5 and retained roadmap.
+
 ## 2026-11-06 — Preserve original package identity across squash merges
 
 Add a read-only trusted-checkout source verifier for an already-built package.

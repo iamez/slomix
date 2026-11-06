@@ -1,3 +1,11 @@
+## 2026-11-06 — Exercise the timing caller through an actual OS signal
+
+Programmatic CancelledError tests do not prove installed signal registration.
+A separately owned test child now receives real SIGTERM at the R2 wait point;
+removing only add_signal_handler makes it die with -15 rather than emit the
+expected interrupted JSON and exit130. Real file/lease cleanup is verified;
+database stages remain stubbed and full native recovery is a separate gate.
+
 ## 2026-11-05 — Retain cache consumer last-failure diagnostics independently of current health
 
 M4/D5 observability improvement: cache intentionally clears current error on
