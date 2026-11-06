@@ -72,6 +72,12 @@ class RuntimeCacheWorker:
                 try:
                     async with asyncio.timeout(self.attempt_timeout):
                         async with connection_factory() as conn:
+                            # terminate() clears a native connection's protocol;
+                            # is_in_transaction() then raises AttributeError.
+                            # asyncpg's isinstance also accepts pooled proxies;
+                            # their detached state is handled by InterfaceError below.
+                            if issubclass(type(conn), asyncpg.Connection) and conn.is_closed():
+                                raise ConnectionError("Runtime cache connection closed")
                             try:
                                 result = await consume_http_cache_events(conn, batch_size=self.batch_size)
                             except asyncpg.InterfaceError:

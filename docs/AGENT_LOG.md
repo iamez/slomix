@@ -1,3 +1,13 @@
+## 2026-11-06 — Native asyncpg closure differs from detached proxy closure
+
+Native terminate() clears the protocol; is_in_transaction() raises AttributeError,
+while a detached PoolConnectionProxy raises InterfaceError. Check closed native
+state before consumer access and preserve proxy handling. asyncpg customizes
+Connection.__instancecheck__ to include proxies, so Mock(spec=Connection) is not
+an adequate native-state fixture and a simple isinstance preflight can regress
+proxy recovery. Unit driver-state subclasses plus actual native PG tests cover
+both; unrelated AttributeError on a usable connection must still propagate.
+
 ## 2026-11-06 — Exercise the timing caller through an actual OS signal
 
 Programmatic CancelledError tests do not prove installed signal registration.

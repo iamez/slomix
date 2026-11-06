@@ -86,6 +86,12 @@ class RuntimeTeamWorker:
                 try:
                     async with asyncio.timeout(self.attempt_timeout):
                         async with connection_factory() as conn:
+                            # Reject a closed native transport before any
+                            # consumer touches its cleared protocol object.
+                            # Pooled proxies advertise Connection without inheriting
+                            # it; preserve their separate InterfaceError handling.
+                            if issubclass(type(conn), asyncpg.Connection) and conn.is_closed():
+                                raise ConnectionError('Team connection closed')
                             try:
                                 result = await consume_team_page(conn, batch_size=self.batch_size, hint=hint)
                             except asyncpg.InterfaceError:
