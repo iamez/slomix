@@ -1,3 +1,21 @@
+## 2026-11-06 — Real SIGTERM acceptance for the timing caller
+
+Add a focused process regression for the existing SIGTERM handler. The parent
+signals only its own disposable CLI child after an R2 readiness marker. Actual
+Lua stats/timing files, descriptors and cooperative writer lease are used;
+database operations are explicitly stubbed. Verify exit130, truthful interrupted /
+possibly_partial state, R1 accepted / R2 unknown, both timing sources retained,
+no timing application or source acknowledgement, resource cleanup while the lease
+is held, descriptor closure and lease reacquisition in child and parent. All four
+source files remain byte-identical.
+
+Local targeted suite:17 passed. Negative control removes only signal registration:
+actual child exits with signal15 and the test fails (-15 versus130). Restore is
+verified by cmp; all17 cases pass again. This is actual OS-signal coverage of the
+caller and cleanup, not native database commit recovery or full D5 acceptance.
+No production code, service, game, config or live database was changed. No merge
+permission is inferred. Continue the original runtime D4/D5 and retained roadmap.
+
 ## 2026-11-05 — Deployed web parity is a runtime release prerequisite
 
 Keep the approved1117-1124 queue moving independently. Before a subsequent DEV
