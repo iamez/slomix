@@ -31,6 +31,24 @@ caller and cleanup, not native database commit recovery or full D5 acceptance.
 No production code, service, game, config or live database was changed. No merge
 permission is inferred. Continue the original runtime D4/D5 and retained roadmap.
 
+## 2026-11-06 — Preserve original package identity across squash merges
+
+Add a read-only trusted-checkout source verifier for an already-built package.
+Require its reviewed manifest SHA256 and original full source SHA, compare the
+complete original/accepted Git trees, independently compare every selected
+runtime file with its committed Git blob and mode, and check both frontend output
+inventories/source labels. Never rewrite the package manifest or execute package
+code. GitHub merge authority, frontend input provenance/build reproduction,
+dependency reproduction, writer/schema handover and runtime acceptance remain
+separate unchecked gates; ready_for_activation always stays false.
+
+Fourteen focused offline cases cover distinct-commit/equal-tree admission,
+different accepted trees, resealed source/mode/output/extra-file drift, exact SHA
+and manifest pins, mode-verified manifest versions and JSON refusal. A deliberately disabled tree guard is seen
+failing, then restored with external cmp. Actual inactive candidate inspection
+finds821source files,133app outputs and131modern outputs; original manifest pin
+is unchanged. Preserve the full masterplan and all57remaining obligations.
+
 ## 2026-11-05 — Preserve deployed web behavior before runtime cutover
 
 Comparing the immutable runtime candidate31260cf4 with the active DEV web release

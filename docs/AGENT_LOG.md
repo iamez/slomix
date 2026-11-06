@@ -3186,3 +3186,12 @@ assets with candidate behavior before cutover; preserve local fixes for review
 instead of overwriting main wholesale with an old integration tree. Native test
 fixtures must use explicit disposable connection admission so CI actually runs
 their cases; a skipped owner-socket fixture is not a SQL certificate.
+
+## 2026-11-06 — A squash merge must not relabel a built artifact
+
+A reviewed build's source SHA differs from its squash merge SHA even when their
+Git trees are equal. Preserve the existing package and its pinned manifest;
+record the exact accepted commit separately after observing GitHub merged=true.
+The trusted-checkout verifier compares trees and committed payloads without
+importing package code. Output integrity is not frontend input reproduction,
+writer exclusion, schema readiness or permission to activate.

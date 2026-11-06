@@ -31,6 +31,14 @@ caller and cleanup, not native database commit recovery or full D5 acceptance.
 No production code, service, game, config or live database was changed. No merge
 permission is inferred. Continue the original runtime D4/D5 and retained roadmap.
 
+## 2026-11-06 — Package-source verification slice
+
+Read-only package admission now checks a pinned manifest, original source SHA,
+whole-tree equivalence, committed source blobs/modes and frontend output identity.
+This does not approve GitHub merge or activation. The original runtime writer,
+fresh-quiesced backup, live104/105and D4/D5 gates remain; no new service or data
+changes are part of this slice. Evidence stays private outside Git.
+
 ## 2026-11-05 — Deployed web parity is a runtime release prerequisite
 
 Keep the approved1117-1124 queue moving independently. Before a subsequent DEV
