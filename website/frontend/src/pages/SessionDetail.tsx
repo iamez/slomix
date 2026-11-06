@@ -950,8 +950,8 @@ function SignalsTab({
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <MoverList title="Distance Leaders" rows={movers?.distance ?? []} formatValue={(row) => `${(row.total_distance ?? 0).toFixed(1)}u`} />
         <MoverList title="Sprint Leaders" rows={movers?.sprint ?? []} formatValue={(row) => formatPct(row.sprint_pct)} />
-        <MoverList title="Reaction Leaders" rows={movers?.reaction ?? []} formatValue={(row) => row.reaction_ms != null ? `${Math.round(row.reaction_ms)}ms` : '--'} />
-        <MoverList title="Survival Leaders" rows={movers?.survival ?? []} formatValue={(row) => row.duration_ms != null ? formatDuration(row.duration_ms / 1000) : '--'} />
+        <MoverList title="Raw Spawn-to-Movement Time (May Include Pauses)" rows={movers?.reaction ?? []} formatValue={(row) => row.reaction_ms != null ? `${Math.round(row.reaction_ms)}ms` : '--'} />
+        <MoverList title="Average Raw Track Span (May Include Pauses)" rows={movers?.survival ?? []} formatValue={(row) => row.duration_ms != null ? formatDuration(row.duration_ms / 1000) : '--'} />
       </div>
     </div>
   );

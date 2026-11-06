@@ -69,6 +69,43 @@ function renderAt(roundId: string) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('ProximityReplayPage', () => {
+  it.each([
+    ['unmarked historical path', [{ time: 0, event: 'spawn' }, { time: 900, event: 'sample' }], 900],
+    ['observed resume boundary', [{ time: 0, event: 'spawn' }, { time: 900, event: 'capture_resume' }], 900],
+    ['missing path and unknown end', [], 0],
+    ['reversed endpoint timestamps', [], -50],
+  ])('withholds active elapsed metrics for %s without an active clock contract', async (_name, path, end) => {
+    const rows = [{
+      ...tracks.tracks[0], guid: 'synthetic', team: 'AXIS', class: 'MEDIC',
+      spawn_time: 0, death_time: end, first_move_time: 900, death_type: 'unknown', path,
+    }];
+    stub(new Map<string, unknown>([
+      ['/api/proximity/round/11344/timeline', timeline],
+      ['/api/proximity/round/11344/tracks', { ...tracks, track_count: 1, tracks: rows }],
+    ]));
+    renderAt('11344');
+    await waitFor(() => expect(screen.getByText('1 lives')).toBeInTheDocument());
+    expect(screen.queryByText(/min alive total/)).not.toBeInTheDocument();
+    expect(screen.queryByText('900 ms')).not.toBeInTheDocument();
+    expect(screen.getByText(/active life time and spawn-to-first-move delay are not available/)).toBeInTheDocument();
+    expect(screen.getByText('medic 1')).toBeInTheDocument();
+    expect(screen.getByText('unknown 1')).toBeInTheDocument();
+  });
+
+  it('does not invent a death or round ending from missing lifecycle cause', async () => {
+    const rows = [null, 'world', 'shutdown', 'unknown'].map((cause, i) => ({
+      ...tracks.tracks[0], guid: `synthetic${i}`, spawn_time: 0,
+      death_time: i === 0 ? 0 : 5000, death_type: cause,
+    }));
+    stub(new Map<string, unknown>([
+      ['/api/proximity/round/11344/timeline', timeline],
+      ['/api/proximity/round/11344/tracks', { ...tracks, track_count: rows.length, tracks: rows }],
+    ]));
+    renderAt('11344');
+    await waitFor(() => expect(screen.getByText('unknown 2 · world 1 · shutdown 1')).toBeInTheDocument());
+    expect(screen.queryByText(/died 1|round end 1/)).not.toBeInTheDocument();
+  });
+
   it('renders all four event shapes, the strip and the track stats from the recorded wire', async () => {
     stub(new Map<string, unknown>([
       ['/api/proximity/round/11344/timeline', timeline],

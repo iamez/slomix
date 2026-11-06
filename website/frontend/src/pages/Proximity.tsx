@@ -1941,16 +1941,16 @@ export default function Proximity() {
                 tip="Percentage of time spent sprinting (~300 u/s). Higher sprint % = more aggressive positioning."
               />
               <LeaderList
-                title="Return Fire Leaders"
+                title="Raw Spawn-to-Movement Time"
                 rows={movers?.reaction ?? []}
                 format={(r) => fmtMs(r.reaction_ms as number)}
-                tip="Fastest return fire — time (ms) to shoot back after being hit. Lower = faster reflexes."
+                tip="Average raw time from spawn to first movement. May include pauses; not return-fire reflexes. Missing or invalid endpoints are excluded."
               />
               <LeaderList
-                title="Survival Leaders"
+                title="Average Raw Track Span"
                 rows={movers?.survival ?? []}
                 format={(r) => r.duration_ms != null ? `${((r.duration_ms as number) / 1000).toFixed(1)}s` : '--'}
-                tip="Players who survived longest in engagements. Escape = moved 300+ units from attacker for 5 seconds."
+                tip="Average raw spawn-to-end time. May include pauses; not verified active life time. Missing or invalid endpoints are excluded."
               />
             </div>
 

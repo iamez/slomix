@@ -3169,3 +3169,12 @@ binding must usecounter+1 at InitGame; completed-phase identity uses2-counter.
 Synthetic tests used reversed active counters and masked the defect until real
 owner-run gameplay. Check exact engine source and both phases independently;
 never reuse a failed first-use workspace or infer completed capture from ABI load.
+
+## 2026-11-05 — Package integrity does not prove deployed-feature parity
+
+Two existing DEV route fixes were present in the active immutable release but
+absent from the main-based candidate. Compare installed blob hashes and served
+assets with candidate behavior before cutover; preserve local fixes for review
+instead of overwriting main wholesale with an old integration tree. Native test
+fixtures must use explicit disposable connection admission so CI actually runs
+their cases; a skipped owner-socket fixture is not a SQL certificate.
