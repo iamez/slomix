@@ -1,26 +1,177 @@
-"""
-Integration test: Stats parser end-to-end validation.
+"""Deterministic file-to-parser contracts, plus an explicitly opted-in corpus smoke.
 
-Verifies that the production stats parser (C0RNP0RN3StatsParser) can
-parse real stats fixture files and produce structurally valid output
-with expected fields, types, and value ranges.
-
-This is a critical-path test: if the parser breaks, all downstream
-data (database imports, Discord embeds, leaderboards) will be wrong.
+Synthetic rows follow c0rn's c0rnp0rn/endstats wire format, independently checked
+against vps_scripts/c0rnp0rn8.lua (weapon serialization and stats[guid] writes).
+This is not a live engine proof. Historical TAB-prefix fixtures stay unchanged:
+other parity tests deliberately characterize their zero-player output.
 """
 
+import errno
+import os
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 
-FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "sample_stats_files"
-# Also check real stats files if available (local_stats has production data)
-LOCAL_STATS_DIR = Path(__file__).parent.parent.parent / "bot" / "local_stats"
+
+def write_round_pair(root):
+    """Literal synthetic counters; never derive expectations with parser code."""
+    paths = []
+    # Weapon order: hits, shots, kills, deaths, headshot HITS.
+    # TAB slots: damage 0/1, alive% 8, headshot KILLS 14, played minutes 22,
+    # dead minutes 25, revives 37. Reset fields deliberately differ from deltas.
+    for number, name, weapon, damage, received, played, dead, hs_kills, revives in (
+        (1, "^1Before", "16 20 50 4 2 3", 900, 400, 5, 1, 2, 4),
+        (2, "^4After", "16 50 100 10 5 8", 2100, 1000, 9, 0.5, 3, 7),
+    ):
+        fields = ["0"] * 38
+        for slot, value in {0: damage, 1: received, 8: 80, 14: hs_kills,
+                            22: played, 25: dead, 37: revives}.items():
+            fields[slot] = str(value)
+        limit, target, measured_ms = ("12:00", "5:00", 300000) if number == 1 else ("5:00", "4:00", 240000)
+        header = "\\".join(("synthetic", "goldrush", "synthetic", str(number),
+                            "2", "1", limit, target, str(measured_ms)))
+        player = "\\".join(("12345678", name, str(number), str(number), weapon))
+        path = root / f"2026-01-01-120000-goldrush-round-{number}.txt"
+        path.write_text(header + "\n" + player + " \t" + "\t".join(fields) + "\n")
+        paths.append(path)
+    return tuple(paths)
+
+
+def one_player(result, round_number):
+    assert result["success"] is True
+    assert result["map_name"] == "goldrush"
+    assert result["round_num"] == round_number
+    assert result["total_players"] == 1
+    assert len(result["players"]) == 1
+    player = result["players"][0]
+    assert player["guid"] == "12345678"
+    return player
+
+
+def assert_r1(result):
+    player = one_player(result, 1)
+    expected = dict(name="Before", kills=4, deaths=2, headshots=3,
+                    damage_given=900, damage_received=400, time_played_seconds=300,
+                    dpm=180, kd_ratio=2, accuracy=40, hits_total=20, shots_total=50)
+    assert {key: player[key] for key in expected} == expected
+    assert player["objective_stats"]["headshot_kills"] == 2
+    assert player["objective_stats"]["revives_given"] == 4
+
+
+def assert_r2(result, r1_name):
+    player = one_player(result, 2)
+    assert result["differential_calculation"] is True
+    assert result["r1_filename"] == r1_name
+    expected = dict(name="After", kills=6, deaths=3, headshots=5,
+                    damage_given=1200, damage_received=600, time_played_seconds=240,
+                    dpm=300, kd_ratio=2, accuracy=60, hits_total=30, shots_total=50)
+    assert {key: player[key] for key in expected} == expected
+    assert player["r2_counter_reset_fallback"] is False
+    assert player["weapon_stats"] == {
+        "WS_MP40": dict(hits=30, shots=50, kills=6, deaths=3, headshots=5, accuracy=60)}
+    objective = dict(time_played_minutes=4, time_dead_minutes=0.5, time_dead_ratio=12.5,
+                     time_played_percent=80, headshot_kills=3, revives_given=7)
+    assert {key: player["objective_stats"][key] for key in objective} == objective
+    summary = result["match_summary"]
+    assert summary["round_num"] == 0
+    assert summary["is_match_summary"] is True
+    assert len(summary["players"]) == 1
+    totals = summary["players"][0]
+    assert (totals["kills"], totals["headshots"]) == (10, 8)
+    assert totals["objective_stats"]["headshot_kills"] == 5
+    assert totals["objective_stats"]["revives_given"] == 11
 
 
 class TestStatsParserIntegration:
+    @pytest.fixture
+    def parser(self):
+        return C0RNP0RN3StatsParser(allow_legacy_r1_fallback=False)
+
+    @pytest.fixture
+    def pair(self, tmp_path):
+        return write_round_pair(tmp_path)
+
+    def test_parse_round_1_with_independent_oracle(self, parser, pair):
+        assert_r1(parser.parse_stats_file(str(pair[0])))
+
+    def test_parse_round_2_with_independent_oracle(self, parser, pair):
+        # 10 cumulative kills - 4 R1 kills = 6 R2 kills; reset revives stay 7.
+        # A renamed player must still match by GUID rather than name.
+        assert_r2(parser.parse_stats_file(str(pair[1])), pair[0].name)
+
+    def test_missing_file_has_explicit_error_contract(self, parser, tmp_path):
+        missing = tmp_path / "2026-01-01-120000-goldrush-round-1.txt"
+        result = parser.parse_stats_file(str(missing))
+        error = "exception: " + str(FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), str(missing)))
+        assert result["success"] is False
+        assert result["error"] == error
+        assert result["players"] == []
+        assert result["total_players"] == 0
+        assert result["map_name"] == "Unknown"
+        assert result["round_num"] == 0
+        assert result["mvp"] is None
+        assert result["score_confidence"] == "missing"
+        assert result["side_parse_diagnostics"]["reasons"] == ["parse_error:" + error]
+        for key in ("round_stopwatch_state", "time_to_beat_seconds", "next_timelimit_minutes"):
+            assert result[key] is None
+        datetime.fromisoformat(result["timestamp"])
+
+    @pytest.mark.parametrize("name,expected", [
+        ("^1Red^7Normal", "RedNormal"), ("^4Blue^0Black", "BlueBlack"),
+        ("NoCodes", "NoCodes"), ("^9Number^aLetter", "NumberLetter"),
+    ])
+    def test_color_codes_preserve_text(self, parser, name, expected):
+        from bot.core.utils import normalize_player_name
+
+        assert parser.strip_color_codes(name) == expected
+        assert normalize_player_name(name) == expected
+
+    def test_round_2_filename_detection(self, parser):
+        assert parser.is_round_2_file("2025-12-17-120000-goldrush-round-2.txt")
+        assert parser.is_round_2_file("/some/path/2025-12-17-120000-map-round-2.txt")
+        assert not parser.is_round_2_file("2025-12-17-120000-goldrush-round-1.txt")
+        assert not parser.is_round_2_file("random-file.txt")
+
+    def test_time_parsing(self, parser):
+        assert parser.parse_time_to_seconds("10:00") == 600
+        assert parser.parse_time_to_seconds("1:30") == 90
+        assert parser.parse_time_to_seconds("0:45") == 45
+        assert parser.parse_time_to_seconds("") == 0
+
+
+def test_explicit_local_corpus_is_not_silent_success():
+    selected = os.environ.get("SLOMIX_PARSER_CORPUS")
+    if selected is None:
+        pytest.skip("Optional corpus not requested; deterministic parser contracts run independently")
+    directory = Path(selected)
+    assert directory.is_dir(), "Requested corpus directory is missing"
+    files = sorted(directory.glob("*-round-1.txt"))[:5]
+    assert files, "Requested corpus has no R1 files"
+    parser = C0RNP0RN3StatsParser(allow_legacy_r1_fallback=False)
+    evaluated = 0
+    for path in files:
+        result = parser.parse_stats_file(str(path))
+        assert result["success"] is True, path.name
+        assert result["players"], path.name
+        assert result["total_players"] == len(result["players"])
+        for player in result["players"]:
+            assert player["guid"]
+            assert player["kills"] >= 0
+            assert player["deaths"] >= 0
+            assert player["damage_given"] >= 0
+            evaluated += 1
+    assert evaluated > 0
+
+
+# Preserve the published historical fixture smoke alongside the stronger oracles.
+FIXTURE_DIR = Path(__file__).parent.parent / "fixtures" / "sample_stats_files"
+
+LOCAL_STATS_DIR = Path(__file__).parent.parent.parent / "bot" / "local_stats"
+
+class TestLegacyStatsFixtureIntegration:
     """End-to-end parsing of real stats files through the production parser."""
 
     @pytest.fixture
