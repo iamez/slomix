@@ -23,9 +23,9 @@ from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
 
 
 class FakeVoiceService:
-    """`ran` mirrors warm_kis_cache's contract: True only when the compute
-    actually ran (HTTP 200). False means the call never reached it — no
-    secret, website down, non-200 — which must not cost the session a retry."""
+    """`ran` models a verified completed internal warm attempt, including
+    cached/no_data; it does not mean a new calculation. Unconfirmed responses,
+    missing secret and transport failure must not cost the session a retry."""
 
     def __init__(self, fail: bool = False, ran: bool = True):
         self.calls: list[tuple] = []

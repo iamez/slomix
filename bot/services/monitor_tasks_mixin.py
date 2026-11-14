@@ -768,24 +768,26 @@ class _MonitorTasksMixin:
                 gsid, first_date, kis_rows, prox_kills, tries + 1,
             )
             # The pass budget is spent either way — a failed call still costs a
-            # request — but an ATTEMPT is consumed only for a verified completed
-            # internal warm (computed/cached/no_data under the R1 contract).
-            # Unconfirmed/failed requests must not exhaust a session's budget.
+            # request — but an ATTEMPT requires a verified completed internal
+            # warm response. Cached/no_data consume that budget without claiming
+            # a new calculation, so persistent gaps cannot monopolize every
+            # pass. Unconfirmed requests during a web restart do not burn the
+            # session's attempts. Coverage convergence is checked separately.
             healed += 1
             self._kis_reconcile_cursor = gsid
             try:
-                ran = await self.voice_session_service.warm_kis_cache(
+                confirmed = await self.voice_session_service.warm_kis_cache(
                     first_date, gaming_session_id=gsid,
                 )
             except Exception:
                 logger.error("[KIS-RECONCILE] recompute failed for session %s", gsid, exc_info=True)
                 continue
-            if ran:
+            if confirmed:
                 attempts[gsid] = tries + 1
             else:
                 logger.warning(
-                    "[KIS-RECONCILE] session %s: warm attempt unconfirmed — "
-                    "not counting it as an attempt", gsid,
+                    "[KIS-RECONCILE] session %s: warm attempt not confirmed (no secret, "
+                    "failed request, or unverified response) — not counting it as an attempt", gsid,
                 )
 
     @kis_coverage_reconcile.before_loop
