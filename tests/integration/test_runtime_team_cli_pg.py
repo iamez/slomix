@@ -235,8 +235,8 @@ def assert_rounds_http_rows(body, session_id, round_rows, player_rows):
     assert len(body['rounds']) == 2
     assert {r['round_id']: r['round_number'] for r in body['rounds']} == expected
     for round_ in body['rounds']:
-        actual = sorted((p['player_guid'], p['kills'], p['damage_given']) for p in round_['players'])
-        wanted = sorted((row[1], row[2], row[3]) for row in player_rows if row[0] == round_['round_id'])
+        actual = sorted((p['player_guid'], p['kills'], p['damage_given'], p['deaths']) for p in round_['players'])
+        wanted = sorted((row[1], row[2], row[3], row[4]) for row in player_rows if row[0] == round_['round_id'])
         assert wanted and actual == wanted
 
 
@@ -245,7 +245,7 @@ async def verified_session_rounds_http(observer, session_id):
         'SELECT id, round_number FROM rounds WHERE gaming_session_id=$1 ORDER BY id', session_id,
     )
     players = await observer.fetch(
-        'SELECT p.round_id, p.player_guid, p.kills, p.damage_given '
+        'SELECT p.round_id, p.player_guid, p.kills, p.damage_given, p.deaths '
         'FROM player_comprehensive_stats p JOIN rounds r ON r.id=p.round_id '
         'WHERE r.gaming_session_id=$1 ORDER BY p.round_id, p.player_guid', session_id,
     )
@@ -254,20 +254,23 @@ async def verified_session_rounds_http(observer, session_id):
     assert_rounds_http_rows(body, session_id, rounds, players)
     for round_ in body['rounds']:
         totals = await observer.fetchrow(
-            'SELECT COUNT(*), SUM(kills), SUM(damage_given) FROM player_comprehensive_stats WHERE round_id=$1',
+            'SELECT COUNT(*), SUM(kills), SUM(damage_given), SUM(deaths) '
+            'FROM player_comprehensive_stats WHERE round_id=$1',
             round_['round_id'],
         )
         assert tuple(totals) == (len(round_['players']), sum(p['kills'] for p in round_['players']),
-                                 sum(p['damage_given'] for p in round_['players']))
+                                 sum(p['damage_given'] for p in round_['players']),
+                                 sum(p['deaths'] for p in round_['players']))
     return body
 
 
 @pytest.mark.timeout(180)
-async def test_connected_import_and_team_cli_pair_replay(native_cli_db, tmp_path):
+@pytest.mark.parametrize('numeric', [False, True], ids=['legacy', 'numeric'])
+async def test_connected_import_and_team_cli_pair_replay(native_cli_db, tmp_path, numeric):
     import hashlib
 
     target, _, observer = native_cli_db
-    pair = completed_pair(tmp_path, balanced=True)
+    pair = completed_pair(tmp_path, balanced=True, numeric=numeric)
     lock = tmp_path / 'writer'
     lock.mkdir(mode=0o700)
     expected = {'rounds': 3, 'player_comprehensive_stats': 6, 'weapon_comprehensive_stats': 6,
@@ -287,6 +290,14 @@ async def test_connected_import_and_team_cli_pair_replay(native_cli_db, tmp_path
     assert len(session_ids) == 1 and session_ids[0][0] is not None
     session_id = session_ids[0][0]
     before_http = await verified_session_rounds_http(observer, session_id)
+    if numeric:
+        # Independent literal expectations, never computed by the parser/API under test.
+        observed = {r['round_number']: {p['player_guid']: (p['kills'], p['deaths'], p['damage_given'])
+                                      for p in r['players']} for r in before_http['rounds']}
+        assert observed == {
+            1: {'12345678': (4, 3, 900), '87654321': (3, 4, 700)},
+            2: {'12345678': (6, 5, 1200), '87654321': (5, 6, 1000)},
+        }
     # Session identity is carried by rounds; there is no gaming_sessions table.
     absent_id = await observer.fetchval('SELECT COALESCE(MAX(gaming_session_id), 0) + 1 FROM rounds')
     assert not await observer.fetchval('SELECT EXISTS(SELECT 1 FROM rounds WHERE gaming_session_id=$1)', absent_id)
@@ -376,13 +387,13 @@ async def test_session_rounds_asgi_protocol_without_database():
     status, body = await session_rounds_http(Observer(), 7)
     assert status == 200
     assert_rounds_http_rows(body, 7, [(9, 0), (10, 1), (11, 2)],
-                           [(9, 'A', 8, 240), (10, 'A', 3, 90), (11, 'A', 5, 150)])
+                           [(9, 'A', 8, 240, 2), (10, 'A', 3, 90, 1), (11, 'A', 5, 150, 1)])
     # Exercise the verifier's R0 guard without pretending the fixture executes SQL.
     import copy
     bad = copy.deepcopy(body)
     bad['rounds'].append({**bad['rounds'][0], 'round_id': 9, 'round_number': 0})
     with pytest.raises(AssertionError):
-        assert_rounds_http_rows(bad, 7, [(9, 0), (10, 1), (11, 2)], [(10, 'A', 3, 90)])
+        assert_rounds_http_rows(bad, 7, [(9, 0), (10, 1), (11, 2)], [(10, 'A', 3, 90, 1)])
     assert await session_rounds_http(Observer(), 8) == (404, {'detail': 'Session not found'})
     assert len(queries) == 3
     assert 'r.round_number IN (1, 2)' in queries[0][0]
