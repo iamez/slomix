@@ -748,26 +748,25 @@ class _MonitorTasksMixin:
                 gsid, first_date, kis_rows, prox_kills, tries + 1,
             )
             # The pass budget is spent either way — a failed call still costs a
-            # request — but an ATTEMPT is only consumed when the compute really
-            # ran. warm_kis_cache returns False without reaching it when the
-            # secret is missing or the website is down; counting those would
-            # burn all three attempts during a web restart and abandon the
-            # session until the bot process itself restarts, which is the very
-            # silent-failure mode this loop exists to end.
+            # request — but an ATTEMPT requires a verified completed internal
+            # warm response. Cached/no_data consume that budget without claiming
+            # a new calculation, so persistent gaps cannot monopolize every
+            # pass. Unconfirmed requests during a web restart do not burn the
+            # session's attempts. Coverage convergence is checked separately.
             healed += 1
             try:
-                ran = await self.voice_session_service.warm_kis_cache(
+                confirmed = await self.voice_session_service.warm_kis_cache(
                     first_date, gaming_session_id=gsid,
                 )
             except Exception:
                 logger.error("[KIS-RECONCILE] recompute failed for session %s", gsid, exc_info=True)
                 continue
-            if ran:
+            if confirmed:
                 attempts[gsid] = tries + 1
             else:
                 logger.warning(
-                    "[KIS-RECONCILE] session %s: recompute did not run (no secret, or the "
-                    "response did not confirm computation) — not counting it as an attempt", gsid,
+                    "[KIS-RECONCILE] session %s: warm attempt not confirmed (no secret, "
+                    "failed request, or unverified response) — not counting it as an attempt", gsid,
                 )
 
     @kis_coverage_reconcile.before_loop

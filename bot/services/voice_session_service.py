@@ -626,11 +626,12 @@ class VoiceSessionService:
         session_digest_service.py's _fetch_kis_top call pattern.
         Best-effort; must never raise.
 
-        Returns True only for a verified computed response in the requested
-        scope. Cached/no_data responses did not run a compute and return False,
-        as do read-only, malformed, wrong-scope and failed responses. This bool
-        accounts compute attempts in reconcile; it does not certify complete
-        coverage or reset its retry budget."""
+        Returns True for a verified completed internal warm attempt in the
+        requested scope: computed, cached or no_data. Only computed means a
+        new calculation; cached/no_data still consume the caller's bounded
+        attempt budget. Read-only, malformed, wrong-scope and failed responses
+        return False. This bool does not certify complete coverage or reset
+        the reconcile retry budget."""
         # Warming's whole job is to TRIGGER a compute, which now requires a
         # valid internal token. Without a secret the call can only ever come
         # back read-only (or 401), so skip it with one clear warning instead
@@ -680,9 +681,12 @@ class VoiceSessionService:
                     logger.warning("KIS cache warm unverified scored count for %s", session_date)
                     return False
                 status = compute.get("status")
+                if status == "no_data" and scored != 0:
+                    logger.warning("KIS cache warm inconsistent empty result for %s", session_date)
+                    return False
                 if status in ("cached", "no_data"):
                     logger.info("KIS cache warm for %s returned %s; no compute performed", session_date, status)
-                    return False
+                    return True
                 if status != "computed":
                     logger.warning("KIS cache warm did not confirm computation for %s", session_date)
                     return False

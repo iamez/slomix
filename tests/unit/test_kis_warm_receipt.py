@@ -1,4 +1,4 @@
-"""A warm attempt requires a computed response for the requested session."""
+"""A warm attempt requires a verified completed response in the requested scope."""
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -12,7 +12,7 @@ pytestmark = pytest.mark.asyncio
 
 
 def payload(status="computed"):
-    return {"status": "ok", "compute": {"status": status, "kills_scored": 92},
+    return {"status": "ok", "compute": {"status": status, "kills_scored": 0 if status == "no_data" else 92},
             "scope": {"gaming_session_id": 184, "dates": ["2026-11-12", "2026-11-13"]}}
 
 
@@ -43,12 +43,28 @@ async def test_matching_computed_response_confirms_attempt(monkeypatch, caplog):
     assert "cache warmed" in caplog.text
 
 
-@pytest.mark.parametrize("status", ["cached", "no_data", "read_only", "error", "unknown"])
-async def test_noncomputed_200_does_not_consume_compute_attempt(monkeypatch, caplog, status):
+@pytest.mark.parametrize("status", ["read_only", "error", "unknown"])
+async def test_unconfirmed_200_does_not_consume_attempt(monkeypatch, caplog, status):
     transport(monkeypatch, payload(status))
     with caplog.at_level("INFO"):
         assert await service().warm_kis_cache("2026-11-12", gaming_session_id=184) is False
     assert "cache warmed" not in caplog.text
+
+
+@pytest.mark.parametrize("status", ["cached", "no_data"])
+async def test_completed_noncompute_attempt_is_counted_without_claiming_calculation(monkeypatch, caplog, status):
+    transport(monkeypatch, payload(status))
+    with caplog.at_level("INFO"):
+        assert await service().warm_kis_cache("2026-11-12", gaming_session_id=184) is True
+    assert "cache warmed" not in caplog.text
+    assert f"returned {status}; no compute performed" in caplog.text
+
+
+async def test_inconsistent_empty_result_is_not_confirmed(monkeypatch):
+    body = payload("no_data")
+    body["compute"]["kills_scored"] = 92
+    transport(monkeypatch, body)
+    assert await service().warm_kis_cache("2026-11-12", gaming_session_id=184) is False
 
 
 @pytest.mark.parametrize("field,value", [
@@ -162,3 +178,33 @@ async def test_warm_receipt_through_actual_cache_and_auth(monkeypatch, enabled):
         assert public.json()["compute"]["status"] == "read_only"
     assert statuses == [200, 401]
     assert calls == [(184, False), (184, True)]
+
+
+@pytest.mark.parametrize("status", ["cached", "no_data"])
+async def test_confirmed_noncompute_attempt_cannot_starve_older_gap(monkeypatch, status):
+    from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
+    from tests.unit.test_kis_coverage_reconcile import Bot
+
+    owner = service()
+    bot = Bot([(gsid, "2026-11-12", 100, 0) for gsid in (200, 199, 198, 197)])
+    bot.voice_session_service = owner
+    _, session = transport(monkeypatch, None)
+    calls = []
+
+    def request(url, *, params, headers):
+        gsid = params["gaming_session_id"]
+        calls.append(gsid)
+        body = payload("computed" if gsid == 197 else status)
+        body["scope"]["gaming_session_id"] = gsid
+        response = SimpleNamespace(status=200, json=AsyncMock(return_value=body))
+        context = MagicMock()
+        context.__aenter__ = AsyncMock(return_value=response)
+        return context
+
+    session.get.side_effect = request
+    attempt_limit = _MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS  # noqa: SLF001 - actual scheduler budget
+    for _ in range(attempt_limit + 1):
+        await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
+    assert 197 in calls
+    for gsid in (200, 199, 198):
+        assert calls.count(gsid) == attempt_limit
