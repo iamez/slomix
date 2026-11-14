@@ -778,10 +778,9 @@ class _MonitorTasksMixin:
     async def _find_kis_coverage_gaps(self):
         """Sessions whose KIS row count is below their proximity kill count.
 
-        Aggregates each side by canonical round key ONCE and joins, rather than
-        running a correlated subquery per round: measured 5,325 ms the naive way
-        against 51 ms this way over ALL history, which is the difference between
-        a loop that is free and one that is not.
+        Aggregates each side by canonical round key instead of running a
+        correlated subquery per round. Historical timings for the prior join
+        query remain in Git history; this query needs its own DEV profiling.
 
         Base round validity matches the canonical story scope. This detector
         additionally excludes bot rounds and keys without an available clock.
