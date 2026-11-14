@@ -204,8 +204,14 @@ async def _noop():
 # ---------------------------------------------------------------------------
 
 class _Resp:
-    def __init__(self, status):
+    def __init__(self, status, params):
         self.status = status
+        self.params = params
+
+    async def json(self):
+        return {"status": "ok", "compute": {"status": "computed", "kills_scored": 1},
+                "scope": {"gaming_session_id": self.params.get("gaming_session_id", 137),
+                          "dates": [self.params.get("session_date", "2026-03-25")]}}
 
     async def __aenter__(self):
         return self
@@ -234,7 +240,7 @@ class _Sess:
         self.headers = headers
         if self._raise:
             raise self._raise
-        return _Resp(self._status)
+        return _Resp(self._status, params)
 
 
 def _warm_svc():
@@ -252,7 +258,7 @@ def _warm_svc():
 async def test_warm_hits_kill_impact_with_the_date():
     sess = _Sess(status=200)
     with patch("aiohttp.ClientSession", return_value=sess):
-        await _warm_svc().warm_kis_cache("2026-07-07")  # noqa: SLF001
+        assert await _warm_svc().warm_kis_cache("2026-07-07") is True
     assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
     assert sess.params == {"session_date": "2026-07-07", "limit": 1}
     assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
@@ -417,7 +423,7 @@ async def test_warm_without_gsid_falls_back_to_the_date():
 async def test_warm_sends_gaming_session_id_not_session_date():
     sess = _Sess(status=200)
     with patch("aiohttp.ClientSession", return_value=sess):
-        await _warm_svc().warm_kis_cache("2026-03-25", gaming_session_id=137)  # noqa: SLF001
+        assert await _warm_svc().warm_kis_cache("2026-03-25", gaming_session_id=137) is True
     assert sess.params == {"gaming_session_id": 137, "limit": 1}
     assert "session_date" not in sess.params
 

@@ -626,11 +626,11 @@ class VoiceSessionService:
         session_digest_service.py's _fetch_kis_top call pattern.
         Best-effort; must never raise.
 
-        Returns True only when a compute actually ran (HTTP 200). A missing
-        secret, an unreachable website or a non-200 answer all return False:
-        the reconcile loop counts retries, and counting one for a call that
-        never reached the compute would exhaust a session's attempts during a
-        website restart and abandon it until the bot itself restarts."""
+        Returns True only for a verified computed response in the requested
+        scope. Cached/no_data responses did not run a compute and return False,
+        as do read-only, malformed, wrong-scope and failed responses. This bool
+        accounts compute attempts in reconcile; it does not certify complete
+        coverage or reset its retry budget."""
         # Warming's whole job is to TRIGGER a compute, which now requires a
         # valid internal token. Without a secret the call can only ever come
         # back read-only (or 401), so skip it with one clear warning instead
@@ -656,15 +656,41 @@ class VoiceSessionService:
                         else {"session_date": str(session_date)[:10], "limit": 1}
                     ),
                              headers=headers) as resp:
-                if resp.status == 200:
-                    logger.info("✅ KIS cache warmed for %s", session_date)
-                    return True
-                logger.warning("KIS cache warm HTTP %s for %s (url=%s)",
-                                resp.status, session_date, url)
-                return False
+                if resp.status != 200:
+                    logger.warning("KIS cache warm HTTP %s for %s (url=%s)",
+                                   resp.status, session_date, url)
+                    return False
+                payload = await resp.json()
+                compute = payload.get("compute") if isinstance(payload, dict) else None
+                scope = payload.get("scope") if isinstance(payload, dict) else None
+                if (not isinstance(compute, dict) or not isinstance(scope, dict)
+                        or payload.get("status") != "ok"):
+                    logger.warning("KIS cache warm unverified response for %s", session_date)
+                    return False
+                resolved_id = scope.get("gaming_session_id")
+                dates = scope.get("dates")
+                if (type(resolved_id) is not int or resolved_id <= 0
+                        or (gaming_session_id is not None and resolved_id != gaming_session_id)
+                        or (gaming_session_id is None and (
+                            not isinstance(dates, list) or str(session_date)[:10] not in dates))):
+                    logger.warning("KIS cache warm scope mismatch for %s", session_date)
+                    return False
+                scored = compute.get("kills_scored")
+                if type(scored) is not int or scored < 0:
+                    logger.warning("KIS cache warm unverified scored count for %s", session_date)
+                    return False
+                status = compute.get("status")
+                if status in ("cached", "no_data"):
+                    logger.info("KIS cache warm for %s returned %s; no compute performed", session_date, status)
+                    return False
+                if status != "computed":
+                    logger.warning("KIS cache warm did not confirm computation for %s", session_date)
+                    return False
+                logger.info("✅ KIS cache warmed for %s (%d kills scored)", session_date, scored)
+                return True
         except Exception as e:
             logger.warning("KIS cache warm failed for %s (url=%s): %s",
-                            session_date, url, e)
+                            session_date, url, type(e).__name__)
             return False
 
     async def _delete_kis_rows(self, session_date: str, gsids=None) -> None:

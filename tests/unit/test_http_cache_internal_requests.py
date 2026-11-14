@@ -36,8 +36,9 @@ def client_for(cache, reader):
         if error == "exception":
             raise RuntimeError("Fixture handler failure")
         calls.append((gaming_session_id, internal))
-        return {"scope": {"gaming_session_id": gaming_session_id},
-                "compute": {"status": "computed" if internal else "read_only"}}
+        return {"status": "ok",
+                "scope": {"gaming_session_id": gaming_session_id, "dates": ["2026-11-12"]},
+                "compute": {"status": "computed" if internal else "read_only", "kills_scored": 92}}
 
     app.add_middleware(HTTPCacheMiddleware, cache_backend=cache, generation_reader=reader)
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://fixture"), calls
@@ -89,7 +90,7 @@ async def test_internal_first_never_populates_public_response_or_etag(runtime_mo
         assert "ETag" not in again.headers
         other = await client.get(PATH, params={"gaming_session_id": 185})
         assert other.headers["X-Cache"] == "MISS"
-        assert other.json()["scope"] == {"gaming_session_id": 185}
+        assert other.json()["scope"]["gaming_session_id"] == 185
         assert (await client.get(PATH)).headers["X-Cache"] == "HIT"
         assert calls == [(184, True), (184, False), (184, True), (185, False)]
 

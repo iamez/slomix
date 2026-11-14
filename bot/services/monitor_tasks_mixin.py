@@ -767,7 +767,7 @@ class _MonitorTasksMixin:
             else:
                 logger.warning(
                     "[KIS-RECONCILE] session %s: recompute did not run (no secret, or the "
-                    "website did not answer 200) — not counting it as an attempt", gsid,
+                    "response did not confirm computation) — not counting it as an attempt", gsid,
                 )
 
     @kis_coverage_reconcile.before_loop
