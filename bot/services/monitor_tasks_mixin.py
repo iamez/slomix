@@ -777,35 +777,43 @@ class _MonitorTasksMixin:
     async def _find_kis_coverage_gaps(self):
         """Sessions whose KIS row count is below their proximity kill count.
 
-        Aggregates each side by canonical round key ONCE and joins, rather than
-        running a correlated subquery per round: measured 5,325 ms the naive way
-        against 51 ms this way over ALL history, which is the difference between
-        a loop that is free and one that is not.
+        Aggregates each side by canonical round key instead of running a
+        correlated subquery per round. Historical timings for the prior join
+        query remain in Git history; this query needs its own DEV profiling.
 
-        The canonical key (round_start_unix, map_name, round_number) is the same
-        one the compute filters by, so a gap here is exactly a gap there.
+        Base round validity matches the canonical story scope. This detector
+        additionally excludes bot rounds and keys without an available clock.
+        Each session key is selected once, and EXISTS avoids multiplying event
+        counts when several accepted round rows share a physical key.
         """
         rows = await self.db_adapter.fetch_all(
             """
             WITH scoped AS (
                 SELECT gaming_session_id AS gsid, round_start_unix AS rsu,
-                       map_name, round_number AS rn, round_date::date AS d
+                       map_name, round_number AS rn, MIN(round_date::date) AS d
                 FROM rounds
-                WHERE gaming_session_id IS NOT NULL AND is_valid AND round_number > 0
+                WHERE gaming_session_id IS NOT NULL AND round_number IN (1, 2)
+                  AND is_valid IS DISTINCT FROM FALSE
+                  AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
                   AND is_bot_round IS DISTINCT FROM TRUE AND round_start_unix IS NOT NULL
+                GROUP BY gaming_session_id, round_start_unix, map_name, round_number
             ), prox AS (
                 SELECT ko.round_start_unix AS rsu, ko.map_name, ko.round_number AS rn,
                        COUNT(*) AS n
                 FROM proximity_kill_outcome ko
-                JOIN scoped s ON s.rsu = ko.round_start_unix AND s.map_name = ko.map_name
-                             AND s.rn = ko.round_number
+                WHERE EXISTS (
+                    SELECT 1 FROM scoped s WHERE s.rsu = ko.round_start_unix
+                        AND s.map_name = ko.map_name AND s.rn = ko.round_number
+                )
                 GROUP BY 1, 2, 3
             ), kis AS (
                 SELECT k.round_start_unix AS rsu, k.map_name, k.round_number AS rn,
                        COUNT(*) AS n
                 FROM storytelling_kill_impact k
-                JOIN scoped s ON s.rsu = k.round_start_unix AND s.map_name = k.map_name
-                             AND s.rn = k.round_number
+                WHERE EXISTS (
+                    SELECT 1 FROM scoped s WHERE s.rsu = k.round_start_unix
+                        AND s.map_name = k.map_name AND s.rn = k.round_number
+                )
                 GROUP BY 1, 2, 3
             )
             SELECT s.gsid, MIN(s.d)::text AS first_date,
