@@ -248,7 +248,7 @@ def _warm_svc():
 
     class Cfg:
         website_api_base = "http://127.0.0.1:8000/api"
-        internal_api_secret = "test-internal-secret"  # noqa: S105 - test-only shared secret
+        internal_api_secret = "dummy_internal_warm_fixture"  # noqa: S105 - test-only shared secret
 
     svc.config = Cfg()
     return svc
@@ -261,7 +261,7 @@ async def test_warm_hits_kill_impact_with_the_date():
         assert await _warm_svc().warm_kis_cache("2026-07-07") is True
     assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
     assert sess.params == {"session_date": "2026-07-07", "limit": 1}
-    assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
+    assert sess.headers == {"X-Internal-Token": "dummy_internal_warm_fixture"}
 
 
 def _warm_svc_no_secret():

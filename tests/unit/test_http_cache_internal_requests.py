@@ -11,7 +11,7 @@ from website.backend.middleware.http_cache_middleware import HTTPCacheMiddleware
 from website.backend.services.http_cache_backend import MemoryCacheBackend
 
 PATH = "/api/storytelling/kill-impact"
-SECRET = "internal-cache-fixture-only"  # noqa: S105 - synthetic authentication fixture
+SECRET = "dummy_internal_cache_fixture"  # noqa: S105 - synthetic authentication fixture
 pytestmark = pytest.mark.asyncio
 
 

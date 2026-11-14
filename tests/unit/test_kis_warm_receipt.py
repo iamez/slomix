@@ -18,7 +18,7 @@ def payload(status="computed"):
 
 def service():
     result = VoiceSessionService.__new__(VoiceSessionService)
-    result.config = SimpleNamespace(internal_api_secret="warm-fixture-only",  # noqa: S106 - synthetic fixture
+    result.config = SimpleNamespace(internal_api_secret="dummy_warm_fixture",  # noqa: S106 - synthetic fixture
                                     website_api_base="http://fixture.invalid/api")
     return result
 
@@ -171,7 +171,7 @@ async def test_warm_receipt_through_actual_cache_and_auth(monkeypatch, enabled):
         assert (await client.get(PATH, params=params)).headers["X-Cache"] == "MISS"
         assert (await client.get(PATH, params=params)).headers["X-Cache"] == "HIT"
         assert await owner.warm_kis_cache("2026-11-12", gaming_session_id=184) is True
-        owner.config.internal_api_secret = "invalid-fixture"  # noqa: S105 - deliberately invalid fixture
+        owner.config.internal_api_secret = "dummy_invalid_fixture"  # noqa: S105 - deliberately invalid fixture
         assert await owner.warm_kis_cache("2026-11-12", gaming_session_id=184) is False
         public = await client.get(PATH, params=params)
         assert public.headers["X-Cache"] == "HIT"
