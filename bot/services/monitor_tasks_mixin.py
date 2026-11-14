@@ -697,9 +697,9 @@ class _MonitorTasksMixin:
         except Exception:
             logger.error("[KIS-RECONCILE] gap query failed", exc_info=True)
             return
-        # A session that cannot be healed must not be retried forever: give up
-        # after a few passes and say so once, rather than logging the same
-        # failure every 15 minutes until someone notices the noise.
+        # Bound verified attempts without observed progress. A growing source
+        # or increasing coverage gets a fresh budget; a True warm result alone
+        # does not prove either. Counts are observations, not content identity.
         attempts = getattr(self, "_kis_reconcile_attempts", None)
         if attempts is None:
             attempts = {}
@@ -708,6 +708,10 @@ class _MonitorTasksMixin:
         if abandoned is None:
             abandoned = set()
             self._kis_reconcile_abandoned = abandoned
+        observed = getattr(self, "_kis_reconcile_observed_counts", None)
+        if observed is None:
+            observed = {}
+            self._kis_reconcile_observed_counts = observed
 
         # A session no longer in the gap list is scored: forget its retry count.
         # Kept, it would outlive the problem it counted — a LATER gap in the same
@@ -720,10 +724,26 @@ class _MonitorTasksMixin:
         for gsid in [g for g in attempts if g not in live]:
             del attempts[gsid]
         abandoned.intersection_update(live)
+        for gsid in [g for g in observed if g not in live]:
+            del observed[gsid]
+        for gsid, _, prox_kills, kis_rows in gaps:
+            previous = observed.get(gsid)
+            if previous is not None and (prox_kills != previous[0] or kis_rows > previous[1]):
+                attempts.pop(gsid, None)
+                abandoned.discard(gsid)
+            observed[gsid] = (prox_kills, kis_rows)
 
         if not gaps:
+            self._kis_reconcile_cursor = None
             return
 
+        # Rotate by a stable session ID, including after unconfirmed/failed
+        # requests. Always choosing the newest three starves every older gap
+        # when those calls cannot consume their per-session attempt budgets.
+        gaps = sorted(gaps, key=lambda row: row[0], reverse=True)
+        cursor = getattr(self, "_kis_reconcile_cursor", None)
+        if cursor is not None:
+            gaps = [row for row in gaps if row[0] < cursor] + [row for row in gaps if row[0] >= cursor]
         healed = 0
         for gsid, first_date, prox_kills, kis_rows in gaps:
             if healed >= self._KIS_RECONCILE_MAX_PER_PASS:
@@ -748,13 +768,11 @@ class _MonitorTasksMixin:
                 gsid, first_date, kis_rows, prox_kills, tries + 1,
             )
             # The pass budget is spent either way — a failed call still costs a
-            # request — but an ATTEMPT is only consumed when the compute really
-            # ran. warm_kis_cache returns False without reaching it when the
-            # secret is missing or the website is down; counting those would
-            # burn all three attempts during a web restart and abandon the
-            # session until the bot process itself restarts, which is the very
-            # silent-failure mode this loop exists to end.
+            # request — but an ATTEMPT is consumed only for a verified completed
+            # internal warm (computed/cached/no_data under the R1 contract).
+            # Unconfirmed/failed requests must not exhaust a session's budget.
             healed += 1
+            self._kis_reconcile_cursor = gsid
             try:
                 ran = await self.voice_session_service.warm_kis_cache(
                     first_date, gaming_session_id=gsid,
@@ -766,8 +784,8 @@ class _MonitorTasksMixin:
                 attempts[gsid] = tries + 1
             else:
                 logger.warning(
-                    "[KIS-RECONCILE] session %s: recompute did not run (no secret, or the "
-                    "website did not answer 200) — not counting it as an attempt", gsid,
+                    "[KIS-RECONCILE] session %s: warm attempt unconfirmed — "
+                    "not counting it as an attempt", gsid,
                 )
 
     @kis_coverage_reconcile.before_loop
