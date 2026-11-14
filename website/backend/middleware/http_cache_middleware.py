@@ -92,8 +92,10 @@ class HTTPCacheMiddleware(BaseHTTPMiddleware):
         if not path.startswith(self.cacheable_prefixes):
             return await call_next(request)
 
-        # Avoid caching user/session-specific data.
-        if request.headers.get("authorization") or request.headers.get("cookie"):
+        # Internal GETs must reach authentication and must never share public
+        # cache entries. Presence includes empty or invalid tokens; auth decides.
+        if ("x-internal-token" in request.headers
+                or request.headers.get("authorization") or request.headers.get("cookie")):
             response = await call_next(request)
             response.headers["Cache-Control"] = "private, no-store"
             return response
