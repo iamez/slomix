@@ -16,8 +16,9 @@ This test proves it on the CI PostgreSQL:
    something the dump lacked would show up here);
 6. `--baseline` + `--validate` must then report a clean ledger.
 
-Skips when the CI PostgreSQL service is unavailable (local dev) or the test
-user cannot CREATE DATABASE.
+Only missing explicit private/CI opt-in skips. Requested connection, privilege
+or cleanup failures fail. Each case owns its database; collection does not load
+application dotenv. This test proves presence parity, not safe historical replay.
 
 Known limitation (Codex on #516): this proves PRESENCE parity, not
 DEFINITION parity. An idempotent migration (`ADD COLUMN IF NOT EXISTS`,
@@ -30,36 +31,20 @@ follow-up in the remediation plan.
 """
 from __future__ import annotations
 
-import os
 import re
-import sys
-import uuid
 from pathlib import Path
 
+import asyncpg
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
-asyncpg = pytest.importorskip("asyncpg")
-
-from scripts.apply_migrations import (  # noqa: E402
-    cmd_baseline,
-    cmd_validate,
-    discover_migrations,
-    split_statements,
-    unwrap_outer_transaction,
+# Reuse the audited target lifecycle and deferred, dotenv-disabled runner.
+from tests.integration.test_apply_migrations_pg import (  # noqa: F401
+    migration_runner,
+    migration_target,
 )
 
 REPO = Path(__file__).resolve().parents[2]
 DUMP = REPO / "tools" / "schema_postgresql.sql"
-
-TEST_DB = {
-    "host": os.getenv("POSTGRES_TEST_HOST", "localhost"),
-    "port": int(os.getenv("POSTGRES_TEST_PORT", "5432")),
-    "database": os.getenv("POSTGRES_TEST_DATABASE", "etlegacy_test"),
-    "user": os.getenv("POSTGRES_TEST_USER", "etlegacy_user"),
-    "password": os.getenv("POSTGRES_TEST_PASSWORD", "etlegacy_test_password"),
-}
 
 # SQLSTATEs that prove the object ALREADY EXISTS in the dump-bootstrapped
 # schema — exactly what parity wants. Anything else (undefined column/table,
@@ -87,11 +72,34 @@ def _has_executable_sql(stmt: str) -> bool:
     )
 
 
-async def _admin_conn():
+@pytest.fixture
+def parity_runner(monkeypatch, migration_target, migration_runner):  # noqa: F811 - imported pytest fixtures
+    """Exercise real ledger code, but restrict every connection to the owned DB."""
+    for key, value in migration_target.items():
+        monkeypatch.setenv("POSTGRES_" + key.upper(), str(value))
+
+    async def connect_owned():
+        resolved = migration_runner.get_connection_kwargs()
+        if resolved != migration_target:
+            raise AssertionError("Parity runner escaped its owned test database")
+        return await asyncpg.connect(**resolved, timeout=5, command_timeout=5, ssl=False)
+
+    monkeypatch.setattr(migration_runner, "get_connection", connect_owned)
+    return migration_runner
+
+
+@pytest.fixture
+async def parity_connection(parity_runner, migration_target):  # noqa: F811 - imported pytest fixture
+    """Reader closes before migration_target removes only its newly owned DB."""
+    conn = await parity_runner.get_connection()
     try:
-        return await asyncpg.connect(timeout=5, **TEST_DB)
-    except (TimeoutError, OSError, asyncpg.PostgresError) as e:
-        pytest.skip(f"test PostgreSQL unavailable: {e}")
+        identity = await conn.fetchrow("SELECT current_database() AS database, current_user AS username")
+        if (identity["database"] != migration_target["database"]
+                or identity["username"] != migration_target["user"]):
+            raise AssertionError("Parity connection database/user identity mismatch")
+        yield conn
+    finally:
+        await conn.close(timeout=5)
 
 
 async def _snapshot(conn) -> frozenset:
@@ -109,72 +117,60 @@ async def _snapshot(conn) -> frozenset:
 
 
 @pytest.mark.asyncio
-async def test_dump_contains_every_migration(monkeypatch):
-    admin = await _admin_conn()
-    parity_db = f"parity_{uuid.uuid4().hex[:8]}"
-    try:
-        await admin.execute(f'CREATE DATABASE "{parity_db}"')
-    except asyncpg.InsufficientPrivilegeError as e:
-        # Local dev users typically lack CREATEDB; only the CI service user is
-        # guaranteed to have it. Skip (like the connection check) instead of
-        # hard-failing the suite outside CI (Copilot on #516).
-        await admin.close()
-        pytest.skip(f"test user cannot CREATE DATABASE: {e}")
-    try:
-        conn = await asyncpg.connect(**{**TEST_DB, "database": parity_db})
-        try:
-            # 1) canonical dump onto the empty database — every error is real.
-            await conn.execute(DUMP.read_text(encoding="utf-8"))
-            before = await _snapshot(conn)
-            assert before, "dump produced no schema — wrong file?"
+async def test_dump_contains_every_migration(parity_connection, parity_runner):
+    conn = parity_connection
+    # 1) canonical dump onto the empty database — every error is real.
+    await conn.execute(DUMP.read_text(encoding="utf-8"), timeout=60)
+    # pg_dump resets server bounds; do not let the replay inherit unlimited SQL.
+    await conn.execute("SET statement_timeout = '5s'; SET lock_timeout = '1s'")
+    before = await _snapshot(conn)
+    assert before, "dump produced no schema — wrong file?"
 
-            # 2) re-apply every committed migration, statement by statement.
-            problems: list[str] = []
-            for filename, path in discover_migrations():
-                body = unwrap_outer_transaction(path.read_text(encoding="utf-8"))
-                for stmt in split_statements(body):
-                    if not _has_executable_sql(stmt):
-                        continue
-                    try:
-                        await conn.execute(stmt)
-                    except asyncpg.PostgresError as e:
-                        state = getattr(e, "sqlstate", "")
-                        if state in _ALREADY_EXISTS:
-                            continue  # presence proven — parity holds
-                        problems.append(
-                            f"{filename}: [{state}] {e} :: {stmt[:120]}"
-                        )
-            assert not problems, (
-                "canonical dump is missing effects these migrations assume:\n"
-                + "\n".join(problems)
-            )
+    # 2) re-apply every committed migration, statement by statement.
+    problems: list[str] = []
+    for filename, path in parity_runner.discover_migrations():
+        body = parity_runner.unwrap_outer_transaction(path.read_text(encoding="utf-8"))
+        for stmt in parity_runner.split_statements(body):
+            if not _has_executable_sql(stmt):
+                continue
+            try:
+                await conn.execute(stmt)
+            except asyncpg.PostgresError as e:
+                state = getattr(e, "sqlstate", "")
+                if state in _ALREADY_EXISTS:
+                    continue  # presence proven — parity holds
+                problems.append(
+                    f"{filename}: [{state}] {e} :: {stmt[:120]}"
+                )
+    assert not problems, (
+        "canonical dump is missing effects these migrations assume:\n"
+        + "\n".join(problems)
+    )
 
-            # 3) schema IDENTICAL in BOTH directions ⇒ dump ≡ migrations.
-            # `after - before` catches objects a migration adds that the dump
-            # lacks; `before - after` catches objects a migration REMOVES that
-            # the dump still creates (e.g. 045's dropped monitoring tables) —
-            # deploy_clean.sh baselines immediately after the dump, so either
-            # direction means the fresh ledger lies about the schema (Codex
-            # on #516).
-            after = await _snapshot(conn)
-            added = sorted(after - before)
-            removed = sorted(before - after)
-            assert not added and not removed, (
-                "dump ≠ migrations:\n"
-                + "".join(f"  MIGRATION-ONLY (dump lacks): {a}\n" for a in added[:25])
-                + "".join(f"  DUMP-ONLY (migration removes): {r}\n" for r in removed[:25])
-            )
-        finally:
-            await conn.close()
+    # 3) No observed column/index additions or removals (presence parity only).
+    # `after - before` catches objects a migration adds that the dump
+    # lacks; `before - after` catches objects a migration REMOVES that
+    # the dump still creates (e.g. 045's dropped monitoring tables) —
+    # deploy_clean.sh baselines immediately after the dump, so either
+    # direction means the fresh ledger lies about the schema (Codex
+    # on #516).
+    after = await _snapshot(conn)
+    added = sorted(after - before)
+    removed = sorted(before - after)
+    assert not added and not removed, (
+        "dump ≠ migrations:\n"
+        + "".join(f"  MIGRATION-ONLY (dump lacks): {a}\n" for a in added[:25])
+        + "".join(f"  DUMP-ONLY (migration removes): {r}\n" for r in removed[:25])
+    )
 
-        # 4) the deploy_clean.sh flow: baseline + validate must be clean.
-        monkeypatch.setenv("POSTGRES_HOST", TEST_DB["host"])
-        monkeypatch.setenv("POSTGRES_PORT", str(TEST_DB["port"]))
-        monkeypatch.setenv("POSTGRES_DATABASE", parity_db)
-        monkeypatch.setenv("POSTGRES_USER", TEST_DB["user"])
-        monkeypatch.setenv("POSTGRES_PASSWORD", TEST_DB["password"])
-        await cmd_baseline()
-        await cmd_validate()  # exits non-zero on drift; clean = returns
-    finally:
-        await admin.execute(f'DROP DATABASE IF EXISTS "{parity_db}"')
-        await admin.close()
+    # Real baseline/validate on the same pinned target, not an application DB.
+    await parity_runner.cmd_baseline()
+    await parity_runner.cmd_validate()
+    # This reader is independent of the runner's now-closed ledger connections.
+    ledger = await conn.fetch("SELECT filename, success, checksum FROM schema_migrations")
+    expected = {filename for filename, _ in parity_runner.discover_migrations()}
+    assert {row['filename'] for row in ledger} == expected
+    assert all(row['success'] for row in ledger)
+    assert await conn.fetchval('SELECT count(*) FROM schema_migrations') == len(ledger) == len(expected)
+    print(f'Bootstrap presence proof: {len(before)} unchanged column/index entries; '
+          f'{len(ledger)} ledger rows; {sum(row["checksum"] is None for row in ledger)} historical NULL checksums')

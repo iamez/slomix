@@ -1,3 +1,41 @@
+## 2026-11-07 — Restore retained local runtime contracts and harden test target ownership
+
+Owner-approved1129 merged1fcc50b3355bf48eb012589bf7eacbe6244b1f6d after full
+pinned420second cycle; independent GitHub merged=true/whole-tree equality/empty
+diff confirm reviewed347477dea. No deployment or service action follows.
+
+This cohesive slice restores18original local test files plus the pinned C probe,
+reconciles bootstrap parity and parser fixture prerequisites, and retains every
+published legacy parser smoke method in TestLegacyStatsFixtureIntegration.
+The bootstrap reader now uses the existing owned disposable target and deferred
+runner; requested infrastructure errors fail instead of silently skipping and
+collection does not load application dotenv. The journal wrapper delegates to
+the existing strict target policy, explicitly pinning role/port/empty password /
+SSL/deadlines. Empty requested opt-in fails. Its schema cleanup drops only after
+successful CREATE. Existing journal tests remain, with port/password cases added.
+
+Observed original local failure: unpinned legacy connection options could inherit
+ambientPGUSER/PGPORT. Original cleanup guard was missing as well; deliberate
+removal of the restored created guard produces an observed failure, restoredcmp.
+The restored mapping test was stale:104intentionally allows plus in map names.
+Its old filename-only mutation hit receipt integrity instead of the map guard.
+Now valid sealed plus/dot/underscore names reach the actual bound importer; a
+properly sealed65character map still fails before pool creation. No map alphabet,
+application behavior, merged migration or deployed package is changed.
+
+Focused local result276passed/4explicit optional-corpus or local-data skips /
+3existing strict expected failures for the deferred versioned proximity clock.
+Six pinned ET2.85 C observations actually execute with ETLEGACY_SOURCE set;
+these use dependency stubs and compile functions, never launch a game server.
+Lua5.1/5.4 writer/required-bootstrap and actual unavailable-consumer child lifecycles
+are included.41mapping caller cases pass. Initial failed measurements, original
+blobs/preimages, mutation failure and restoredcmp are retained privately.
+Native PG14/17 CI remains required after push; skip is not acceptance. No new
+numbered PR merge permission or service authority is inferred. Original57paths /
+1069713planbytes/deferredfeatures remain. Remaining native/UI contracts are the
+next dependent slice; broader sustained independent ingestion/live source/human
+DOM/crash/PITR gates stay separate from restored test execution.
+
 ## 2026-11-06 — Private service outage passes; restore retained capture identity SQL coverage
 
 Owner ran the pinned worker recovery packet. Actual private PG14 service stop /

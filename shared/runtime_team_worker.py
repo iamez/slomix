@@ -9,6 +9,7 @@ from dataclasses import dataclass, replace
 
 import asyncpg
 
+from shared.runtime_pool_errors import closed_pool_release
 from shared.runtime_team_batch import consume_team_page
 from shared.runtime_team_consumer import team_consumer_enabled
 from shared.runtime_team_discovery import TeamScanHint
@@ -16,7 +17,8 @@ from shared.team_write_guard import TeamWriteBusy
 
 logger = logging.getLogger(__name__)
 _RETRYABLE = (OSError, TimeoutError, TeamWriteBusy, asyncpg.PostgresConnectionError,
-              asyncpg.CannotConnectNowError, asyncpg.SerializationError, asyncpg.DeadlockDetectedError)
+              asyncpg.CannotConnectNowError, asyncpg.SerializationError, asyncpg.DeadlockDetectedError,
+              asyncpg.InternalClientError)
 
 
 def team_worker_enabled() -> bool:
@@ -83,6 +85,7 @@ class RuntimeTeamWorker:
                 if not team_worker_enabled():
                     self.state = replace(self.state, status='disabled', error_type=None)
                     return
+                conn = None
                 try:
                     async with asyncio.timeout(self.attempt_timeout):
                         async with connection_factory() as conn:
@@ -109,6 +112,12 @@ class RuntimeTeamWorker:
                                     raise ConnectionError('Team connection closed') from None
                                 raise
                 except _RETRYABLE as error:
+                    if isinstance(error, asyncpg.InternalClientError):
+                        if not closed_pool_release(error, conn):
+                            raise
+                        pending = asyncio.current_task()
+                        if pending is not None and pending.cancelling():
+                            raise asyncio.CancelledError from error
                     # Release can fail after commits; keep original hint too.
                     self.state = replace(self.state, status='unavailable', error_type=type(error).__name__)
                     logger.warning('Runtime team consumer unavailable (%s)', type(error).__name__)
