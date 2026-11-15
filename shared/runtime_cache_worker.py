@@ -11,6 +11,7 @@ import asyncpg
 
 from shared.runtime_cache_consumer import consume_http_cache_events
 from shared.runtime_events import event_stream_enabled
+from shared.runtime_pool_errors import closed_pool_release
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,7 @@ class RuntimeCacheWorker:
                 if not cache_worker_enabled():
                     self.state = replace(self.state, status="disabled", error_type=None)
                     return
+                conn = None
                 try:
                     async with asyncio.timeout(self.attempt_timeout):
                         async with connection_factory() as conn:
@@ -94,7 +96,13 @@ class RuntimeCacheWorker:
                                 if closed:
                                     raise ConnectionError("Runtime cache connection closed") from None
                                 raise
-                except (asyncpg.PostgresError, OSError, TimeoutError) as error:
+                except (asyncpg.PostgresError, OSError, TimeoutError, asyncpg.InternalClientError) as error:
+                    if isinstance(error, asyncpg.InternalClientError):
+                        if not closed_pool_release(error, conn):
+                            raise
+                        pending = asyncio.current_task()
+                        if pending is not None and pending.cancelling():
+                            raise asyncio.CancelledError from error
                     self.state = replace(self.state, status="unavailable", error_type=type(error).__name__,
                                          last_failure_type=type(error).__name__,
                                          last_failure_monotonic=time.monotonic())
