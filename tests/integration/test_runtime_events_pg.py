@@ -8,7 +8,6 @@ This file never starts a server. Two connections observe visibility and NOTIFY.
 
 import asyncio
 import os
-import stat
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -19,31 +18,14 @@ import asyncpg
 import pytest
 
 from shared.runtime_events import emit_round_stats_imported
+from tests.disposable_database import connection_options as validated_connection_options
 
 
 def connection_options():
     """Fail closed: local private socket OR explicitly opted-in CI service."""
-    socket = os.getenv("RUNTIME_EVENTS_TEST_SOCKET")
-    if not socket:
-        if os.getenv("RUNTIME_EVENTS_TEST_CI") == "true":
-            if (os.getenv("GITHUB_ACTIONS") != "true"
-                    or os.getenv("POSTGRES_TEST_HOST") != "127.0.0.1"
-                    or os.getenv("POSTGRES_TEST_DATABASE") != "etlegacy_test"
-                    or os.getenv("POSTGRES_TEST_USER") != "etlegacy_user"):
-                pytest.fail("Runtime journal CI requires the explicit loopback test service")
-            return dict(
-                host="127.0.0.1", port=5432, database="etlegacy_test",
-                user="etlegacy_user", password=os.environ["POSTGRES_TEST_PASSWORD"],
-                timeout=5,
-            )
+    if not {"RUNTIME_EVENTS_TEST_SOCKET", "RUNTIME_EVENTS_TEST_CI"}.intersection(os.environ):
         pytest.skip("Disposable PostgreSQL not explicitly configured")
-    path = Path(socket).resolve()
-    if path.parent != Path("/tmp") or not path.name.startswith("slomix-runtime-pg-"):
-        pytest.fail("Refusing non-disposable PostgreSQL socket path")
-    info = path.stat()
-    if not path.is_dir() or info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) != 0o700:
-        pytest.fail("Disposable PostgreSQL directory must be owned by this user with mode 0700")
-    return dict(host=str(path), database="postgres", timeout=5)
+    return validated_connection_options()
 
 
 @pytest.fixture
@@ -52,9 +34,11 @@ async def journal_db():
     writer = await asyncpg.connect(**options)
     reader = None
     schema = "runtime_events_test_" + uuid.uuid4().hex
+    created = False
     try:
         reader = await asyncpg.connect(**options)
         await writer.execute(f'CREATE SCHEMA "{schema}"')
+        created = True
         for conn in (writer, reader):
             await conn.execute(f'SET search_path TO "{schema}"')
         await writer.execute("""
@@ -69,7 +53,8 @@ async def journal_db():
                 await reader.close(timeout=5)
         finally:
             try:
-                await writer.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE', timeout=5)
+                if created:
+                    await writer.execute(f'DROP SCHEMA "{schema}" CASCADE', timeout=5)
             finally:
                 await writer.close(timeout=5)
 
@@ -80,18 +65,20 @@ async def migrate(conn):
 
 
 @pytest.mark.parametrize("bad_key", [None, "GITHUB_ACTIONS", "POSTGRES_TEST_HOST",
-                                    "POSTGRES_TEST_DATABASE", "POSTGRES_TEST_USER"])
+                                    "POSTGRES_TEST_PORT", "POSTGRES_TEST_DATABASE",
+                                    "POSTGRES_TEST_USER", "POSTGRES_TEST_PASSWORD"])
 def test_ci_connection_guard(monkeypatch, bad_key):
     monkeypatch.delenv("RUNTIME_EVENTS_TEST_SOCKET", raising=False)
     for key, value in {
         "RUNTIME_EVENTS_TEST_CI": "true", "GITHUB_ACTIONS": "true",
         "POSTGRES_TEST_HOST": "127.0.0.1", "POSTGRES_TEST_DATABASE": "etlegacy_test",
+        "POSTGRES_TEST_PORT": "5432",
         "POSTGRES_TEST_USER": "etlegacy_user", "POSTGRES_TEST_PASSWORD": "test-only",
     }.items():
         monkeypatch.setenv(key, value)
     if bad_key:
-        monkeypatch.setenv(bad_key, "wrong")
-        with pytest.raises(pytest.fail.Exception, match="explicit loopback test service"):
+        monkeypatch.delenv(bad_key)
+        with pytest.raises(ValueError, match="explicit CI isolation"):
             connection_options()
     else:
         assert connection_options()["database"] == "etlegacy_test"

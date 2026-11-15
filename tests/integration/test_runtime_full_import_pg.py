@@ -51,7 +51,7 @@ async def full_import_db():
                     await reader.close(timeout=5)
 
 
-def completed_pair(root, *, balanced=False):
+def completed_pair(root, *, balanced=False, numeric=False):
     """Synthetic player/weapon counts increase from one to two cumulatively."""
     root.chmod(0o700)
     inputs = []
@@ -61,6 +61,11 @@ def completed_pair(root, *, balanced=False):
                f'12345678\\Player\\1\\1\\1 {number} {number} {number} {number} {number}\n').encode()
         if balanced:
             raw += (f'87654321\\Opponent\\1\\2\\1 {number} {number} {number} {number} {number}\n').encode()
+        if numeric:
+            if not balanced:
+                raise ValueError('Numeric pair requires both opponents')
+            filename = f'2026-01-01-120000-goldrush-round-{number}.txt'
+            raw = numeric_round_bytes(number)
         digest = hashlib.sha256(raw).hexdigest()
         generation = str(number) * 32
         directory = reserve_source_generation(root, generation)
@@ -70,6 +75,26 @@ def completed_pair(root, *, balanced=False):
         }, expected_sha256=digest)
         inputs.append(CompletedRoundInput(root, generation, filename, len(raw), digest))
     return inputs
+
+
+def numeric_round_bytes(number):
+    """Literal cumulative source counters; only the canonical parser takes R2 deltas."""
+    players = {
+        1: [('12345678', '^1BeforeA', 1, '16 20 50 4 3 3', 900, 700, 5, 1, 2, 4),
+            ('87654321', '^2BeforeB', 2, '16 15 40 3 4 2', 700, 900, 5, 1.5, 1, 2)],
+        2: [('12345678', '^4AfterA', 2, '16 50 100 10 8 8', 2100, 1700, 9, .5, 3, 7),
+            ('87654321', '^5AfterB', 1, '16 36 90 8 10 5', 1700, 2100, 9, .8, 2, 5)],
+    }
+    limit, target, duration = ('12:00', '5:00', 300000) if number == 1 else ('5:00', '4:00', 240000)
+    lines = ['\\'.join(('synthetic', 'goldrush', 'synthetic', str(number), '2', '1',
+                       limit, target, str(duration)))]
+    for guid, name, team, weapon, damage, received, played, dead, hs, revives in players[number]:
+        fields = ['0'] * 38
+        for slot, value in {0: damage, 1: received, 8: 80, 14: hs, 22: played, 25: dead, 37: revives}.items():
+            fields[slot] = str(value)
+        player = '\\'.join((guid, name, str(number), str(team), weapon))
+        lines.append(player + ' \t' + '\t'.join(fields))
+    return ('\n'.join(lines) + '\n').encode()
 
 
 @pytest.fixture
