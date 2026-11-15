@@ -54,6 +54,9 @@ class _NullUnixTargetDB:
             return []
         return []
 
+    async def fetch_one(self, query, params=None):
+        return (None,)
+
     async def execute(self, query, params=None):
         self.executed.append((" ".join(str(query).split()), params))
 
@@ -130,3 +133,34 @@ async def test_resolver_miss_keeps_never_guess_behaviour(monkeypatch):
     await svc._relink_null_round_ids()
 
     assert not [q for q, _ in db.executed if q.startswith("UPDATE")]
+
+
+@pytest.mark.asyncio
+async def test_conflicting_previous_match_defers_until_exact_round_arrives(monkeypatch):
+    target_unix, round_date = _recent_identity()
+
+    class DelayedRoundDB(_NullUnixTargetDB):
+        arrived = False
+
+        async def fetch_one(self, query, params=None):
+            return (target_unix - 600,)
+
+        async def fetch_all(self, query, params=None):
+            if self.arrived and 'round_start_unix = $3' in query:
+                return [(22222,)]
+            return await super().fetch_all(query, params)
+
+    db = DelayedRoundDB(target_unix, round_date)
+    svc = _relinker(db)
+
+    async def resolve_previous(*args, **kwargs):
+        return _RESOLVED_ID
+
+    monkeypatch.setattr('bot.core.round_linker.resolve_round_id', resolve_previous)
+    await svc._relink_null_round_ids()
+    assert not [q for q, _ in db.executed if q.startswith('UPDATE')]
+    db.arrived = True
+    await svc._relink_null_round_ids()
+    updates = [p for q, p in db.executed if q.startswith('UPDATE') and 'SET round_id = $1' in q]
+    assert updates
+    assert all(p[0] == 22222 for p in updates)

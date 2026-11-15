@@ -57,7 +57,8 @@ async def test_missing_implausible_start_preserves_fallback(start, monkeypatch):
 async def test_no_exact_start_keeps_original_end_target(monkeypatch):
     fallback = AsyncMock(return_value=(55, {}))
     monkeypatch.setattr(round_identity, 'resolve_round_id_with_reason', fallback)
-    adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[]))
+    adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[]),
+                              fetch_one=AsyncMock(return_value=(None,)))
     target = object()
     assert await round_identity.resolve_proximity_round_id(
         adapter, 'fixture', 1, source_start_unix=START, target_dt=target,
@@ -89,3 +90,34 @@ async def test_filename_fallback_is_not_promoted_to_source_identity(monkeypatch,
     assert parser.parse_file(path, source_bytes=payload + f'# round_start_unix={START}\n'.encode())
     await parser._resolve_round_link_context(date(2026, 9, 19))
     assert resolver.call_args.kwargs['source_start_unix'] == START
+
+
+async def test_fallback_cannot_link_to_previous_match_with_conflicting_start(monkeypatch):
+    fallback = AsyncMock(return_value=(11774, {'reason_code': 'resolved'}))
+    monkeypatch.setattr(round_identity, 'resolve_round_id_with_reason', fallback)
+    adapter = SimpleNamespace(
+        fetch_all=AsyncMock(return_value=[]),
+        fetch_one=AsyncMock(return_value=(1791835728,)),
+    )
+    result, diag = await round_identity.resolve_proximity_round_id(
+        adapter, 'te_escape2', 2, source_start_unix=1791836142,
+    )
+    assert result is None
+    assert diag['reason_code'] == 'conflicting_source_start'
+
+
+@pytest.mark.parametrize('candidate,reason', [
+    (None, 'source_start_candidate_unavailable'),
+    ((START + 1,), 'conflicting_source_start'),
+    ((0,), 'conflicting_source_start'),
+])
+async def test_fallback_candidate_must_not_conflict(candidate, reason, monkeypatch):
+    monkeypatch.setattr(round_identity, 'resolve_round_id_with_reason',
+                        AsyncMock(return_value=(55, {'reason_code': 'resolved'})))
+    adapter = SimpleNamespace(fetch_all=AsyncMock(return_value=[]),
+                              fetch_one=AsyncMock(return_value=candidate))
+    result, diag = await round_identity.resolve_proximity_round_id(
+        adapter, 'fixture', 1, source_start_unix=START,
+    )
+    assert result is None
+    assert diag['reason_code'] == reason

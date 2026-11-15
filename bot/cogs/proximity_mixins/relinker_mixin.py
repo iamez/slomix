@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from discord.ext import tasks
 
 from bot.core.dead_hours import awake_cutoff
+from bot.core.round_linker import FILENAME_CLOCK_SOURCE, fallback_source_start_conflict
 from bot.services.lua_round_storage_mixin import _lua_exact_source_lock_key
 
 logger = logging.getLogger("bot.cogs.proximity")
@@ -237,6 +238,46 @@ def _relink_sql(table: str, *, fallback: bool = False) -> str:
     return cache[table]
 
 
+async def _relink_filename_clocks(db, cutoff_unix, resolve):
+    """Only explicitly marked child rows may use a filename clock as a hint.
+
+    Preserve the effective timestamp/UNIQUE key. Never extend this classification
+    to unmarked siblings, Lua rows or historical rows with unknown provenance.
+    """
+    columns = await db.fetch_all(
+        "SELECT table_name FROM information_schema.columns "
+        "WHERE table_schema = current_schema() AND column_name = 'round_link_source'"
+    )
+    supported = {row[0] for row in columns}.intersection(_DETECTION_TABLES)
+    if not supported:
+        return supported
+    legs = " UNION ALL ".join(
+        f"SELECT '{table}' AS table_name, map_name, round_number, round_start_unix, session_date "
+        f"FROM {table} WHERE round_id IS NULL AND round_start_unix >= $1 "
+        f"AND round_link_source = '{FILENAME_CLOCK_SOURCE}'"
+        for table in sorted(supported)
+    )
+    rows = await db.fetch_all(
+        f"SELECT DISTINCT table_name, map_name, round_number, round_start_unix, session_date "
+        f"FROM ({legs}) filename_sources ORDER BY session_date DESC LIMIT 50",
+        (cutoff_unix,),
+    )
+    for table, map_name, half, clock, day in rows:
+        if table not in supported:
+            raise ValueError("Unexpected filename-clock table")
+        target = datetime.fromtimestamp(int(clock), tz=timezone.utc)
+        round_id = await resolve(db, map_name, half, target_dt=target,
+                                 round_date=str(day), window_minutes=120, quiet=True)
+        if round_id is not None:
+            await db.execute(
+                f"UPDATE {table} SET round_id = $1 WHERE map_name = $2 "
+                "AND round_number = $3 AND session_date = $4 AND round_start_unix = $5 "
+                f"AND round_link_source = '{FILENAME_CLOCK_SOURCE}' AND round_id IS NULL",
+                (round_id, map_name, half, day, clock),
+            )
+    return supported
+
+
 class _ProximityRelinkerMixin:
     """Null-round relinker (fixes proximity rows linked to wrong rounds) for ProximityCog."""
 
@@ -269,6 +310,7 @@ class _ProximityRelinkerMixin:
             cutoff = awake_cutoff(now, _PERMANENT_ORPHAN_AGE_HOURS)
             cutoff_unix = int(cutoff.timestamp())
             cutoff_date = cutoff.date()
+            origin_tables = await _relink_filename_clocks(db, cutoff_unix, resolve_round_id)
             recent_source = (
                 "(round_start_unix >= $1 OR "
                 "((round_start_unix IS NULL OR round_start_unix <= 0) "
@@ -285,6 +327,8 @@ class _ProximityRelinkerMixin:
             null_legs = " UNION ALL ".join(
                 f"SELECT map_name, round_number, round_start_unix, session_date "
                 f"FROM {t} WHERE round_id IS NULL AND {recent_source}"
+                + (f" AND round_link_source IS DISTINCT FROM '{FILENAME_CLOCK_SOURCE}'"
+                   if t in origin_tables else "")
                 for t in tables_with_round_number
             )
             mismatch_legs = " UNION ALL ".join(
@@ -293,6 +337,8 @@ class _ProximityRelinkerMixin:
                 f"WHERE {recent_source_alias} "
                 f"  AND r.round_start_unix IS NOT NULL "
                 f"  AND pko.round_start_unix != r.round_start_unix"
+                + (f" AND pko.round_link_source IS DISTINCT FROM '{FILENAME_CLOCK_SOURCE}'"
+                   if t in origin_tables else "")
                 for t in tables_with_round_number
             )
             # lua_round_teams: no session_date column — synthesize one from
@@ -470,6 +516,13 @@ class _ProximityRelinkerMixin:
                             window_minutes=120,
                             quiet=True,
                         )
+                        if round_id is not None:
+                            conflict = await fallback_source_start_conflict(
+                                db, round_id, map_name, round_number, exact_start_unix,
+                            )
+                            if conflict:
+                                logger.debug("Re-linker: reason=%s; deferring source identity", conflict)
+                                round_id = None
                 else:
                     round_id = await resolve_round_id(
                         db,
@@ -534,7 +587,9 @@ class _ProximityRelinkerMixin:
                                     )
                             else:
                                 await db.execute(
-                                    _relink_sql(table),
+                                    _relink_sql(table) + (
+                                        f" AND round_link_source IS DISTINCT FROM '{FILENAME_CLOCK_SOURCE}'"
+                                        if table in origin_tables else ""),
                                     (rid, mn, rn, sd, rsu),
                                 )
                         except Exception as e:
@@ -543,7 +598,9 @@ class _ProximityRelinkerMixin:
                                 return
                             try:
                                 await db.execute(
-                                    _relink_sql(table, fallback=True),
+                                    _relink_sql(table, fallback=True) + (
+                                        f" AND round_link_source IS DISTINCT FROM '{FILENAME_CLOCK_SOURCE}'"
+                                        if table in origin_tables else ""),
                                     (rid, mn, rsu),
                                 )
                             except Exception as e2:

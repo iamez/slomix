@@ -1341,7 +1341,11 @@ class ProximityParserV4:
             values.append(context.get("round_id"))
         if await self._table_has_column(table, "round_link_source"):
             columns.append("round_link_source")
-            values.append(context.get("round_link_source"))
+            from bot.core.round_linker import FILENAME_CLOCK_SOURCE
+
+            origin = (FILENAME_CLOCK_SOURCE if self.metadata.get("round_start_is_fallback")
+                      else context.get("round_link_source"))
+            values.append(origin)
         if await self._table_has_column(table, "round_link_reason"):
             columns.append("round_link_reason")
             values.append(context.get("round_link_reason"))

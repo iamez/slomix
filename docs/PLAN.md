@@ -820,6 +820,14 @@ restore/migration rehearsal and D4/D5 remain. No live/service/Lua changes.
 Parked findings index stays private at evidence/incident-20261103/PARKED-FINDINGS.md;
 all old branches retained. Active branch feat/runtime-timing-close-20261103.
 
+## 2026-11-03 — Defer proximity fallback when physical start conflicts
+
+Parser and periodic relinker share a fallback source-start guard. A candidate
+with a known different start remains pending; legacy NULL-start fallback stays
+supported. Late exact arrival resumes linkage. Local56focused cases pass and
+mutation fails as expected; native PG14/17 CI proof pending. No historical repair,
+service activation or deployment. Original runtime continuation remains intact.
+
 ## 2026-11-02 - Use lexical contexts for the fixed two-file intake
 
 The f35c6e72 refactor still produces two CodeQL alerts at ExitStack.enter_context
