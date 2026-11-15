@@ -484,3 +484,7 @@ async def fallback_source_start_conflict(adapter, round_id, map_name, round_numb
     if candidate[0] is not None and candidate[0] != source_start_unix:
         return 'conflicting_source_start'
     return None
+
+
+# Persisted clock provenance, independent of effective row identity timestamps.
+FILENAME_CLOCK_SOURCE = "filename_clock_v1"

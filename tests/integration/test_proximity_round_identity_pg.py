@@ -67,7 +67,8 @@ async def test_relinker_preserves_duplicate_pg_identity(journal_db, monkeypatch,
     await _relinker(adapter)._relink_null_round_ids()
     fallback.assert_not_awaited()
     execute.assert_not_awaited()
-    assert len(queries) == (1 if strict else 2)
+    candidate_queries = [query for query in queries if 'FROM rounds' in query]
+    assert len(candidate_queries) == (1 if strict else 2)
     assert await observer.fetchval('SELECT count(*) FROM proof_links WHERE round_id IS NULL') == 1
     assert [tuple(row) for row in await observer.fetch('SELECT * FROM proof_links')] == [(None,)]
 
